@@ -1,0 +1,153 @@
+DECLARE `Targets 2026 - Orquest base` STRING DEFAULT 'Targets 2026 - Orquest base';
+
+WITH diccionario_warehouses AS (
+  SELECT
+    warehouse_id,
+    name AS warehouse_name,
+    LOWER(LEFT(country_code, 2)) AS country_code
+  FROM `peya-data-origins-pro.cl_dmarts.warehouses_v2`
+  
+  WHERE is_dmart IS TRUE
+    AND is_distribution_center IS FALSE
+    AND is_active IS TRUE
+    AND name NOT LIKE "%ficina%"
+    AND name != "PA_9_Midtown"
+    AND warehouse_id IN (
+      SELECT DISTINCT warehouse_id
+      FROM `peya-data-origins-pro.cl_dmarts.qc_orders`
+      WHERE DATE(order_created_date_lt) >= DATE_SUB(CURRENT_DATE() - 1, INTERVAL 7 DAY)
+        AND is_dmart IS TRUE
+        AND order_id NOT LIKE 'obs%'
+        AND order_id NOT LIKE 'GAMEDAY%'
+    )
+),
+
+forecast_manual AS (
+  SELECT
+    DATE(from_ls) AS fecha,
+    business_id,
+    service_id,
+    dw.warehouse_name AS name,
+    measure,
+    EXTRACT(HOUR FROM from_ls) AS hora,
+    SUM(value) AS total_value
+  FROM `peya-data-origins-pro.cl_orquest.measure_projections` fcst
+  
+  INNER JOIN diccionario_warehouses dw
+    ON fcst.service_id = dw.warehouse_id
+    
+  WHERE fcst.measure IN ('units_out', 'tickets')
+    AND DATE(from_ls) BETWEEN DATE_TRUNC(CURRENT_DATE(), MONTH) AND DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 12, 31)
+    
+  GROUP BY service_id, business_id, dw.warehouse_name, measure, fecha, hora
+),
+
+forecast_orquest AS (
+  SELECT
+    DATE(from_ls) AS fecha,
+    business_id,
+    service_id,
+    dw.warehouse_name AS name,
+    measure,
+    EXTRACT(HOUR FROM from_ls) AS hora,
+    SUM(value) AS total_value
+  FROM `peya-data-origins-pro.cl_orquest.measure_forecast` fcst
+  
+  INNER JOIN diccionario_warehouses dw
+    ON fcst.service_id = dw.warehouse_id
+    
+  WHERE fcst.measure IN ('units_out', 'tickets')
+    AND DATE(from_ls) BETWEEN DATE_TRUNC(CURRENT_DATE(), MONTH) AND DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 12, 31)
+    
+  GROUP BY service_id, business_id, dw.warehouse_name, measure, fecha, hora
+),
+
+base_agg AS (
+  SELECT
+    fcst.fecha,
+    fcst.business_id,
+    fcst.service_id,
+    dw.warehouse_name AS name,
+    fcst.measure,
+    SUM(manual.total_value) AS forecast_manual,
+    SUM(fcst.total_value) AS forecast_orquest
+  FROM forecast_orquest fcst
+  
+  INNER JOIN diccionario_warehouses dw
+    ON fcst.service_id = dw.warehouse_id
+    
+  LEFT JOIN forecast_manual manual
+    ON fcst.service_id = manual.service_id
+    AND fcst.measure = manual.measure
+    AND fcst.fecha = manual.fecha
+    AND fcst.hora = manual.hora
+    
+  GROUP BY 1, 2, 3, 4, 5
+),
+
+base_country_totals AS (
+  SELECT
+    fecha,
+    CASE LEFT(name, 2)
+      WHEN 'AR' THEN 'Argentina'
+      WHEN 'CH' THEN 'Chile'
+      WHEN 'PY' THEN 'Paraguay'
+      WHEN 'RD' THEN 'República Dominicana'
+      WHEN 'SV' THEN 'El Salvador'
+      WHEN 'UY' THEN 'Uruguay'
+      WHEN 'PE' THEN 'Perú'
+      WHEN 'BO' THEN 'Bolivia'
+      WHEN 'PA' THEN 'Panamá'
+      WHEN 'EC' THEN 'Ecuador'
+      WHEN 'GT' THEN 'Guatemala'
+      WHEN 'NI' THEN 'Nicaragua'
+      WHEN 'HN' THEN 'Honduras'
+      ELSE LEFT(name, 2)
+    END AS country,
+    measure,
+    
+    -- Sumamos el mayor valor entre el forecast manual y el orquest a nivel local (tienda)
+    SUM(CASE WHEN forecast_manual > forecast_orquest THEN forecast_manual ELSE forecast_orquest END) AS forecast
+    
+  FROM base_agg
+  GROUP BY 1, 2, 3
+),
+
+base_consolidada AS (
+  -- Traemos los totales nacionales de units_out y tickets
+  SELECT 
+    fecha,
+    country,
+    measure,
+    forecast
+  FROM base_country_totals
+
+  UNION ALL
+
+  -- Calculamos el basket_size a nivel nacional dividiendo units_out / tickets
+  SELECT
+    fecha,
+    country,
+    'basket_size' AS measure,
+    SAFE_DIVIDE(
+      SUM(CASE WHEN measure = 'units_out' THEN forecast END),
+      SUM(CASE WHEN measure = 'tickets' THEN forecast END)
+    ) AS forecast
+  FROM base_country_totals
+  GROUP BY 1, 2
+)
+
+SELECT
+  fecha,
+  country,
+  measure,
+  forecast,
+  
+  -- Calculamos la ponderación mensual por país y métrica
+  SAFE_DIVIDE(
+    forecast,
+    SUM(forecast) OVER (PARTITION BY country, measure, DATE_TRUNC(fecha, MONTH))
+  ) AS ponderancia
+  
+FROM base_consolidada
+ORDER BY fecha ASC, measure, country;
