@@ -65,7 +65,11 @@ Ubicación: `3. Querys SQL / 2. Querys / 4. Bases Frank - Matias`
 
 ## 3. Consultas en esta carpeta
 
-* **`1. Frank - User Type.sql`**: Versión original histórica (respaldo).
-* **`2. Frank - User Count.sql`**: Versión original agregada (respaldo).
-* **`3. Frank - User Type (Level 1 & 2 + Tenure).sql`**: Nueva consulta granular usuario-mes con toda la taxonomía y métricas de tenure.
-* **`4. Frank - User Count (Level 1 & 2 + Tenure).sql`**: Nueva consulta resumen mensual por país, negocio, Level 1 y Level 2 con promedios de tenure y tracking de RR.
+* **`1. Frank - User Type.sql`**: Versión granular usuario-mes con ciclo de vida base (PeYa y Dmart), incorporando:
+  * **Tenure por País (`country_tenure_months`)**: Antigüedad del usuario dentro de ese país.
+  * **Tenure del Usuario (`user_tenure_months`)**: Antigüedad histórica global del usuario en la plataforma/negocio.
+  * **Tenure del Tipo de Usuario (`tenure_user_type`)**: Meses consecutivos en su estado actual desde el último cambio de tipo (islas/rachas).
+  * **Racha de RR (`tenure_rr_streak`)**: Contador continuo de meses como Recurring Return desde que arrancó a serlo.
+* **`2. Frank - User Count.sql`**: Versión agregada mensual por país, negocio y tipo de usuario con promedios de tenure (país, usuario, tipo actual y racha RR).
+* **`3. Frank - User Type (Level 1 & 2 + Tenure).sql`**: Versión granular usuario-mes extendida con taxonomía Level 1, Level 2 (Double Ya, AAA Supermercados) y métricas avanzadas de tenure.
+* **`4. Frank - User Count (Level 1 & 2 + Tenure).sql`**: Resumen mensual agrupado por país, negocio, Level 1 y Level 2 con promedios de tenure y tracking de RR.

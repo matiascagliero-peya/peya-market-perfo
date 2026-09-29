@@ -1,7 +1,5 @@
 DECLARE query_name STRING DEFAULT '5. Weekly & MTD Users - Base - Performance (Weekly users)';
 
-DECLARE query_source STRING DEFAULT '5. Weekly & MTD Users - Base - Performance (Weekly users)';
-
 -- VARIABLES DE FECHA
 DECLARE from_date DATE DEFAULT DATE_TRUNC(DATE '2025-01-01', ISOWEEK);
 DECLARE to_date   DATE DEFAULT DATE_SUB(CURRENT_DATE(), INTERVAL 1 DAY);
