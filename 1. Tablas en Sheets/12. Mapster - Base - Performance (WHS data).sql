@@ -1,5 +1,4 @@
-DECLARE query_name STRING DEFAULT '14. Mapster (WHS data)';
-
+DECLARE query_name STRING DEFAULT '12. Mapster - Base - Performance (WHS data)';
 -- ==============================================================================
 -- QUERY MAESTRA DE ALMACENES: dim_warehouse_all_partners_master
 --
@@ -14,10 +13,10 @@ DECLARE query_name STRING DEFAULT '14. Mapster (WHS data)';
 -- Tablas origen:
 --   1. `peya-bi-tools-pro.il_core.dim_partner` (datos físicos y lista de partners WHS)
 --   2. `peya-food-and-groceries.automated_tables_reports.qc_coverage_partner_shapes` (polígonos históricos y geografía)
---   3. `peya-bi-tools-pro.il_core.fact_orders` (actividad / órdenes confirmadas de darkstores)
+--   3. `peya-datamarts-pro.dm_dmarts.customer_orders_sku_level` (órdenes y actividad)
 -- ==============================================================================
 
-DECLARE start_month DATE DEFAULT DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL 3 MONTH), MONTH);
+DECLARE start_month DATE DEFAULT DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL 6 MONTH), MONTH);
 DECLARE end_month   DATE DEFAULT DATE_TRUNC(CURRENT_DATE(), MONTH);
 
 WITH
@@ -30,20 +29,17 @@ months_range AS (
     AND month_date <= end_month
 ),
 
--- 2. Órdenes mensuales por Partner y Warehouse usando fact_orders
+-- 2. Órdenes mensuales por Partner y Warehouse
 partner_monthly_orders AS (
   SELECT
-    dp.warehouse_id,
-    CAST(fo.restaurant.id AS STRING)            AS partner_id,
-    DATE_TRUNC(DATE(fo.registered_date), MONTH) AS month_date,
-    COUNT(DISTINCT fo.order_id)                 AS monthly_orders
-  FROM `peya-bi-tools-pro.il_core.fact_orders` fo
-  INNER JOIN `peya-bi-tools-pro.il_core.dim_partner` dp
-    ON fo.restaurant.id = dp.partner_id
-  WHERE fo.registered_date >= start_month
-    AND fo.order_status = 'CONFIRMED'
-    AND dp.is_darkstore = TRUE
-    AND dp.warehouse_id IS NOT NULL
+    warehouse_id,
+    CAST(vendor_id AS STRING)     AS partner_id,
+    DATE_TRUNC(order_date, MONTH) AS month_date,
+    COUNT(DISTINCT order_id)      AS monthly_orders
+  FROM `peya-datamarts-pro.dm_dmarts.customer_orders_sku_level`
+  WHERE order_date >= start_month
+    AND state = 'CONFIRMED'
+    AND warehouse_id IS NOT NULL
   GROUP BY 1, 2, 3
 ),
 

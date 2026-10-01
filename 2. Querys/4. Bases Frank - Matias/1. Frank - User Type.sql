@@ -1,4 +1,4 @@
-DECLARE query_name STRING DEFAULT '1. Frank - User Type';
+DECLARE query_name STRING DEFAULT '1. Frank - User Type.sql';
 
 CREATE OR REPLACE TABLE `peya-food-and-groceries.automated_tables_reports.frank_user_type` AS
 
