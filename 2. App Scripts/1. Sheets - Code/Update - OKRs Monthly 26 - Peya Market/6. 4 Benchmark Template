@@ -1,0 +1,81 @@
+/**
+ * ====================================================================
+ * TAREA 4: BENCHMARK TEMPLATE (SIN ETIQUETA DE PAÍS)
+ * ====================================================================
+ */
+
+// CONFIGURACIÓN
+const ID_MASTER_BENCHMARK = "1H_gDXL9IQ9HCHSAzzDT8oGBNwPIw4rHmbjtqcqKJikc"; 
+const NOMBRE_HOJA_BENCHMARK = "4 Benchmark Template";
+
+// --- FUNCIÓN MAESTRA (WORKER) ---
+function _workerBenchmark(pais) {
+  if (!pais) { Logger.log("❌ Error: País no definido."); return; }
+
+  try {
+    Logger.log(`🔵 [TAREA 4] Procesando: ${pais.country}...`);
+
+    // 1. ABRIR MASTER
+    const ssMaster = SpreadsheetApp.openById(ID_MASTER_BENCHMARK);
+    const hojaOrigen = ssMaster.getSheetByName(NOMBRE_HOJA_BENCHMARK);
+    if (!hojaOrigen) throw new Error(`No existe la hoja '${NOMBRE_HOJA_BENCHMARK}' en el Master.`);
+
+    // 2. ABRIR DESTINO
+    const ssDestino = SpreadsheetApp.openById(pais.id);
+
+    // 3. LIMPIEZA Y CAPTURA DE POSICIÓN
+    let indiceOriginal = null; // Variable para guardar la posición
+    const hojaVieja = ssDestino.getSheetByName(NOMBRE_HOJA_BENCHMARK);
+    
+    if (hojaVieja) {
+      try {
+        // --- NUEVO: Guardamos el índice (posición) antes de borrar ---
+        indiceOriginal = hojaVieja.getIndex(); 
+        
+        // Renombramos a BASURA antes de borrar para evitar conflictos de nombre
+        hojaVieja.setName("BASURA_BENCH_" + new Date().getTime());
+        ssDestino.deleteSheet(hojaVieja);
+      } catch (e) {
+        hojaVieja.hideSheet(); // Si no se puede borrar, se oculta
+      }
+    }
+
+    // 4. COPIAR Y RENOMBRAR
+    const nuevaHoja = hojaOrigen.copyTo(ssDestino);
+    nuevaHoja.setName(NOMBRE_HOJA_BENCHMARK);
+
+    // 5. RESTAURAR POSICIÓN ORIGINAL
+    // Si existía una hoja previa, movemos la nueva a ese lugar.
+    if (indiceOriginal !== null) {
+        ssDestino.setActiveSheet(nuevaHoja);
+        ssDestino.moveActiveSheet(indiceOriginal);
+    }
+
+    Logger.log(`   ✅ ${pais.country} OK.`);
+
+  } catch (e) {
+    Logger.log(`   🔴 ERROR en ${pais.country}: ${e.message}`);
+  }
+}
+
+// --- FUNCIONES POR PAÍS ---
+function copiarBenchmark_Para_Argentina() { _workerBenchmark(PAISES_DE_DESTINO.find(p => p.country === "Argentina")); }
+function copiarBenchmark_Para_Bolivia() { _workerBenchmark(PAISES_DE_DESTINO.find(p => p.country === "Bolivia")); }
+function copiarBenchmark_Para_Chile() { _workerBenchmark(PAISES_DE_DESTINO.find(p => p.country === "Chile")); }
+function copiarBenchmark_Para_Republica_Dominicana() { _workerBenchmark(PAISES_DE_DESTINO.find(p => p.country === "Republica Dominicana")); }
+function copiarBenchmark_Para_Ecuador() { _workerBenchmark(PAISES_DE_DESTINO.find(p => p.country === "Ecuador")); }
+function copiarBenchmark_Para_El_Salvador() { _workerBenchmark(PAISES_DE_DESTINO.find(p => p.country === "El Salvador")); }
+function copiarBenchmark_Para_Guatemala() { _workerBenchmark(PAISES_DE_DESTINO.find(p => p.country === "Guatemala")); }
+function copiarBenchmark_Para_Honduras() { _workerBenchmark(PAISES_DE_DESTINO.find(p => p.country === "Honduras")); }
+function copiarBenchmark_Para_Nicaragua() { _workerBenchmark(PAISES_DE_DESTINO.find(p => p.country === "Nicaragua")); }
+function copiarBenchmark_Para_Panama() { _workerBenchmark(PAISES_DE_DESTINO.find(p => p.country === "Panama")); }
+function copiarBenchmark_Para_Paraguay() { _workerBenchmark(PAISES_DE_DESTINO.find(p => p.country === "Paraguay")); }
+function copiarBenchmark_Para_Peru() { _workerBenchmark(PAISES_DE_DESTINO.find(p => p.country === "Peru")); }
+function copiarBenchmark_Para_Uruguay() { _workerBenchmark(PAISES_DE_DESTINO.find(p => p.country === "Uruguay")); }
+
+// --- EJECUTAR TODOS ---
+function copiarBenchmark_Para_TODOS() {
+  Logger.log("🚀 INICIANDO COPIA DE BENCHMARK (SIN EDITOR DE PAÍS)...");
+  PAISES_DE_DESTINO.forEach(pais => _workerBenchmark(pais));
+  Logger.log("🏁 FIN.");
+}

@@ -1,0 +1,935 @@
+<!DOCTYPE html>
+<!--
+  EMAIL — 7_Email.html — sirve en /exec?page=email
+  Configura el MENSAJE PERSONALIZADO que se muestra arriba de todo en el mail
+  diario. Si el mensaje está vacío, en el mail no se muestra ningún bloque.
+  El texto se guarda server-side (ScriptProperties) vía setEmailMessage().
+  En preview local (sin backend GAS) usa localStorage como fallback.
+-->
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Email - PeYa Markets</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --primary:#e50044; --text-main:#0f172a; --text-sub:#475569; --text-light:#94a3b8;
+    --border:#e2e8f0; --border-light:#f1f5f9; --bg-main:#f8fafc; --panel-bg:#ffffff;
+    --positive:#059669; --negative:#e11d48; --neutral:#64748b;
+    --shadow-sm:0 1px 2px 0 rgba(0,0,0,0.03);
+    --shadow-md:0 4px 6px -1px rgba(0,0,0,0.04),0 2px 4px -1px rgba(0,0,0,0.02);
+    --radius:8px;
+  }
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:'Inter',system-ui,sans-serif;background:var(--bg-main);color:var(--text-main);font-size:13px;-webkit-font-smoothing:antialiased;}
+
+  #splash{position:fixed;inset:0;background:rgba(255,255,255,0.95);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;transition:opacity .3s ease;backdrop-filter:blur(4px);}
+  #splash.out{opacity:0;pointer-events:none;}
+  .spinner{width:42px;height:42px;border:4px solid rgba(229,0,68,0.12);border-top-color:var(--primary);border-radius:50%;animation:spin 0.75s linear infinite;margin-bottom:14px;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+
+  nav{background:#fff;border-bottom:1px solid var(--border);height:52px;display:flex;align-items:center;padding:0 20px;position:sticky;top:0;z-index:300;box-shadow:0 1px 0 var(--border);}
+  .n-brand{display:flex;align-items:center;gap:7px;margin-right:18px;flex-shrink:0;}
+  .n-dot{width:7px;height:7px;border-radius:50%;background:var(--primary);}
+  .n-divider{width:1px;height:20px;background:var(--border);margin:0 10px;flex-shrink:0;}
+  .n-tabs{display:flex;gap:2px;}
+  .n-tab{display:flex;align-items:center;gap:5px;padding:5px 11px;border-radius:7px;font-size:12px;font-weight:500;color:var(--text-sub);transition:all .15s;border:none;background:transparent;cursor:pointer;text-decoration:none;white-space:nowrap;}
+  .n-tab svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
+  .n-tab.active{background:var(--bg-main);color:var(--text-main);font-weight:600;}
+  .n-tab:hover:not(.active){background:var(--border-light);color:var(--text-main);}
+  .n-right{margin-left:auto;display:flex;align-items:center;gap:8px;}
+  .n-btn{height:30px;border:1px solid var(--border);background:#fff;border-radius:7px;padding:0 11px;font-size:11px;font-weight:600;color:var(--text-sub);cursor:pointer;display:flex;align-items:center;gap:5px;transition:all .15s;}
+  .n-btn:hover{border-color:var(--text-sub);color:var(--text-main);}
+  .n-btn svg{width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;}
+
+  .page{padding:24px 20px;max-width:760px;margin:0 auto;display:flex;flex-direction:column;gap:18px;}
+
+  .card{background:var(--panel-bg);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-sm);overflow:hidden;}
+  .card-head{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;}
+  .card-head .bar{width:4px;height:26px;border-radius:4px;background:var(--primary);flex-shrink:0;}
+  .card-head h2{font-size:14px;font-weight:800;color:var(--text-main);letter-spacing:-.2px;}
+  .card-head p{font-size:11px;color:var(--text-light);font-weight:500;margin-top:1px;}
+  .card-body{padding:18px;}
+
+  textarea#msg, textarea#msg-weekly{width:100%;min-height:120px;resize:vertical;border:1px solid var(--border);border-radius:8px;padding:12px 14px;font-family:'Inter',system-ui,sans-serif;font-size:13px;line-height:1.5;color:var(--text-main);outline:none;transition:all .15s;background:#fff;}
+  textarea#msg:focus{border-color:var(--primary);box-shadow:0 0 0 2px rgba(229,0,68,0.15);}
+  textarea#msg-weekly:focus{border-color:#0284c7;box-shadow:0 0 0 2px rgba(2,132,199,0.15);}
+  .row{display:flex;align-items:center;gap:10px;margin-top:12px;flex-wrap:wrap;}
+  .count{font-size:11px;color:var(--text-light);font-weight:600;margin-left:auto;}
+
+  .btn{height:36px;border-radius:8px;padding:0 16px;font-size:12px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:7px;transition:all .15s;border:1px solid var(--border);background:#fff;color:var(--text-sub);}
+  .btn svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
+  .btn:hover{border-color:var(--text-sub);color:var(--text-main);}
+  .btn-primary{background:var(--primary);border-color:var(--primary);color:#fff;}
+  .btn-primary:hover{background:#cf003d;border-color:#cf003d;color:#fff;}
+  .btn:disabled{opacity:.5;cursor:not-allowed;}
+
+  .status{font-size:12px;font-weight:600;display:none;align-items:center;gap:6px;}
+  .status.show{display:inline-flex;}
+  .status.ok{color:var(--positive);} .status.err{color:var(--negative);} .status.info{color:var(--neutral);}
+  .status svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;}
+
+  .hint{font-size:11.5px;color:var(--text-sub);line-height:1.5;background:#f8fafc;border:1px solid var(--border-light);border-radius:8px;padding:10px 12px;margin-top:14px;}
+  .hint b{color:var(--text-main);}
+  .send-info{display:flex;align-items:flex-start;gap:8px;font-size:12px;color:#1d4ed8;line-height:1.5;background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 12px;margin-top:10px;}
+  .send-info svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0;margin-top:1px;}
+  .send-info b{color:#0f172a;}
+  .send-info.clk{cursor:pointer;transition:background .15s,border-color .15s;}
+  .send-info.clk:hover{background:#dbeafe;border-color:#93c5fd;}
+  .send-info .exec-link{display:inline-flex;align-items:center;gap:3px;font-weight:700;text-decoration:underline;white-space:nowrap;margin-left:4px;}
+
+  /* Preview del bloque tal como sale en el mail */
+  .prev-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-light);margin-bottom:10px;}
+  .mail-frame{background:#e2e8f0;border-radius:10px;padding:18px;}
+  .mail-msg{background:#fff;border:1px solid #cbd5e1;border-left:6px solid var(--primary);border-radius:8px;padding:12px 16px;}
+  .mail-msg .lbl{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--primary);margin-bottom:4px;}
+  .mail-msg .txt{font-size:13px;line-height:1.5;color:#1e293b;white-space:pre-wrap;word-wrap:break-word;}
+  .mail-empty{font-size:12px;color:var(--text-light);font-style:italic;text-align:center;padding:18px;}
+
+  @media(max-width:600px){.page{padding:16px 12px;}.card-body{padding:14px;}}
+</style>
+</head>
+<body>
+
+<div id="splash">
+  <div style="font-weight:700;font-size:15px;color:var(--text-sub);margin-bottom:4px;">PedidosYa Markets</div>
+  <div style="font-weight:900;font-size:22px;margin-bottom:20px;"><b style="color:var(--primary)">Email</b></div>
+  <div class="spinner"></div>
+  <div style="font-weight:600;color:var(--text-light);font-size:12px;">Cargando...</div>
+</div>
+
+<script>window.PAGE_ID='email';</script>
+<?!= include('_nav'); ?>
+
+<div class="page">
+
+  <!-- ========================================== -->
+  <!-- SECCIÓN DIARIA (MENSAJE + PREVIEW)         -->
+  <!-- ========================================== -->
+
+  <!-- CARD 1: DAILY MESSAGE -->
+  <div class="card">
+    <div class="card-head">
+      <div class="bar"></div>
+      <div>
+        <h2>Mensaje personalizado del mail DIARIO</h2>
+        <p>Aparece arriba de todo en el Daily Report. Si lo dejás vacío, no se muestra nada.</p>
+      </div>
+    </div>
+    <div class="card-body">
+      <textarea id="msg" placeholder="Escribí un mensaje para destacar arriba del mail diario (ej: 'Hoy es feriado en AR, los datos pueden llegar más tarde'). Dejalo vacío para no mostrar nada."></textarea>
+      <div class="row">
+        <button class="btn btn-primary" id="btn-save" onclick="saveMsg()">
+          <svg viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+          Guardar Diario
+        </button>
+        <button class="btn" id="btn-clear" onclick="clearMsg()">
+          <svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+          Limpiar Diario
+        </button>
+        <button class="btn" id="btn-prev" onclick="previewEmail()" title="Genera el mail completo (sin enviarlo) y lo abre">
+          <svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          Previsualizar mail diario
+        </button>
+        <button class="btn" id="btn-force-daily" onclick="abrirModalEnvioForzado('daily')" style="color:#b91c1c;border-color:#fecdd3;" title="Envía el correo diario forzado con 3 verificaciones">
+          <svg viewBox="0 0 24 24"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+          Enviar diario forzado
+        </button>
+        <span class="status" id="status"></span>
+        <span class="count" id="count">0 caracteres</span>
+      </div>
+      <div class="hint">
+        <b>Importante:</b> <b>Guardar Diario</b> solo guarda el mensaje — <b>no envía el mail</b>. El Daily Report se envía <b>automáticamente</b> a su hora; lo que esté guardado se incluye arriba de todo. Para verlo antes, usá <b>Previsualizar mail diario</b>.
+      </div>
+      <div class="send-info" id="send-info">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        <span id="send-info-txt">Cargando estado de envío…</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- CARD 2: DAILY PREVIEW -->
+  <div class="card" style="margin-top:-6px;margin-bottom:12px;">
+    <div class="card-head" style="padding:10px 18px;border-bottom:none;background:#f8fafc;">
+      <div class="bar" style="background:#64748b;height:18px;"></div>
+      <div>
+        <h2 style="font-size:12px;color:var(--text-sub);">Vista previa (Mail Diario)</h2>
+      </div>
+    </div>
+    <div class="card-body" style="padding-top:0;">
+      <div class="mail-frame">
+        <div id="prev-on" style="display:none;">
+          <div class="mail-msg">
+            <div class="lbl">Mensaje</div>
+            <div class="txt" id="prev-txt"></div>
+            <div id="prev-by" style="font-size:11px;color:#94a3b8;margin-top:9px;padding-top:8px;border-top:1px solid #eef2f7;display:none;"></div>
+          </div>
+        </div>
+        <div class="mail-empty" id="prev-off">Sin mensaje — no se mostrará ningún bloque en el mail diario.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- SECCIÓN SEMANAL (MENSAJE + PREVIEW)        -->
+  <!-- ========================================== -->
+
+  <!-- CARD 3: WEEKLY MESSAGE -->
+  <div class="card" style="margin-top:12px;">
+    <div class="card-head">
+      <div class="bar" style="background:#0284c7;"></div>
+      <div>
+        <h2>Mensaje personalizado del mail SEMANAL</h2>
+        <p>Aparece arriba de todo en el Reporte Semanal. Si lo dejás vacío, no se muestra nada.</p>
+      </div>
+    </div>
+    <div class="card-body">
+      <textarea id="msg-weekly" placeholder="Escribí un mensaje para destacar arriba del mail semanal (ej: 'Cierre de la Semana 31 finalizado, excelente performance general!'). Dejalo vacío para no mostrar nada."></textarea>
+      <div class="row">
+        <button class="btn btn-primary" id="btn-save-weekly" onclick="saveMsgWeekly()" style="background:#0284c7;border-color:#0284c7;">
+          <svg viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+          Guardar Semanal
+        </button>
+        <button class="btn" id="btn-clear-weekly" onclick="clearMsgWeekly()">
+          <svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+          Limpiar Semanal
+        </button>
+        <button class="btn" id="btn-prev-weekly" onclick="previewEmailWeekly()" title="Genera el mail semanal completo (sin enviarlo) y lo abre">
+          <svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          Previsualizar mail semanal
+        </button>
+        <button class="btn" id="btn-force-weekly" onclick="forzarEnvioSemanalUi()" style="color:#b91c1c;border-color:#fecdd3;" title="Envía el correo semanal inmediatamente a todos los destinatarios (fuerza el envío ignorando bloqueos)">
+          <svg viewBox="0 0 24 24"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+          Enviar semanal forzado
+        </button>
+        <span class="status" id="status-weekly"></span>
+        <span class="count" id="count-weekly">0 caracteres</span>
+      </div>
+      <div class="hint">
+        <b>Importante:</b> <b>Guardar Semanal</b> solo guarda el mensaje — <b>no envía el mail</b>. El Reporte Semanal se envía <b>automáticamente</b> cada lunes; si los datos no están 100% listos a su hora, se <b>bloquea</b> para que no se reintente y deberás usar <b>Enviar semanal forzado</b>.
+      </div>
+      <div class="send-info" id="send-info-weekly" style="background:#f0f9ff;border-color:#bae6fd;color:#0369a1;margin-top:10px;">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        <span id="send-info-weekly-txt">Cargando estado de envío semanal…</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- CARD 4: WEEKLY PREVIEW -->
+  <div class="card" style="margin-top:-6px;">
+    <div class="card-head" style="padding:10px 18px;border-bottom:none;background:#f8fafc;">
+      <div class="bar" style="background:#0284c7;height:18px;"></div>
+      <div>
+        <h2 style="font-size:12px;color:var(--text-sub);">Vista previa (Mail Semanal)</h2>
+      </div>
+    </div>
+    <div class="card-body" style="padding-top:0;">
+      <div class="mail-frame">
+        <div id="prev-weekly-on" style="display:none;">
+          <div class="mail-msg" style="border-left-color:#0284c7;">
+            <div class="lbl" style="color:#0284c7;">Mensaje Semanal</div>
+            <div class="txt" id="prev-weekly-txt"></div>
+            <div id="prev-weekly-by" style="font-size:11px;color:#94a3b8;margin-top:9px;padding-top:8px;border-top:1px solid #eef2f7;display:none;"></div>
+          </div>
+        </div>
+        <div class="mail-empty" id="prev-weekly-off">Sin mensaje — no se mostrará ningún bloque en el mail semanal.</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ========================================== -->
+<!-- MODAL DE ENVÍO FORZADO (3 VERIFICACIONES)  -->
+<!-- ========================================== -->
+<div id="modal-force" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,0.65);backdrop-filter:blur(3px);z-index:9999;align-items:center;justify-content:center;padding:16px;">
+  <div style="background:#fff;border-radius:14px;max-width:580px;width:100%;max-height:92vh;display:flex;flex-direction:column;box-shadow:0 25px 50px -12px rgba(0,0,0,0.25);overflow:hidden;border:1px solid #e2e8f0;">
+    
+    <!-- Header -->
+    <div style="padding:16px 20px;border-bottom:1px solid #e2e8f0;background:#f8fafc;display:flex;align-items:center;justify-content:space-between;">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div style="width:32px;height:32px;border-radius:8px;background:#fee2e2;color:#ef4444;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        </div>
+        <div>
+          <div style="font-size:15px;font-weight:800;color:#0f172a;" id="mf-title">Envío Forzado</div>
+          <div style="font-size:11.5px;color:#64748b;" id="mf-subtitle">Paso 1 de 3: Confirmación de intención</div>
+        </div>
+      </div>
+      <button onclick="cerrarModalEnvioForzado()" style="background:transparent;border:none;cursor:pointer;color:#94a3b8;font-size:20px;line-height:1;padding:4px 8px;border-radius:6px;">✕</button>
+    </div>
+
+    <!-- Stepper indicator -->
+    <div style="display:flex;background:#f1f5f9;padding:8px 20px;gap:8px;border-bottom:1px solid #e2e8f0;font-size:11px;font-weight:700;">
+      <div id="mf-step-tab-1" style="flex:1;text-align:center;padding:6px;border-radius:6px;background:#e50044;color:#fff;">1. Intención</div>
+      <div id="mf-step-tab-2" style="flex:1;text-align:center;padding:6px;border-radius:6px;background:#e2e8f0;color:#64748b;">2. Destinatarios</div>
+      <div id="mf-step-tab-3" style="flex:1;text-align:center;padding:6px;border-radius:6px;background:#e2e8f0;color:#64748b;">3. Confirmación</div>
+    </div>
+
+    <!-- Body -->
+    <div style="padding:20px;overflow-y:auto;flex:1;" id="mf-body">
+      <!-- PASO 1 -->
+      <div id="mf-step-1">
+        <div style="background:#fff1f2;border:1px solid #fecdd3;border-radius:8px;padding:12px 14px;color:#991b1b;font-size:12.5px;line-height:1.5;margin-bottom:16px;">
+          <b>⚠️ Advertencia:</b> Estás por forzar el envío del correo oficial ignorando los chequeos automáticos de datos desactualizados o bloqueos.
+        </div>
+        <div style="font-size:13px;color:#334155;line-height:1.6;" id="mf-info-text">
+          Estás por forzar el envío del reporte.
+        </div>
+        <div style="margin-top:16px;font-size:12px;color:#64748b;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:12px;">
+          <b>Verificaciones de seguridad en 3 pasos:</b>
+          <ol style="margin:8px 0 0 18px;padding:0;line-height:1.7;">
+            <li>Confirmar la intención y tipo de reporte a forzar.</li>
+            <li>Revisar la lista de destinatarios y <b>desmarcar (deslistar)</b> a quienes no quieras enviarles.</li>
+            <li>Confirmación final mediante palabra clave para evitar disparos accidentales.</li>
+          </ol>
+        </div>
+      </div>
+
+      <!-- PASO 2 -->
+      <div id="mf-step-2" style="display:none;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;gap:10px;flex-wrap:wrap;">
+          <div>
+            <div style="font-size:13px;font-weight:700;color:#0f172a;">Destinatarios del reporte</div>
+            <div style="font-size:11.5px;color:#64748b;" id="mf-recip-counter">Cargando lista…</div>
+          </div>
+          <div style="display:flex;gap:6px;">
+            <button class="btn" type="button" style="height:28px;padding:0 8px;font-size:11px;" onclick="mfSelectAll(true)">Marcar todos</button>
+            <button class="btn" type="button" style="height:28px;padding:0 8px;font-size:11px;" onclick="mfSelectAll(false)">Desmarcar todos</button>
+          </div>
+        </div>
+
+        <input type="text" id="mf-search" placeholder="🔍 Buscar por nombre o email..." oninput="mfFilterRecipients(this.value)" style="width:100%;height:34px;border:1px solid #cbd5e1;border-radius:7px;padding:0 10px;font-size:12px;margin-bottom:10px;outline:none;box-sizing:border-box;">
+
+        <div id="mf-recip-list" style="border:1px solid #e2e8f0;border-radius:8px;max-height:250px;overflow-y:auto;background:#f8fafc;padding:6px;">
+          <!-- items checkboxes -->
+        </div>
+      </div>
+
+      <!-- PASO 3 -->
+      <div id="mf-step-3" style="display:none;">
+        <div style="background:#fef2f2;border:1.5px solid #ef4444;border-radius:10px;padding:14px;color:#991b1b;margin-bottom:16px;">
+          <div style="font-size:13.5px;font-weight:800;margin-bottom:6px;">🚨 Verificación final antes del disparo</div>
+          <div style="font-size:12px;line-height:1.6;" id="mf-summary"></div>
+        </div>
+        <div style="font-size:12.5px;color:#334155;margin-bottom:8px;font-weight:600;">
+          Para habilitar el botón de envío, escribí exactamente <span style="background:#fee2e2;color:#dc2626;padding:2px 6px;border-radius:4px;font-family:monospace;font-weight:800;">ENVIAR</span> a continuación:
+        </div>
+        <input type="text" id="mf-confirm-input" placeholder="Escribí ENVIAR" oninput="mfCheckConfirm(this.value)" autocomplete="off" style="width:100%;height:38px;border:2px solid #cbd5e1;border-radius:8px;padding:0 12px;font-size:13px;font-weight:700;letter-spacing:1px;outline:none;box-sizing:border-box;">
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div style="padding:14px 20px;border-top:1px solid #e2e8f0;background:#f8fafc;display:flex;align-items:center;justify-content:space-between;">
+      <button class="btn" type="button" id="mf-btn-prev" onclick="mfPrevStep()" style="display:none;">← Volver</button>
+      <div style="margin-left:auto;display:flex;gap:8px;">
+        <button class="btn" type="button" onclick="cerrarModalEnvioForzado()">Cancelar</button>
+        <button class="btn btn-primary" type="button" id="mf-btn-next" onclick="mfNextStep()">Continuar a destinatarios →</button>
+        <button class="btn" type="button" id="mf-btn-send" onclick="mfExecuteSend()" style="display:none;background:#dc2626;border-color:#dc2626;color:#fff;" disabled>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+          Confirmar y enviar ahora
+        </button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  var LOCAL = (typeof google === 'undefined' || !google.script || !google.script.run);
+  var LS_KEY = 'peya_email_msg';
+  var LS_KEY_WEEKLY = 'peya_weekly_email_msg';
+  var SAVED = '';
+  var SAVED_WEEKLY = '';
+  var SAVED_BY = '', SAVED_BYNAME = '', SAVED_AT = '';   // autoría del mensaje guardado
+  var SAVED_WEEKLY_BY = '', SAVED_WEEKLY_BYNAME = '', SAVED_WEEKLY_AT = '';
+  var STATUS = null;   // estado del envío (getEmailStatus)
+  var EXEC_URL = '';   // URL del panel "Ejecuciones" del proyecto (getEmailStatus.executionsUrl)
+
+  function $(id){ return document.getElementById(id); }
+
+  // Abre el panel de Ejecuciones (Executions) de Apps Script en otra pestaña.
+  function openExecutions(){
+    if(EXEC_URL) window.open(EXEC_URL, '_blank');
+  }
+
+  function setStatus(kind, text){
+    var s = $('status');
+    var icons = {
+      ok:'<svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>',
+      err:'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>',
+      info:'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>'
+    };
+    s.className = 'status show ' + kind;
+    s.innerHTML = (icons[kind]||'') + '<span>' + text + '</span>';
+    if(kind === 'ok'){ clearTimeout(s._t); s._t = setTimeout(function(){ s.classList.remove('show'); }, 2500); }
+  }
+
+  function setStatusWeekly(kind, text){
+    var s = $('status-weekly');
+    var icons = {
+      ok:'<svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>',
+      err:'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>',
+      info:'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>'
+    };
+    s.className = 'status show ' + kind;
+    s.innerHTML = (icons[kind]||'') + '<span>' + text + '</span>';
+    if(kind === 'ok'){ clearTimeout(s._t); s._t = setTimeout(function(){ s.classList.remove('show'); }, 2500); }
+  }
+
+  function updatePreview(){
+    var v = $('msg').value;
+    $('count').textContent = v.length + ' caracteres';
+    var trimmed = v.trim();
+    var dirty = (v.trim() !== SAVED.trim());
+    if(trimmed === ''){
+      $('prev-on').style.display = 'none';
+      $('prev-off').style.display = 'block';
+    } else {
+      $('prev-txt').textContent = trimmed;
+      $('prev-on').style.display = 'block';
+      $('prev-off').style.display = 'none';
+      var pb = $('prev-by');
+      if(pb){
+        if(dirty){
+          pb.style.display = 'block';
+          pb.innerHTML = '<i>Al guardar quedará a tu nombre.</i>';
+        } else if(SAVED_BY){
+          pb.style.display = 'block';
+          pb.innerHTML = 'Escrito por <b style="color:#475569">' + (SAVED_BYNAME || SAVED_BY) + ' &lt;' + SAVED_BY + '&gt;</b>' + (SAVED_AT ? (' · ' + SAVED_AT) : '');
+        } else {
+          pb.style.display = 'none';
+        }
+      }
+    }
+    if(dirty) setStatus('info', 'Cambios sin guardar');
+    else if($('status').classList.contains('show') && $('status').classList.contains('info')) $('status').classList.remove('show');
+  }
+
+  function updatePreviewWeekly(){
+    var v = $('msg-weekly').value;
+    $('count-weekly').textContent = v.length + ' caracteres';
+    var trimmed = v.trim();
+    var dirty = (v.trim() !== SAVED_WEEKLY.trim());
+    if(trimmed === ''){
+      $('prev-weekly-on').style.display = 'none';
+      $('prev-weekly-off').style.display = 'block';
+    } else {
+      $('prev-weekly-txt').textContent = trimmed;
+      $('prev-weekly-on').style.display = 'block';
+      $('prev-weekly-off').style.display = 'none';
+      var pb = $('prev-weekly-by');
+      if(pb){
+        if(dirty){
+          pb.style.display = 'block';
+          pb.innerHTML = '<i>Al guardar quedará a tu nombre.</i>';
+        } else if(SAVED_WEEKLY_BY){
+          pb.style.display = 'block';
+          pb.innerHTML = 'Escrito por <b style="color:#475569">' + (SAVED_WEEKLY_BYNAME || SAVED_WEEKLY_BY) + ' &lt;' + SAVED_WEEKLY_BY + '&gt;</b>' + (SAVED_WEEKLY_AT ? (' · ' + SAVED_WEEKLY_AT) : '');
+        } else {
+          pb.style.display = 'none';
+        }
+      }
+    }
+    if(dirty) setStatusWeekly('info', 'Cambios sin guardar');
+    else if($('status-weekly').classList.contains('show') && $('status-weekly').classList.contains('info')) $('status-weekly').classList.remove('show');
+  }
+
+  function renderSendInfo(){
+    var el = $('send-info-txt');
+    if(!el) return;
+    if(LOCAL){
+      el.innerHTML = 'El mail se envía <b>automáticamente</b> todos los días. Acá no se envía nada: <b>Guardar</b> solo guarda el mensaje para el próximo envío.';
+      applyExecLink();
+      return;
+    }
+    if(!STATUS){ el.textContent = 'No se pudo leer el estado de envío.'; applyExecLink(); return; }
+    var pieza = SAVED ? 'Tu mensaje guardado se incluirá' : 'No hay mensaje guardado; no se mostrará ningún bloque';
+    if(STATUS.enviadoHoy){
+      el.innerHTML = 'El mail de <b>hoy ya se envió</b> a ' + STATUS.recipients + ' destinatarios. El próximo sale <b>mañana ~' + STATUS.horaStr + '</b> (' + STATUS.zona + '). ' + pieza + ' en ese envío.';
+    } else {
+      var warn = '';
+      if(STATUS.dataCheck && !STATUS.dataCheck.ok){
+        warn = '<div style="margin-top:7px;padding:6px 10px;background:#fff1f2;border:1px solid #fecdd3;border-radius:6px;color:#991b1b;font-size:11.5px;font-weight:600">⚠️ En espera de datos: ' + STATUS.dataCheck.motivo + '. El mail automático no se enviará hasta que Orders y GMV alcancen la fecha del daily.</div>';
+      }
+      el.innerHTML = 'El mail se envía <b>automáticamente hoy ~' + STATUS.horaStr + '</b> (' + STATUS.zona + ') a ' + STATUS.recipients + ' destinatarios.' + warn + '<div style="margin-top:4px">' + pieza + ' en ese envío.</div>';
+    }
+    applyExecLink();
+  }
+
+  function applyExecLink(){
+    var box = $('send-info'), txt = $('send-info-txt');
+    if(!box || !txt) return;
+    if(EXEC_URL){
+      box.classList.add('clk');
+      box.onclick = openExecutions;
+      box.title = 'Abrir el panel de Ejecuciones (Executions) de Apps Script';
+      if(!txt.querySelector('.exec-link')){
+        txt.insertAdjacentHTML('beforeend',
+          ' <span class="exec-link">Ver ejecuciones <svg viewBox="0 0 24 24" width="11" height="11" style="stroke:currentColor;fill:none;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;vertical-align:-1px"><path d="M7 17L17 7M17 7H9M17 7v8"/></svg></span>');
+      }
+    } else {
+      box.classList.remove('clk');
+      box.onclick = null;
+    }
+  }
+
+  function renderSendInfoWeekly(){
+    var el = $('send-info-weekly-txt');
+    if(!el) return;
+    if(LOCAL){
+      el.innerHTML = 'El Reporte Semanal se envía <b>automáticamente</b> los lunes ~12:00.';
+      return;
+    }
+    if(!STATUS || !STATUS.weekly){ el.textContent = 'No se pudo leer el estado del envío semanal.'; return; }
+    var w = STATUS.weekly;
+    var pieza = SAVED_WEEKLY ? 'Tu mensaje guardado se incluirá' : 'No hay mensaje guardado; no se mostrará ningún bloque';
+    if(w.enviadoEstaSemana){
+      el.innerHTML = 'El Reporte Semanal de la semana <b>' + w.semana + ' ya se envió</b> a ' + STATUS.recipients + ' destinatarios. El próximo sale el <b>próximo lunes ~' + w.horaStr + '</b> (' + w.zona + '). ' + pieza + ' en ese envío.';
+    } else if(w.bloqueadoEstaSemana){
+      el.innerHTML = '<span style="color:#b91c1c;font-weight:700">⛔ ENVÍO AUTOMÁTICO BLOQUEADO PARA LA SEMANA ' + w.semana + ':</span> ' + (w.motivoBloqueo || 'Datos incompletos al momento del envío') + '. El sistema no reintentará automáticamente. Usá el botón <b>Enviar semanal forzado</b> cuando los datos estén listos.';
+    } else {
+      var warn = '';
+      if(w.dataCheck && !w.dataCheck.ok){
+        warn = '<div style="margin-top:6px;padding:6px 10px;background:#fff1f2;border:1px solid #fecdd3;border-radius:6px;color:#991b1b;font-size:11.5px;font-weight:600">⚠️ Datos de la semana ' + w.semana + ' aún incompletos: ' + w.dataCheck.motivo + '. Si no están listos el lunes a las ' + w.horaStr + ', el envío automático se cancelará y bloqueará permanentemente.</div>';
+      }
+      el.innerHTML = 'El Reporte Semanal se envía <b>automáticamente los lunes ~' + w.horaStr + '</b> (' + w.zona + ') para la semana ' + w.semana + ' a ' + STATUS.recipients + ' destinatarios.' + warn + '<div style="margin-top:4px">' + pieza + ' en ese envío.</div>';
+    }
+  }
+
+  // ── LÓGICA DEL MODAL DE ENVÍO FORZADO (3 VERIFICACIONES) ─────────────
+  var MF_TYPE = 'daily';          // 'daily' | 'weekly'
+  var MF_STEP = 1;                // 1, 2 o 3
+  var MF_RECIPIENTS = [];         // [{email, name, checked}]
+  var MF_SEARCH_QUERY = '';
+
+  function abrirModalEnvioForzado(tipo){
+    MF_TYPE = tipo;
+    MF_STEP = 1;
+    MF_SEARCH_QUERY = '';
+    $('mf-search').value = '';
+    $('mf-confirm-input').value = '';
+    $('mf-btn-send').disabled = true;
+
+    var esDaily = (tipo === 'daily');
+    $('mf-title').textContent = esDaily ? 'Envío Forzado: Daily Report' : 'Envío Forzado: Reporte Semanal';
+
+    // Texto informativo en Paso 1
+    var info = '';
+    if(esDaily){
+      var dFecha = (STATUS && STATUS.dataCheck && STATUS.dataCheck.dailyDateDmy) || 'más reciente';
+      info = 'Estás por forzar el envío del <b>Daily Report</b> (' + dFecha + ').';
+      if(STATUS && STATUS.dataCheck && !STATUS.dataCheck.ok){
+        info += '<br><br><span style="color:#b91c1c;">Motivo actual de espera: ' + STATUS.dataCheck.motivo + '</span>';
+      }
+    } else {
+      var wSem = (STATUS && STATUS.weekly && STATUS.weekly.semana) || 'cerrada anterior';
+      info = 'Estás por forzar el envío del <b>Reporte Semanal</b> (semana ' + wSem + ').';
+      if(STATUS && STATUS.weekly && STATUS.weekly.bloqueadoEstaSemana){
+        info += '<br><br><span style="color:#b91c1c;">El envío automático estaba BLOQUEADO: ' + (STATUS.weekly.motivoBloqueo || 'Datos incompletos') + '</span>';
+      } else if(STATUS && STATUS.weekly && STATUS.weekly.dataCheck && !STATUS.weekly.dataCheck.ok){
+        info += '<br><br><span style="color:#b91c1c;">Datos incompletos: ' + STATUS.weekly.dataCheck.motivo + '</span>';
+      }
+    }
+    $('mf-info-text').innerHTML = info;
+
+    // Cargar destinatarios
+    $('mf-recip-counter').textContent = 'Cargando lista de destinatarios…';
+    $('mf-recip-list').innerHTML = '<div style="padding:12px;text-align:center;color:#64748b;font-size:12px;">Cargando...</div>';
+    
+    mfUpdateStepUi();
+    $('modal-force').style.display = 'flex';
+
+    if(LOCAL){
+      MF_RECIPIENTS = [
+        { email:'matias.cagliero@pedidosya.com', name:'Matias Cagliero', checked:true },
+        { email:'eugenio.irigoin@pedidosya.com', name:'Eugenio Irigoin', checked:true },
+        { email:'nicki.krawiecki@pedidosya.com', name:'Nicki Krawiecki', checked:true },
+        { email:'juan.pinori@pedidosya.com', name:'Juan Pinori', checked:true }
+      ];
+      mfRenderRecipients();
+      return;
+    }
+
+    google.script.run
+      .withSuccessHandler(function(list){
+        MF_RECIPIENTS = (list || []).map(function(item){
+          return { email: item.email, name: item.name, checked: true };
+        });
+        mfRenderRecipients();
+      })
+      .withFailureHandler(function(err){
+        $('mf-recip-counter').textContent = 'Error al cargar: ' + err;
+        $('mf-recip-list').innerHTML = '<div style="padding:12px;color:#dc2626;font-size:12px;">No se pudo cargar la lista: ' + err + '</div>';
+      })
+      .getRecipientsParaAdmin();
+  }
+
+  function cerrarModalEnvioForzado(){
+    $('modal-force').style.display = 'none';
+  }
+
+  function mfUpdateStepUi(){
+    // Step tabs styling
+    for(var i=1; i<=3; i++){
+      var tab = $('mf-step-tab-' + i);
+      var view = $('mf-step-' + i);
+      if(i === MF_STEP){
+        tab.style.background = '#e50044';
+        tab.style.color = '#fff';
+        view.style.display = 'block';
+      } else if(i < MF_STEP){
+        tab.style.background = '#dcfce7';
+        tab.style.color = '#15803d';
+        view.style.display = 'none';
+      } else {
+        tab.style.background = '#e2e8f0';
+        tab.style.color = '#64748b';
+        view.style.display = 'none';
+      }
+    }
+
+    $('mf-subtitle').textContent = 'Paso ' + MF_STEP + ' de 3: ' + 
+      (MF_STEP === 1 ? 'Confirmación de intención' : (MF_STEP === 2 ? 'Revisión y descarte de destinatarios' : 'Confirmación final de seguridad'));
+
+    // Buttons
+    $('mf-btn-prev').style.display = (MF_STEP > 1) ? 'inline-flex' : 'none';
+    if(MF_STEP === 1){
+      $('mf-btn-next').style.display = 'inline-flex';
+      $('mf-btn-next').textContent = 'Continuar a destinatarios →';
+      $('mf-btn-send').style.display = 'none';
+    } else if(MF_STEP === 2){
+      $('mf-btn-next').style.display = 'inline-flex';
+      $('mf-btn-next').textContent = 'Continuar a confirmación final →';
+      $('mf-btn-send').style.display = 'none';
+    } else if(MF_STEP === 3){
+      $('mf-btn-next').style.display = 'none';
+      $('mf-btn-send').style.display = 'inline-flex';
+      mfBuildSummary();
+    }
+  }
+
+  function mfNextStep(){
+    if(MF_STEP === 1){
+      MF_STEP = 2;
+      mfUpdateStepUi();
+    } else if(MF_STEP === 2){
+      var checkedCount = MF_RECIPIENTS.filter(function(r){ return r.checked; }).length;
+      if(checkedCount === 0){
+        alert('Debés seleccionar al menos un destinatario para poder realizar el envío.');
+        return;
+      }
+      MF_STEP = 3;
+      mfUpdateStepUi();
+      $('mf-confirm-input').value = '';
+      $('mf-btn-send').disabled = true;
+      setTimeout(function(){ $('mf-confirm-input').focus(); }, 150);
+    }
+  }
+
+  function mfPrevStep(){
+    if(MF_STEP > 1){
+      MF_STEP--;
+      mfUpdateStepUi();
+    }
+  }
+
+  function mfRenderRecipients(){
+    var container = $('mf-recip-list');
+    var q = MF_SEARCH_QUERY.toLowerCase().trim();
+    var filtered = MF_RECIPIENTS.filter(function(r){
+      return !q || r.email.toLowerCase().indexOf(q) !== -1 || (r.name && r.name.toLowerCase().indexOf(q) !== -1);
+    });
+
+    var total = MF_RECIPIENTS.length;
+    var selected = MF_RECIPIENTS.filter(function(r){ return r.checked; }).length;
+    var excluded = total - selected;
+    $('mf-recip-counter').innerHTML = '<b>' + selected + '</b> de ' + total + ' seleccionados' + 
+      (excluded > 0 ? ' (<span style="color:#dc2626;font-weight:700;">' + excluded + ' desmarcados</span>)' : '');
+
+    if(!filtered.length){
+      container.innerHTML = '<div style="padding:14px;text-align:center;color:#94a3b8;font-size:12px;">No se encontraron destinatarios con "' + q + '"</div>';
+      return;
+    }
+
+    var html = '';
+    filtered.forEach(function(r){
+      var idx = MF_RECIPIENTS.indexOf(r);
+      html += '<label style="display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:6px;background:' + (r.checked ? '#fff' : '#f1f5f9') + ';border:1px solid ' + (r.checked ? '#e2e8f0' : '#fecdd3') + ';margin-bottom:4px;cursor:pointer;font-size:12px;">' +
+        '<input type="checkbox" ' + (r.checked ? 'checked' : '') + ' onchange="mfToggleRecipient(' + idx + ', this.checked)" style="width:15px;height:15px;accent-color:#e50044;cursor:pointer;">' +
+        '<div style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' +
+          (r.name ? ('<b style="color:' + (r.checked ? '#0f172a' : '#94a3b8') + '">' + r.name + '</b> ') : '') +
+          '<span style="color:' + (r.checked ? '#64748b' : '#94a3b8') + '">&lt;' + r.email + '&gt;</span>' +
+        '</div>' +
+        (!r.checked ? '<span style="font-size:10px;font-weight:800;color:#dc2626;background:#fee2e2;padding:1px 5px;border-radius:4px;">EXCLUIDO</span>' : '') +
+      '</label>';
+    });
+    container.innerHTML = html;
+  }
+
+  function mfToggleRecipient(idx, isChecked){
+    if(MF_RECIPIENTS[idx]){
+      MF_RECIPIENTS[idx].checked = isChecked;
+      mfRenderRecipients();
+    }
+  }
+
+  function mfSelectAll(check){
+    var q = MF_SEARCH_QUERY.toLowerCase().trim();
+    MF_RECIPIENTS.forEach(function(r){
+      if(!q || r.email.toLowerCase().indexOf(q) !== -1 || (r.name && r.name.toLowerCase().indexOf(q) !== -1)){
+        r.checked = check;
+      }
+    });
+    mfRenderRecipients();
+  }
+
+  function mfFilterRecipients(query){
+    MF_SEARCH_QUERY = query || '';
+    mfRenderRecipients();
+  }
+
+  function mfBuildSummary(){
+    var esDaily = (MF_TYPE === 'daily');
+    var sel = MF_RECIPIENTS.filter(function(r){ return r.checked; });
+    var excl = MF_RECIPIENTS.filter(function(r){ return !r.checked; });
+
+    var html = '<b>Reporte:</b> ' + (esDaily ? 'Daily Report' : 'Reporte Semanal MTD') + '<br>' +
+      '<b>Destinatarios a enviar:</b> <span style="font-size:13px;font-weight:800;color:#0f172a;">' + sel.length + ' personas</span><br>' +
+      '<b>Destinatarios excluidos (deslistados):</b> ' + (excl.length > 0 ? ('<b style="color:#dc2626">' + excl.length + '</b>') : '0');
+
+    if(excl.length > 0 && excl.length <= 5){
+      html += '<div style="margin-top:4px;font-size:11px;color:#64748b;">(No recibirán: ' + excl.map(function(e){ return e.email; }).join(', ') + ')</div>';
+    } else if(excl.length > 5){
+      html += '<div style="margin-top:4px;font-size:11px;color:#64748b;">(No recibirán: ' + excl.slice(0, 4).map(function(e){ return e.email; }).join(', ') + ' y ' + (excl.length - 4) + ' más)</div>';
+    }
+
+    $('mf-summary').innerHTML = html;
+  }
+
+  function mfCheckConfirm(val){
+    var isConfirmed = (String(val || '').trim().toUpperCase() === 'ENVIAR');
+    $('mf-btn-send').disabled = !isConfirmed;
+  }
+
+  function mfExecuteSend(){
+    var btn = $('mf-btn-send');
+    var orig = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = 'Enviando correo forzado...';
+
+    var excluidos = MF_RECIPIENTS.filter(function(r){ return !r.checked; }).map(function(r){ return r.email; });
+    var esDaily = (MF_TYPE === 'daily');
+
+    if(LOCAL){
+      setTimeout(function(){
+        btn.disabled = false; btn.innerHTML = orig;
+        cerrarModalEnvioForzado();
+        if(esDaily) setStatus('ok', 'Envío forzado diario simulado OK');
+        else setStatusWeekly('ok', 'Envío forzado semanal simulado OK');
+      }, 700);
+      return;
+    }
+
+    if(esDaily){
+      setStatus('info', 'Enviando Daily Report forzado...');
+      google.script.run
+        .withSuccessHandler(function(r){
+          btn.disabled = false; btn.innerHTML = orig;
+          cerrarModalEnvioForzado();
+          if(r && r.ok){
+            setStatus('ok', '¡Daily Report enviado con éxito a ' + (r.sent || 'todos') + ' destinatarios!');
+            loadStatus();
+          } else {
+            setStatus('err', 'Error al enviar diario: ' + ((r && r.error) || 'desconocido'));
+          }
+        })
+        .withFailureHandler(function(err){
+          btn.disabled = false; btn.innerHTML = orig;
+          cerrarModalEnvioForzado();
+          setStatus('err', 'Error: ' + err);
+        })
+        .forzarEnvioDailyFiltrado(excluidos);
+    } else {
+      setStatusWeekly('info', 'Enviando Reporte Semanal forzado...');
+      google.script.run
+        .withSuccessHandler(function(r){
+          btn.disabled = false; btn.innerHTML = orig;
+          cerrarModalEnvioForzado();
+          if(r && r.ok){
+            setStatusWeekly('ok', '¡Reporte Semanal enviado con éxito a ' + (r.sent || 'todos') + ' destinatarios!');
+            loadStatus();
+          } else {
+            setStatusWeekly('err', 'Error al enviar semanal: ' + ((r && r.error) || 'desconocido'));
+          }
+        })
+        .withFailureHandler(function(err){
+          btn.disabled = false; btn.innerHTML = orig;
+          cerrarModalEnvioForzado();
+          setStatusWeekly('err', 'Error: ' + err);
+        })
+        .forzarEnvioWeeklyFiltrado(excluidos);
+    }
+  }
+
+  function loadStatus(){
+    if(LOCAL){ renderSendInfo(); renderSendInfoWeekly(); return; }
+    google.script.run
+      .withSuccessHandler(function(s){ STATUS = s; EXEC_URL = (s && s.executionsUrl) || ''; renderSendInfo(); renderSendInfoWeekly(); })
+      .withFailureHandler(function(){ renderSendInfo(); renderSendInfoWeekly(); })
+      .getEmailStatus();
+  }
+
+  function loadMsg(cb){
+    if(LOCAL){
+      try { SAVED = localStorage.getItem(LS_KEY) || ''; } catch(e){ SAVED = ''; }
+      SAVED_BY = SAVED ? 'eugenio.irigoin@pedidosya.com' : '';
+      SAVED_BYNAME = SAVED ? 'Eugenio Irigoin' : '';
+      SAVED_AT = SAVED ? '2026-06-29 10:15' : '';
+      $('msg').value = SAVED; updatePreview(); if(cb) cb(); return;
+    }
+    google.script.run
+      .withSuccessHandler(function(info){
+        info = info || {};
+        SAVED = info.msg || ''; SAVED_BY = info.by || ''; SAVED_BYNAME = info.byName || ''; SAVED_AT = info.at || '';
+        $('msg').value = SAVED; updatePreview(); if(cb) cb();
+      })
+      .withFailureHandler(function(err){ setStatus('err', 'No se pudo cargar: ' + err); if(cb) cb(); })
+      .getEmailMessageInfo();
+  }
+
+  function loadMsgWeekly(cb){
+    if(LOCAL){
+      try { SAVED_WEEKLY = localStorage.getItem(LS_KEY_WEEKLY) || ''; } catch(e){ SAVED_WEEKLY = ''; }
+      SAVED_WEEKLY_BY = SAVED_WEEKLY ? 'eugenio.irigoin@pedidosya.com' : '';
+      SAVED_WEEKLY_BYNAME = SAVED_WEEKLY ? 'Eugenio Irigoin' : '';
+      SAVED_WEEKLY_AT = SAVED_WEEKLY ? '2026-06-29 10:15' : '';
+      $('msg-weekly').value = SAVED_WEEKLY; updatePreviewWeekly(); if(cb) cb(); return;
+    }
+    google.script.run
+      .withSuccessHandler(function(info){
+        info = info || {};
+        SAVED_WEEKLY = info.msg || ''; SAVED_WEEKLY_BY = info.by || ''; SAVED_WEEKLY_BYNAME = info.byName || ''; SAVED_WEEKLY_AT = info.at || '';
+        $('msg-weekly').value = SAVED_WEEKLY; updatePreviewWeekly(); if(cb) cb();
+      })
+      .withFailureHandler(function(err){ setStatusWeekly('err', 'No se pudo cargar: ' + err); if(cb) cb(); })
+      .getWeeklyEmailMessageInfo();
+  }
+
+  function saveMsg(){
+    var v = $('msg').value;
+    $('btn-save').disabled = true;
+    if(LOCAL){
+      try { if(v.trim()==='') localStorage.removeItem(LS_KEY); else localStorage.setItem(LS_KEY, v.trim()); } catch(e){}
+      SAVED = v.trim();
+      SAVED_BY = SAVED ? 'eugenio.irigoin@pedidosya.com' : ''; SAVED_BYNAME = SAVED ? 'Eugenio Irigoin' : ''; SAVED_AT = SAVED ? '(ahora)' : '';
+      $('btn-save').disabled = false; updatePreview(); renderSendInfo();
+      setStatus('ok', SAVED ? 'Guardado (local) — no se envió nada' : 'Mensaje vacío — no se mostrará');
+      return;
+    }
+    google.script.run
+      .withSuccessHandler(function(res){
+        if(res && res.ok === false){ $('btn-save').disabled = false; setStatus('err', res.error || 'No autorizado'); return; }
+        SAVED = (res && res.message) || '';
+        SAVED_BY = (res && res.by) || ''; SAVED_BYNAME = (res && res.byName) || ''; SAVED_AT = (res && res.at) || '';
+        $('btn-save').disabled = false; updatePreview(); renderSendInfo();
+        setStatus('ok', SAVED ? 'Guardado — se incluye en el próximo envío' : 'Mensaje vacío — no se mostrará');
+      })
+      .withFailureHandler(function(err){ $('btn-save').disabled = false; setStatus('err', 'Error al guardar: ' + err); })
+      .setEmailMessage(v);
+  }
+
+  function saveMsgWeekly(){
+    var v = $('msg-weekly').value;
+    $('btn-save-weekly').disabled = true;
+    if(LOCAL){
+      try { if(v.trim()==='') localStorage.removeItem(LS_KEY_WEEKLY); else localStorage.setItem(LS_KEY_WEEKLY, v.trim()); } catch(e){}
+      SAVED_WEEKLY = v.trim();
+      SAVED_WEEKLY_BY = SAVED_WEEKLY ? 'eugenio.irigoin@pedidosya.com' : ''; SAVED_WEEKLY_BYNAME = SAVED_WEEKLY ? 'Eugenio Irigoin' : ''; SAVED_WEEKLY_AT = SAVED_WEEKLY ? '(ahora)' : '';
+      $('btn-save-weekly').disabled = false; updatePreviewWeekly();
+      setStatusWeekly('ok', SAVED_WEEKLY ? 'Guardado (local) — no se envió nada' : 'Mensaje vacío — no se mostrará');
+      return;
+    }
+    google.script.run
+      .withSuccessHandler(function(res){
+        if(res && res.ok === false){ $('btn-save-weekly').disabled = false; setStatusWeekly('err', res.error || 'No autorizado'); return; }
+        SAVED_WEEKLY = (res && res.message) || '';
+        SAVED_WEEKLY_BY = (res && res.by) || ''; SAVED_WEEKLY_BYNAME = (res && res.byName) || ''; SAVED_WEEKLY_AT = (res && res.at) || '';
+        $('btn-save-weekly').disabled = false; updatePreviewWeekly();
+        setStatusWeekly('ok', SAVED_WEEKLY ? 'Guardado — se incluye en el próximo envío' : 'Mensaje vacío — no se mostrará');
+      })
+      .withFailureHandler(function(err){ $('btn-save-weekly').disabled = false; setStatusWeekly('err', 'Error al guardar: ' + err); })
+      .setWeeklyEmailMessage(v);
+  }
+
+  function clearMsg(){
+    $('msg').value = '';
+    saveMsg();
+  }
+
+  function clearMsgWeekly(){
+    $('msg-weekly').value = '';
+    saveMsgWeekly();
+  }
+
+  function previewEmail(){
+    if(LOCAL){ setStatus('info', 'La previsualización completa solo funciona publicado en Apps Script'); return; }
+    var btn = $('btn-prev'); var orig = btn.innerHTML;
+    btn.disabled = true; btn.innerHTML = 'Generando...';
+    google.script.run
+      .withSuccessHandler(function(){
+        google.script.run
+          .withSuccessHandler(function(r){
+            btn.disabled = false; btn.innerHTML = orig;
+            if(r && r.ok && r.htmlUrl){ window.open(r.htmlUrl, '_blank'); setStatus('ok', 'Preview generada en tu Drive'); }
+            else setStatus('err', 'No se pudo generar: ' + (r && r.error || 'desconocido'));
+          })
+          .withFailureHandler(function(err){ btn.disabled = false; btn.innerHTML = orig; setStatus('err', 'Error: ' + err); })
+          .sendDailyEmail(true);
+      })
+      .withFailureHandler(function(err){ btn.disabled = false; btn.innerHTML = orig; setStatus('err', 'Error al guardar: ' + err); })
+      .setEmailMessage($('msg').value);
+  }
+
+  function previewEmailWeekly(){
+    if(LOCAL){ setStatusWeekly('info', 'La previsualización completa solo funciona publicado en Apps Script'); return; }
+    var btn = $('btn-prev-weekly'); var orig = btn.innerHTML;
+    btn.disabled = true; btn.innerHTML = 'Generando...';
+    google.script.run
+      .withSuccessHandler(function(){
+        google.script.run
+          .withSuccessHandler(function(r){
+            btn.disabled = false; btn.innerHTML = orig;
+            if(r && r.ok && r.htmlUrl){ window.open(r.htmlUrl, '_blank'); setStatusWeekly('ok', 'Preview generada en tu Drive'); }
+            else setStatusWeekly('err', 'No se pudo generar: ' + (r && r.error || 'desconocido'));
+          })
+          .withFailureHandler(function(err){ btn.disabled = false; btn.innerHTML = orig; setStatusWeekly('err', 'Error: ' + err); })
+          .sendWeeklyMtdEmail(true);
+      })
+      .withFailureHandler(function(err){ btn.disabled = false; btn.innerHTML = orig; setStatusWeekly('err', 'Error al guardar: ' + err); })
+      .setWeeklyEmailMessage($('msg-weekly').value);
+  }
+
+  function doRefresh(){
+    loadMsg(function(){
+      loadMsgWeekly(function(){
+        setStatus('ok', 'Actualizado');
+      });
+    });
+  }
+
+  $('msg').addEventListener('input', updatePreview);
+  $('msg-weekly').addEventListener('input', updatePreviewWeekly);
+
+  window.addEventListener('load', function(){
+    loadMsg(function(){
+      loadMsgWeekly(function(){
+        $('splash').classList.add('out');
+        loadStatus();
+      });
+    });
+  });
+</script>
+</body>
+</html>

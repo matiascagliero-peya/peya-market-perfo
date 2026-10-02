@@ -1,0 +1,63 @@
+// ##########################################################################################
+// #  TAREA: "5 OKRs by Line + Charts"                                                      #
+// ##########################################################################################
+
+const CONFIG_OKRS_CHARTS = {
+  nombreHoja: "5 OKRs by Line + Charts"
+};
+
+function _okrsChartsWorker(targetCountry) {
+  try {
+    Logger.log(`--- [TAREA 5 OKRs CHARTS] Iniciando para ${targetCountry.country.toUpperCase()} ---`);
+    
+    // 1. Abrir origen
+    const sourceSpreadsheet = SpreadsheetApp.openById(SOURCE_SPREADSHEET_ID);
+    const sourceSheet = sourceSpreadsheet.getSheetByName(CONFIG_OKRS_CHARTS.nombreHoja);
+    if (!sourceSheet) throw new Error(`La hoja de origen '${CONFIG_OKRS_CHARTS.nombreHoja}' no fue encontrada.`);
+    
+    // 2. Abrir destino
+    const targetSpreadsheet = SpreadsheetApp.openById(targetCountry.id);
+    const existingSheet = targetSpreadsheet.getSheetByName(CONFIG_OKRS_CHARTS.nombreHoja);
+    
+    let newSheet;
+
+    // 3. Reemplazar o Copiar hoja (MANTENIENDO EL ORDEN)
+    if (existingSheet) {
+      const originalIndex = existingSheet.getIndex(); // Guarda la posición actual
+      targetSpreadsheet.deleteSheet(existingSheet);
+      newSheet = sourceSheet.copyTo(targetSpreadsheet);
+      newSheet.setName(CONFIG_OKRS_CHARTS.nombreHoja);
+      targetSpreadsheet.setActiveSheet(newSheet);
+      targetSpreadsheet.moveActiveSheet(originalIndex); // Restaura la posición
+    } else {
+      newSheet = sourceSheet.copyTo(targetSpreadsheet);
+      newSheet.setName(CONFIG_OKRS_CHARTS.nombreHoja);
+    }
+
+    Logger.log(`>>> [TAREA 5 OKRs CHARTS] Proceso completado para ${targetCountry.country.toUpperCase()}.`);
+  } catch (error) {
+    Logger.log(`ERROR en [TAREA 5 OKRs CHARTS] para ${targetCountry.country.toUpperCase()}: ${error.toString()}`);
+  }
+}
+
+// --- Funciones Individuales ---
+function copiarOKRsCharts_Para_Argentina() { _okrsChartsWorker(PAISES_DE_DESTINO.find(p => p.country === "Argentina")); }
+function copiarOKRsCharts_Para_Bolivia() { _okrsChartsWorker(PAISES_DE_DESTINO.find(p => p.country === "Bolivia")); }
+function copiarOKRsCharts_Para_Chile() { _okrsChartsWorker(PAISES_DE_DESTINO.find(p => p.country === "Chile")); }
+function copiarOKRsCharts_Para_Costa_Rica() { _okrsChartsWorker(PAISES_DE_DESTINO.find(p => p.country === "Costa Rica")); }
+function copiarOKRsCharts_Para_Republica_Dominicana() { _okrsChartsWorker(PAISES_DE_DESTINO.find(p => p.country === "Republica Dominicana")); }
+function copiarOKRsCharts_Para_Ecuador() { _okrsChartsWorker(PAISES_DE_DESTINO.find(p => p.country === "Ecuador")); }
+function copiarOKRsCharts_Para_El_Salvador() { _okrsChartsWorker(PAISES_DE_DESTINO.find(p => p.country === "El Salvador")); }
+function copiarOKRsCharts_Para_Guatemala() { _okrsChartsWorker(PAISES_DE_DESTINO.find(p => p.country === "Guatemala")); }
+function copiarOKRsCharts_Para_Honduras() { _okrsChartsWorker(PAISES_DE_DESTINO.find(p => p.country === "Honduras")); }
+function copiarOKRsCharts_Para_Nicaragua() { _okrsChartsWorker(PAISES_DE_DESTINO.find(p => p.country === "Nicaragua")); }
+function copiarOKRsCharts_Para_Panama() { _okrsChartsWorker(PAISES_DE_DESTINO.find(p => p.country === "Panama")); }
+function copiarOKRsCharts_Para_Paraguay() { _okrsChartsWorker(PAISES_DE_DESTINO.find(p => p.country === "Paraguay")); }
+function copiarOKRsCharts_Para_Peru() { _okrsChartsWorker(PAISES_DE_DESTINO.find(p => p.country === "Peru")); }
+function copiarOKRsCharts_Para_Uruguay() { _okrsChartsWorker(PAISES_DE_DESTINO.find(p => p.country === "Uruguay")); }
+
+function copiarOKRsCharts_Para_TODOS() {
+  Logger.log("INICIANDO TAREA '5 OKRs CHARTS' PARA TODOS LOS PAÍSES");
+  PAISES_DE_DESTINO.forEach(pais => _okrsChartsWorker(pais));
+  Logger.log("TAREA '5 OKRs CHARTS' FINALIZADA");
+}

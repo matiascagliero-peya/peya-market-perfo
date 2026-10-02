@@ -1,0 +1,1025 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>BigQuery Analyzer — Principal</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <?!= include('styles'); ?>
+</head>
+<body>
+
+<script>
+function __bqBanner(txt){
+  var d=document.createElement('div');
+  d.style.cssText='position:fixed;top:0;left:0;right:0;background:#dc2626;color:#fff;padding:10px 16px;z-index:99999;font:12px Consolas,monospace;white-space:pre-wrap;';
+  d.textContent=txt;(document.body||document.documentElement).appendChild(d);
+}
+if(window.__BQ_WD__){__bqBanner('🛑 ARCHIVO DUPLICADO: el index quedo pegado mas de una vez. Ctrl+A, borra todo, confirma vacio, y pega UNA sola vez.');}
+window.__BQ_WD__=true;
+window.onerror=function(m,s,l,c){__bqBanner('Error JS (linea '+l+':'+c+'): '+m);return false;};
+setTimeout(function(){if(!window.__BQ_OK__){__bqBanner('El script principal no ejecuto. Repega el archivo completo (Ctrl+A, borrar, pegar una vez).');}},2500);
+</script>
+
+<!-- Panel de Control Principal (Compacto y Visual) -->
+<div id="header-panel">
+  <!-- Top Row: Title, Cache, Actions -->
+  <div id="header-top">
+    <h1>📊 BigQuery Analyzer <span class="by">by Matías Cagliero</span></h1>
+    
+    <div id="header-actions">
+      <span id="range-lbl" style="color:var(--muted);font-size:11px"></span>
+      <span id="cache-lbl" style="font-size:11px;color:var(--muted);margin-right:4px"></span>
+      <button class="ibtn" id="btn-search-user" onclick="toggleUserSelector()" title="Buscar otro usuario" style="font-weight:700">🔍 Buscar usuario</button>
+      <button class="ibtn" id="btn-adv" onclick="toggleAdvancedFilters()" title="Filtros avanzados y personalización" style="font-weight:700">⚙️ Filtros</button>
+      <button class="btn-p" id="btn-load" onclick="loadDashboard(true)" title="Vuelve a consultar BigQuery ignorando la caché">🔄 Actualizar</button>
+      <button id="theme-btn" onclick="toggleTheme()" title="Modo noche/día">🌙</button>
+    </div>
+  </div>
+
+  <!-- Primary Filters Grid (Always Visible) -->
+  <div id="primary-filters">
+    <!-- Period Selector (Pills) -->
+    <div class="filter-group">
+      <span class="lbl">🗓 Período</span>
+      <div class="grangrp">
+        <button class="granbtn" id="pyear" onclick="setRange('year')">Año</button>
+        <button class="granbtn on" id="pm" onclick="setRange('month')">Mes actual</button>
+        <button class="granbtn" id="p30" onclick="setRange('30d')">30 días</button>
+        <button class="granbtn" id="p7" onclick="setRange('7d')">7 días</button>
+      </div>
+    </div>
+
+    <!-- Rango de fechas manual (Siempre Visible) -->
+    <div class="filter-group">
+      <span class="lbl">📅 Rango</span>
+      <div style="display:inline-flex;align-items:center;gap:6px">
+        <input type="date" id="date-from" title="Fecha desde"/>
+        <span style="color:var(--muted)">→</span>
+        <input type="date" id="date-to" title="Fecha hasta"/>
+        <button class="ibtn" onclick="applyCustom()">Aplicar</button>
+      </div>
+    </div>
+
+    <!-- User Selector -->
+    <div id="cfg-user-group" class="filter-group hidden">
+      <span class="lbl">👤 Usuario</span>
+      <input id="cfg-user" list="cfg-user-list" placeholder="Tu usuario o todos" onchange="loadDashboard()" title="Escribí o elegí un usuario" autocomplete="off"/>
+      <datalist id="cfg-user-list"></datalist>
+    </div>
+  </div>
+
+  <!-- Advanced & Custom Filters (Collapsible) -->
+  <div id="adv-filters" class="hidden">
+    <div id="adv-filters-grid">
+      <!-- Project Selector (Colapsable) -->
+      <div class="filter-group">
+        <span class="lbl">📁 Proyecto</span>
+        <select id="cfg-project" onchange="loadDashboard()">
+          <option value="all">🌐 Todos mis proyectos</option>
+          <option value="peya-food-and-groceries">peya-food-and-groceries</option>
+        </select>
+        <span id="proj-status" style="font-size:10px;color:var(--muted)"></span>
+      </div>
+
+      <!-- Plataforma -->
+      <div class="filter-group">
+        <span class="lbl">🧩 Plataforma</span>
+        <select id="cfg-platform" onchange="loadDashboard()">
+          <option value="all">Todas</option>
+          <option value="GSHEET">Google Sheets</option>
+          <option value="BQ_UX_CONSOLE">BigQuery Console</option>
+          <option value="LOOKER">Looker</option>
+          <option value="DATAFORM">Dataform</option>
+          <option value="SCHEDULED">Scheduled</option>
+          <option value="NOT_DEFINED">Sin definir</option>
+        </select>
+      </div>
+
+      <!-- Zona / Región -->
+      <div class="filter-group">
+        <span class="lbl">🌍 Zona</span>
+        <select id="cfg-region" onchange="loadDashboard()" title="Zona / Región">
+          <option value="all">Todas las zonas</option>
+          <option value="us">us</option>
+          <option value="eu">eu</option>
+          <option value="southamerica-east1">southamerica-east1</option>
+          <option value="us-central1">us-central1</option>
+        </select>
+      </div>
+
+      <!-- Precio por TB -->
+      <div class="filter-group">
+        <span class="lbl">💲 USD/TB</span>
+        <input type="number" id="cfg-price" value="6.25" step="0.01" style="width:72px" title="USD por TB"/>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="alert"><span class="dot" id="adot"></span><span id="alabel">Alertas</span><a class="ibtn" href="<?= appUrl ?>?page=alertas" style="text-decoration:none;font-weight:700">🔔 Configurar alertas</a></div>
+
+<div id="tabs">
+  <a class="tab on" id="tab-ov" href="<?= appUrl ?>?page=index">📈 Overview / Queries</a>
+  <a class="tab" id="tab-sched" href="<?= appUrl ?>?page=programadas">⏰ Programadas</a>
+  <a class="tab" id="tab-alerts" href="<?= appUrl ?>?page=alertas">🔔 Alertas</a>
+  <? if (isAdmin()) { ?>
+    <a class="tab" id="tab-analytics" href="<?= appUrl ?>?page=analytics">📊 Analytics</a>
+  <? } ?>
+</div>
+
+<div style="display: flex; gap: 8px; margin-bottom: 12px;">
+  <button class="ibtn on" id="subtab-ov" onclick="switchSubTab('ov')">📈 Resumen Gráfico</button>
+  <button class="ibtn" id="subtab-q" onclick="switchSubTab('q')">🔎 Explorador de Queries</button>
+</div>
+
+<div id="err" class="hidden"></div>
+<div id="loader" class="hidden"><div class="spin"></div><div>Consultando BigQuery…</div></div>
+
+<div id="ov">
+  <div id="cards">
+      <div class="card c1"><div class="k">💵 Costo total</div><div class="v" id="c-cost">—</div><div class="s" id="c-period"></div></div>
+      <div class="card c2"><div class="k">📦 Datos facturados</div><div class="v" id="c-tb">—</div><div class="s" id="c-tb-sub"></div></div>
+      <div class="card c3"><div class="k">⚡ Slot hours</div><div class="v" id="c-slots">—</div><div class="s">horas de slot</div></div>
+      <div class="card c4"><div class="k">🔢 Queries</div><div class="v" id="c-jobs">—</div><div class="s" id="c-cache"></div></div>
+      <div class="card c5"><div class="k">🤖 Apps Script QPM <span class="badge-live">EN VIVO</span></div><div class="v" id="c-as-qpm">—</div><div class="s" id="c-as-qpm-time">pico en el período</div></div>
+  </div>
+
+  <div class="charts">
+    <div class="chartbox"><h3>TB facturados por origen <button class="copybtn" onclick="copyChart('source',this)" title="Copiar gráfico como imagen">⧉ copiar</button></h3><div class="cwrap"><canvas id="ch-source"></canvas></div></div>
+    <div class="chartbox"><h3>TB por usuario <span class="grangrp"><button class="granbtn on" onclick="setGran('day',this)">Día</button><button class="granbtn" onclick="setGran('week',this)">Semana</button><button class="granbtn" onclick="setGran('month',this)">Mes</button></span> <button class="copybtn" onclick="copyChart('trend',this)" title="Copiar gráfico como imagen">⧉ copiar</button></h3><div class="cwrap"><canvas id="ch-trend"></canvas></div></div>
+  </div>
+
+  <div id="proj-section" class="hidden">
+    <h2>🗂️ Consumo por proyecto <span class="cnt" id="proj-cnt">0</span><button class="copybtn" onclick="copyTable('t-projects',this)" title="Copiar tabla (pegá en Sheets)">⧉ copiar tabla</button></h2>
+    <div class="tablebox"><table id="t-projects"></table></div>
+  </div>
+
+  <h2>🔌 Consumo por origen <span class="cnt" id="src-cnt">0</span><button class="copybtn" onclick="copyTable('t-sources',this)" title="Copiar tabla (pegá en Sheets)">⧉ copiar tabla</button></h2>
+  <div class="tablebox"><table id="t-sources"></table></div>
+
+  <h2>🏗️ Costo por tabla construida <span class="cnt" id="built-cnt">0</span><button class="copybtn" onclick="copyTable('t-built',this)" title="Copiar tabla (pegá en Sheets)">⧉ copiar tabla</button></h2>
+  <div style="font-size:11px;color:var(--muted);margin:-4px 0 8px">Cuánto costó armar/refrescar cada tabla puntual (CREATE TABLE · INSERT · MERGE). Tocá un encabezado para ordenar; la fila de abajo es el total. Buscá una tabla específica abajo.</div>
+  <div id="built-filter" style="margin-bottom:8px"><input id="f-built" placeholder="🔍 Filtrar por nombre de tabla / dataset" style="width:100%;max-width:420px" oninput="renderBuilt()"/></div>
+  <div class="tablebox"><table id="t-built"></table></div>
+
+  <h2>📊 Google Sheets conectados <span class="cnt" id="sh-cnt">0</span><button class="copybtn" onclick="copyTable('t-sheets',this)" title="Copiar tabla (pegá en Sheets)">⧉ copiar tabla</button></h2>
+  <div class="tablebox"><table id="t-sheets"></table></div>
+
+  <h2>🔁 Consultas repetidas <span class="cnt" id="rep-cnt">0</span><button class="copybtn" onclick="copyTable('t-repeated',this)" title="Copiar tabla (pegá en Sheets)">⧉ copiar tabla</button></h2>
+  <div style="font-size:11px;color:var(--muted);margin:-4px 0 8px">Mismo SQL ejecutado 2+ veces en el período — lo que más consumís repitiendo.</div>
+  <div class="tablebox"><table id="t-repeated"></table></div>
+
+  <details id="quota-panel">
+    <summary>📐 Límites de cuota — Apps Script y Sheets API</summary>
+    <div class="qbody">
+      <div style="font-size:11px;color:var(--muted);margin:8px 0 6px;line-height:1.5">
+        Topes de Google (referencia 2026), <b>no</b> consumo actual. La fuente viva es la consola de Google Cloud de tu proyecto y la doc oficial (links abajo). Los topes por-cuenta dependen de si la app corre bajo una cuenta <b>gratis</b> (@gmail.com) o <b>Workspace</b> (@pedidosya.com → tu caso).
+      </div>
+
+      <div class="quota-sub">🚥 Semáforo de Consultas por Minuto (QPM) <span>· pico detectado en el período</span></div>
+      <div class="tablebox" style="margin-bottom:14px;"><table class="quota-tbl">
+        <thead><tr><th>Origen</th><th>Tope Google</th><th>Consumo Máximo Detectado</th><th>Minuto Pico</th><th>Estado</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><b>Consultas Totales (QPM)</b></td>
+            <td>—</td>
+            <td id="q-peak-total" style="font-weight:700">—</td>
+            <td id="q-peak-total-time" class="mono">—</td>
+            <td><span id="q-peak-total-badge" class="badge b-none">—</span></td>
+          </tr>
+          <tr>
+            <td><b>Google Sheets (QPM)</b></td>
+            <td>300 / min</td>
+            <td id="q-peak-sheets" style="font-weight:700">—</td>
+            <td id="q-peak-sheets-time" class="mono">—</td>
+            <td><span id="q-peak-sheets-badge" class="badge b-none">—</span></td>
+          </tr>
+          <tr>
+            <td><b>Apps Script (QPM)</b></td>
+            <td>—</td>
+            <td id="q-peak-script" style="font-weight:700">—</td>
+            <td id="q-peak-script-time" class="mono">—</td>
+            <td><span id="q-peak-script-badge" class="badge b-none">—</span></td>
+          </tr>
+        </tbody>
+      </table></div>
+
+      <div class="quota-sub">🧩 Apps Script <span>· la cuenta que ejecuta esta app</span></div>
+      <div class="tablebox"><table class="quota-tbl">
+        <thead><tr><th>Recurso</th><th>Tope</th><th>Uso en esta app</th></tr></thead>
+        <tbody>
+          <tr><td>Tiempo por ejecución</td><td>6 min</td><td>cada carga / fetch por proyecto</td></tr>
+          <tr><td>Tiempo total de triggers por día</td><td>90 min (gratis) · 6 h (Workspace)</td><td>chequeo de alertas</td></tr>
+          <tr><td>Triggers time-driven por script</td><td>20</td><td>alertas / scheduler</td></tr>
+          <tr><td>Ejecuciones simultáneas</td><td>30</td><td>varios usuarios a la vez</td></tr>
+          <tr><td>Destinatarios de email por día (MailApp)</td><td>100 (gratis) · 1.500 (Workspace)</td><td>mail de alertas</td></tr>
+          <tr><td>URL Fetch por día</td><td>20.000 (gratis) · 100.000 (Workspace)</td><td>no la usa</td></tr>
+        </tbody>
+      </table></div>
+
+      <div class="quota-sub">📊 Sheets API <span>· proyecto de Google Cloud · lo consumen las Hojas conectadas</span></div>
+      <div class="tablebox"><table class="quota-tbl">
+        <thead><tr><th>Recurso</th><th>Tope</th><th>Nota</th></tr></thead>
+        <tbody>
+          <tr><td>Lecturas</td><td>300/min por proyecto · 60/min por usuario</td><td>cada refresco de Connected Sheets</td></tr>
+          <tr><td>Escrituras</td><td>300/min por proyecto · 60/min por usuario</td><td>ídem</td></tr>
+          <tr><td>Tope diario</td><td>sin límite si estás dentro del por-minuto</td><td>excederlo → error 429</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+  </details>
+</div>
+
+<div id="q" class="hidden">
+  <div id="filters">
+    <select id="f-source" onchange="renderQueries()"><option value="">Todos los origenes</option></select>
+    <select id="f-stmt" onchange="renderQueries()"><option value="">Todos los tipos</option></select>
+    <input id="f-search" placeholder="🔍 Buscar query / usuario / job id" style="flex:1;min-width:200px" oninput="renderQueries()"/>
+    <button class="copybtn" onclick="copyTable('t-queries',this)" title="Copiar tabla con totales (pegá en Sheets)">⧉ copiar tabla</button>
+  </div>
+  <div class="tablebox"><table id="t-queries"></table></div>
+  <div style="color:var(--muted);font-size:11px;margin-top:8px;text-align:center;">Top 100 queries por consumo. Tocá un encabezado para ordenar.</div>
+</div>
+
+<?!= include('js_shared'); ?>
+
+<script>
+var HISTORY_MONTHS = 6;
+var autoHistory = false;
+var chSource=null, chTrend=null;
+var trendGran='day';
+var gAppUrl = "<?= appUrl ?>";
+
+function switchSubTab(sub){
+  g('subtab-ov').classList.toggle('on', sub === 'ov');
+  g('subtab-q').classList.toggle('on', sub === 'q');
+  g('ov').classList.toggle('hidden', sub !== 'ov');
+  g('q').classList.toggle('hidden', sub !== 'q');
+}
+
+function showErr(msg){
+  var e=g('err');
+  if(e){
+    e.textContent='';
+    var txtSpan = document.createElement('span');
+    txtSpan.textContent = msg;
+    e.appendChild(txtSpan);
+    
+    var lower = String(msg).toLowerCase();
+    
+    // Explicación de error de BigQuery por falta de permisos en GCP
+    if (lower.indexOf('jobs.create') !== -1 || lower.indexOf('access denied') !== -1 || lower.indexOf('permission denied') !== -1) {
+      var helpDiv = document.createElement('div');
+      helpDiv.style.cssText = 'margin-top:10px;font-size:11.5px;color:var(--text);background:rgba(239,68,68,0.08);padding:10px;border-radius:6px;border:1px solid rgba(239,68,68,0.2);line-height:1.4;text-align:left;';
+      helpDiv.innerHTML = '💡 <b>¿Falta de Permisos en BigQuery?</b><br>' +
+                          'Este error ocurre cuando tu cuenta de Google no tiene acceso suficiente en Google Cloud. ' +
+                          'Asegurate de que tu usuario tenga asignado el rol <b>BigQuery User</b> (u otro rol con permiso <code>bigquery.jobs.create</code>) ' +
+                          'en el proyecto seleccionado de GCP. Podés solicitar este acceso al equipo de Datos / Mesa de Ayuda.';
+      e.appendChild(helpDiv);
+    }
+    
+    if (lower.indexOf('access') !== -1 || lower.indexOf('permission') !== -1 || lower.indexOf('authoriz') !== -1 || lower.indexOf('autoriz') !== -1 || lower.indexOf('no tienes acceso') !== -1 || lower.indexOf('permiso') !== -1 || lower.indexOf('error') !== -1) {
+      var btn = document.createElement('button');
+      btn.textContent = '🔓 Forzar Autorización de Google';
+      btn.style.cssText = 'display:block;margin:10px auto 0;padding:6px 12px;background:#3b82f6;color:#fff;border:none;border-radius:6px;font-weight:bold;cursor:pointer;font-family:inherit;';
+      btn.onclick = function() {
+        if (gAppUrl) {
+          window.open(gAppUrl, '_top');
+        } else {
+          location.reload();
+        }
+      };
+      e.appendChild(btn);
+    }
+    e.classList.remove('hidden');
+  }
+}
+function hideErr(){var e=g('err');if(e)e.classList.add('hidden');}
+function setLoad(on){g('btn-load').disabled=on;g('loader').classList.toggle('hidden',!on);}
+
+function curUser(){return (g('cfg-user').value||'').trim();}
+
+function loadMyProjects(callback){
+  google.script.run.withSuccessHandler(function(r){
+    if(r&&r.ok){
+      var sel=g('cfg-project');
+      var oldVal=sel.value;
+      sel.textContent='';
+      var optAll=document.createElement('option');optAll.value='all';optAll.textContent='🌐 Todos mis proyectos';
+      sel.appendChild(optAll);
+      (r.projects||[]).forEach(function(p){
+        var o=document.createElement('option');o.value=p.id;o.textContent=p.friendlyName||p.id;
+        sel.appendChild(o);
+      });
+      sel.value=oldVal;
+      set('proj-status',r.projects?r.projects.length+' proyectos activos':'');
+    }
+    if(typeof callback === 'function') callback();
+  }).withFailureHandler(function(){
+    if(typeof callback === 'function') callback();
+  }).getMyProjects();
+}
+
+function loadDashboard(forceBypassCache){
+  hideErr();
+  var r=getRange(), ue=curUser(), platform=g('cfg-platform').value||'all';
+  gProject=g('cfg-project').value||'all';
+  gRegion=g('cfg-region').value||'all';
+  gPrice=parseFloat(g('cfg-price').value)||6.25;
+
+  var key=ckey(r,ue,platform);
+  var cache=forceBypassCache?null:loadCache(key);
+  if(cache){gData=cache.d;render(cache.d);showCache(cache.age);afterLoad();return;}
+
+  if(gProject==='all'){loadAllProgressive(r,ue,platform,key,true);return;}
+
+  setLoad(true);showCache(null);g('ov').classList.add('hidden');g('q').classList.add('hidden');
+  google.script.run
+    .withSuccessHandler(function(d){
+      setLoad(false);
+      if(d&&d.ok){gData=d;render(d);saveCache(key,d);showCache(0);afterLoad();}
+      else{showErr((d&&d.error)||'Error de carga');}
+    })
+    .withFailureHandler(function(e){setLoad(false);showErr(e.message);})
+    .getDashboard(gProject,gRegion,r.from,r.to,gPrice,ue,platform);
+}
+
+function afterLoad(){ if(autoHistory){ autoHistory=false; setTimeout(gProject==='all'?loadAllHistoryBehind:loadHistoryBehind,250); } }
+
+function loadHistoryBehind(){
+  var to=new Date(), from=new Date();
+  from.setDate(1); from.setMonth(from.getMonth()-(HISTORY_MONTHS-1));
+  var r={from:ymd(from),to:ymd(to)};
+  var platform=g('cfg-platform').value||'all';
+  var ue=curUser()||null;
+  var key=ckey(r,ue,platform);
+  var c=loadCache(key);
+  if(c&&c.d&&c.d.ok&&Array.isArray(c.d.topJobs)){markHistReady();return;}
+  setHistLoading(true);
+  google.script.run
+    .withSuccessHandler(function(d){ setHistLoading(false); if(d&&d.ok&&Array.isArray(d.topJobs)){saveCache(key,d);markHistReady();} })
+    .withFailureHandler(function(){ setHistLoading(false); })
+    .getDashboard(gProject,gRegion,r.from,r.to,gPrice,ue,platform);
+}
+
+function loadAllHistoryBehind(){
+  if(gProject!=='all')return;
+  var to=new Date(), from=new Date();
+  from.setDate(1); from.setMonth(from.getMonth()-(HISTORY_MONTHS-1));
+  var r={from:ymd(from),to:ymd(to)};
+  var platform=g('cfg-platform').value||'all';
+  var ue=curUser()||null;
+  var key=ckey(r,ue,platform);
+  var c=loadCache(key);
+  if(c&&c.d&&c.d.ok&&Array.isArray(c.d.topJobs)){markHistReady();return;}
+  var projs=allProjectIds(),acc=null,total=projs.length;
+  setHistLoading(true);
+  (function step(i){
+    if(i>=total){ setHistLoading(false); if(acc&&gProject==='all'){saveCache(key,acc);markHistReady();} return; }
+    google.script.run
+      .withSuccessHandler(function(d){ if(d&&d.ok&&Array.isArray(d.topJobs)){acc=acc?mergeDash(acc,d):d;} step(i+1); })
+      .withFailureHandler(function(){ step(i+1); })
+      .getDashboard(projs[i],gRegion,r.from,r.to,gPrice,ue,platform);
+  })(0);
+}
+
+function setHistLoading(on){ var el=g('cache-lbl'); if(el)el.textContent=on?'precargando '+HISTORY_MONTHS+' meses por detrás…':''; }
+function markHistReady(){ var el=g('cache-lbl'); if(el)el.textContent='📦 '+HISTORY_MONTHS+' meses precargados · ampliá el rango para verlos'; }
+
+function ymd(d){
+  var m=String(d.getMonth()+1),day=String(d.getDate());
+  return d.getFullYear()+'-'+(m.length===1?'0'+m:m)+'-'+(day.length===1?'0'+day:day);
+}
+
+function render(d, isPartial){
+  if(!d||!d.ok){ if(!isPartial) showErr((d&&d.error)||'Error desconocido');return;}
+  fillRegionSelect(d.regionsPresent);
+  fillUserSelect(d.users);
+  if(d.rawJobCount===0){
+    if(!isPartial) {
+      gUserAutoFilled=false;
+      clearPanels();
+      showErr('Sin queries para "'+(gProject==='all'?'todos los proyectos':gProject)+'" en el período. Probá otro rango de fechas.');
+    }
+    return;
+  }
+  
+  var ueNow=curUser();
+  if(ueNow && d.summary && d.summary.total_jobs===0){
+    if(gUserAutoFilled){ gUserAutoFilled=false; var _cuf=g('cfg-user'); if(_cuf)_cuf.value=''; hideErr(); loadDashboard(); return; }
+    if(!isPartial) {
+      clearPanels();
+      var present=realUsers(d.users);
+      var msg='⚠️ No hay queries de "'+ueNow+'" en '+(gProject==='all'?'tus proyectos':gProject)+' para este período. ';
+      if(present.length<=1)
+        msg+='Ojo: el dashboard sólo trajo '+present.length+' usuario'+(present.length===1?(' ('+present[0]+')'):'')+' → probablemente falte el permiso bigquery.jobs.listAll (corré debugFull).';
+      else
+        msg+='Ese mail no figura entre los que tienen datos. Usuarios disponibles ('+present.length+'): '+present.slice(0,50).join(', ');
+      showErr(msg);
+    }
+    return;
+  }
+  gUserAutoFilled=false;
+  hideErr();
+  gData=d;
+  var showSub = g('subtab-q').classList.contains('on') ? 'q' : 'ov';
+  g(showSub).classList.remove('hidden');
+  var r=getRange(),s=d.summary||{};
+  var tb=parseFloat(s.total_tb||0);
+
+  // Calcular diferencia en días y proyección a fin de mes (30 días)
+  var fDate = new Date(r.from + 'T00:00:00');
+  var tDate = new Date(r.to + 'T00:00:00');
+  var diffDays = Math.round((tDate - fDate) / 86400000) + 1;
+  if (!diffDays || diffDays <= 0) diffDays = 1;
+
+  var projCost = (s.total_cost_usd / diffDays) * 30;
+  var projTb = (tb / diffDays) * 30;
+
+  g('c-cost').textContent=fmtUSD(s.total_cost_usd);
+  g('c-period').innerHTML=r.from+' → '+r.to + (diffDays < 30 ? '<br><span style="font-weight:700; color:var(--accent);">Proy: ' + fmtUSD(projCost) + '/mes</span>' : '');
+  g('c-tb').textContent=tb>=1?tb.toFixed(1)+' TB':(tb*1000).toFixed(1)+' GB';
+  g('c-tb-sub').innerHTML='≈ '+fmtUSD(tb*gPrice)+' est.' + (diffDays < 30 ? '<br><span style="font-weight:700; color:var(--green);">Proy: ' + (projTb >= 1 ? projTb.toFixed(1)+' TB' : (projTb*1000).toFixed(1)+' GB') + '/mes</span>' : '');
+  g('c-slots').textContent=num(s.total_slot_hours)+' h';
+  g('c-jobs').textContent=fmtNum(s.total_jobs);
+  g('c-cache').textContent=fmtNum(s.cache_hits)+' desde cache';
+
+  if (d.rateLimits) {
+    var qpm = d.rateLimits.peakAppsScriptQpm || 0;
+    set('c-as-qpm', qpm + ' qpm');
+    var asJobsCount = d.rateLimits.appsScriptJobsTodayCount || 0;
+    if (qpm > 0) {
+      var peakTime = d.rateLimits.peakAppsScriptMin ? d.rateLimits.peakAppsScriptMin.slice(11) : '—';
+      set('c-as-qpm-time', 'pico hoy: ' + peakTime + ' (' + asJobsCount + ' queries hoy)');
+    } else {
+      set('c-as-qpm-time', '0 queries hoy');
+    }
+  }
+
+  drawCharts(d);
+  renderProjects();
+  renderSources();
+  renderBuilt();
+  renderSheets();
+  renderRepeated();
+  renderQuotas(d);
+
+  allQueries=d.topJobs||[];
+  buildFilters(d);
+  renderQueries();
+}
+
+function clearPanels(){
+  g('c-cost').textContent='—';g('c-tb').textContent='—';g('c-slots').textContent='—';g('c-jobs').textContent='—';
+  g('ov').classList.add('hidden');g('q').classList.add('hidden');
+}
+
+function realUsers(lst){return (lst||[]).filter(function(e){return e && e.toLowerCase().indexOf('gserviceaccount')===-1;});}
+
+function fillUserSelect(users){
+  var dl=g('cfg-user-list');if(!dl)return;dl.textContent='';
+  realUsers(users).forEach(function(u){var o=document.createElement('option');o.value=u;dl.appendChild(o);});
+}
+function fillRegionSelect(regions){
+  var sel=g('cfg-region');if(!sel)return;var oldVal=sel.value;
+  sel.textContent='';
+  var optAll=document.createElement('option');optAll.value='all';optAll.textContent='🌍 Todas las zonas';
+  sel.appendChild(optAll);
+  (regions||[]).forEach(function(r){
+    var o=document.createElement('option');o.value=r.region;o.textContent=r.region;
+    sel.appendChild(o);
+  });
+  sel.value=oldVal;
+}
+
+function drawCharts(d){
+  if(typeof Chart==='undefined')return;
+  var grid=chartGrid(),tick=chartTick();
+  
+  var src=(d.bySource||[]).slice().sort(function(a,b){return b.total_bytes-a.total_bytes;});
+  if(chSource)chSource.destroy();
+  chSource=new Chart(g('ch-source'),{
+    type:'doughnut',
+    data:{labels:src.map(function(r){return srcLabel(r.source);}),
+      datasets:[{data:src.map(function(r){return tbOf(r.total_bytes);}),
+        backgroundColor:src.map(function(r){return srcColor(r.source);}),
+        borderColor:'rgba(0,0,0,0)',borderWidth:2}]},
+    options:{responsive:true,maintainAspectRatio:false,cutout:'62%',
+      plugins:{legend:{position:'right',labels:{color:tick,boxWidth:11,padding:9,font:{size:11}}},
+        tooltip:{callbacks:{label:function(c){
+          var r=src[c.dataIndex];return ' '+c.label+': '+fmtTBval(c.parsed)+'  ('+fmtUSD(r.cost_usd)+')';}}}}}
+  });
+
+  drawTrend(d);
+}
+
+function drawTrend(d){
+  if(typeof Chart==='undefined')return;
+  var grid=chartGrid(),tick=chartTick();
+  var trend=d.userTrend||{users:[],days:[]};
+  
+  var groupedDays = [];
+  var daysMap = {};
+
+  trend.days.forEach(function(r){
+    var groupKey = r.day;
+    var label = dowLabel(r.day);
+
+    if (trendGran === 'week') {
+      var date = new Date(r.day + 'T12:00:00');
+      var dayOfWeek = date.getDay();
+      var diff = date.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
+      var monday = new Date(date.setDate(diff));
+      groupKey = monday.toISOString().slice(0, 10);
+      label = 'Sem ' + groupKey.slice(5);
+    } else if (trendGran === 'month') {
+      groupKey = r.day.slice(0, 7);
+      label = r.day.slice(0, 7);
+    }
+
+    if (!daysMap[groupKey]) {
+      daysMap[groupKey] = {
+        label: label,
+        b: trend.users.map(function(){return 0;}),
+        c: trend.users.map(function(){return 0;})
+      };
+      groupedDays.push(daysMap[groupKey]);
+    }
+
+    for (var i = 0; i < trend.users.length; i++) {
+      daysMap[groupKey].b[i] += (r.b[i] || 0);
+      daysMap[groupKey].c[i] += (r.c[i] || 0);
+    }
+  });
+
+  if(chTrend)chTrend.destroy();
+  chTrend=new Chart(g('ch-trend'),{
+    type:'bar',
+    data:{
+      labels:groupedDays.map(function(r){return r.label;}),
+      datasets:trend.users.map(function(u,idx){
+        return {
+          label:u,
+          data:groupedDays.map(function(r){return r.b[idx];}),
+          backgroundColor:getUserColor(u,idx),
+          stack:'s'
+        };
+      })
+    },
+    options:{
+      responsive:true,
+      maintainAspectRatio:false,
+      scales:{
+        x:{stacked:true,grid:{color:grid},ticks:{color:tick,font:{size:10}}},
+        y:{stacked:true,grid:{color:grid},ticks:{color:tick,font:{size:10}}}
+      },
+      plugins:{
+        legend:{display:false},
+        tooltip:{
+          callbacks:{
+            label:function(c){
+              var r = groupedDays[c.dataIndex];
+              return ' ' + c.dataset.label + ': ' + fmtTBval(c.parsed.y) + ' (' + fmtUSD(r.c[c.datasetIndex]) + ')';
+            }
+          }
+        }
+      }
+    }
+  });
+}
+
+var _colors=['#4f8ef7','#10b981','#f59e0b','#8b5cf6','#ec4899','#06b6d4','#14b8a6','#f43f5e','#848d9f','#a855f7','#6366f1','#10b981'];
+function getUserColor(u,idx){
+  if(u==='Otros')return '#4b5563';
+  return _colors[idx % _colors.length];
+}
+function setGran(g,btn){
+  trendGran=g;
+  var parent=btn.parentNode;
+  parent.querySelectorAll('button').forEach(function(b){b.classList.toggle('on',b===btn);});
+  if(gData)drawTrend(gData);
+}
+
+var COLS_PR=[
+  {k:'project',label:'Proyecto',render:function(r){return td(r.project,'mono');}},
+  {k:'jobs',label:'Queries',align:'r',render:function(r){return td(fmtNum(r.jobs),null,'r');}},
+  {k:'total_bytes',label:'Datos',align:'r',render:function(r){return td(fmtTB(r.total_bytes),null,'r');}},
+  {k:'slot_hours',label:'Slot hours',align:'r',render:function(r){return td(num(r.slot_hours)+' h',null,'r');}},
+  {k:'cost_usd',label:'Costo',align:'r',render:function(r){return td(fmtUSD(r.cost_usd),null,'r');}}
+];
+function renderProjects(){
+  var rows=(gData&&gData.byProject)||[];
+  if(rows.length>1){
+    g('proj-section').classList.remove('hidden');
+    g('proj-cnt').textContent=rows.length;
+    buildTable('t-projects',COLS_PR,rows,sortPr,renderProjects,null,null,function(r){
+      g('f-source').value='';
+      g('f-stmt').value='';
+      g('f-search').value=r.project;
+      switchSubTab('q');
+      renderQueries();
+    });
+  }else{
+    g('proj-section').classList.add('hidden');
+  }
+}
+
+var COLS_SRC=[
+  {k:'source',label:'Origen',render:function(r){return badgeCell(r.source);}},
+  {k:'jobs',label:'Queries',align:'r',render:function(r){return td(fmtNum(r.jobs),null,'r');}},
+  {k:'total_bytes',label:'Datos facturados',align:'r',render:function(r){return td(fmtTB(r.total_bytes),null,'r');}},
+  {k:'slot_hours',label:'Slot hours',align:'r',render:function(r){return td(num(r.slot_hours)+' h',null,'r');}},
+  {k:'cost_usd',label:'Costo total',align:'r',render:function(r){return td(fmtUSD(r.cost_usd),null,'r');}}
+];
+function sumSrc(sorted){
+  var tj=0,tb=0,sh=0,tc=0;
+  sorted.forEach(function(r){tj+=r.jobs;tb+=r.total_bytes;sh+=r.slot_hours;tc+=r.cost_usd;});
+  return ['Σ TOTAL ('+sorted.length+')',fmtNum(tj),fmtTB(tb),num(sh)+' h',fmtUSD(tc)];
+}
+function renderSources(){
+  buildTable('t-sources',COLS_SRC,(gData&&gData.bySource)||[],sortSrc,renderSources,sumSrc);
+}
+
+var COLS_BL=[
+  {k:'table_name',label:'Tabla / Dataset de destino',render:function(r){return td(r.table_name,'mono');}},
+  {k:'jobs',label:'Refrescos',align:'r',render:function(r){return td(fmtNum(r.jobs),null,'r');}},
+  {k:'total_bytes',label:'Billed Bytes',align:'r',render:function(r){return td(fmtTB(r.total_bytes),null,'r');}},
+  {k:'slot_hours',label:'Slot Hours',align:'r',render:function(r){return td(num(r.slot_hours)+' h',null,'r');}},
+  {k:'cost_usd',label:'Costo acumulado',align:'r',render:function(r){return td(fmtUSD(r.cost_usd),null,'r');}}
+];
+function sumBl(sorted){
+  var tj=0,tb=0,sh=0,tc=0;
+  sorted.forEach(function(r){tj+=r.jobs;tb+=r.total_bytes;sh+=r.slot_hours;tc+=r.cost_usd;});
+  return ['Σ FILTRADO ('+sorted.length+')',fmtNum(tj),fmtTB(tb),num(sh)+' h',fmtUSD(tc)];
+}
+function renderBuilt(){
+  var raw=(gData&&gData.builtTables)||[];
+  var filter=g('f-built').value.trim().toLowerCase();
+  var filtered=filter?raw.filter(function(r){return r.table_name.toLowerCase().indexOf(filter)!==-1;}):raw;
+  set('built-cnt',filtered.length);
+  var maxCost = filtered.length ? Math.max.apply(Math, filtered.map(function(x){return x.cost_usd || 0;})) : 1;
+  if (maxCost <= 0) maxCost = 1;
+  buildTable('t-built',COLS_BL,filtered,sortSh,renderBuilt,sumBl,function(r){
+    return heatBg((r.cost_usd || 0) / maxCost);
+  });
+}
+
+var COLS_SH=[
+  {k:'name',label:'Planilla',render:function(r){return linkCell(r.link,r.name);}},
+  {k:'jobs',label:'Refrescos',align:'r',render:function(r){return td(fmtNum(r.jobs),null,'r');}},
+  {k:'bytes',label:'Datos facturados',align:'r',render:function(r){return td(fmtTB(r.bytes),null,'r');}},
+  {k:'cost',label:'Costo acumulado',align:'r',render:function(r){return td(fmtUSD(r.cost),null,'r');}}
+];
+function sumSh(sorted){
+  var tj=0,tb=0,tc=0;
+  sorted.forEach(function(r){tj+=r.jobs;tb+=r.bytes;tc+=r.cost;});
+  return ['Σ TOTAL ('+sorted.length+')',fmtNum(tj),fmtTB(tb),fmtUSD(tc)];
+}
+function renderSheets(){
+  buildTable('t-sheets',COLS_SH,(gData&&gData.sheetsJobs)||[],sortSh,renderSheets,sumSh);
+}
+
+var COLS_REP=[
+  {k:'query_name',label:'Nombre de la Query',render:function(r){return td(r.query_name || '(no declarada)', 'namecell');}},
+  {k:'query_preview',label:'SQL Preview',render:function(r){return qCell(r.query_preview);}},
+  {k:'count',label:'Ejecuciones',align:'r',render:function(r){return td(fmtNum(r.count),null,'r');}},
+  {k:'total_bytes',label:'Datos facturados',align:'r',render:function(r){return td(fmtTB(r.total_bytes),null,'r');}},
+  {k:'slot_hours',label:'Slot Hours',align:'r',render:function(r){return td(num(r.slot_hours)+' h',null,'r');}},
+  {k:'cost_usd',label:'Costo total',align:'r',render:function(r){return td(fmtUSD(r.cost_usd),null,'r');}}
+];
+function sumRep(sorted){
+  var tj=0,tb=0,sh=0,tc=0;
+  sorted.forEach(function(r){tj+=r.count;tb+=r.total_bytes;sh+=r.slot_hours;tc+=r.cost_usd;});
+  return ['Σ TOTAL ('+sorted.length+')','',fmtNum(tj),fmtTB(tb),num(sh)+' h',fmtUSD(tc)];
+}
+function renderRepeated(){
+  var raw = (gData && gData.repeatedQueries) || [];
+  set('rep-cnt', raw.length);
+  var maxCount = raw.length ? Math.max.apply(Math, raw.map(function(x){return x.count || 0;})) : 1;
+  if (maxCount <= 0) maxCount = 1;
+  buildTable('t-repeated',COLS_REP,raw,sortSh,renderRepeated,sumRep,function(r){
+    return heatBg((r.count || 0) / maxCount);
+  }, function(r){
+    openSqlModal(r.query_name, r.query_full || r.query_preview);
+  });
+}
+
+function renderQuotas(d){
+  if(!d || !d.rateLimits) return;
+  var rl = d.rateLimits;
+  
+  // Total QPM
+  var qTotal = rl.peakQpm || 0;
+  set('q-peak-total', qTotal + ' qpm');
+  set('q-peak-total-time', rl.peakMin ? rl.peakMin : '—');
+  var bTotal = g('q-peak-total-badge');
+  if (bTotal) {
+    bTotal.textContent = qTotal === 0 ? 'Sin uso' : 'Normal';
+    bTotal.className = 'badge ' + (qTotal === 0 ? 'b-none' : 'b-gsheet');
+  }
+
+  // Google Sheets QPM (Limit is 300 qpm)
+  var qSheets = rl.peakSheetsQpm || 0;
+  set('q-peak-sheets', qSheets + ' qpm');
+  set('q-peak-sheets-time', rl.peakSheetsMin ? rl.peakSheetsMin : '—');
+  var bSheets = g('q-peak-sheets-badge');
+  if (bSheets) {
+    if (qSheets === 0) {
+      bSheets.textContent = 'Sin uso';
+      bSheets.className = 'badge b-none';
+    } else if (qSheets < 150) {
+      bSheets.textContent = 'Normal';
+      bSheets.className = 'badge b-gsheet';
+    } else if (qSheets < 240) {
+      bSheets.textContent = 'Advertencia';
+      bSheets.className = 'badge b-warn';
+    } else {
+      bSheets.textContent = 'Crítico';
+      bSheets.className = 'badge b-crit';
+    }
+  }
+
+  // Apps Script QPM
+  var qScript = rl.peakAppsScriptQpm || 0;
+  set('q-peak-script', qScript + ' qpm');
+  set('q-peak-script-time', rl.peakAppsScriptMin ? rl.peakAppsScriptMin : '—');
+  var bScript = g('q-peak-script-badge');
+  if (bScript) {
+    bScript.textContent = qScript === 0 ? 'Sin uso' : 'Normal';
+    bScript.className = 'badge ' + (qScript === 0 ? 'b-none' : 'b-appsscript');
+  }
+}
+
+var COLS_Q=[
+  {k:'creationTime',label:'Fecha',render:function(r){return td(fmtDateTime(r.creationTime),'mono');}},
+  {k:'query_name',label:'Nombre de la Query',render:function(r){return td(r.query_name || '(no declarada)', 'namecell');}},
+  {k:'userEmail',label:'Usuario',render:function(r){return td(r.userEmail);}},
+  {k:'source',label:'Origen',render:function(r){return badgeCell(r.source);}},
+  {k:'statementType',label:'Tipo',render:function(r){return stmtCell(r.statementType);}},
+  {k:'totalBytesBilled',label:'Datos',align:'r',render:function(r){return td(fmtTB(r.totalBytesBilled),null,'r');}},
+  {k:'cost_usd',label:'Costo',align:'r',render:function(r){return td(fmtUSD(r.cost_usd),null,'r');}},
+  {k:'query',label:'SQL',render:function(r){return qCell(r.query);}},
+  {k:'jobId',label:'Job ID',render:function(r){var el=td(r.jobId,'mono');el.style.fontSize='10px';el.title=r.jobId;return el;}}
+];
+function renderQueries(){
+  var raw=allQueries||[];
+  var src=g('f-source').value,stmt=g('f-stmt').value,search=g('f-search').value.trim().toLowerCase();
+  var filtered=raw.filter(function(r){
+    if(src&&r.source!==src)return false;
+    if(stmt&&r.statementType!==stmt)return false;
+    if(search){
+      var match=r.query.toLowerCase().indexOf(search)!==-1||
+                 (r.query_name && r.query_name.toLowerCase().indexOf(search)!==-1)||
+                 r.userEmail.toLowerCase().indexOf(search)!==-1||
+                 r.jobId.toLowerCase().indexOf(search)!==-1||
+                 r.project.toLowerCase().indexOf(search)!==-1;
+      if(!match)return false;
+    }
+    return true;
+  });
+  buildTable('t-queries',COLS_Q,filtered,sortQ,renderQueries,null,null,function(r){
+    openSqlModal(r.query_name || 'SQL Completo', r.query);
+  });
+}
+
+function buildFilters(d){
+  var selSrc=g('f-source'),selStmt=g('f-stmt');
+  var oldSrc=selSrc.value,oldStmt=selStmt.value;
+  selSrc.textContent='';selStmt.textContent='';
+  var o1=document.createElement('option');o1.value='';o1.textContent='Todos los origenes';selSrc.appendChild(o1);
+  var o2=document.createElement('option');o2.value='';o2.textContent='Todos los tipos';selStmt.appendChild(o2);
+  
+  (d.bySource||[]).forEach(function(s){
+    var o=document.createElement('option');o.value=s.source;o.textContent=srcLabel(s.source)+' ('+s.jobs+')';
+    selSrc.appendChild(o);
+  });
+  
+  var stmts={};
+  allQueries.forEach(function(q){if(q.statementType)stmts[q.statementType]=(stmts[q.statementType]||0)+1;});
+  Object.keys(stmts).sort().forEach(function(k){
+    var o=document.createElement('option');o.value=k;o.textContent=k+' ('+stmts[k]+')';
+    selStmt.appendChild(o);
+  });
+  selSrc.value=oldSrc;selStmt.value=oldStmt;
+}
+
+function allProjectIds(){
+  var sel=g('cfg-project'),ids=[];
+  if(sel)Array.prototype.forEach.call(sel.options,function(o){if(o.value&&o.value!=='all')ids.push(o.value);});
+  return ids.length?ids:['peya-food-and-groceries'];
+}
+
+function loadAllProgressive(r,ue,platform,key,doHist){
+  hideErr();
+  var projs=allProjectIds(),acc=null,total=projs.length,okc=0;
+  gAllIds=projs.join(',');
+  setLoad(true);showCache(null);g('ov').classList.add('hidden');g('q').classList.add('hidden');
+  function step(i){
+    if(i>=total){
+      setLoad(false);setProgress('');
+      if(acc){gData=acc;try{render(acc, false);}catch(e){showErr('Error al mostrar: '+e.message);}saveCache(key,acc);showCache(0);
+        if(doHist) setTimeout(loadAllHistoryBehind,250);
+      }
+      else showErr('No se pudo leer ningún proyecto. Es probable que no tengas permisos en BigQuery o que falte la autorización de Google.');
+      return;
+    }
+    setProgress('cargando proyecto '+(i+1)+'/'+total+'…');
+    google.script.run
+      .withSuccessHandler(function(d){
+        if(d&&d.ok&&Array.isArray(d.topJobs)){okc++;acc=acc?mergeDash(acc,d):d;setLoad(false);gData=acc;try{render(acc, (i < total - 1));}catch(e){}}
+        step(i+1);
+      })
+      .withFailureHandler(function(){step(i+1);})
+      .getDashboard(projs[i],gRegion,r.from,r.to,gPrice,ue,platform);
+  }
+  step(0);
+}
+
+function setProgress(msg){var el=g('cache-lbl');if(el)el.textContent=msg||'';}
+function r4(n){return Math.round((parseFloat(n)||0)*1e4)/1e4;}
+function r2(n){return Math.round((parseFloat(n)||0)*1e2)/1e2;}
+function tbOf(bytes){return (parseFloat(bytes)||0)/1e12;}
+function fmtTBval(tb){return tb>=1?tb.toFixed(1)+' TB':(tb*1000).toFixed(1)+' GB';}
+var DOW=['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+function dowLabel(day){var p=String(day).split('-');var d=new Date(+p[0],+p[1]-1,+p[2]);return DOW[d.getDay()]+' '+(+p[2])+'/'+p[1];}
+
+function mergeByKey(a,b,keyf,sumf,sortf,asc,topN){
+  var map={},order=[];
+  function add(arr){(arr||[]).forEach(function(row){var k=row[keyf];if(k==null)return;
+    if(!map[k]){map[k]={};for(var p in row)map[k][p]=row[p];order.push(k);}
+    else{sumf.forEach(function(f){map[k][f]=(parseFloat(map[k][f])||0)+(parseFloat(row[f])||0);});}});}
+  add(a);add(b);
+  var out=order.map(function(k){return map[k];});
+  out.sort(function(x,y){var xv=x[sortf],yv=y[sortf];
+    if(typeof xv==='string'||typeof yv==='string')return (asc?1:-1)*(''+(xv||'')).localeCompare(''+(yv||''));
+    return (asc?1:-1)*((parseFloat(xv)||0)-(parseFloat(yv)||0));});
+  return topN?out.slice(0,topN):out;
+}
+function mergeUserTrend(a,b){
+  a=a||{users:[],days:[]};b=b||{users:[],days:[]};
+  var map={};
+  function ingest(ut){var us=ut.users||[];(ut.days||[]).forEach(function(rec){if(!map[rec.day])map[rec.day]={};
+    for(var i=0;i<us.length;i++){var u=us[i];if(!map[rec.day][u])map[rec.day][u]=[0,0];
+      map[rec.day][u][0]+=(rec.b&&rec.b[i])||0;map[rec.day][u][1]+=(rec.c&&rec.c[i])||0;}});}
+  ingest(a);ingest(b);
+  var tot={};Object.keys(map).forEach(function(d){Object.keys(map[d]).forEach(function(u){tot[u]=(tot[u]||0)+map[d][u][0];});});
+  var named=Object.keys(tot).filter(function(u){return u!=='Otros';}).sort(function(x,y){return tot[y]-tot[x];});
+  var top=named.slice(0,12),hasOtros=(named.length>12)||('Otros' in tot);
+  var users=top.concat(hasOtros?['Otros']:[]),idx={};users.forEach(function(u,i){idx[u]=i;});
+  var oi=hasOtros?idx['Otros']:-1;
+  var days=Object.keys(map).sort().map(function(d){var bb=users.map(function(){return 0;}),cc=users.map(function(){return 0;});
+    Object.keys(map[d]).forEach(function(u){var i=(idx[u]!==undefined)?idx[u]:oi;if(i<0)return;bb[i]+=map[d][u][0];cc[i]+=map[d][u][1];});
+    return {day:d,b:bb,c:cc};});
+  return {users:users,days:days};
+}
+function mergeDash(a,b){
+  if(!a)return b;if(!b)return a;
+  var sa=a.summary||{},sb=b.summary||{},tj=(sa.total_jobs||0)+(sb.total_jobs||0),tc=r4((sa.total_cost_usd||0)+(sb.total_cost_usd||0));
+  var res = {
+    ok:true,multiMode:true,loops:[],triggerActive:a.triggerActive||b.triggerActive,
+    allUsersWorked:(a.allUsersWorked!==false)&&(b.allUsersWorked!==false),
+    rawJobCount:(a.rawJobCount||0)+(b.rawJobCount||0),
+    projectsQueried:(a.projectsQueried||[]).concat(b.projectsQueried||[]),
+    summary:{total_jobs:tj,total_cost_usd:tc,total_tb:r4((sa.total_tb||0)+(sb.total_tb||0)),
+      total_slot_hours:r2((sa.total_slot_hours||0)+(sb.total_slot_hours||0)),
+      cache_hits:(sa.cache_hits||0)+(sb.cache_hits||0),total_bytes:(sa.total_bytes||0)+(sb.total_bytes||0),
+      avg_cost_per_job:tj?r4(tc/tj):0},
+    rateLimits:(function(x,y){x=x||{};y=y||{};function mx(k){return Math.max(x[k]||0,y[k]||0);}
+      var qA=x.peakQpm||0,qB=y.peakQpm||0,sA=x.peakSheetsQpm||0,sB=y.peakSheetsQpm||0,asA=x.peakAppsScriptQpm||0,asB=y.peakAppsScriptQpm||0;
+      return {
+        peakQpm:Math.max(qA,qB),
+        peakQpmUser:mx('peakQpmUser'),
+        peakSheetsQpm:Math.max(sA,sB),
+        peakSheetsQpmUser:mx('peakSheetsQpmUser'),
+        peakAppsScriptQpm:Math.max(asA,asB),
+        peakAppsScriptQpmUser:mx('peakAppsScriptQpmUser'),
+        peakMin:(qA>=qB?x.peakMin:y.peakMin)||x.peakMin||y.peakMin||'',
+        peakSheetsMin:(sA>=sB?x.peakSheetsMin:y.peakSheetsMin)||x.peakSheetsMin||y.peakSheetsMin||'',
+        peakAppsScriptMin:(asA>=asB?x.peakAppsScriptMin:y.peakAppsScriptMin)||x.peakAppsScriptMin||y.peakAppsScriptMin||''
+      };})(a.rateLimits,b.rateLimits),
+    regionsPresent:mergeByKey(a.regionsPresent,b.regionsPresent,'region',['jobs'],'region',true,0),
+    bySource:mergeByKey(a.bySource,b.bySource,'source',['jobs','total_bytes','cost_usd','slot_hours'],'slot_hours',false,0),
+    byProject:mergeByKey(a.byProject,b.byProject,'project',['jobs','total_bytes','cost_usd','slot_hours'],'slot_hours',false,0),
+    byDataset:mergeByKey(a.byDataset,b.byDataset,'dataset',['jobs','total_bytes','cost_usd'],'cost_usd',false,15),
+    byTable:mergeByKey(a.byTable,b.byTable,'table_name',['jobs','total_bytes','cost_usd'],'cost_usd',false,20),
+    builtTables:mergeByKey(a.builtTables,b.builtTables,'table_name',['jobs','total_bytes','cost_usd','slot_hours'],'cost_usd',false,30),
+    byOrigin:mergeByKey(a.byOrigin,b.byOrigin,'origin',['jobs','total_bytes','cost_usd'],'cost_usd',false,0),
+    byMonth:mergeByKey(a.byMonth,b.byMonth,'month',['jobs','tb','cost_usd','slot_hours'],'month',true,0),
+    dailyTrend:mergeByKey(a.dailyTrend,b.dailyTrend,'day',['jobs','gb_processed','cost_usd','slot_hours'],'day',true,0),
+    repeatedQueries:mergeByKey(a.repeatedQueries,b.repeatedQueries,'query_preview',['count','total_bytes','cost_usd','slot_hours'],'cost_usd',false,50),
+    sheetsJobs:mergeByKey(a.sheetsJobs,b.sheetsJobs,'name',['jobs','bytes','cost'],'cost',false,0),
+    topJobs:(a.topJobs||[]).concat(b.topJobs||[]).sort(function(x,y){return (parseFloat(y.slot_ms)||0)-(parseFloat(x.slot_ms)||0);}).slice(0,100),
+    users:(function(){var s={};(a.users||[]).concat(b.users||[]).forEach(function(u){s[u]=1;});return Object.keys(s).sort();})(),
+    userTrend:mergeUserTrend(a.userTrend,b.userTrend),
+    hourlyAppsScript: (function(){
+      var out=Array(24).fill(0);
+      for(var i=0;i<24;i++) out[i]=(a.hourlyAppsScript?a.hourlyAppsScript[i]:0)+(b.hourlyAppsScript?b.hourlyAppsScript[i]:0);
+      return out;
+    })(),
+    hourlyAll: (function(){
+      var out=Array(24).fill(0);
+      for(var i=0;i<24;i++) out[i]=(a.hourlyAll?a.hourlyAll[i]:0)+(b.hourlyAll?b.hourlyAll[i]:0);
+      return out;
+    })(),
+    numDays: 0
+  };
+  res.numDays = Math.max(1, (res.dailyTrend || []).length);
+  return res;
+}
+
+// ── Init ──
+document.addEventListener('DOMContentLoaded',function(){
+  try{if(localStorage.getItem('bq-theme')==='light')toggleTheme();}catch(e){}
+  var themeBtn=g('theme-btn');if(themeBtn)themeBtn.textContent=document.documentElement.classList.contains('light')?'☀️':'🌙';
+  setRange('month');
+  var yBtn = g('pyear'); if(yBtn) yBtn.textContent = 'Año ' + new Date().getFullYear();
+
+  google.script.run.withSuccessHandler(function(cfg){
+    if(cfg){
+      if(cfg.pricePerTB)g('cfg-price').value=cfg.pricePerTB;
+      currentUser=cfg.currentUser||'';
+      gIsAdmin=!!cfg.isAdmin;
+      gIsViewer=!!cfg.isViewer;
+      if(currentUser){ var _cu=g('cfg-user'); if(_cu){ _cu.value=currentUser; } }
+    }
+    _ready=true;
+    autoHistory=true;
+    loadMyProjects(function(){
+      loadDashboard();
+    });
+  }).withFailureHandler(function(){
+    _ready=true;
+    autoHistory=true;
+    loadMyProjects(function(){
+      loadDashboard();
+    });
+  }).getConfig();
+
+  google.script.run.withSuccessHandler(function(st){
+    if(st){g('adot').classList.toggle('on',!!st.active);set('alabel',st.active?('Alertas activas: '+(st.enabled||0)):'Alertas inactivas');}
+  }).withFailureHandler(function(){}).getAlertsStatus();
+});
+
+window.__BQ_OK__=true;
+</script>
+
+<!-- Modal para ver SQL Completo -->
+<div id="sql-modal" style="position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(15,23,42,0.6); backdrop-filter:blur(4px); z-index:9999; display:none; align-items:center; justify-content:center; padding:20px;">
+  <div style="background:var(--card); border:1px solid var(--border); border-radius:12px; width:90%; max-width:950px; height:80vh; max-height:800px; display:flex; flex-direction:column; box-shadow:0 20px 25px -5px rgba(0,0,0,0.2), 0 10px 10px -5px rgba(0,0,0,0.04); overflow:hidden;">
+    <div style="padding:16px 20px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; background:var(--card2);">
+      <h3 id="modal-query-title" style="margin:0; font-size:14px; font-weight:700; color:var(--text); text-transform:uppercase; letter-spacing:0.05em;">SQL Completo</h3>
+      <button onclick="closeSqlModal()" style="background:none; border:none; color:var(--muted); font-size:24px; cursor:pointer; padding:4px; line-height:1; transition:var(--transition);" onmouseover="this.style.color='var(--text)'" onmouseout="this.style.color='var(--muted)'">&times;</button>
+    </div>
+    <div style="padding:16px; flex:1; display:flex; flex-direction:column; overflow:hidden; background:var(--card);">
+      <pre id="modal-query-text" style="margin:0; font-family:'Consolas','Fira Code',monospace; font-size:11.5px; white-space:pre-wrap; word-break:break-all; color:var(--text); padding:14px; background:var(--card2); border:1px solid var(--border); border-radius:8px; line-height:1.5; user-select:all; flex:1; overflow:auto;"></pre>
+    </div>
+    <div style="padding:12px 20px; border-top:1px solid var(--border); display:flex; justify-content:flex-end; gap:8px; background:var(--card2);">
+      <button onclick="copyModalSql(this)" style="background:var(--accent); color:#fff; border:none; padding:8px 16px; border-radius:6px; font-size:12px; font-weight:600; cursor:pointer; transition:var(--transition);" onmouseover="this.style.background='var(--accent2)'" onmouseout="this.style.background='var(--accent)'">⧉ Copiar SQL</button>
+      <button onclick="closeSqlModal()" style="background:none; border:1px solid var(--border); color:var(--text); padding:8px 16px; border-radius:6px; font-size:12px; font-weight:600; cursor:pointer; transition:var(--transition);" onmouseover="this.style.background='var(--border-light)'" onmouseout="this.style.background='none'">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+function openSqlModal(queryName, fullQuery) {
+  g('modal-query-title').textContent = queryName || 'SQL Completo';
+  g('modal-query-text').textContent = fullQuery;
+  g('sql-modal').style.background = 'rgba(15,23,42,0.6)';
+  g('sql-modal').style.display = 'flex';
+}
+
+function closeSqlModal() {
+  g('sql-modal').style.display = 'none';
+}
+
+function copyModalSql(btn) {
+  var sqlText = g('modal-query-text').textContent;
+  var temp = document.createElement('textarea');
+  temp.value = sqlText;
+  temp.style.position = 'fixed';
+  temp.style.opacity = '0';
+  document.body.appendChild(temp);
+  temp.select();
+  try {
+    document.execCommand('copy');
+    var oldText = btn.textContent;
+    btn.textContent = '✓ Copiado!';
+    btn.style.background = 'var(--green)';
+    setTimeout(function() {
+      btn.textContent = oldText;
+      btn.style.background = 'var(--accent)';
+    }, 1500);
+  } catch (err) {}
+  document.body.removeChild(temp);
+}
+
+// Clic fuera del modal para cerrar
+window.addEventListener('click', function(e) {
+  var modal = g('sql-modal');
+  if (e.target === modal) {
+    closeSqlModal();
+  }
+});
+</script>
+</body>
+</html>

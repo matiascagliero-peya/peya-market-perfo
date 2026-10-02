@@ -1,0 +1,1382 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Daily Report - PeYa Markets (Simulado)</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<!-- Carga local y CDN segura de dependencias para gráficos -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  *, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+  
+  :root {
+    --red: #e50044;
+    --red-bg: #fff0f3;
+    --green: #15803d;
+    --green-bg: #f0fdf4;
+    --rose: #e11d48;
+    --rose-bg: #fff1f2;
+    --blue: #2563eb;
+    --blue-bg: #eff6ff;
+    --purple: #9333ea;
+    --purple-bg: #faf5ff;
+    --t1: #0f172a;
+    --t2: #475569;
+    --t3: #94a3b8;
+    --t4: #cbd5e1;
+    --border: #e2e8f0;
+    --border2: #f1f5f9;
+    --bg: #f8fafc;
+    --card: #fff;
+    --sh: 0 1px 3px rgba(0,0,0,.05), 0 1px 2px rgba(0,0,0,.04);
+    --sh2: 0 4px 16px rgba(0,0,0,.06), 0 1px 4px rgba(0,0,0,.03);
+    --r: 10px;
+  }
+
+  body {
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--t1);
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+    font-size: 13px;
+  }
+
+  /* SPLASH SCREEN LOADER */
+  #splash {
+    position: fixed;
+    inset: 0;
+    background: #fff;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    transition: opacity 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+  }
+  #splash.out {
+    opacity: 0;
+    pointer-events: none;
+  }
+  .sp-eye {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--t3);
+    margin-bottom: 18px;
+  }
+  .sp-h {
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--t1);
+    letter-spacing: -.5px;
+    margin-bottom: 5px;
+  }
+  .sp-h b {
+    color: var(--red);
+  }
+  .sp-sub {
+    font-size: 13px;
+    color: var(--t3);
+    margin-bottom: 40px;
+  }
+  .sp-box {
+    width: 320px;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 24px;
+    box-shadow: var(--sh2);
+    background: #fff;
+  }
+  .sp-phases {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+  .sp-ph {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .sp-ph-ic {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    border: 1.5px solid var(--t4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-size: 9px;
+    font-weight: 700;
+    transition: all 0.25s;
+  }
+  .sp-ph.active .sp-ph-ic {
+    border-color: var(--red);
+    background: var(--red-bg);
+    color: var(--red);
+  }
+  .sp-ph.active .sp-ph-ic::after {
+    content: '';
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--red);
+    display: block;
+    animation: blink .8s ease infinite;
+  }
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: .2; }
+  }
+  .sp-ph.done .sp-ph-ic {
+    border-color: var(--green);
+    background: var(--green-bg);
+  }
+  .sp-ph.done .sp-ph-ic::after {
+    content: '✓';
+    font-size: 9px;
+    font-weight: 700;
+    color: var(--green);
+    display: block;
+  }
+  .sp-ph-lbl {
+    font-size: 12px;
+    color: var(--t2);
+    font-weight: 500;
+  }
+  .sp-ph.done .sp-ph-lbl {
+    color: var(--t3);
+    font-weight: 400;
+  }
+  .sp-track {
+    height: 4px;
+    background: var(--border2);
+    border-radius: 99px;
+    overflow: hidden;
+    position: relative;
+  }
+  .sp-fill {
+    height: 100%;
+    background: var(--red);
+    border-radius: 99px;
+    width: 0%;
+    transition: width 0.4s ease;
+  }
+
+  /* HEADER & NAVIGATION */
+  #app {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    opacity: 0;
+    transition: opacity 0.5s ease;
+  }
+  #app.ready {
+    opacity: 1;
+  }
+
+  nav {
+    background: #fff;
+    border-bottom: 1px solid var(--border);
+    height: 54px;
+    display: flex;
+    align-items: center;
+    padding: 0 20px;
+    position: sticky;
+    top: 0;
+    z-index: 300;
+    box-shadow: 0 1px 0 var(--border);
+  }
+  .n-brand {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-right: 18px;
+    flex-shrink: 0;
+  }
+  .n-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--red);
+    box-shadow: 0 0 6px var(--red);
+  }
+  .n-name {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--t1);
+    letter-spacing: -.3px;
+  }
+  .n-name em {
+    color: var(--red);
+    font-style: normal;
+  }
+  .n-tag {
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: #fff;
+    background: var(--red);
+    padding: 2px 6px;
+    border-radius: 4px;
+    margin-left: 6px;
+    letter-spacing: .5px;
+  }
+  .n-divider {
+    width: 1px;
+    height: 20px;
+    background: var(--border);
+    margin: 0 12px;
+    flex-shrink: 0;
+  }
+  .n-desc {
+    font-size: 11px;
+    color: var(--t3);
+    font-weight: 500;
+  }
+
+  /* FILTER BAR */
+  .fbar {
+    background: #fff;
+    border-bottom: 1px solid var(--border);
+    padding: 10px 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    position: sticky;
+    top: 54px;
+    z-index: 299;
+  }
+  .fg {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .fl {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .6px;
+    color: var(--t3);
+  }
+  .fs {
+    border: 1px solid var(--border);
+    background: #fff;
+    border-radius: 7px;
+    padding: 5px 28px 5px 10px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--t1);
+    font-family: inherit;
+    cursor:pointer;
+    outline: none;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='11' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2.5' stroke-linecap='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+    transition: border-color .15s, box-shadow .15s;
+    min-width: 140px;
+  }
+  .fs:focus {
+    border-color: var(--red);
+    box-shadow: 0 0 0 2px var(--red-bg);
+  }
+  .fsep {
+    width: 1px;
+    height: 20px;
+    background: var(--border);
+  }
+  .f-live {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: var(--green);
+    font-weight: 600;
+    margin-left: auto;
+    background: var(--green-bg);
+    padding: 3px 10px;
+    border-radius: 20px;
+  }
+  .f-live-dot {
+    width: 6px;
+    height: 6px;
+    background: var(--green);
+    border-radius: 50%;
+    animation: pulse 1.5s infinite alternate;
+  }
+  @keyframes pulse {
+    0% { transform: scale(0.9); opacity: 0.6; }
+    100% { transform: scale(1.2); opacity: 1; }
+  }
+
+  /* INFOBANNER */
+  .info-banner {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 16px;
+    margin-bottom: 20px;
+    font-size: 11.5px;
+    color: var(--t2);
+    flex-wrap: wrap;
+    box-shadow: var(--sh);
+  }
+  .info-banner strong {
+    color: var(--t1);
+  }
+  .info-banner .sep {
+    width: 1px;
+    height: 14px;
+    background: var(--border);
+  }
+  .info-banner .badge-sim {
+    background: #e2e8f0;
+    color: #475569;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: bold;
+  }
+
+  /* CONTAINER PAGE */
+  .page {
+    padding: 20px;
+    max-width: 1600px;
+    margin: 0 auto;
+    width: 100%;
+  }
+
+  /* MAIN CARDS GRID */
+  .metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 16px;
+    margin-bottom: 20px;
+  }
+  
+  /* METRIC CARD STYLE */
+  .mcard {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--r);
+    padding: 18px;
+    box-shadow: var(--sh);
+    transition: transform 0.2s, box-shadow 0.2s;
+    position: relative;
+    overflow: hidden;
+  }
+  .mcard:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--sh2);
+  }
+  /* First metric (invented) special layout */
+  .mcard-primary {
+    border-left: 4px solid var(--red);
+    background: linear-gradient(180deg, #fffcfd 0%, #fff 100%);
+  }
+  
+  .mcard-title {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .5px;
+    text-transform: uppercase;
+    color: var(--t3);
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .mcard-primary .mcard-title {
+    color: var(--red);
+  }
+  
+  .mcard-val-row {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  .mcard-val {
+    font-size: 26px;
+    font-weight: 700;
+    color: var(--t1);
+    letter-spacing: -.5px;
+  }
+  .mcard-target {
+    font-size: 11px;
+    color: var(--t2);
+  }
+  
+  .mcard-comparisons {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    border-top: 1px solid var(--border2);
+    padding-top: 12px;
+  }
+  .mcard-comp {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+  .mcard-comp-lbl {
+    font-size: 9px;
+    text-transform: uppercase;
+    font-weight: 600;
+    color: var(--t3);
+    letter-spacing: .3px;
+  }
+  
+  /* BADGES */
+  .vb {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 10px;
+    font-weight: 700;
+    border-radius: 6px;
+    padding: 3px 6px;
+    white-space: nowrap;
+    width: fit-content;
+  }
+  .vb-pos {
+    background: var(--green-bg);
+    color: var(--green);
+  }
+  .vb-neg {
+    background: var(--rose-bg);
+    color: var(--rose);
+  }
+  .vb-neu {
+    background: var(--border2);
+    color: var(--t2);
+  }
+
+  /* MIDDLE ROW: CHART AND TABLE */
+  .mid-row {
+    display: grid;
+    grid-template-columns: 1.6fr 1fr;
+    gap: 16px;
+    margin-bottom: 20px;
+  }
+  @media(max-width: 1024px) {
+    .mid-row {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  /* PANEL STANDARD */
+  .panel {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--r);
+    overflow: hidden;
+    box-shadow: var(--sh);
+  }
+  .panel-header {
+    padding: 14px 18px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--border2);
+  }
+  .panel-title {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: .6px;
+    text-transform: uppercase;
+    color: var(--t1);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .panel-title-dot {
+    width: 4px;
+    height: 14px;
+    background: var(--red);
+    border-radius: 2px;
+  }
+  .panel-meta {
+    font-size: 11px;
+    color: var(--t3);
+  }
+
+  .panel-body {
+    padding: 18px;
+    position: relative;
+  }
+
+  /* CHART WRAPPER */
+  .chart-wrap {
+    height: 320px;
+    width: 100%;
+    position: relative;
+  }
+
+  /* TABLE STYLE */
+  table.ov {
+    width: 100%;
+    border-collapse: collapse;
+    text-align: left;
+  }
+  table.ov th {
+    padding: 10px 12px;
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    color: var(--t3);
+    border-bottom: 1px solid var(--border);
+    background: #fafbff;
+  }
+  table.ov td {
+    padding: 11px 12px;
+    font-size: 12px;
+    border-bottom: 1px solid var(--border2);
+    color: var(--t2);
+  }
+  table.ov tbody tr:hover {
+    background: #fafbff;
+  }
+  table.ov tbody tr:last-child td {
+    border-bottom: none;
+  }
+  .cell-country {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+    color: var(--t1) !important;
+  }
+  .flag-icon {
+    width: 18px;
+    height: 13px;
+    border-radius: 2px;
+    object-fit: cover;
+    border: 1px solid var(--border);
+  }
+
+  /* BOTTOM ROW (ADMIN/SIMULATION TOOL) */
+  .bottom-panel {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--r);
+    padding: 20px;
+    box-shadow: var(--sh);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    flex-wrap: wrap;
+    background: linear-gradient(90deg, #fefefe 0%, #fafbff 100%);
+    border-top: 3px solid var(--blue);
+  }
+  .bottom-info {
+    max-width: 600px;
+  }
+  .bottom-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--t1);
+    margin-bottom: 4px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .bottom-title svg {
+    color: var(--blue);
+    width: 16px;
+    height: 16px;
+  }
+  .bottom-desc {
+    font-size: 12px;
+    color: var(--t2);
+  }
+  
+  .bottom-action {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+  }
+  .input-email {
+    padding: 8px 12px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 12px;
+    width: 250px;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  .input-email:focus {
+    border-color: var(--blue);
+    box-shadow: 0 0 0 2px var(--blue-bg);
+  }
+  .btn-send {
+    background: var(--blue);
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    padding: 8px 16px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s, opacity 0.15s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .btn-send:hover {
+    background: #1d4ed8;
+  }
+  .btn-send:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+  
+  /* TOAST ALERTS */
+  #toast {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    background: #1e293b;
+    color: #f1f5f9;
+    font-size: 12px;
+    font-weight: 500;
+    padding: 12px 20px;
+    border-radius: 8px;
+    z-index: 1000;
+    opacity: 0;
+    transform: translateY(10px);
+    transition: opacity 0.25s, transform 0.25s;
+    pointer-events: none;
+    box-shadow: var(--sh2);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  #toast.show {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  #toast.success {
+    border-left: 4px solid var(--green);
+  }
+  #toast.error {
+    border-left: 4px solid var(--rose);
+  }
+
+  /* LOADER ELEMENT */
+  .loader-spinner {
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-radius: 50%;
+    border-top: 2px solid #fff;
+    width: 14px;
+    height: 14px;
+    animation: spin 0.8s linear infinite;
+    display: none;
+  }
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+</style>
+</head>
+<body>
+
+  <!-- STEP-BY-STEP SPLASH LOADER -->
+  <div id="splash">
+    <div class="sp-eye">DASHBOARD SIMULATOR</div>
+    <div class="sp-h">Daily Report <b>Simulado</b></div>
+    <div class="sp-sub" id="sp-sub-info">Generando escenario de demostración...</div>
+    
+    <div class="sp-box">
+      <div class="sp-phases">
+        <div class="sp-ph" id="ph-1">
+          <div class="sp-ph-ic"></div>
+          <div class="sp-ph-lbl">Conectando a BQ-Quantum Engine</div>
+        </div>
+        <div class="sp-ph" id="ph-2">
+          <div class="sp-ph-ic"></div>
+          <div class="sp-ph-lbl">Procesando Appetite Velocity</div>
+        </div>
+        <div class="sp-ph" id="ph-3">
+          <div class="sp-ph-ic"></div>
+          <div class="sp-ph-lbl">Unificando metas diarias vs BE07</div>
+        </div>
+        <div class="sp-ph" id="ph-4">
+          <div class="sp-ph-ic"></div>
+          <div class="sp-ph-lbl">Renderizando Dashboard Simulado</div>
+        </div>
+      </div>
+      
+      <div class="sp-track">
+        <div class="sp-fill" id="sp-bar"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MAIN APP CONTAINER -->
+  <div id="app">
+    <!-- TOP NAVIGATION BRAND BAR -->
+    <nav>
+      <div class="n-brand">
+        <div class="n-dot"></div>
+        <div class="n-name">PeYa Markets <em>Daily</em></div>
+        <div class="n-tag">SIMULADOR</div>
+      </div>
+      <div class="n-divider"></div>
+      <div class="n-desc">Resumen Operativo Diario — Datos de Demostración</div>
+    </nav>
+
+    <!-- FILTER & CONTROL BAR -->
+    <div class="fbar">
+      <div class="fg">
+        <span class="fl">País</span>
+        <select class="fs" id="filter-country" onchange="loadDashboard()">
+          <option value="LATAM" selected>LATAM (Total)</option>
+          <option value="AR">Argentina</option>
+          <option value="UY">Uruguay</option>
+          <option value="CL">Chile</option>
+          <option value="BO">Bolivia</option>
+          <option value="PY">Paraguay</option>
+        </select>
+      </div>
+      
+      <div class="fsep"></div>
+      
+      <div class="fg">
+        <span class="fl">Fecha</span>
+        <input type="date" class="fs" id="filter-date" value="2026-09-15" onchange="loadDashboard()" style="min-width: 150px;">
+      </div>
+
+      <div class="f-live">
+        <div class="f-live-dot"></div>
+        <span>MODO DEMOSTRACIÓN</span>
+      </div>
+    </div>
+
+    <!-- MAIN PAGE CONTAINER -->
+    <div class="page">
+      
+      <!-- TOP INFORMATION BANNER -->
+      <div class="info-banner">
+        <span>⚠️ <strong>Nota de Seguridad:</strong> Este entorno contiene <strong>datos de simulación 100% inventados</strong> con el único fin de realizar demostraciones visuales y prototipado rápido.</span>
+        <span class="sep"></span>
+        <span>Motor activo: <span class="badge-sim">Quantum-Simulation-v1.0</span></span>
+      </div>
+
+      <!-- METRICS MAIN KPI GRID -->
+      <div class="metrics-grid" id="kpi-grid">
+        <!-- Generados dinámicamente -->
+      </div>
+
+      <!-- MIDDLE ROW WITH CHART AND COUNTRY TABLE -->
+      <div class="mid-row">
+        <!-- Chart Panel -->
+        <div class="panel">
+          <div class="panel-header">
+            <div class="panel-title">
+              <div class="panel-title-dot"></div>
+              <span>Tendencia Semanal — Quantum Delivery Efficiency (QDE)</span>
+            </div>
+            <div class="panel-meta">vs Target diario</div>
+          </div>
+          <div class="panel-body">
+            <div class="chart-wrap">
+              <canvas id="weeklyTrendChart"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <!-- Country Table Panel -->
+        <div class="panel">
+          <div class="panel-header">
+            <div class="panel-title">
+              <div class="panel-title-dot"></div>
+              <span>Comparación de Desempeño — QDE vs Target</span>
+            </div>
+          </div>
+          <div class="panel-body" style="padding:0; overflow-x: auto;">
+            <table class="ov">
+              <thead>
+                <tr>
+                  <th>País</th>
+                  <th style="text-align: right;">QDE Real</th>
+                  <th style="text-align: right;">Target (BE)</th>
+                  <th style="text-align: center;">Estado</th>
+                </tr>
+              </thead>
+              <tbody id="country-table-body">
+                <!-- Filas autogeneradas -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- BOTTOM ROW - TEST MAIL TRIGGER -->
+      <div class="bottom-panel">
+        <div class="bottom-info">
+          <div class="bottom-title">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="feather feather-send"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+            <span>Simular Envío de Reporte Diario</span>
+          </div>
+          <div class="bottom-desc">
+            Prueba cómo se recibiría el email consolidado diario. Ingresa cualquier correo y el sistema simulará el proceso completo de empaquetado HTML y despacho.
+          </div>
+        </div>
+        <div class="bottom-action">
+          <input type="email" id="input-recipient" class="input-email" placeholder="tu.nombre@pedidosya.com">
+          <button class="btn-send" id="btn-send" onclick="triggerEmailTest()">
+            <div class="loader-spinner" id="btn-loader"></div>
+            <span id="btn-text">Mandar de Prueba</span>
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- TOAST ALERTS SYSTEM -->
+  <div id="toast">Notificación</div>
+
+  <!-- FRONTEND SCRIPT CONTROLLING LOADING & DUAL-MODE LOGIC -->
+  <script>
+    // Base de datos de fallback local para que funcione offline o haciendo doble click al archivo
+    const LOCAL_MOCK_DB = {
+      'LATAM': {
+        countryName: 'LATAM (Total)',
+        metrics: {
+          'Quantum Delivery Efficiency (QDE)': { current: 0.948, target: 0.925, wow: 0.015, mom: 0.024, yoy: 0.048, format: 'percent', isInvented: true, desc: 'Ratio de optimización sub-espacial de despacho local.' },
+          'Confirmed Orders': { current: 184500, target: 180000, wow: 0.021, mom: 0.035, yoy: 0.125, format: 'number' },
+          'GMV User Dmarts': { current: 2214000, target: 2150000, wow: 0.032, mom: 0.041, yoy: 0.152, format: 'currency' },
+          'Delivery Time': { current: 21.4, target: 23.0, wow: -0.8, mom: -1.2, yoy: -2.4, format: 'decimal_low_is_better' },
+          'Seamless Experience %': { current: 0.892, target: 0.880, wow: 0.007, mom: 0.012, yoy: 0.031, format: 'percent' }
+        },
+        tableData: [
+          { iso: 'AR', name: 'Argentina', flag: 'https://flagcdn.com/w80/ar.png', qde: 0.952, target: 0.930 },
+          { iso: 'CL', name: 'Chile', flag: 'https://flagcdn.com/w80/cl.png', qde: 0.941, target: 0.925 },
+          { iso: 'UY', name: 'Uruguay', flag: 'https://flagcdn.com/w80/uy.png', qde: 0.939, target: 0.920 },
+          { iso: 'PY', name: 'Paraguay', flag: 'https://flagcdn.com/w80/py.png', qde: 0.931, target: 0.915 },
+          { iso: 'BO', name: 'Bolivia', flag: 'https://flagcdn.com/w80/bo.png', qde: 0.925, target: 0.910 }
+        ],
+        history: [
+          { date: '09/09', qde: 0.912, qdeTarget: 0.925, orders: 171000, ordersTarget: 180000 },
+          { date: '10/09', qde: 0.924, qdeTarget: 0.925, orders: 175200, ordersTarget: 180000 },
+          { date: '11/09', qde: 0.935, qdeTarget: 0.925, orders: 179900, ordersTarget: 180000 },
+          { date: '12/09', qde: 0.958, qdeTarget: 0.925, orders: 189100, ordersTarget: 180000 },
+          { date: '13/09', qde: 0.941, qdeTarget: 0.925, orders: 181200, ordersTarget: 180000 },
+          { date: '14/09', qde: 0.945, qdeTarget: 0.925, orders: 183400, ordersTarget: 180000 },
+          { date: '15/09', qde: 0.948, qdeTarget: 0.925, orders: 184500, ordersTarget: 180000 }
+        ]
+      },
+      'AR': {
+        countryName: 'Argentina',
+        metrics: {
+          'Quantum Delivery Efficiency (QDE)': { current: 0.952, target: 0.930, wow: 0.018, mom: 0.029, yoy: 0.051, format: 'percent', isInvented: true, desc: 'Ratio de optimización sub-espacial de despacho local.' },
+          'Confirmed Orders': { current: 85200, target: 83000, wow: 0.025, mom: 0.038, yoy: 0.141, format: 'number' },
+          'GMV User Dmarts': { current: 980000, target: 950000, wow: 0.038, mom: 0.045, yoy: 0.165, format: 'currency' },
+          'Delivery Time': { current: 20.8, target: 22.5, wow: -1.1, mom: -1.5, yoy: -2.9, format: 'decimal_low_is_better' },
+          'Seamless Experience %': { current: 0.901, target: 0.890, wow: 0.009, mom: 0.015, yoy: 0.035, format: 'percent' }
+        },
+        tableData: [
+          { iso: 'AR', name: 'Argentina', flag: 'https://flagcdn.com/w80/ar.png', qde: 0.952, target: 0.930 }
+        ],
+        history: [
+          { date: '09/09', qde: 0.921, qdeTarget: 0.930, orders: 79200, ordersTarget: 83000 },
+          { date: '10/09', qde: 0.929, qdeTarget: 0.930, orders: 81100, ordersTarget: 83000 },
+          { date: '11/09', qde: 0.941, qdeTarget: 0.930, orders: 83400, ordersTarget: 83000 },
+          { date: '12/09', qde: 0.963, qdeTarget: 0.930, orders: 88500, ordersTarget: 83000 },
+          { date: '13/09', qde: 0.949, qdeTarget: 0.930, orders: 84100, ordersTarget: 83000 },
+          { date: '14/09', qde: 0.950, qdeTarget: 0.930, orders: 84900, ordersTarget: 83000 },
+          { date: '15/09', qde: 0.952, qdeTarget: 0.930, orders: 85200, ordersTarget: 83000 }
+        ]
+      },
+      'UY': {
+        countryName: 'Uruguay',
+        metrics: {
+          'Quantum Delivery Efficiency (QDE)': { current: 0.939, target: 0.920, wow: 0.011, mom: 0.018, yoy: 0.038, format: 'percent', isInvented: true, desc: 'Ratio de optimización sub-espacial de despacho local.' },
+          'Confirmed Orders': { current: 28400, target: 28000, wow: 0.014, mom: 0.021, yoy: 0.095, format: 'number' },
+          'GMV User Dmarts': { current: 369000, target: 360000, wow: 0.022, mom: 0.031, yoy: 0.118, format: 'currency' },
+          'Delivery Time': { current: 22.1, target: 23.5, wow: -0.5, mom: -0.9, yoy: -1.8, format: 'decimal_low_is_better' },
+          'Seamless Experience %': { current: 0.884, target: 0.875, wow: 0.005, mom: 0.008, yoy: 0.024, format: 'percent' }
+        },
+        tableData: [
+          { iso: 'UY', name: 'Uruguay', flag: 'https://flagcdn.com/w80/uy.png', qde: 0.939, target: 0.920 }
+        ],
+        history: [
+          { date: '09/09', qde: 0.910, qdeTarget: 0.920, orders: 25400, ordersTarget: 28000 },
+          { date: '10/09', qde: 0.915, qdeTarget: 0.920, orders: 26100, ordersTarget: 28000 },
+          { date: '11/09', qde: 0.928, qdeTarget: 0.920, orders: 27200, ordersTarget: 28000 },
+          { date: '12/09', qde: 0.948, qdeTarget: 0.920, orders: 29500, ordersTarget: 28000 },
+          { date: '13/09', qde: 0.931, qdeTarget: 0.920, orders: 27900, ordersTarget: 28000 },
+          { date: '14/09', qde: 0.936, qdeTarget: 0.920, orders: 28100, ordersTarget: 28000 },
+          { date: '15/09', qde: 0.939, qdeTarget: 0.920, orders: 28400, ordersTarget: 28000 }
+        ]
+      },
+      'CL': {
+        countryName: 'Chile',
+        metrics: {
+          'Quantum Delivery Efficiency (QDE)': { current: 0.941, target: 0.925, wow: 0.013, mom: 0.022, yoy: 0.042, format: 'percent', isInvented: true, desc: 'Ratio de optimización sub-espacial de despacho local.' },
+          'Confirmed Orders': { current: 41300, target: 40500, wow: 0.019, mom: 0.028, yoy: 0.112, format: 'number' },
+          'GMV User Dmarts': { current: 524000, target: 510000, wow: 0.029, mom: 0.036, yoy: 0.134, format: 'currency' },
+          'Delivery Time': { current: 21.9, target: 23.2, wow: -0.7, mom: -1.1, yoy: -2.1, format: 'decimal_low_is_better' },
+          'Seamless Experience %': { current: 0.889, target: 0.880, wow: 0.006, mom: 0.011, yoy: 0.029, format: 'percent' }
+        },
+        tableData: [
+          { iso: 'CL', name: 'Chile', flag: 'https://flagcdn.com/w80/cl.png', qde: 0.941, target: 0.925 }
+        ],
+        history: [
+          { date: '09/09', qde: 0.915, qdeTarget: 0.925, orders: 38200, ordersTarget: 40500 },
+          { date: '10/09', qde: 0.920, qdeTarget: 0.925, orders: 39100, ordersTarget: 40500 },
+          { date: '11/09', qde: 0.932, qdeTarget: 0.925, orders: 40200, ordersTarget: 40500 },
+          { date: '12/09', qde: 0.951, qdeTarget: 0.925, orders: 42300, ordersTarget: 40500 },
+          { date: '13/09', qde: 0.934, qdeTarget: 0.925, orders: 40900, ordersTarget: 40500 },
+          { date: '14/09', qde: 0.938, qdeTarget: 0.925, orders: 41100, ordersTarget: 40500 },
+          { date: '15/09', qde: 0.941, qdeTarget: 0.925, orders: 41300, ordersTarget: 40500 }
+        ]
+      },
+      'BO': {
+        countryName: 'Bolivia',
+        metrics: {
+          'Quantum Delivery Efficiency (QDE)': { current: 0.925, target: 0.910, wow: 0.008, mom: 0.014, yoy: 0.031, format: 'percent', isInvented: true, desc: 'Ratio de optimización sub-espacial de despacho local.' },
+          'Confirmed Orders': { current: 16500, target: 16000, wow: 0.011, mom: 0.019, yoy: 0.081, format: 'number' },
+          'GMV User Dmarts': { current: 185000, target: 180000, wow: 0.018, mom: 0.025, yoy: 0.098, format: 'currency' },
+          'Delivery Time': { current: 23.2, target: 24.5, wow: -0.4, mom: -0.7, yoy: -1.4, format: 'decimal_low_is_better' },
+          'Seamless Experience %': { current: 0.872, target: 0.865, wow: 0.004, mom: 0.006, yoy: 0.019, format: 'percent' }
+        },
+        tableData: [
+          { iso: 'BO', name: 'Bolivia', flag: 'https://flagcdn.com/w80/bo.png', qde: 0.925, target: 0.910 }
+        ],
+        history: [
+          { date: '09/09', qde: 0.898, qdeTarget: 0.910, orders: 14500, ordersTarget: 16000 },
+          { date: '10/09', qde: 0.902, qdeTarget: 0.910, orders: 15100, ordersTarget: 16000 },
+          { date: '11/09', qde: 0.914, qdeTarget: 0.910, orders: 15800, ordersTarget: 16000 },
+          { date: '12/09', qde: 0.932, qdeTarget: 0.910, orders: 17200, ordersTarget: 16000 },
+          { date: '13/09', qde: 0.919, qdeTarget: 0.910, orders: 16100, ordersTarget: 16000 },
+          { date: '14/09', qde: 0.921, qdeTarget: 0.910, orders: 16300, ordersTarget: 16000 },
+          { date: '15/09', qde: 0.925, qdeTarget: 0.910, orders: 16500, ordersTarget: 16000 }
+        ]
+      },
+      'PY': {
+        countryName: 'Paraguay',
+        metrics: {
+          'Quantum Delivery Efficiency (QDE)': { current: 0.931, target: 0.915, wow: 0.009, mom: 0.016, yoy: 0.035, format: 'percent', isInvented: true, desc: 'Ratio de optimización sub-espacial de despacho local.' },
+          'Confirmed Orders': { current: 13100, target: 12500, wow: 0.015, mom: 0.024, yoy: 0.089, format: 'number' },
+          'GMV User Dmarts': { current: 156000, target: 150000, wow: 0.024, mom: 0.032, yoy: 0.105, format: 'currency' },
+          'Delivery Time': { current: 22.8, target: 24.0, wow: -0.6, mom: -1.0, yoy: -1.6, format: 'decimal_low_is_better' },
+          'Seamless Experience %': { current: 0.879, target: 0.870, wow: 0.005, mom: 0.009, yoy: 0.022, format: 'percent' }
+        },
+        tableData: [
+          { iso: 'PY', name: 'Paraguay', flag: 'https://flagcdn.com/w80/py.png', qde: 0.931, target: 0.915 }
+        ],
+        history: [
+          { date: '09/09', qde: 0.905, qdeTarget: 0.915, orders: 11500, ordersTarget: 12500 },
+          { date: '10/09', qde: 0.910, qdeTarget: 0.915, orders: 12100, ordersTarget: 12500 },
+          { date: '11/09', qde: 0.921, qdeTarget: 0.915, orders: 12400, ordersTarget: 12500 },
+          { date: '12/09', qde: 0.941, qdeTarget: 0.915, orders: 13800, ordersTarget: 12500 },
+          { date: '13/09', qde: 0.925, qdeTarget: 0.915, orders: 12800, ordersTarget: 12500 },
+          { date: '14/09', qde: 0.928, qdeTarget: 0.915, orders: 12900, ordersTarget: 12500 },
+          { date: '15/09', qde: 0.931, qdeTarget: 0.915, orders: 13100, ordersTarget: 12500 }
+        ]
+      }
+    };
+
+    let activeChart = null;
+
+    // AL INICIAR LA PÁGINA
+    window.addEventListener('DOMContentLoaded', () => {
+      runSplashPhases();
+    });
+
+    // SIMULAR LAS FASES DE SPLASH LOADER
+    function runSplashPhases() {
+      const phases = ['ph-1', 'ph-2', 'ph-3', 'ph-4'];
+      const bar = document.getElementById('sp-bar');
+      const sub = document.getElementById('sp-sub-info');
+      const stepsText = [
+        "Iniciando enlace cuántico de datos...",
+        "Decomprimiendo Appetite Velocity Index en backend...",
+        "Compilando desvíos operativos vs BE07...",
+        "Finalizando compilación de la UI simulada..."
+      ];
+      
+      let currentIdx = 0;
+      
+      const interval = setInterval(() => {
+        if (currentIdx > 0) {
+          document.getElementById(phases[currentIdx - 1]).classList.remove('active');
+          document.getElementById(phases[currentIdx - 1]).classList.add('done');
+        }
+        
+        if (currentIdx < phases.length) {
+          document.getElementById(phases[currentIdx]).classList.add('active');
+          sub.innerText = stepsText[currentIdx];
+          bar.style.width = ((currentIdx + 1) * 25) + '%';
+          currentIdx++;
+        } else {
+          clearInterval(interval);
+          // Ocultar splash y mostrar app
+          setTimeout(() => {
+            const splash = document.getElementById('splash');
+            const app = document.getElementById('app');
+            splash.classList.add('out');
+            app.classList.add('ready');
+            
+            // Cargar datos por primera vez
+            loadDashboard();
+          }, 400);
+        }
+      }, 600);
+    }
+
+    // FORMATEADORES DE DATOS
+    function formatVal(val, format) {
+      if (format === 'percent') {
+        return (val * 100).toFixed(1) + '%';
+      } else if (format === 'currency') {
+        return 'USD ' + val.toLocaleString('es-AR');
+      } else if (format === 'number') {
+        return val.toLocaleString('es-AR');
+      } else if (format === 'decimal_low_is_better') {
+        return val.toFixed(1) + 'm';
+      }
+      return val;
+    }
+
+    function formatDelta(val, format) {
+      const prefix = val >= 0 ? '+' : '';
+      if (format === 'percent' || format === 'decimal_low_is_better') {
+        const valueStr = (val * 100).toFixed(1) + '%';
+        const sign = val >= 0 ? '+' : '';
+        return sign + valueStr;
+      }
+      return prefix + val.toLocaleString('es-AR');
+    }
+
+    function getDeltaClass(val, format) {
+      if (format === 'decimal_low_is_better') {
+        // En delivery time, menos es mejor
+        return val <= 0 ? 'vb-pos' : 'vb-neg';
+      }
+      if (val === 0) return 'vb-neu';
+      return val > 0 ? 'vb-pos' : 'vb-neg';
+    }
+
+    function getDeltaSvg(val, format) {
+      const isGood = format === 'decimal_low_is_better' ? val <= 0 : val > 0;
+      if (val === 0) return '';
+      if (isGood) {
+        return `<svg viewBox="0 0 24 24"><polyline points="18 15 12 9 6 15"></polyline></svg>`;
+      }
+      return `<svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"></polyline></svg>`;
+    }
+
+    // CARGAR DASHBOARD (Dual Mode: GAS o Local)
+    function loadDashboard() {
+      const country = document.getElementById('filter-country').value;
+      const date = document.getElementById('filter-date').value;
+      
+      showToast("Cargando métricas de " + country + "...", "neu");
+
+      // Verificamos si estamos en Google Apps Script
+      if (typeof google !== 'undefined' && google.script && google.script.run) {
+        google.script.run
+          .withSuccessHandler((response) => {
+            renderUI(response);
+          })
+          .withFailureHandler((err) => {
+            showToast("Error de API: " + err, "error");
+            loadLocalFallback(country);
+          })
+          .getDailyMetrics(country, date);
+      } else {
+        // Fallback local instantáneo para desarrollo offline/Visualización
+        setTimeout(() => {
+          loadLocalFallback(country);
+        }, 150);
+      }
+    }
+
+    function loadLocalFallback(country) {
+      const response = {
+        success: true,
+        country: country,
+        metrics: LOCAL_MOCK_DB[country].metrics,
+        tableData: LOCAL_MOCK_DB['LATAM'].tableData, // La tabla compara siempre todos los países
+        history: LOCAL_MOCK_DB[country].history
+      };
+      renderUI(response);
+    }
+
+    // RENDERIZAR LA INTERFAZ CON EL PAYLOAD RECIBIDO
+    function renderUI(data) {
+      const grid = document.getElementById('kpi-grid');
+      grid.innerHTML = '';
+
+      const metrics = data.metrics;
+      
+      // Renderizar tarjetas KPI
+      Object.keys(metrics).forEach(mKey => {
+        const m = metrics[mKey];
+        const isPrim = m.isInvented || mKey.includes('Quantum');
+        
+        let targetText = '';
+        let vsTargetClass = 'vb-neu';
+        let vsTargetLabel = 'vs Target';
+        let vsTargetVal = '0%';
+        let vsTargetSvg = '';
+
+        if (m.format === 'percent') {
+          targetText = `Target: ${(m.target * 100).toFixed(1)}%`;
+          const diff = m.current - m.target;
+          vsTargetVal = (diff * 100).toFixed(1) + 'pp';
+          vsTargetClass = diff >= 0 ? 'vb-pos' : 'vb-neg';
+          vsTargetSvg = getDeltaSvg(diff, m.format);
+        } else if (m.format === 'number' || m.format === 'currency') {
+          targetText = `Target: ${formatVal(m.target, m.format)}`;
+          const pct = (m.current / m.target - 1);
+          vsTargetVal = (pct * 100).toFixed(1) + '%';
+          vsTargetClass = pct >= 0 ? 'vb-pos' : 'vb-neg';
+          vsTargetSvg = getDeltaSvg(pct, m.format);
+        } else if (m.format === 'decimal_low_is_better') {
+          targetText = `Target: ${m.target.toFixed(1)}m`;
+          const diff = m.current - m.target;
+          vsTargetVal = (diff).toFixed(1) + 'm';
+          vsTargetClass = diff <= 0 ? 'vb-pos' : 'vb-neg'; // menos tiempo es positivo
+          vsTargetSvg = getDeltaSvg(diff, m.format);
+        }
+
+        const cardHTML = `
+          <div class="mcard ${isPrim ? 'mcard-primary' : ''}">
+            <div class="mcard-title">
+              <span>${mKey}</span>
+              ${isPrim ? '<span style="color:var(--red); font-size:10px; font-weight:700;">★ INVENTADA</span>' : ''}
+            </div>
+            <div class="mcard-val-row">
+              <div class="mcard-val">${formatVal(m.current, m.format)}</div>
+              <div class="mcard-target">${targetText}</div>
+            </div>
+            
+            <div class="mcard-comparisons">
+              <div class="mcard-comp">
+                <span class="mcard-comp-lbl">vs Target</span>
+                <span class="vb ${vsTargetClass}">${vsTargetSvg}${vsTargetVal}</span>
+              </div>
+              <div class="mcard-comp">
+                <span class="mcard-comp-lbl">WoW</span>
+                <span class="vb ${getDeltaClass(m.wow, m.format)}">${getDeltaSvg(m.wow, m.format)}${formatDelta(m.wow, m.format)}</span>
+              </div>
+              <div class="mcard-comp">
+                <span class="mcard-comp-lbl">MoM</span>
+                <span class="vb ${getDeltaClass(m.mom, m.format)}">${getDeltaSvg(m.mom, m.format)}${formatDelta(m.mom, m.format)}</span>
+              </div>
+            </div>
+          </div>
+        `;
+        grid.insertAdjacentHTML('beforeend', cardHTML);
+      });
+
+      // Renderizar tabla comparativa de países (usando el listado estático o dinámico)
+      const tbody = document.getElementById('country-table-body');
+      tbody.innerHTML = '';
+      
+      const tableRows = LOCAL_MOCK_DB['LATAM'].tableData; // Siempre mostramos comparación de países
+      tableRows.forEach(row => {
+        const diff = row.qde - row.target;
+        const statusClass = diff >= 0 ? 'vb-pos' : 'vb-neg';
+        const statusText = diff >= 0 ? 'Cumple' : 'Desvío';
+
+        const rowHTML = `
+          <tr>
+            <td>
+              <div class="cell-country">
+                <img class="flag-icon" src="${row.flag}" alt="${row.name}">
+                <span>${row.name}</span>
+              </div>
+            </td>
+            <td style="text-align: right; font-weight: 600; color: var(--t1);">${(row.qde * 100).toFixed(1)}%</td>
+            <td style="text-align: right; color: var(--t2);">${(row.target * 100).toFixed(1)}%</td>
+            <td style="text-align: center;">
+              <span class="vb ${statusClass}">${statusText}</span>
+            </td>
+          </tr>
+        `;
+        tbody.insertAdjacentHTML('beforeend', rowHTML);
+      });
+
+      // Renderizar / actualizar gráfico Chart.js
+      renderChart(data.history);
+      
+      showToast("Datos cargados correctamente.", "success");
+    }
+
+    // RENDERIZAR TENDENCIA EN GRÁFICO
+    function renderChart(history) {
+      const ctx = document.getElementById('weeklyTrendChart').getContext('2d');
+      
+      const labels = history.map(h => h.date);
+      const qdeVals = history.map(h => h.qde * 100);
+      const targetVals = history.map(h => h.qdeTarget * 100);
+
+      if (activeChart) {
+        activeChart.destroy();
+      }
+
+      activeChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: labels,
+          datasets: [
+            {
+              label: 'QDE Real (%)',
+              data: qdeVals,
+              borderColor: '#e50044',
+              backgroundColor: 'rgba(229, 0, 68, 0.05)',
+              borderWidth: 3,
+              tension: 0.35,
+              fill: true,
+              pointBackgroundColor: '#e50044',
+              pointRadius: 4
+            },
+            {
+              label: 'Target Diario BE07 (%)',
+              data: targetVals,
+              borderColor: '#94a3b8',
+              borderDash: [5, 5],
+              borderWidth: 1.5,
+              pointRadius: 0,
+              fill: false,
+              tension: 0
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              position: 'top',
+              labels: {
+                boxWidth: 12,
+                font: { family: 'Inter', size: 11, weight: '500' },
+                color: '#475569'
+              }
+            },
+            tooltip: {
+              mode: 'index',
+              intersect: false,
+              backgroundColor: '#1e293b',
+              titleColor: '#fff',
+              bodyColor: '#cbd5e1',
+              titleFont: { family: 'Inter', size: 12, weight: 'bold' },
+              bodyFont: { family: 'Inter', size: 11 },
+              padding: 10,
+              cornerRadius: 6,
+              callbacks: {
+                label: function(context) {
+                  return ' ' + context.dataset.label + ': ' + context.parsed.y.toFixed(1) + '%';
+                }
+              }
+            }
+          },
+          scales: {
+            y: {
+              grid: { color: '#f1f5f9' },
+              ticks: {
+                font: { family: 'Inter', size: 10 },
+                color: '#64748b',
+                callback: function(val) { return val + '%'; }
+              },
+              suggestedMin: 85,
+              suggestedMax: 100
+            },
+            x: {
+              grid: { display: false },
+              ticks: {
+                font: { family: 'Inter', size: 10 },
+                color: '#64748b'
+              }
+            }
+          }
+        }
+      });
+    }
+
+    // SIMULAR EL ENVÍO DE EMAIL
+    function triggerEmailTest() {
+      const emailInput = document.getElementById('input-recipient');
+      const email = emailInput.value.trim();
+      const btn = document.getElementById('btn-send');
+      const loader = document.getElementById('btn-loader');
+      const btnText = document.getElementById('btn-text');
+
+      if (!email || email.indexOf('@') === -1) {
+        showToast("Por favor, ingresa un correo corporativo válido.", "error");
+        return;
+      }
+
+      // Deshabilitar botón e iniciar spinner
+      btn.disabled = true;
+      loader.style.display = 'inline-block';
+      btnText.innerText = 'Mandando...';
+
+      if (typeof google !== 'undefined' && google.script && google.script.run) {
+        google.script.run
+          .withSuccessHandler((res) => {
+            btn.disabled = false;
+            loader.style.display = 'none';
+            btnText.innerText = 'Mandar de Prueba';
+            
+            if (res.success) {
+              showToast(res.message, "success");
+            } else {
+              showToast("Error de simulación: " + res.message, "error");
+            }
+          })
+          .withFailureHandler((err) => {
+            btn.disabled = false;
+            loader.style.display = 'none';
+            btnText.innerText = 'Mandar de Prueba';
+            showToast("Falla de API en GAS: " + err, "error");
+          })
+          .sendTestEmail(email);
+      } else {
+        // Simulación frontend
+        setTimeout(() => {
+          btn.disabled = false;
+          loader.style.display = 'none';
+          btnText.innerText = 'Mandar de Prueba';
+          showToast(`Reporte consolidado enviado a ${email} (Simulado exitosamente)`, "success");
+        }, 1200);
+      }
+    }
+
+    // MOSTRAR TOASTS NOTIFICADORES
+    function showToast(text, type = 'success') {
+      const toast = document.getElementById('toast');
+      toast.innerText = text;
+      toast.className = 'show ' + type;
+      
+      setTimeout(() => {
+        toast.classList.remove('show');
+      }, 3500);
+    }
+  </script>
+</body>
+</html>

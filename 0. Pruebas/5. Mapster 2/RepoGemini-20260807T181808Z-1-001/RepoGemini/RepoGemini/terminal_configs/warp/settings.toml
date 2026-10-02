@@ -1,0 +1,93 @@
+[code]
+
+[code.editor]
+show_project_explorer = true
+show_code_review_button = false
+show_global_search = true
+
+[appearance]
+
+[appearance.vertical_tabs]
+enabled = false
+use_latest_prompt_as_title = true
+
+[appearance.themes]
+theme = {
+  custom = { name = "Dracula", path = "~/.warp/themes/warp_bundled/dracula.yaml" },
+}
+system_theme = false
+
+[appearance.window]
+override_opacity = 60
+open_windows_at_custom_size = false
+override_blur = 18
+left_panel_visibility_across_tabs = true
+zoom_level = 115
+
+[appearance.text]
+notebook_font_size = 14.0
+font_size = 13.0
+font_name = "JetBrains Mono"
+line_height_ratio = 1.4
+match_notebook_to_monospace_font_size = true
+
+[appearance.input]
+input_mode = "waterfall"
+
+[appearance.panes]
+should_dim_inactive_panes = true
+
+[appearance.tabs]
+show_indicators_button = true
+workspace_decoration_visibility = "always_show"
+preserve_active_tab_color = true
+
+[account]
+is_settings_sync_enabled = false
+
+[privacy]
+telemetry_enabled = true
+crash_reporting_enabled = true
+
+[warp_drive]
+enabled = false
+
+[agents]
+cloud_conversation_storage_enabled = true
+
+[agents.third_party]
+should_render_cli_agent_toolbar = false
+
+[agents.warp_agent]
+is_any_ai_enabled = false
+
+[agents.warp_agent.other]
+show_conversation_history = true
+show_agent_notifications = true
+
+[agents.warp_agent.input]
+nld_in_terminal_enabled = false
+
+[general]
+default_session_mode = "terminal"
+default_tab_config_path = "~/.warp/tab_configs/startup_config.toml"
+show_warning_before_quitting = false
+snackbar_enabled = true
+
+[terminal]
+
+[terminal.input]
+input_box_type_setting = "classic"
+honor_ps1 = true
+show_terminal_input_message_bar = false
+
+[notifications]
+toast_duration_secs = 8
+
+[session]
+
+[session.new_session_shell_override]
+executable = "/opt/homebrew/Cellar/fish/4.5.0/bin/fish"
+
+[accessibility]
+accessibility_verbosity = "concise"

@@ -1,0 +1,82 @@
+// ##########################################################################################
+// #  TAREA: "6. DEMAND STIMULATION" (CON BLOQUEO DE CELDA DE PAÍS)                         #
+// ##########################################################################################
+
+const CONFIG_DEMAND = {
+  nombreHoja: "6 Demand Stimulation",
+  celdaPais: "C4"
+};
+
+function _demandStimulationWorker(targetCountry) {
+  try {
+    Logger.log(`--- [TAREA 6 DEMAND STIMULATION] Iniciando para ${targetCountry.country.toUpperCase()} ---`);
+    
+    // 1. Abrir origen
+    const sourceSpreadsheet = SpreadsheetApp.openById(SOURCE_SPREADSHEET_ID);
+    const sourceSheet = sourceSpreadsheet.getSheetByName(CONFIG_DEMAND.nombreHoja);
+    if (!sourceSheet) throw new Error(`La hoja de origen '${CONFIG_DEMAND.nombreHoja}' no fue encontrada.`);
+    
+    // 2. Abrir destino
+    const targetSpreadsheet = SpreadsheetApp.openById(targetCountry.id);
+    const existingSheet = targetSpreadsheet.getSheetByName(CONFIG_DEMAND.nombreHoja);
+    
+    let newSheet;
+
+    // 3. Reemplazar o Copiar hoja (MANTENIENDO EL ORDEN)
+    if (existingSheet) {
+      const originalIndex = existingSheet.getIndex(); // Guarda la posición actual
+      targetSpreadsheet.deleteSheet(existingSheet);
+      newSheet = sourceSheet.copyTo(targetSpreadsheet);
+      newSheet.setName(CONFIG_DEMAND.nombreHoja);
+      targetSpreadsheet.setActiveSheet(newSheet);
+      targetSpreadsheet.moveActiveSheet(originalIndex); // Restaura la posición
+    } else {
+      newSheet = sourceSheet.copyTo(targetSpreadsheet);
+      newSheet.setName(CONFIG_DEMAND.nombreHoja);
+    }
+
+    // 4. Escribir el País en la celda configurada y bloquearla
+    const celdaPais = newSheet.getRange(CONFIG_DEMAND.celdaPais);
+    celdaPais.setValue(targetCountry.country);
+
+    // ---- INICIO DEL BLOQUEO ----
+    // Creamos la protección para la celda C4
+    const proteccion = celdaPais.protect().setDescription('Bloqueo automático de celda de país');
+    
+    // Removemos a los demás editores para restringir el acceso
+    const editores = proteccion.getEditors();
+    proteccion.removeEditors(editores);
+    
+    // Si estás en Google Workspace, bloqueamos la edición a nivel de dominio corporativo
+    if (proteccion.canDomainEdit()) {
+      proteccion.setDomainEdit(false);
+    }
+    // ---- FIN DEL BLOQUEO ----
+
+    Logger.log(`>>> [TAREA 6 DEMAND STIMULATION] Proceso completado y celda bloqueada para ${targetCountry.country.toUpperCase()}.`);
+  } catch (error) {
+    Logger.log(`ERROR en [TAREA 6 DEMAND STIMULATION] para ${targetCountry.country.toUpperCase()}: ${error.toString()}`);
+  }
+}
+
+// --- Funciones Individuales ---
+function copiarDemand_Para_Argentina() { _demandStimulationWorker(PAISES_DE_DESTINO.find(p => p.country === "Argentina")); }
+function copiarDemand_Para_Bolivia() { _demandStimulationWorker(PAISES_DE_DESTINO.find(p => p.country === "Bolivia")); }
+function copiarDemand_Para_Chile() { _demandStimulationWorker(PAISES_DE_DESTINO.find(p => p.country === "Chile")); }
+function copiarDemand_Para_Costa_Rica() { _demandStimulationWorker(PAISES_DE_DESTINO.find(p => p.country === "Costa Rica")); }
+function copiarDemand_Para_Republica_Dominicana() { _demandStimulationWorker(PAISES_DE_DESTINO.find(p => p.country === "Republica Dominicana")); }
+function copiarDemand_Para_Ecuador() { _demandStimulationWorker(PAISES_DE_DESTINO.find(p => p.country === "Ecuador")); }
+function copiarDemand_Para_El_Salvador() { _demandStimulationWorker(PAISES_DE_DESTINO.find(p => p.country === "El Salvador")); }
+function copiarDemand_Para_Guatemala() { _demandStimulationWorker(PAISES_DE_DESTINO.find(p => p.country === "Guatemala")); }
+function copiarDemand_Para_Honduras() { _demandStimulationWorker(PAISES_DE_DESTINO.find(p => p.country === "Honduras")); }
+function copiarDemand_Para_Nicaragua() { _demandStimulationWorker(PAISES_DE_DESTINO.find(p => p.country === "Nicaragua")); }
+function copiarDemand_Para_Panama() { _demandStimulationWorker(PAISES_DE_DESTINO.find(p => p.country === "Panama")); }
+function copiarDemand_Para_Paraguay() { _demandStimulationWorker(PAISES_DE_DESTINO.find(p => p.country === "Paraguay")); }
+function copiarDemand_Para_Peru() { _demandStimulationWorker(PAISES_DE_DESTINO.find(p => p.country === "Peru")); }
+function copiarDemand_Para_Uruguay() { _demandStimulationWorker(PAISES_DE_DESTINO.find(p => p.country === "Uruguay")); }
+
+function copiarDemand_Para_TODOS() {
+  Logger.log("INICIANDO TAREA '6 DEMAND STIMULATION' PARA TODOS LOS PAÍSES");
+  PAISES_DE_DESTINO.forEach(pais => _demandStimulationWorker(pais));
+  Logger.log("TAREA '6 DEMAND STIMULATION' FINALIZADA");
+}

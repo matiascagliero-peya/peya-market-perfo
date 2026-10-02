@@ -1,0 +1,130 @@
+/**
+ * ====================================================================
+ * TAREA 2: TEMPLATE (Link en AQ12) - CON BLOQUEO DE PAÍS Y LINK PPT
+ * ====================================================================
+ */
+
+// CONFIGURACIÓN
+const ID_MASTER_TEMPLATE = "1H_gDXL9IQ9HCHSAzzDT8oGBNwPIw4rHmbjtqcqKJikc"; 
+const NOMBRE_HOJA_TEMPLATE = "1 Template";
+const CELDA_NOMBRE_PAIS = "C6";
+const CELDA_LINK_PPT = "AP14"; // <--- AQUÍ VA EL LINK AHORA
+
+// --- FUNCIÓN MAESTRA (WORKER) ---
+function _workerTemplate(pais) {
+  if (!pais) { Logger.log("❌ Error: País no definido."); return; }
+
+  try {
+    Logger.log(`🔵 [TAREA 2] Procesando: ${pais.country}...`);
+
+    // 1. ABRIR MASTER
+    const ssMaster = SpreadsheetApp.openById(ID_MASTER_TEMPLATE);
+    const hojaOrigen = ssMaster.getSheetByName(NOMBRE_HOJA_TEMPLATE);
+    if (!hojaOrigen) throw new Error("No existe '1 Template' en el Master.");
+
+    // 2. ABRIR DESTINO
+    const ssDestino = SpreadsheetApp.openById(pais.id);
+
+    // 3. LIMPIEZA (Manejo de hoja vieja)
+    const hojaVieja = ssDestino.getSheetByName(NOMBRE_HOJA_TEMPLATE);
+    if (hojaVieja) {
+      try {
+        // Renombramos a BASURA antes de borrar
+        hojaVieja.setName("BASURA_TEMP_" + new Date().getTime());
+        ssDestino.deleteSheet(hojaVieja);
+      } catch (e) {
+        hojaVieja.hideSheet();
+      }
+    }
+
+    // 4. COPIAR Y RENOMBRAR
+    const nuevaHoja = hojaOrigen.copyTo(ssDestino);
+    nuevaHoja.setName(NOMBRE_HOJA_TEMPLATE);
+
+    // 5. PERSONALIZAR
+
+    // A. Nombre del País en C6 y bloquearlo
+    const celdaPais = nuevaHoja.getRange(CELDA_NOMBRE_PAIS);
+    celdaPais.setValue(pais.country);
+
+    // ---- INICIO DEL BLOQUEO DE PAÍS ----
+    const proteccionPais = celdaPais.protect().setDescription('Bloqueo automático de celda de país');
+    const editoresPais = proteccionPais.getEditors();
+    proteccionPais.removeEditors(editoresPais);
+    if (proteccionPais.canDomainEdit()) {
+      proteccionPais.setDomainEdit(false);
+    }
+    // ---- FIN DEL BLOQUEO DE PAÍS ----
+
+
+    // B. Link de la Presentación en AR14 y bloquearlo
+    if (typeof PPTs_PAISES_DE_DESTINO !== 'undefined') {
+      const ppt = PPTs_PAISES_DE_DESTINO.find(p => p.country === pais.country);
+      if (ppt && ppt.id) {
+        const urlPPT = "https://docs.google.com/presentation/d/" + ppt.id;
+        const celdaPPT = nuevaHoja.getRange(CELDA_LINK_PPT);
+        celdaPPT.setValue(urlPPT);
+        
+        // ---- INICIO DEL BLOQUEO DEL LINK PPT ----
+        const proteccionPPT = celdaPPT.protect().setDescription('Bloqueo automático de link de PPT');
+        const editoresPPT = proteccionPPT.getEditors();
+        proteccionPPT.removeEditors(editoresPPT);
+        if (proteccionPPT.canDomainEdit()) {
+          proteccionPPT.setDomainEdit(false);
+        }
+        // ---- FIN DEL BLOQUEO DEL LINK PPT ----
+        
+        Logger.log("   > 🔗 Link pegado y bloqueado en " + CELDA_LINK_PPT);
+      } else {
+        Logger.log("   > ⚠️ No hay ID de PPT configurado para este país.");
+      }
+    }
+
+    // 6. MOVER AL INICIO
+    nuevaHoja.activate();
+    try { ssDestino.moveActiveSheet(1); } catch(e) {}
+
+    Logger.log(`   ✅ ${pais.country} OK. Celdas de País y PPT protegidas.`);
+
+  } catch (e) {
+    Logger.log(`   🔴 ERROR en ${pais.country}: ${e.message}`);
+  }
+}
+
+// --- FUNCIONES POR PAÍS ---
+function copiarTemplate_Para_Argentina() { _workerTemplate(PAISES_DE_DESTINO.find(p => p.country === "Argentina")); }
+function copiarTemplate_Para_Bolivia() { _workerTemplate(PAISES_DE_DESTINO.find(p => p.country === "Bolivia")); }
+function copiarTemplate_Para_Chile() { _workerTemplate(PAISES_DE_DESTINO.find(p => p.country === "Chile")); }
+function copiarTemplate_Para_Republica_Dominicana() { _workerTemplate(PAISES_DE_DESTINO.find(p => p.country === "Republica Dominicana")); }
+function copiarTemplate_Para_Ecuador() { _workerTemplate(PAISES_DE_DESTINO.find(p => p.country === "Ecuador")); }
+function copiarTemplate_Para_El_Salvador() { _workerTemplate(PAISES_DE_DESTINO.find(p => p.country === "El Salvador")); }
+function copiarTemplate_Para_Guatemala() { _workerTemplate(PAISES_DE_DESTINO.find(p => p.country === "Guatemala")); }
+function copiarTemplate_Para_Honduras() { _workerTemplate(PAISES_DE_DESTINO.find(p => p.country === "Honduras")); }
+function copiarTemplate_Para_Nicaragua() { _workerTemplate(PAISES_DE_DESTINO.find(p => p.country === "Nicaragua")); }
+function copiarTemplate_Para_Panama() { _workerTemplate(PAISES_DE_DESTINO.find(p => p.country === "Panama")); }
+function copiarTemplate_Para_Paraguay() { _workerTemplate(PAISES_DE_DESTINO.find(p => p.country === "Paraguay")); }
+function copiarTemplate_Para_Peru() { _workerTemplate(PAISES_DE_DESTINO.find(p => p.country === "Peru")); }
+function copiarTemplate_Para_Uruguay() { _workerTemplate(PAISES_DE_DESTINO.find(p => p.country === "Uruguay")); }
+
+// --- EJECUTAR TODOS ---
+function copiarTemplate_Para_TODOS() {
+  Logger.log("🚀 INICIANDO COPIA DE TEMPLATE CON DOBLE BLOQUEO...");
+  PAISES_DE_DESTINO.forEach(pais => _workerTemplate(pais));
+  Logger.log("🏁 FIN.");
+}
+// ====================================================================
+// TEMPLATE — SOLO PRUEBAS
+// ====================================================================
+const ID_SHEET_PRUEBA_TEMPLATE = "1dGAwLGz9cRuKmxPylgcPcGDINf2uNFOGMIOcVIuhs3g"; // tu sheet de prueba
+const PAIS_PRUEBA              = "Chile"; // país a simular (cambialo si querés)
+
+function copiarTemplate_PRUEBAS() {
+  Logger.log("🧪 [PRUEBA] Copiando '1 Template' al sheet de prueba...");
+
+  _workerTemplate({
+    id: ID_SHEET_PRUEBA_TEMPLATE,
+    country: PAIS_PRUEBA
+  });
+
+  Logger.log("🧪 [PRUEBA] FIN.");
+}

@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>BQ Analyzer — Diagnóstico</title>
+<style>
+body{font-family:Consolas,monospace;background:#0f1117;color:#e2e8f0;padding:20px;font-size:13px;}
+h1{font-size:18px;color:#4f8ef7;}
+.test{margin:8px 0;padding:10px;border-radius:6px;background:#1a1d27;border-left:4px solid #64748b;}
+.test.ok{border-left-color:#10b981;}
+.test.fail{border-left-color:#ef4444;}
+.test.running{border-left-color:#fbbf24;}
+.name{font-weight:bold;}
+.time{color:#64748b;float:right;}
+.detail{margin-top:6px;color:#94a3b8;white-space:pre-wrap;word-break:break-all;max-height:200px;overflow:auto;font-size:11px;}
+#summary{margin-top:16px;padding:12px;background:#1a1d27;border-radius:6px;font-weight:bold;}
+</style>
+</head>
+<body>
+<h1>🔧 BQ Analyzer — Diagnóstico completo</h1>
+<div id="t0" class="test running"><span class="name">0. JavaScript ejecuta</span><span class="time"></span><div class="detail"></div></div>
+<div id="t1" class="test"><span class="name">1. google.script.run disponible</span><span class="time"></span><div class="detail"></div></div>
+<div id="t2" class="test"><span class="name">2. ping() — ida y vuelta básica</span><span class="time"></span><div class="detail"></div></div>
+<div id="t3" class="test"><span class="name">3. getConfig()</span><span class="time"></span><div class="detail"></div></div>
+<div id="t4" class="test"><span class="name">4. getAvailableProjects()</span><span class="time"></span><div class="detail"></div></div>
+<div id="t5" class="test"><span class="name">5. getTriggerStatus()</span><span class="time"></span><div class="detail"></div></div>
+<div id="t6" class="test"><span class="name">6. getDashboard() — últimos 7 días</span><span class="time"></span><div class="detail"></div></div>
+<div id="t7" class="test"><span class="name">7. detectLoops()</span><span class="time"></span><div class="detail"></div></div>
+<div id="t8" class="test"><span class="name">8. getIndexInfo() — integridad del index.html en el editor</span><span class="time"></span><div class="detail"></div></div>
+<div id="t9" class="test"><span class="name">9. inspectSheetsJob() — metadata real de jobs de Google Sheets</span><span class="time"></span><div class="detail"></div></div>
+<div id="t10" class="test"><span class="name">10. debugFull() — ¿trae otros usuarios? + tiempo de cada paso</span><span class="time"></span><div class="detail"></div></div>
+<div id="summary">Ejecutando tests…</div>
+
+<script>
+// Si ves esta página con estilos pero los tests no avanzan → google.script.run está roto
+var results=[];
+function mark(id,status,detail,ms){
+  var el=document.getElementById(id);
+  el.className='test '+status;
+  el.querySelector('.time').textContent=ms!==undefined?ms+'ms':'';
+  el.querySelector('.detail').textContent=detail||'';
+  results.push({id:id,status:status});
+  var done=results.filter(function(r){return r.status!=='running';}).length;
+  var fails=results.filter(function(r){return r.status==='fail';}).length;
+  document.getElementById('summary').textContent=
+    'Tests: '+done+' completados, '+fails+' fallidos. '+
+    (fails===0&&done>=8?'✅ Servidor OK — mirá el test 8 para la integridad del index.html.':'');
+}
+
+// Test 0: JS runs at all
+mark('t0','ok','El bloque <script> ejecuta correctamente.',0);
+
+// Test 1: google.script.run exists
+if(typeof google!=='undefined'&&google.script&&google.script.run){
+  mark('t1','ok','google.script.run existe.',0);
+  runTests();
+}else{
+  mark('t1','fail','google.script.run NO existe. La página no se está sirviendo desde Apps Script o el sandbox está bloqueado.');
+  document.getElementById('summary').textContent='❌ Bloqueado en test 1.';
+}
+
+function callServer(id,fnName,args,next,raw){
+  var t=Date.now();
+  mark(id,'running','llamando…');
+  var runner=google.script.run
+    .withSuccessHandler(function(r){
+      var preview;
+      if(raw){preview=String(r);}                       // debugFull devuelve texto plano largo
+      else{try{preview=JSON.stringify(r,null,1).slice(0,2000);}catch(e){preview=String(r);}}
+      mark(id,'ok',preview,Date.now()-t);
+      if(next)next();
+    })
+    .withFailureHandler(function(e){
+      mark(id,'fail','ERROR: '+(e&&e.message?e.message:String(e)),Date.now()-t);
+      if(next)next();
+    });
+  runner[fnName].apply(runner,args||[]);
+}
+
+function runTests(){
+  callServer('t2','ping',[],function(){
+    callServer('t3','getConfig',[],function(){
+      callServer('t4','getAvailableProjects',[],function(){
+        callServer('t5','getTriggerStatus',[],function(){
+          var to=new Date().toISOString().slice(0,10);
+          var f=new Date(Date.now()-7*864e5).toISOString().slice(0,10);
+          callServer('t6','getDashboard',['peya-food-and-groceries','us',f,to,6.25,null],function(){
+            callServer('t7','detectLoops',['peya-food-and-groceries'],function(){
+              callServer('t8','getIndexInfo',[],function(){
+                callServer('t9','inspectSheetsJob',[],function(){
+                callServer('t10','debugFull',[],null,true);   // raw=true: render como texto
+              });
+              });
+            });
+          });
+        });
+      });
+    });
+  });
+}
+
+// Timeout global: si en 90s no terminó todo, avisar
+setTimeout(function(){
+  var pending=document.querySelectorAll('.test.running');
+  for(var i=0;i<pending.length;i++){
+    pending[i].className='test fail';
+    pending[i].querySelector('.detail').textContent='TIMEOUT: el servidor nunca respondió (>180s).';
+  }
+  if(pending.length)document.getElementById('summary').textContent='❌ '+pending.length+' tests con timeout.';
+},180000);
+</script>
+</body>
+</html>

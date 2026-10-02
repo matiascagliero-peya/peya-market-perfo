@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Store Intelligence - Performance Analyzer</title>
+<style>
+  html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; }
+  main {
+    padding: 0;
+    position: relative;
+    height: calc(100vh - 52px); /* Altura total menos la barra de navegación */
+  }
+  #explorer-map {
+    width: 100%;
+    height: 100%;
+  }
+
+  /* --- Botón para abrir el panel --- */
+  #panel-toggle-btn {
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 20;
+    background: var(--card);
+    color: var(--t1);
+    border: 1px solid var(--border);
+    border-radius: 99px;
+    padding: 10px 20px;
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: var(--shadow-lg);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  #panel-toggle-btn:hover {
+    transform: translateX(-50%) translateY(-2px);
+    box-shadow: 0 8px 25px rgba(0,0,0,.1);
+    color: var(--red);
+  }
+  #panel-toggle-btn.is-hidden {
+    transform: translateX(-50%) translateY(200%);
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  /* --- Panel Flotante --- */
+  #floating-panel {
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%) translateY(105%);
+    opacity: 0;
+    width: 95%;
+    max-width: 1400px;
+    height: 70vh;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-lg);
+    z-index: 21;
+    display: flex;
+    flex-direction: column;
+    pointer-events: none;
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  #floating-panel.is-open {
+    transform: translateX(-50%) translateY(0);
+    opacity: 1;
+    pointer-events: auto;
+  }
+  
+  .panel-header { display: flex; align-items: center; padding: 8px 10px 8px 20px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  .panel-tabs { display: flex; gap: 8px; }
+  .panel-tab-btn { padding: 6px 14px; border-radius: 7px; border: none; background: transparent; font-size: 13px; font-weight: 600; color: var(--t2); cursor: pointer; }
+  .panel-tab-btn:hover:not(.active) { background: var(--border2); }
+  .panel-tab-btn.active { background: var(--red-bg); color: var(--red); }
+  .panel-tab-btn.disabled { color: var(--t3); cursor: not-allowed; }
+  
+  .panel-close-btn { margin-left: auto; width: 28px; height: 28px; border: none; background: transparent; border-radius: 50%; cursor: pointer; font-weight: bold; color: var(--t3); }
+  .panel-close-btn:hover { background: var(--border2); color: var(--t1); }
+
+  .panel-body { flex: 1; overflow: hidden; position: relative; display: flex; }
+  .panel-tab-content { display: none; width: 100%; height: 100%; }
+  .panel-tab-content.active { display: block; }
+  .content-wrapper { padding: 20px; height: 100%; overflow-y: auto; }
+
+  /* --- Contenido de Pestaña Filtros --- */
+  .filter-grid { display: grid; grid-template-columns: 280px 1fr; gap: 20px; height: 100%; }
+  .filter-column, .list-column { display: flex; flex-direction: column; gap: 16px; overflow-y: auto; }
+  .filter-group { display: flex; flex-direction: column; gap: 6px; }
+  .filter-label { font-size: 11px; font-weight: 600; color: var(--t3); text-transform: uppercase; }
+  select, input { width: 100%; border:1px solid var(--border); background:#fff; border-radius:7px; padding: 8px 12px; font-size:13px; font-weight:500; color:var(--t1); font-family:'Inter',system-ui,sans-serif; }
+
+  .whs-list-item { padding: 8px 12px; border-radius: 6px; cursor: pointer; font-weight: 500; border: 1px solid transparent; }
+  .whs-list-item:hover { background: var(--bg); }
+  .whs-list-item.selected { background: var(--red-bg); border-color: var(--red); color: var(--red); font-weight: 600; }
+  
+  /* Tabla genérica para el panel */
+  .panel-table-wrap { max-height: calc(70vh - 120px); overflow: auto; }
+  table.panel-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  table.panel-table th { background: var(--bg); color: var(--t3); font-size: 10px; font-weight: 700; text-transform: uppercase; padding: 10px 14px; text-align: right; border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 2; }
+  table.panel-table th:first-child { text-align: left; }
+  table.panel-table tr:nth-child(even) { background: var(--bg); }
+  table.panel-table td { padding: 8px 14px; text-align: right; color: var(--t2); }
+  table.panel-table td:first-child { text-align: left; font-weight: 600; color: var(--t1); }
+</style>
+</head>
+<body>
+
+<?!= include('_nav', { activePage: 'explorer', scriptUrl: scriptUrl }); ?>
+
+<main>
+  <div id="explorer-map"></div>
+
+  <button id="panel-toggle-btn" onclick="togglePanel(true)">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line><line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line><line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line><line x1="1" y1="14" x2="7" y2="14"></line><line x1="9" y1="8" x2="15" y2="8"></line><line x1="17" y1="16" x2="23" y2="16"></line></svg>
+    <span>Controles y Datos</span>
+  </button>
+  
+  <div id="floating-panel">
+    <div class="panel-header">
+      <div class="panel-tabs">
+        <button class="panel-tab-btn active" onclick="switchPanelTab('filtros')">Filtros y Selección</button>
+        <button id="tab-btn-anillos" class="panel-tab-btn disabled" onclick="switchPanelTab('anillos')">Análisis de Anillos</button>
+        <button id="tab-btn-benchmark" class="panel-tab-btn" onclick="switchPanelTab('benchmark')">Benchmark</button>
+      </div>
+      <button class="panel-close-btn" onclick="togglePanel(false)">X</button>
+    </div>
+    <div class="panel-body">
+      <!-- Pestaña Filtros -->
+      <div id="tab-content-filtros" class="panel-tab-content active">
+        <div class="filter-grid">
+          <div class="filter-column">
+            <div class="filter-group"><label class="filter-label">País</label><select id="country-filter" onchange="onFilterChange()"><option value="">Todos</option></select></div>
+            <div class="filter-group"><label class="filter-label">Ciudad</label><select id="city-filter" onchange="onFilterChange()"><option value="">Todas</option></select></div>
+            <div class="filter-group"><label class="filter-label">Buscar Almacén</label><input type="text" id="whs-search" onkeyup="renderWarehouseList()" placeholder="Escriba para buscar..."></div>
+          </div>
+          <div class="list-column" id="whs-list"></div>
+        </div>
+      </div>
+      <!-- Pestaña Anillos -->
+      <div id="tab-content-anillos" class="panel-tab-content">
+        <div class="content-wrapper" id="anillos-content"></div>
+      </div>
+      <!-- Pestaña Benchmark -->
+      <div id="tab-content-benchmark" class="panel-tab-content">
+        <div class="content-wrapper"><p>Funcionalidad de Benchmark en construcción.</p></div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+// --- STATE MANAGEMENT ---
+let gMap, activePolygon;
+let allMarkers = [], allWarehouses = [];
+let activeWarehouseId = null;
+
+// --- INITIALIZATION ---
+window.onload = () => {
+  try {
+    initMap();
+    fetchInitialData();
+  } catch (e) { showError(e); }
+};
+
+function initMap() {
+  if (typeof google === 'undefined' || !google.maps) return showError({message: "Google Maps API no se cargó."});
+  gMap = new google.maps.Map(document.getElementById('explorer-map'), {
+    center: { lat: -20, lng: -60 }, zoom: 4,
+    styles: getMapStyles(),
+    disableDefaultUI: true, zoomControl: true, streetViewControl: false
+  });
+}
+
+function fetchInitialData() {
+  showLoading();
+  google.script.run
+    .withSuccessHandler(data => {
+      if (!data || !data.warehouses) return showError({message: "No se recibieron datos iniciales."});
+      allWarehouses = data.warehouses;
+      populateCountryFilter(data.countries);
+      renderMarkers(allWarehouses);
+      renderWarehouseList();
+      hideLoading();
+    })
+    .withFailureHandler(showError).getExplorerInitialData();
+}
+
+// --- PANEL & TABS ---
+function togglePanel(open) {
+  const panel = document.getElementById('floating-panel');
+  const btn = document.getElementById('panel-toggle-btn');
+  const shouldOpen = open === undefined ? !panel.classList.contains('is-open') : open;
+  panel.classList.toggle('is-open', shouldOpen);
+  btn.classList.toggle('is-hidden', shouldOpen);
+}
+
+function switchPanelTab(tabName) {
+  document.querySelectorAll('.panel-tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelector(`.panel-tab-btn[onclick="switchPanelTab('${tabName}')"]`).classList.add('active');
+  document.querySelectorAll('.panel-tab-content').forEach(c => c.classList.remove('active'));
+  document.getElementById(`tab-content-${tabName}`).classList.add('active');
+  
+  if (tabName === 'anillos' && activeWarehouseId) {
+    loadAnillosData(activeWarehouseId);
+  }
+}
+
+// --- FILTERS & SELECTION ---
+function populateCountryFilter(countries) {
+  if (!countries) return;
+  const sel = document.getElementById('country-filter');
+  countries.forEach(c => sel.innerHTML += `<option value="${c}">${c}</option>`);
+}
+
+function onFilterChange() {
+  const filtered = getFilteredWarehouses();
+  renderWarehouseList(filtered);
+  renderMarkers(filtered);
+}
+
+function renderWarehouseList(warehouses = allWarehouses) {
+  const listEl = document.getElementById('whs-list');
+  listEl.innerHTML = '';
+  const search = document.getElementById('whs-search').value.toLowerCase();
+  const country = document.getElementById('country-filter').value;
+  const filtered = warehouses.filter(w => (!country || w.country === country) && w.warehouse_name.toLowerCase().includes(search));
+
+  if (filtered.length === 0) {
+    listEl.innerHTML = '<p style="color: var(--t3); text-align: center; font-size: 12px;">No se encontraron almacenes.</p>';
+    return;
+  }
+  filtered.forEach(whs => {
+    const item = document.createElement('div');
+    item.className = `whs-list-item ${whs.warehouse_id === activeWarehouseId ? 'selected' : ''}`;
+    item.textContent = whs.warehouse_name;
+    item.onclick = () => selectWarehouse(whs.warehouse_id);
+    listEl.appendChild(item);
+  });
+}
+
+function getFilteredWarehouses() {
+  const country = document.getElementById('country-filter').value;
+  const search = document.getElementById('whs-search').value.toLowerCase();
+  return allWarehouses.filter(whs => 
+    (!country || whs.country === country) && 
+    (!search || whs.warehouse_name.toLowerCase().includes(search))
+  );
+}
+
+function selectWarehouse(warehouseId) {
+  if (activeWarehouseId === warehouseId) return;
+  activeWarehouseId = warehouseId;
+  
+  document.getElementById('tab-btn-anillos').classList.remove('disabled');
+  renderWarehouseList(getFilteredWarehouses());
+
+  const marker = allMarkers.find(m => m.warehouseId === warehouseId);
+  if (marker) {
+    gMap.panTo(marker.getPosition());
+    if (gMap.getZoom() < 12) gMap.setZoom(12);
+  }
+  
+  fetchAndDrawPolygon(warehouseId);
+
+  // Si el usuario ya está en una pestaña de detalle, que se recargue.
+  const activeTab = document.querySelector('.panel-tab-btn.active');
+  if (activeTab.id === 'tab-btn-anillos') {
+    loadAnillosData(warehouseId);
+  }
+}
+
+// --- DATA LOADING FOR TABS ---
+function loadAnillosData(whsId) {
+  const contentEl = document.getElementById('anillos-content');
+  contentEl.innerHTML = '<p>Cargando datos de anillos...</p>';
+  google.script.run
+    .withSuccessHandler(ringData => {
+      if (!ringData || ringData.length === 0) {
+        contentEl.innerHTML = '<p>No se encontraron datos de anillos para esta tienda.</p>';
+        return;
+      }
+      let tableHtml = '<div class="panel-table-wrap"><table class="panel-table"><thead><tr><th>Anillo</th><th>Covered MAUs</th><th>Dmart MAUs</th><th>Penetración</th><th>Órdenes</th><th>Net Sales</th><th>Avg DT</th><th>% Late</th></tr></thead><tbody>';
+      ringData.forEach(row => {
+        tableHtml += `<tr>
+          <td>${row.anillo}</td>
+          <td>${(row.covered_maus || 0).toLocaleString('es-AR')}</td>
+          <td>${(row.anillo === 'Sin Cobertura' ? row.dmart_maus_uncovered : row.dmart_maus_covered || 0).toLocaleString('es-AR')}</td>
+          <td>${row.anillo === 'Sin Cobertura' ? '-' : (parseFloat(row.penetration_pct) || 0).toFixed(1) + '%'}</td>
+          <td>${(row.dmart_orders || 0).toLocaleString('es-AR')}</td>
+          <td>€${(row.net_sales || 0).toLocaleString('es-AR')}</td>
+          <td>${row.avg_dt_min ? row.avg_dt_min + ' min' : '-'}</td>
+          <td>${row.pct_late ? row.pct_late.toFixed(1) + '%' : '-'}</td>
+        </tr>`;
+      });
+      tableHtml += '</tbody></table></div>';
+      contentEl.innerHTML = tableHtml;
+    })
+    .withFailureHandler(e => { contentEl.innerHTML = `<p>Error: ${e.message}</p>`; })
+    .getRingData(whsId, '2026-07-01'); // Usar fecha más reciente
+}
+
+// --- MAP DRAWING ---
+function renderMarkers(warehouses) {
+  clearMarkers();
+  warehouses.forEach(whs => {
+    const marker = new google.maps.Marker({
+      position: { lat: whs.lat, lng: whs.lng },
+      map: gMap, title: whs.warehouse_name, warehouseId: whs.warehouse_id
+    });
+    marker.addListener('click', () => selectWarehouse(whs.warehouse_id));
+    allMarkers.push(marker);
+  });
+}
+
+function fetchAndDrawPolygon(warehouseId) {
+  if (activePolygon) activePolygon.setMap(null);
+  google.script.run
+    .withSuccessHandler(data => {
+      if (!data || !data.geojson_shape) return;
+      const shape = JSON.parse(data.geojson_shape);
+      const paths = (shape.type === 'Polygon') ? shape.coordinates.map(r => r.map(c=>({lat:c[1],lng:c[0]}))) : shape.coordinates.flatMap(p=>p.map(r=>r.map(c=>({lat:c[1],lng:c[0]}))));
+      activePolygon = new google.maps.Polygon({
+          paths: paths, map: gMap,
+          strokeColor: '#e50044', strokeOpacity: 0.9, strokeWeight: 1.5,
+          fillColor: '#e50044', fillOpacity: 0.1,
+      });
+    }).getWarehousePolygon(warehouseId, '2026-07-01');
+}
+
+function clearMarkers() {
+  allMarkers.forEach(m => m.setMap(null));
+  allMarkers = [];
+}
+
+function getMapStyles() { return [ { "featureType": "all", "elementType": "labels.text.fill", "stylers": [ { "saturation": 36 }, { "color": "#ffffff" }, { "lightness": 40 } ] }, { "featureType": "all", "elementType": "labels.text.stroke", "stylers": [ { "visibility": "on" }, { "color": "#000000" }, { "lightness": 16 } ] }, { "featureType": "all", "elementType": "labels.icon", "stylers": [ { "visibility": "off" } ] }, { "featureType": "administrative", "elementType": "geometry.fill", "stylers": [ { "color": "#000000" }, { "lightness": 20 } ] }, { "featureType": "administrative", "elementType": "geometry.stroke", "stylers": [ { "color": "#000000" }, { "lightness": 17 }, { "weight": 1.2 } ] }, { "featureType": "administrative.country", "elementType": "labels.text.fill", "stylers": [ { "color": "#e5c163" } ] }, { "featureType": "administrative.locality", "elementType": "labels.text.fill", "stylers": [ { "color": "#c4c4c4" } ] }, { "featureType": "administrative.neighborhood", "elementType": "labels.text.fill", "stylers": [ { "color": "#e5c163" } ] }, { "featureType": "landscape", "elementType": "geometry", "stylers": [ { "color": "#000000" }, { "lightness": 20 } ] }, { "featureType": "poi", "elementType": "geometry", "stylers": [ { "color": "#000000" }, { "lightness": 21 }, { "visibility": "on" } ] }, { "featureType": "poi.business", "stylers": [ { "visibility": "off" } ] }, { "featureType": "road.highway", "elementType": "geometry.fill", "stylers": [ { "color": "#e5c163" }, { "lightness": "0" } ] }, { "featureType": "road.highway", "elementType": "geometry.stroke", "stylers": [ { "visibility": "off" } ] }, { "featureType": "road.highway", "elementType": "labels.text.fill", "stylers": [ { "color": "#ffffff" } ] }, { "featureType": "road.highway", "elementType": "labels.text.stroke", "stylers": [ { "color": "#e5c163" } ] }, { "featureType": "road.arterial", "elementType": "geometry", "stylers": [ { "color": "#000000" }, { "lightness": 18 } ] }, { "featureType": "road.arterial", "elementType": "labels.text.fill", "stylers": [ { "color": "#ffffff" } ] }, { "featureType": "road.arterial", "elementType": "labels.text.stroke", "stylers": [ { "color": "#2c2c2c" } ] }, { "featureType": "road.local", "elementType": "geometry", "stylers": [ { "color": "#000000" }, { "lightness": 16 } ] }, { "featureType": "road.local", "elementType": "labels", "stylers": [ { "visibility": "off" } ] }, { "featureType": "transit", "elementType": "geometry", "stylers": [ { "color": "#000000" }, { "lightness": 19 } ] }, { "featureType": "water", "elementType": "geometry", "stylers": [ { "color": "#000000" }, { "lightness": 17 } ] } ]; }
+</script>
+</body>
+</html>

@@ -1,0 +1,77 @@
+// ##########################################################################################
+// #  TAREA: "BENCHMARK LATAM" (VERSIÓN 2 - RENOMBRADA)                                     #
+// ##########################################################################################
+
+// He cambiado el nombre de la constante para evitar conflictos
+const CONFIG_BENCHMARK_V2 = {
+  nombreHoja: "3 Benchmark LATAM"
+};
+
+// He cambiado el nombre del Worker a _V2
+function _benchmarkLatamWorker_V2(targetCountry) {
+  try {
+    Logger.log(`--- [TAREA BENCHMARK LATAM V2] Iniciando para ${targetCountry.country.toUpperCase()} ---`);
+    
+    // 1. Abrir origen
+    const sourceSpreadsheet = SpreadsheetApp.openById(SOURCE_SPREADSHEET_ID);
+    const sourceSheet = sourceSpreadsheet.getSheetByName(CONFIG_BENCHMARK_V2.nombreHoja);
+    
+    if (!sourceSheet) throw new Error(`La hoja de origen '${CONFIG_BENCHMARK_V2.nombreHoja}' no fue encontrada.`);
+    
+    // 2. Abrir destino
+    const targetSpreadsheet = SpreadsheetApp.openById(targetCountry.id);
+    const existingSheet = targetSpreadsheet.getSheetByName(CONFIG_BENCHMARK_V2.nombreHoja);
+    
+    let newSheet;
+
+    // 3. Reemplazar o Copiar hoja
+    if (existingSheet) {
+      const originalIndex = existingSheet.getIndex();
+      targetSpreadsheet.deleteSheet(existingSheet);
+      
+      newSheet = sourceSheet.copyTo(targetSpreadsheet);
+      newSheet.setName(CONFIG_BENCHMARK_V2.nombreHoja);
+      
+      targetSpreadsheet.setActiveSheet(newSheet);
+      targetSpreadsheet.moveActiveSheet(originalIndex);
+    } else {
+      newSheet = sourceSheet.copyTo(targetSpreadsheet);
+      newSheet.setName(CONFIG_BENCHMARK_V2.nombreHoja);
+    }
+
+    Logger.log(`>>> [TAREA BENCHMARK LATAM V2] Proceso completado para ${targetCountry.country.toUpperCase()}.`);
+  } catch (error) {
+    Logger.log(`ERROR en [TAREA BENCHMARK LATAM V2] para ${targetCountry.country.toUpperCase()}: ${error.toString()}`);
+  }
+}
+
+// --- Funciones Individuales (Renombradas con _V2) ---
+
+function copiarBenchmark_Para_Argentina_V2() { _benchmarkLatamWorker_V2(PAISES_DE_DESTINO.find(p => p.country === "Argentina")); }
+function copiarBenchmark_Para_Bolivia_V2() { _benchmarkLatamWorker_V2(PAISES_DE_DESTINO.find(p => p.country === "Bolivia")); }
+function copiarBenchmark_Para_Chile_V2() { _benchmarkLatamWorker_V2(PAISES_DE_DESTINO.find(p => p.country === "Chile")); }
+function copiarBenchmark_Para_Costa_Rica_V2() { _benchmarkLatamWorker_V2(PAISES_DE_DESTINO.find(p => p.country === "Costa Rica")); }
+function copiarBenchmark_Para_Republica_Dominicana_V2() { _benchmarkLatamWorker_V2(PAISES_DE_DESTINO.find(p => p.country === "Republica Dominicana")); }
+function copiarBenchmark_Para_Ecuador_V2() { _benchmarkLatamWorker_V2(PAISES_DE_DESTINO.find(p => p.country === "Ecuador")); }
+function copiarBenchmark_Para_El_Salvador_V2() { _benchmarkLatamWorker_V2(PAISES_DE_DESTINO.find(p => p.country === "El Salvador")); }
+function copiarBenchmark_Para_Guatemala_V2() { _benchmarkLatamWorker_V2(PAISES_DE_DESTINO.find(p => p.country === "Guatemala")); }
+function copiarBenchmark_Para_Honduras_V2() { _benchmarkLatamWorker_V2(PAISES_DE_DESTINO.find(p => p.country === "Honduras")); }
+function copiarBenchmark_Para_Nicaragua_V2() { _benchmarkLatamWorker_V2(PAISES_DE_DESTINO.find(p => p.country === "Nicaragua")); }
+function copiarBenchmark_Para_Panama_V2() { _benchmarkLatamWorker_V2(PAISES_DE_DESTINO.find(p => p.country === "Panama")); }
+function copiarBenchmark_Para_Paraguay_V2() { _benchmarkLatamWorker_V2(PAISES_DE_DESTINO.find(p => p.country === "Paraguay")); }
+function copiarBenchmark_Para_Peru_V2() { _benchmarkLatamWorker_V2(PAISES_DE_DESTINO.find(p => p.country === "Peru")); }
+function copiarBenchmark_Para_Uruguay_V2() { _benchmarkLatamWorker_V2(PAISES_DE_DESTINO.find(p => p.country === "Uruguay")); }
+
+// --- Función Masiva (Renombrada) ---
+
+function copiarBenchmark_Para_TODOS_V2() {
+  Logger.log("INICIANDO TAREA 'BENCHMARK LATAM V2' PARA TODOS LOS PAÍSES");
+  
+  if (typeof PAISES_DE_DESTINO !== 'undefined') {
+      PAISES_DE_DESTINO.forEach(pais => _benchmarkLatamWorker_V2(pais));
+  } else {
+      Logger.log("❌ ERROR: La variable global 'PAISES_DE_DESTINO' no está definida.");
+  }
+  
+  Logger.log("TAREA 'BENCHMARK LATAM V2' FINALIZADA");
+}

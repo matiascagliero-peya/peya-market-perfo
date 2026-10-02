@@ -1,0 +1,3379 @@
+<script>
+    // ============================================================
+    // ESTADO GLOBAL DE LA APLICACIÓN
+    // ============================================================
+    let map;
+    let deckOverlay;
+    let initialData = null;
+    let allWarehouses = [];
+    let selectedWarehouseIds = new Set();
+    
+    // Capas en el Mapa
+    let warehouseMarkers = [];
+    let warehousePolygons = [];
+    let activePolygonsMap = new Map(); // warehouse_id -> { polygon, ghostPolygon, coords, month }
+    let ringCircles = [];
+    let isRingsVisible = false;
+    let isMouseWheelZoomEnabled = true;
+    let currentHeatmapLayer = 'none';
+    let crmChartInstance = null;
+    let transitionTimer = null;
+
+    // Distancias y colores fijos para los anillos concéntricos
+    const RING_RADII_METERS = [1000, 2000, 3000, 4000, 5000];
+    const RING_COLORS = [
+      '#ea044e', // 1 km: Rojo PeYa
+      '#f97316', // 2 km: Naranja Intenso
+      '#f59e0b', // 3 km: Ámbar / Dorado
+      '#10b981', // 4 km: Verde Esmeralda
+      '#6366f1'  // 5 km: Índigo Real
+    ];
+
+    // Estilos personalizados para el mapa oscuro moderno de Google Maps
+    const DARK_MAP_STYLE = [
+      { "elementType": "geometry", "stylers": [{ "color": "#1e293b" }] },
+      { "elementType": "labels.text.stroke", "stylers": [{ "color": "#0f172a" }] },
+      { "elementType": "labels.text.fill", "stylers": [{ "color": "#94a3b8" }] },
+      { "featureType": "administrative.locality", "elementType": "labels.text.fill", "stylers": [{ "color": "#cbd5e1" }] },
+      { "featureType": "road", "elementType": "geometry", "stylers": [{ "color": "#334155" }] },
+      { "featureType": "road", "elementType": "geometry.stroke", "stylers": [{ "color": "#1e293b" }] },
+      { "featureType": "road.highway", "elementType": "geometry", "stylers": [{ "color": "#475569" }] },
+      { "featureType": "water", "elementType": "geometry", "stylers": [{ "color": "#0b0f19" }] },
+      // Ocultar locales comerciales, restaurantes, heladerías y puntos de comida externos (Rapanui, etc.)
+      { "featureType": "poi", "stylers": [{ "visibility": "off" }] },
+      { "featureType": "poi.business", "stylers": [{ "visibility": "off" }] },
+      { "featureType": "poi.attraction", "stylers": [{ "visibility": "off" }] },
+      { "featureType": "transit", "stylers": [{ "visibility": "off" }] }
+    ];
+
+    // Estilos personalizados para el mapa claro (Modo Día) de Google Maps
+    const LIGHT_MAP_STYLE = [
+      { "featureType": "all", "elementType": "geometry", "stylers": [{ "color": "#f5f5f5" }] },
+      { "featureType": "all", "elementType": "labels.text.fill", "stylers": [{ "color": "#616161" }] },
+      { "featureType": "all", "elementType": "labels.text.stroke", "stylers": [{ "color": "#f5f5f5" }] },
+      { "featureType": "administrative.land_parcel", "elementType": "labels.text.fill", "stylers": [{ "color": "#bdbdbd" }] },
+      { "featureType": "poi", "stylers": [{ "visibility": "off" }] },
+      { "featureType": "poi.business", "stylers": [{ "visibility": "off" }] },
+      { "featureType": "road", "elementType": "geometry", "stylers": [{ "color": "#ffffff" }] },
+      { "featureType": "road.arterial", "elementType": "labels.text.fill", "stylers": [{ "color": "#757575" }] },
+      { "featureType": "road.highway", "elementType": "geometry", "stylers": [{ "color": "#dadada" }] },
+      { "featureType": "road.highway", "elementType": "labels.text.fill", "stylers": [{ "color": "#616161" }] },
+      { "featureType": "transit", "stylers": [{ "visibility": "off" }] },
+      { "featureType": "water", "elementType": "geometry", "stylers": [{ "color": "#c9e6ff" }] },
+      { "featureType": "water", "elementType": "labels.text.fill", "stylers": [{ "color": "#9e9e9e" }] }
+    ];
+
+    window.onThemeChangeCallback = function(theme) {
+      updateThemeStyles(theme);
+    };
+
+    window.addEventListener('mapsterThemeChanged', function(e) {
+      const theme = e.detail ? e.detail.theme : (localStorage.getItem('mapster_theme') || 'light');
+      updateThemeStyles(theme);
+    });
+
+    function updateThemeStyles(theme) {
+      if (map) {
+        map.setOptions({
+          styles: theme === 'dark' ? DARK_MAP_STYLE : LIGHT_MAP_STYLE
+        });
+      }
+      const sel = document.getElementById('theme-selector');
+      if (sel) {
+        sel.value = theme;
+      }
+      const label = document.getElementById('toolbar-theme-label');
+      if (label) {
+        label.textContent = theme === 'dark' ? 'Modo Noche' : 'Modo Día';
+      }
+    }
+
+    // Icono SVG vectorial personalizado para la tienda/WHS
+    function getWarehouseMarkerIcon(warehouseName) {
+      const svg = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="38" height="46" viewBox="0 0 38 46" fill="none">
+          <defs>
+            <filter id="pin-shadow" x="0" y="0" width="38" height="46" filterUnits="userSpaceOnUse">
+              <feDropShadow dx="0" dy="3" stdDeviation="2.5" flood-color="#000000" flood-opacity="0.45"/>
+            </filter>
+          </defs>
+          <g filter="url(#pin-shadow)">
+            <path d="M19 2C10.716 2 4 8.716 4 17C4 28 19 39 19 39C19 39 34 28 34 17C34 8.716 27.284 2 19 2Z" fill="#ea044e" stroke="#ffffff" stroke-width="2.2"/>
+            <circle cx="19" cy="17" r="11" fill="#ffffff"/>
+            <!-- Fachada y techo de tienda / Warehouse -->
+            <path d="M13 15L19 11L25 15V22H13V15Z" fill="#ea044e"/>
+            <path d="M17 22V17.5H21V22H17Z" fill="#ffffff"/>
+            <path d="M11.5 15H26.5V16.5H11.5V15Z" fill="#990334"/>
+          </g>
+        </svg>
+      `;
+      return {
+        url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg),
+        scaledSize: new google.maps.Size(34, 42),
+        anchor: new google.maps.Point(17, 39)
+      };
+    }
+
+    // ============================================================
+    // INICIALIZACIÓN
+    // ============================================================
+    window.onload = function() {
+      initGoogleMap();
+      fetchInitialData();
+    };
+
+    let viewportIdleTimer = null;
+    const manuallyDeselectedIds = new Set();
+
+    function removePolygonsForWarehouse(whId) {
+      const normId = String(whId).trim();
+      
+      const entry = activePolygonsMap.get(normId);
+      if (entry) {
+        if (entry.polygon) entry.polygon.setMap(null);
+        if (entry.ghostPolygon) entry.ghostPolygon.setMap(null);
+        activePolygonsMap.delete(normId);
+      }
+
+      activePolygonsMap.forEach((e, key) => {
+        if (String(key).trim() === normId) {
+          if (e.polygon) e.polygon.setMap(null);
+          if (e.ghostPolygon) e.ghostPolygon.setMap(null);
+          activePolygonsMap.delete(key);
+        }
+      });
+    }
+
+    function applyViewportAutoload() {
+      if (!isViewportFilterActive || !map) return;
+      const bounds = map.getBounds();
+      if (!bounds) return;
+
+      // 1. Obtener todas las tiendas válidas que caen en el encuadre visible del mapa
+      const visibleStores = allWarehouses.filter(w => {
+        const cLower = (w.country || '').toLowerCase().trim();
+        if (cLower === 'desconocido' || cLower === 'costa rica' || cLower === 'cr') return false;
+
+        const country = document.getElementById('filter-country').value;
+        if (country && w.country !== country) return false;
+
+        const isStoreActive = isWarehouseActiveInMonth(w);
+        if (selectedStatusFilter === 'ACTIVE' && !isStoreActive) return false;
+        if (selectedStatusFilter === 'INACTIVE' && isStoreActive) return false;
+
+        if (selectedPartnerFilter !== 'ALL') {
+          const enabledTypes = getEnabledPartnerTypes(w);
+          if (!enabledTypes.some(t => t.key === selectedPartnerFilter)) return false;
+        }
+
+        const pos = getWarehousePosition(w);
+        if (!pos) return false;
+        return bounds.contains(new google.maps.LatLng(pos.lat, pos.lng));
+      });
+
+      const visibleIdsSet = new Set(visibleStores.map(w => String(w.warehouse_id).trim()));
+
+      // 2. Deseleccionar y remover polígonos de almacenes que ya no están visibles en pantalla
+      const toRemove = [];
+      selectedWarehouseIds.forEach(id => {
+        if (!visibleIdsSet.has(id)) {
+          toRemove.push(id);
+        }
+      });
+      toRemove.forEach(id => {
+        selectedWarehouseIds.delete(id);
+        removePolygonsForWarehouse(id);
+      });
+
+      // 3. Agregar y seleccionar automáticamente todas las tiendas que entraron en la vista visible
+      let selectionChanged = toRemove.length > 0;
+      visibleIdsSet.forEach(id => {
+        if (!selectedWarehouseIds.has(id)) {
+          selectedWarehouseIds.add(id);
+          selectionChanged = true;
+        }
+      });
+
+      renderWarehouseCards();
+
+      if (selectionChanged) {
+        updateSelectionAndRefresh();
+      }
+    }
+
+    function initGoogleMap() {
+      if (typeof google === 'undefined' || !google.maps) {
+        setTimeout(initGoogleMap, 150);
+        return;
+      }
+
+      const activeTheme = localStorage.getItem('mapster_theme') || 'light';
+      map = new google.maps.Map(document.getElementById('main-map'), {
+        center: { lat: -34.5885, lng: -58.4305 }, // Buenos Aires por defecto
+        zoom: 14, // Nivel 5 por defecto (14x)
+        styles: activeTheme === 'dark' ? DARK_MAP_STYLE : LIGHT_MAP_STYLE,
+        disableDefaultUI: true,
+        zoomControl: true,
+        mapTypeControl: false,
+        streetViewControl: false,
+        scrollwheel: true,
+        gestureHandling: 'greedy'
+      });
+
+      updateThemeStyles(activeTheme);
+
+      // Cerrar la ventana flotante inferior cuando el usuario toca el mapa
+      map.addListener('click', () => {
+        toggleBottomSheet(false);
+        if (hoverInfoWindow) hoverInfoWindow.close();
+        if (currentDetailInfoWindow) currentDetailInfoWindow.close();
+      });
+
+      // Autocarga y autofiltrado en vivo al desplazar o hacer zoom en el mapa
+      map.addListener('idle', () => {
+        if (!isViewportFilterActive) return;
+        if (viewportIdleTimer) clearTimeout(viewportIdleTimer);
+        viewportIdleTimer = setTimeout(applyViewportAutoload, 350);
+      });
+    }
+
+    // ── Atajos de Teclado: 'w' abre panel, 'q' lo cierra, 'e' centra tiendas, 1-9 regulan el zoom ──
+    const NUMERIC_ZOOM_LEVELS = {
+      '1': 10,
+      '2': 11,
+      '3': 12,
+      '4': 13,
+      '5': 14,
+      '6': 15,
+      '7': 16,
+      '8': 17,
+      '9': 18,
+      '0': 12
+    };
+
+    function cycleCountry() {
+      const select = document.getElementById('filter-country');
+      if (!select || select.options.length <= 1) return;
+
+      let nextIndex = select.selectedIndex + 1;
+      if (nextIndex >= select.options.length) {
+        nextIndex = 1;
+      }
+      select.selectedIndex = nextIndex;
+      const nextCountry = select.value;
+      onCountryChange(nextCountry);
+      showToast(`País: ${nextCountry || 'Todos los países'}`, 'info');
+    }
+
+    function cycleCity() {
+      const select = document.getElementById('filter-city');
+      if (!select || select.options.length <= 1) {
+        showToast('No hay más ciudades disponibles en este país.', 'info');
+        return;
+      }
+
+      let nextIndex = select.selectedIndex + 1;
+      if (nextIndex >= select.options.length) {
+        nextIndex = 1;
+      }
+      select.selectedIndex = nextIndex;
+      const nextCity = select.value;
+      onCityChange(nextCity);
+      showToast(`Ciudad: ${nextCity || 'Todas las ciudades'}`, 'info');
+    }
+
+    function cycleWarehouse() {
+      const filtered = getCurrentlyFilteredWarehouses();
+      if (!filtered || filtered.length === 0) {
+        showToast('No hay almacenes disponibles con el filtro actual.', 'warning');
+        return;
+      }
+
+      const currentId = selectedWarehouseIds.size > 0 ? Array.from(selectedWarehouseIds)[0] : null;
+      let currIdx = filtered.findIndex(w => String(w.warehouse_id).trim() === String(currentId).trim());
+      
+      let nextIdx = (currIdx + 1) % filtered.length;
+      if (nextIdx < 0) nextIdx = 0;
+      const nextWh = filtered[nextIdx];
+      const nextId = String(nextWh.warehouse_id).trim();
+
+      selectedWarehouseIds.clear();
+      selectedWarehouseIds.add(nextId);
+      manuallyDeselectedIds.delete(nextId);
+
+      const pos = getWarehousePosition(nextWh);
+      if (pos && map) {
+        map.panTo(pos);
+        if (map.getZoom() < 14) map.setZoom(14);
+      }
+
+      renderWarehouseCards();
+      updateSelectionAndRefresh();
+      showToast(`Tienda (${nextIdx + 1}/${filtered.length}): ${nextWh.warehouse_name}`, 'info');
+    }
+
+    window.addEventListener('keydown', (e) => {
+      const tag = (e.target && e.target.tagName) ? e.target.tagName.toUpperCase() : '';
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (e.target && e.target.isContentEditable)) {
+        return;
+      }
+      if (e.key === 'w' || e.key === 'W') {
+        toggleBottomSheet(true);
+      } else if (e.key === 'q' || e.key === 'Q') {
+        toggleBottomSheet(false);
+      } else if (e.key === 'e' || e.key === 'E') {
+        centerMapOnSelected();
+        showToast('Mapa centrado en tiendas seleccionadas', 'info');
+      } else if (e.key === 'r' || e.key === 'R') {
+        toggleRingsVisibility();
+      } else if (e.key === 'a' || e.key === 'A') {
+        toggleViewportFilter();
+      } else if (e.key === 'p' || e.key === 'P' || e.key === 'u' || e.key === 'U') {
+        cycleCountry();
+      } else if (e.key === 'c' || e.key === 'C' || e.key === 'i' || e.key === 'I') {
+        cycleCity();
+      } else if (e.key === 'o' || e.key === 'O') {
+        cycleWarehouse();
+      } else if (NUMERIC_ZOOM_LEVELS[e.key] !== undefined) {
+        if (map) {
+          const targetZoom = NUMERIC_ZOOM_LEVELS[e.key];
+          map.setZoom(targetZoom);
+          showToast(`Zoom: Nivel ${e.key} (${targetZoom}x)`, 'info');
+        }
+      }
+    });
+
+    // ── Autofiltrado y Autocarga por zona visible del mapa (Viewport) ──
+    let isViewportFilterActive = false;
+
+    function toggleViewportFilter(active) {
+      if (active !== undefined) {
+        isViewportFilterActive = active;
+      } else {
+        const toggle = document.getElementById('viewport-filter-toggle');
+        isViewportFilterActive = !toggle.checked;
+        toggle.checked = isViewportFilterActive;
+      }
+
+      const toggle = document.getElementById('viewport-filter-toggle');
+      if (toggle) toggle.checked = isViewportFilterActive;
+
+      showToast(
+        isViewportFilterActive
+          ? 'Autocarga activada (A): explorando tiendas visibles dinámicamente'
+          : 'Autocarga desactivada (A)',
+        'info'
+      );
+
+      if (isViewportFilterActive) {
+        manuallyDeselectedIds.clear();
+        applyViewportAutoload();
+      } else {
+        renderWarehouseCards();
+      }
+    }
+
+    // ── Mini Indicador de Carga de Shape ──
+    let activeShapeRequestsCount = 0;
+
+    function showShapeLoading(show) {
+      if (show) {
+        activeShapeRequestsCount++;
+      } else {
+        activeShapeRequestsCount = Math.max(0, activeShapeRequestsCount - 1);
+      }
+      const pill = document.getElementById('shape-loading-pill');
+      if (pill) {
+        pill.style.display = (activeShapeRequestsCount > 0) ? 'flex' : 'none';
+      }
+    }
+
+    function applyMonthWarehouseStatus(monthDate) {
+      if (!monthDate) return;
+      const statusMap = (initialData && initialData.monthlyStatus && initialData.monthlyStatus[monthDate]) || {};
+      allWarehouses.forEach(w => {
+        const idStr = String(w.warehouse_id).trim();
+        const st = statusMap[idStr] || statusMap[w.warehouse_id];
+        if (st) {
+          w.is_active = Boolean(st.is_active);
+          w.orders = st.orders;
+          w.active_partners_in_month = st.active_partners_in_month;
+          w.total_enabled_partners = st.total_enabled_partners;
+          if (st.all_partners_display) w.all_partners_display = st.all_partners_display;
+        } else {
+          w.is_active = false;
+          w.orders = 0;
+          w.active_partners_in_month = 0;
+        }
+      });
+    }
+
+    function fetchInitialData() {
+      showLoading('Cargando Mapster 2...');
+      google.script.run
+        .withSuccessHandler(data => {
+          hideLoading();
+          if (!data || !data.warehouses) {
+            showToast('No se recibieron almacenes del servidor.', 'error');
+            return;
+          }
+          initialData = data;
+          allWarehouses = data.warehouses;
+          
+          if (data.authWarning) {
+            showToast(data.authWarning, 'warning');
+          }
+
+          const excludedCountries = new Set(['desconocido', 'costa rica', 'cr']);
+          const cleanCountries = (data.countries || []).filter(c => c && !excludedCountries.has(c.toLowerCase().trim()));
+
+          populateSelect('filter-month', data.months, 'month_date', 'month_label');
+          populateSelect('kpi-month-select', data.months, 'month_date', 'month_label');
+          populateSelect('filter-country', cleanCountries.map(c => ({ id: c, name: c })), 'id', 'name', 'Todos los países');
+          populateSelect('filter-city', data.cities.map(c => ({ id: c, name: c })), 'id', 'name', 'Todas las ciudades');
+          populateSelect('filter-neighborhood', data.neighborhoods.map(n => ({ id: n, name: n })), 'id', 'name', 'Todas las zonas');
+
+          // Aplicar estado dinámico del mes por defecto
+          allAvailableMonths = data.months || [];
+          const currentMonth = data.defaultMonth || (data.months && data.months[0] && data.months[0].month_date);
+          applyMonthWarehouseStatus(currentMonth);
+          
+          activeOverlayMonths.clear();
+          if (currentMonth) activeOverlayMonths.add(currentMonth);
+          renderUnifiedDateControls();
+
+          // Seleccionar por defecto AR_506_Microcentro_II o la primera tienda activa
+          const microcentro = allWarehouses.find(w => {
+            const name = (w.warehouse_name || '').toLowerCase();
+            const id = String(w.warehouse_id || '').toLowerCase();
+            return name.includes('506') || name.includes('microcentro_ii') || id.includes('506') || id.includes('microcentro_ii');
+          });
+          const defaultTarget = microcentro || allWarehouses.find(w => w.is_active) || allWarehouses[0];
+          if (defaultTarget) {
+            selectedWarehouseIds.clear();
+            selectedWarehouseIds.add(String(defaultTarget.warehouse_id).trim());
+          }
+
+          renderPartnerSmartFilterOptions();
+          renderWarehouseCards();
+          updateSelectionAndRefresh();
+        })
+        .withFailureHandler(err => {
+          hideLoading();
+          showToast('Error conectando con el backend: ' + err.message, 'error');
+        })
+        .getStoreExplorerInitialData();
+    }
+
+    // ============================================================
+    // VENTANA INFERIOR FLOTANTE (FLOATING COCKPIT) CONTROLES
+    // ============================================================
+    function toggleBottomSheet(open) {
+      const sheet = document.getElementById('bottom-sheet');
+      const trigger = document.getElementById('bottom-sheet-trigger');
+      const btnText = document.getElementById('toolbar-sheet-btn-text');
+
+      const isOpen = open !== undefined ? open : !sheet.classList.contains('open');
+
+      if (isOpen) {
+        sheet.classList.add('open');
+        trigger.classList.add('hidden');
+        if (btnText) btnText.textContent = 'Ocultar Panel';
+      } else {
+        sheet.classList.remove('open');
+        trigger.classList.remove('hidden');
+        if (btnText) btnText.textContent = 'Ver Panel';
+      }
+    }
+
+    function toggleExpandSheet() {
+      const sheet = document.getElementById('bottom-sheet');
+      sheet.classList.toggle('expanded');
+    }
+
+    function switchSheetTab(tabId) {
+      document.querySelectorAll('.sheet-tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+
+      const activeBtn = Array.from(document.querySelectorAll('.sheet-tab-btn')).find(b => b.getAttribute('onclick').includes(tabId));
+      if (activeBtn) activeBtn.classList.add('active');
+
+      const panel = document.getElementById('tab-' + tabId);
+      if (panel) panel.classList.add('active');
+
+      if (tabId === 'crm') {
+        loadLifecycleData();
+      } else if (tabId === 'anillos') {
+        loadRingsData();
+      } else if (tabId === 'kpis') {
+        loadTotalMetrics();
+      }
+    }
+
+    // ============================================================
+    // FILTROS & SELECCIÓN DE TIENDAS
+    // ============================================================
+    function populateSelect(id, items, valKey, labelKey, emptyLabel) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.innerHTML = '';
+      if (emptyLabel) {
+        el.innerHTML += `<option value="">${emptyLabel}</option>`;
+      }
+      items.forEach(it => {
+        el.innerHTML += `<option value="${it[valKey]}">${it[labelKey]}</option>`;
+      });
+    }
+
+    function centerMapOnCountry(country) {
+      if (!map) return;
+      const targetStores = allWarehouses.filter(w => !country || w.country === country);
+      if (targetStores.length === 0) return;
+
+      const bounds = new google.maps.LatLngBounds();
+      targetStores.forEach(w => {
+        if (w.lat !== null && w.lng !== null && !isNaN(w.lat) && !isNaN(w.lng) && w.lat !== 0) {
+          bounds.extend({ lat: Number(w.lat), lng: Number(w.lng) });
+        }
+      });
+      if (!bounds.isEmpty()) {
+        map.fitBounds(bounds);
+        if (map.getZoom() > 14) map.setZoom(14);
+      }
+    }
+
+    function onCountryChange(country) {
+      const filteredCities = allWarehouses
+        .filter(w => !country || w.country === country)
+        .map(w => w.city);
+      const uniqueCities = [...new Set(filteredCities)].sort();
+      populateSelect('filter-city', uniqueCities.map(c => ({ id: c, name: c })), 'id', 'name', 'Todas las ciudades');
+
+      const filteredNeighborhoods = allWarehouses
+        .filter(w => !country || w.country === country)
+        .map(w => w.neighborhood);
+      const uniqueNeighborhoods = [...new Set(filteredNeighborhoods)].sort();
+      populateSelect('filter-neighborhood', uniqueNeighborhoods.map(n => ({ id: n, name: n })), 'id', 'name', 'Todas las zonas');
+
+      // 1. Deseleccionar almacenes que no pertenezcan al país seleccionado y purgar del mapa
+      if (country) {
+        const toDeselect = [];
+        selectedWarehouseIds.forEach(id => {
+          const w = allWarehouses.find(item => String(item.warehouse_id).trim() === id);
+          if (w && w.country !== country) {
+            toDeselect.push(id);
+          }
+        });
+        toDeselect.forEach(id => {
+          selectedWarehouseIds.delete(id);
+          removePolygonsForWarehouse(id);
+        });
+
+        // 2. Si no quedó ninguna tienda seleccionada en este país, seleccionar la primera activa
+        const countryStores = allWarehouses.filter(w => w.country === country);
+        const anySelected = countryStores.some(w => selectedWarehouseIds.has(String(w.warehouse_id).trim()));
+        if (!anySelected && countryStores.length > 0) {
+          const firstActive = countryStores.find(w => isWarehouseActiveInMonth(w)) || countryStores[0];
+          selectedWarehouseIds.add(String(firstActive.warehouse_id).trim());
+        }
+      }
+
+      renderWarehouseCards();
+      updateSelectionAndRefresh();
+      centerMapOnCountry(country);
+    }
+
+    function onCityChange(city) {
+      if (city) {
+        const toDeselect = [];
+        selectedWarehouseIds.forEach(id => {
+          const w = allWarehouses.find(item => String(item.warehouse_id).trim() === id);
+          if (w && w.city !== city) {
+            toDeselect.push(id);
+          }
+        });
+        toDeselect.forEach(id => {
+          selectedWarehouseIds.delete(id);
+          removePolygonsForWarehouse(id);
+        });
+
+        const cityStores = allWarehouses.filter(w => w.city === city);
+        const anySelected = cityStores.some(w => selectedWarehouseIds.has(String(w.warehouse_id).trim()));
+        if (!anySelected && cityStores.length > 0) {
+          const firstActive = cityStores.find(w => isWarehouseActiveInMonth(w)) || cityStores[0];
+          selectedWarehouseIds.add(String(firstActive.warehouse_id).trim());
+        }
+      }
+      renderWarehouseCards();
+      updateSelectionAndRefresh();
+    }
+
+    function onNeighborhoodChange(neighborhood) {
+      if (neighborhood) {
+        const toDeselect = [];
+        selectedWarehouseIds.forEach(id => {
+          const w = allWarehouses.find(item => String(item.warehouse_id).trim() === id);
+          if (w && w.neighborhood !== neighborhood) {
+            toDeselect.push(id);
+          }
+        });
+        toDeselect.forEach(id => {
+          selectedWarehouseIds.delete(id);
+          removePolygonsForWarehouse(id);
+        });
+
+        const zoneStores = allWarehouses.filter(w => w.neighborhood === neighborhood);
+        const anySelected = zoneStores.some(w => selectedWarehouseIds.has(String(w.warehouse_id).trim()));
+        if (!anySelected && zoneStores.length > 0) {
+          const firstActive = zoneStores.find(w => isWarehouseActiveInMonth(w)) || zoneStores[0];
+          selectedWarehouseIds.add(String(firstActive.warehouse_id).trim());
+        }
+      }
+      renderWarehouseCards();
+      updateSelectionAndRefresh();
+    }
+
+    function onMonthChange(month) {
+      applyMonthWarehouseStatus(month);
+
+      const filterMonthSel = document.getElementById('filter-month');
+      if (filterMonthSel && filterMonthSel.value !== month) filterMonthSel.value = month;
+      const kpiMonthSel = document.getElementById('kpi-month-select');
+      if (kpiMonthSel && kpiMonthSel.value !== month) kpiMonthSel.value = month;
+
+      activeOverlayMonths.add(month);
+      renderMultiDateControls();
+      renderPartnerSmartFilterOptions();
+      renderWarehouseCards();
+      refreshPolygonsWithTransition(month);
+      loadTotalMetrics();
+    }
+
+    function onKpiMonthChange(month) {
+      onMonthChange(month);
+    }
+
+    function filterWarehouseCards() {
+      renderWarehouseCards();
+    }
+
+    // ============================================================
+    // BANDERAS DE PAÍSES (API OFICIAL FLAGCDN)
+    // ============================================================
+    function getCountryCode(w) {
+      if (w && w.country_code) {
+        const cc = String(w.country_code).trim().toLowerCase();
+        if (cc.length === 2) return cc;
+      }
+      const countryName = String((w && w.country) || '').trim().toLowerCase();
+      const map = {
+        'argentina': 'ar', 'bolivia': 'bo', 'chile': 'cl', 'uruguay': 'uy',
+        'paraguay': 'py', 'perú': 'pe', 'peru': 'pe', 'ecuador': 'ec',
+        'república dominicana': 'do', 'republica dominicana': 'do',
+        'dominican republic': 'do', 'costa rica': 'cr', 'panamá': 'pa',
+        'panama': 'pa', 'guatemala': 'gt', 'el salvador': 'sv',
+        'honduras': 'hn', 'nicaragua': 'ni'
+      };
+      return map[countryName] || 'ar';
+    }
+
+    function getCountryFlagImg(w) {
+      const code = getCountryCode(w);
+      const countryTitle = (w && w.country) ? w.country : code.toUpperCase();
+      return `<img src="https://flagcdn.com/24x18/${code}.png" 
+                   srcset="https://flagcdn.com/48x36/${code}.png 2x" 
+                   width="22" 
+                   height="16" 
+                   alt="${countryTitle}" 
+                   title="${countryTitle}" 
+                   class="country-flag-icon" 
+                   loading="lazy" 
+                   style="border-radius:2.5px; box-shadow:0 1px 3px rgba(0,0,0,0.22); object-fit:cover; flex-shrink:0; display:inline-block; vertical-align:middle;">`;
+    }
+
+    // ============================================================
+    // MAPEO DE VERTICALES / PARTNERS HABILITADOS (ICONOS VECTORIALES SVG)
+    // ============================================================
+    const PARTNER_TYPE_DEFINITIONS = [
+      {
+        key: 'market',
+        label: 'Market (Supermercado)',
+        color: '#ea044e',
+        bg: 'rgba(234, 4, 78, 0.12)',
+        match: ['market'],
+        svg: `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#ea044e" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path></svg>`
+      },
+      {
+        key: 'mascotas',
+        label: 'Mascotas & Pets',
+        color: '#d97706',
+        bg: 'rgba(217, 119, 6, 0.12)',
+        match: ['mascota', 'pet', 'patitas'],
+        svg: `<svg width="12" height="12" viewBox="0 0 24 24" fill="#d97706"><circle cx="4.5" cy="9.5" r="2.2"/><circle cx="9" cy="4.5" r="2.2"/><circle cx="15" cy="4.5" r="2.2"/><circle cx="19.5" cy="9.5" r="2.2"/><path d="M12 11c-3.5 0-6 2.5-6 6 0 2 1.5 3 3.5 3 1.5 0 2-.5 2.5-.5s1 .5 2.5 .5c2 0 3.5-1 3.5-3 0-3.5-2.5-6-6-6z"/></svg>`
+      },
+      {
+        key: 'drinks',
+        label: 'Drinks & Bebidas',
+        color: '#7c3aed',
+        bg: 'rgba(124, 58, 237, 0.12)',
+        match: ['drink', 'bebida', 'botilleria', 'botillería', 'chela', 'beer', 'coctel', 'cóctel'],
+        svg: `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 22h8"></path><path d="M12 15v7"></path><path d="M6 3h12a4 4 0 0 1 4 4v1a7 7 0 0 1-7 7H9a7 7 0 0 1-7-7V7a4 4 0 0 1 4-4z"></path></svg>`
+      },
+      {
+        key: 'kiosco',
+        label: 'Kiosco & Snacks',
+        color: '#db2777',
+        bg: 'rgba(219, 39, 119, 0.12)',
+        match: ['kiosco', 'kioscos'],
+        svg: `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#db2777" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><path d="M8.5 8.5L3 3M15.5 15.5L21 21M15.5 8.5L21 3M8.5 15.5L3 21"></path></svg>`
+      },
+      {
+        key: 'beauty',
+        label: 'Beauty & Care',
+        color: '#0891b2',
+        bg: 'rgba(8, 145, 178, 0.12)',
+        match: ['beauty', 'care'],
+        svg: `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#0891b2" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"></path></svg>`
+      },
+      {
+        key: 'green',
+        label: 'Green Market (Frescos)',
+        color: '#059669',
+        bg: 'rgba(5, 150, 105, 0.12)',
+        match: ['green', 'fruta', 'verdura'],
+        svg: `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z"></path><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"></path></svg>`
+      },
+      {
+        key: 'farmacia',
+        label: 'Farmacia / Pharma',
+        color: '#2563eb',
+        bg: 'rgba(37, 99, 235, 0.12)',
+        match: ['farmacia', 'pharma', 'vida'],
+        svg: `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m10.5 20.5 10-10a4.95 4.95 0 1 0-7-7l-10 10a4.95 4.95 0 1 0 7 7Z"></path><path d="m8.5 8.5 7 7"></path></svg>`
+      },
+      {
+        key: 'carniceria',
+        label: 'Carnicería / Carnes',
+        color: '#dc2626',
+        bg: 'rgba(220, 38, 38, 0.12)',
+        match: ['carniceria', 'carnicería', 'corte criollo'],
+        svg: `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18l6-6M9 12l9.5-9.5a2.12 2.12 0 0 1 3 3L12 15l-3-3z"></path><path d="M14 20l4 2 3-3-2-4"></path></svg>`
+      },
+      {
+        key: 'marcas',
+        label: 'Marcas Aliadas',
+        color: '#4f46e5',
+        bg: 'rgba(79, 70, 229, 0.12)',
+        match: ['molinos', 'arcor', 'coca-cola', 'nestle', 'nestlé', 'p&g', 'colgate', 'panini', 'pingüino', 'pinguino', 'quaker'],
+        svg: `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#4f46e5" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path><line x1="7" y1="7" x2="7.01" y2="7"></line></svg>`
+      },
+      {
+        key: 'eventos',
+        label: 'Eventos & Fiestas',
+        color: '#ea580c',
+        bg: 'rgba(234, 88, 12, 0.12)',
+        match: ['evento'],
+        svg: `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#ea580c" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 12 20 22 4 22 4 12"></polyline><rect x="2" y="7" width="20" height="5"></rect><line x1="12" y1="22" x2="12" y2="7"></line><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"></path><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"></path></svg>`
+      },
+      {
+        key: 'bebes',
+        label: 'Bebés',
+        color: '#0d9488',
+        bg: 'rgba(20, 184, 166, 0.12)',
+        match: ['bebé', 'bebes', 'bebe'],
+        svg: `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#0d9488" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>`
+      },
+      {
+        key: 'vapes',
+        label: 'Vapes / Vapor',
+        color: '#475569',
+        bg: 'rgba(71, 85, 105, 0.12)',
+        match: ['vape', 'fog'],
+        svg: `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#475569" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"></path></svg>`
+      },
+      {
+        key: 'express',
+        label: 'Express / 10 Min',
+        color: '#ca8a04',
+        bg: 'rgba(202, 138, 4, 0.12)',
+        match: ['express', '10min', 'flash'],
+        svg: `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#ca8a04" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>`
+      }
+    ];
+
+    function getEnabledPartnerTypes(w) {
+      const text = ((w && (w.all_partners_display || w.warehouse_name)) || '').toLowerCase();
+      const enabled = [];
+      PARTNER_TYPE_DEFINITIONS.forEach(def => {
+        const isMatched = def.match.some(m => text.includes(m));
+        if (isMatched) {
+          enabled.push(def);
+        }
+      });
+      if (enabled.length === 0) {
+        enabled.push(PARTNER_TYPE_DEFINITIONS[0]);
+      }
+      return enabled;
+    }
+
+    function renderPartnerTypeCircles(w) {
+      const types = getEnabledPartnerTypes(w);
+      const isStoreActive = Boolean(w && w.is_active);
+      const monthSelect = document.getElementById('filter-month');
+      const monthLabel = (monthSelect && monthSelect.options && monthSelect.selectedIndex >= 0) 
+        ? monthSelect.options[monthSelect.selectedIndex].text 
+        : 'Mes seleccionado';
+
+      return `
+        <div style="display:flex; align-items:center; gap:5px; margin-top:5px; flex-wrap:wrap; position:relative;">
+          ${types.map(t => {
+            const isVerticalActive = isStoreActive;
+            const style = isVerticalActive
+              ? `background:${t.bg}; border:1.5px solid ${t.color}; cursor:pointer;`
+              : `background:rgba(148,163,184,0.08); border:1.5px dashed #94a3b8; opacity:0.38; filter:grayscale(0.85); cursor:pointer;`;
+            
+            const tooltipText = isVerticalActive
+              ? `${t.label} • Activo en ${monthLabel} (${w.orders ? w.orders.toLocaleString('es-AR') + ' órd.' : 'Operando'})`
+              : `${t.label} • Sin operaciones en ${monthLabel}`;
+
+            return `
+              <span class="partner-circle-badge ${isVerticalActive ? 'partner-active' : 'partner-inactive'}" 
+                    style="${style}"
+                    onclick="event.stopPropagation(); setPartnerFilter('${t.key}')">
+                ${t.svg}
+                <span class="partner-micro-tooltip">${tooltipText}</span>
+              </span>
+            `;
+          }).join('')}
+          <span style="font-size:10px; color:${isStoreActive ? 'var(--text-muted)' : '#64748b'}; font-weight:600; margin-left:3px;">
+            ${isStoreActive ? `${types.length} vertical${types.length === 1 ? '' : 'es'}` : 'Sin operaciones'}
+          </span>
+        </div>
+      `;
+    }
+
+    // ============================================================
+    // INFOWINDOW MEJORADA & HOVER TOOLTIPS PARA WHS
+    // ============================================================
+    let currentDetailInfoWindow = null;
+    let hoverInfoWindow = null;
+    let activeInfoWindowVerticalKey = null;
+
+    function classifyPartnerVertical(name) {
+      const lower = (name || '').toLowerCase();
+      // Evaluar primero todas las verticales específicas excluyendo 'market'
+      const specific = PARTNER_TYPE_DEFINITIONS.filter(d => d.key !== 'market').find(d => 
+        d.match.some(m => lower.includes(m))
+      );
+      if (specific) return specific;
+      // Si no coincide con ninguna vertical específica, evaluar market
+      return PARTNER_TYPE_DEFINITIONS.find(d => d.key === 'market') || PARTNER_TYPE_DEFINITIONS[0];
+    }
+
+    function parseWarehousePartners(w) {
+      if (!w) return [];
+      const raw = w.all_partners_display || w.warehouse_name || '';
+      if (!raw) return [];
+
+      const parts = raw.split(' | ').map(p => p.trim()).filter(Boolean);
+      const isStoreActive = Boolean(w.is_active);
+
+      return parts.map((part, index) => {
+        let cleanName = part;
+        let isPrincipal = index === 0;
+
+        const idMatch = part.match(/\[ID:\s*(\d+)(?:\s*-\s*([^\]]+))?\]/i);
+        if (idMatch) {
+          cleanName = part.replace(/\s*\[ID:[^\]]+\]/i, '').trim();
+          if (idMatch[2] && idMatch[2].toLowerCase().includes('principal')) {
+            isPrincipal = true;
+          }
+        }
+
+        const vertical = classifyPartnerVertical(cleanName);
+
+        // Si la cadena contiene órdenes explícitas reales del partner
+        const orderMatch = part.match(/(\d+[\d.,]*)\s*órd/i) || part.match(/órdenes:\s*(\d+)/i);
+        let realOrders = null;
+        if (orderMatch) {
+          realOrders = parseInt(orderMatch[1].replace(/\./g, ''), 10);
+        }
+
+        return {
+          name: cleanName,
+          isPrincipal: isPrincipal,
+          vertical: vertical,
+          orders: realOrders,
+          hasRealOrders: (realOrders !== null && !isNaN(realOrders)),
+          isActive: isStoreActive
+        };
+      });
+    }
+
+    window.filterInfoWindowVertical = function(whId, verticalKey) {
+      const w = allWarehouses.find(item => String(item.warehouse_id).trim() === String(whId).trim());
+      if (!w || !currentDetailInfoWindow) return;
+
+      if (activeInfoWindowVerticalKey === verticalKey) {
+        activeInfoWindowVerticalKey = null;
+      } else {
+        activeInfoWindowVerticalKey = verticalKey;
+      }
+
+      currentDetailInfoWindow.setContent(getWarehouseInfoWindowContent(w, activeInfoWindowVerticalKey));
+    };
+
+    function isWarehouseActiveInMonth(w) {
+      if (!w) return false;
+      if (w.is_active === false) return false;
+      const orders = Number(w.orders) || 0;
+      const activePartners = Number(w.active_partners_in_month) || 0;
+      return orders > 0 || activePartners > 0;
+    }
+
+    function getWarehouseInfoWindowContent(w, filterVerticalKey = null) {
+      const countryFlag = getCountryFlagImg(w);
+      const isStoreActive = isWarehouseActiveInMonth(w);
+      const monthSelect = document.getElementById('filter-month');
+      const monthLabel = (monthSelect && monthSelect.options && monthSelect.selectedIndex >= 0) 
+        ? monthSelect.options[monthSelect.selectedIndex].text 
+        : 'Mes seleccionado';
+
+      const allPartners = parseWarehousePartners(w);
+
+      // Verticales que REALMENTE están presentes en este almacén (si no está, no se muestra)
+      const existingVerticalKeys = new Set(allPartners.map(p => p.vertical.key));
+      const existingVerticals = PARTNER_TYPE_DEFINITIONS.filter(def => existingVerticalKeys.has(def.key));
+
+      // Si el usuario tocó una vertical: ocultar inactivos y mostrar solo los activos de esa vertical
+      let displayedPartners = [];
+      if (filterVerticalKey) {
+        displayedPartners = allPartners.filter(p => p.vertical.key === filterVerticalKey && p.isActive);
+      } else {
+        displayedPartners = allPartners.filter(p => p.isActive);
+      }
+
+      return `
+        <div style="font-family:'Plus Jakarta Sans',system-ui,sans-serif; padding:7px 10px 10px 10px; width:275px; max-width:285px; box-sizing:border-box; color:var(--text-sheet-body);">
+          <!-- Fila Superior: Bandera, Nombre y Badge Estado (Sin hueco blanco arriba) -->
+          <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:6px; margin-bottom:5px; padding-right:4px;">
+            <div style="display:flex; align-items:center; gap:6px; min-width:0; flex:1;">
+              ${countryFlag}
+              <div style="min-width:0; flex:1;">
+                <div style="font-weight:800; font-size:12px; line-height:1.2; color:var(--text-sheet-title); word-break:break-word;">
+                  ${w.warehouse_name}
+                </div>
+                <div style="font-size:10px; color:var(--text-sheet-muted); font-weight:500; margin-top:1px;">
+                  ${w.neighborhood || w.city} • ${w.country}
+                </div>
+              </div>
+            </div>
+            <div style="font-size:8.5px; font-weight:700; padding:1px 5px; border-radius:99px; flex-shrink:0; ${isStoreActive ? 'background:rgba(16,185,129,0.12); color:#10b981; border:1px solid rgba(16,185,129,0.3);' : 'background:rgba(100,116,139,0.12); color:#64748b; border:1px solid rgba(100,116,139,0.3);'}">
+              ${isStoreActive ? 'Activo' : 'Inactivo'}
+            </div>
+          </div>
+
+          <!-- Micro Métricas -->
+          <div style="background:var(--bg-sheet-bar); border:1px solid var(--border-sheet); border-radius:6px; padding:5px 8px; margin-bottom:6px; display:grid; grid-template-columns:1fr 1fr; gap:6px;">
+            <div>
+              <div style="font-size:8.5px; color:var(--text-sheet-muted); font-weight:700; text-transform:uppercase;">Órdenes / Mes</div>
+              <div style="font-size:12.5px; font-weight:800; color:var(--text-sheet-title); font-family:'JetBrains Mono',monospace;">
+                ${w.orders ? w.orders.toLocaleString('es-AR') : '0'}
+              </div>
+            </div>
+            <div>
+              <div style="font-size:8.5px; color:var(--text-sheet-muted); font-weight:700; text-transform:uppercase;">Cobertura</div>
+              <div style="font-size:12.5px; font-weight:800; color:#ea044e; font-family:'JetBrains Mono',monospace;">
+                ${w.coverage_area_km2 ? w.coverage_area_km2 + ' km²' : '—'}
+              </div>
+            </div>
+          </div>
+
+          <!-- Fila de Verticales -->
+          <div style="margin-bottom:6px;">
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:4px;">
+              <div style="font-size:9px; font-weight:700; color:var(--text-sheet-muted); text-transform:uppercase;">
+                Verticales (${existingVerticals.length}):
+              </div>
+              ${filterVerticalKey ? `
+                <span onclick="filterInfoWindowVertical('${w.warehouse_id}', '${filterVerticalKey}')" style="font-size:9px; font-weight:700; color:#ea044e; cursor:pointer;">
+                  ✕ Ver todas
+                </span>
+              ` : ''}
+            </div>
+            <div style="display:flex; align-items:center; gap:4px; flex-wrap:wrap;">
+              ${existingVerticals.map(t => {
+                const hasActive = allPartners.some(p => p.vertical.key === t.key && p.isActive);
+                const isSelected = filterVerticalKey === t.key;
+                
+                let style = '';
+                if (isSelected) {
+                  style = `background:${t.bg}; border:1.5px solid ${t.color}; transform:scale(1.08); font-weight:700;`;
+                } else if (hasActive) {
+                  style = `background:${t.bg}; border:1px solid ${t.color}; cursor:pointer;`;
+                } else {
+                  style = `background:rgba(148,163,184,0.1); border:1px dashed #94a3b8; opacity:0.4; cursor:pointer;`;
+                }
+
+                return `
+                  <span class="partner-circle-badge" 
+                        style="width:16px; height:16px; ${style}" 
+                        onclick="event.stopPropagation(); filterInfoWindowVertical('${w.warehouse_id}', '${t.key}')"
+                        title="${t.label} • ${hasActive ? 'Activo' : 'Inactivo'}">
+                    <span style="display:inline-flex; align-items:center; transform:scale(0.85);">${t.svg}</span>
+                    <span class="partner-micro-tooltip">${t.label} • ${hasActive ? 'Activo' : 'Inactivo'}</span>
+                  </span>
+                `;
+              }).join('')}
+            </div>
+          </div>
+
+          <!-- Sección de Partners Activos Compacta con Órdenes -->
+          <div style="margin-top:4px; border-top:1px solid var(--border-sheet); padding-top:4px;">
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:3px;">
+              <span style="font-size:8.5px; font-weight:700; color:var(--text-sheet-muted); text-transform:uppercase;">
+                ${filterVerticalKey ? `Partner en ${filterVerticalKey.toUpperCase()}:` : `Partners Activos (${displayedPartners.length}):`}
+              </span>
+              <span style="font-size:8px; font-weight:800; color:#10b981; display:inline-flex; align-items:center; gap:3px;">
+                <span style="display:inline-block; width:5px; height:5px; border-radius:50%; background:#10b981;"></span>
+                ${displayedPartners.length}
+              </span>
+            </div>
+
+            <div style="display:flex; flex-direction:column; gap:3px; max-height:90px; overflow-y:auto; padding-right:2px;">
+              ${displayedPartners.length > 0 ? displayedPartners.map(p => `
+                <div style="display:flex; align-items:center; justify-content:space-between; gap:4px; background:var(--bg-sheet-bar); border:1px solid var(--border-sheet); border-radius:4px; padding:2px 5px;">
+                  <div style="display:flex; align-items:center; gap:4px; min-width:0; flex:1;">
+                    <span style="display:inline-flex; align-items:center; justify-content:center; width:14px; height:14px; border-radius:50%; background:${p.vertical.bg}; border:1px solid ${p.vertical.color}; flex-shrink:0;">
+                      <span style="display:inline-flex; transform:scale(0.65);">${p.vertical.svg}</span>
+                    </span>
+                    <span style="font-size:9px; font-weight:600; color:var(--text-sheet-title); word-break:break-word; line-height:1.15;" title="${p.name}">
+                      ${p.name}
+                    </span>
+                  </div>
+                  <div style="display:flex; align-items:center; gap:3px; flex-shrink:0;">
+                    <span style="font-size:8.5px; font-weight:700; color:var(--text-sheet-muted); font-family:'JetBrains Mono',monospace;">
+                      ${p.orders ? p.orders.toLocaleString('es-AR') + ' órd.' : '—'}
+                    </span>
+                    <span style="font-size:7.5px; font-weight:700; color:#10b981; background:rgba(16,185,129,0.12); padding:1px 4px; border-radius:99px;">
+                      Activo
+                    </span>
+                  </div>
+                </div>
+              `).join('') : `
+                <div style="font-size:9px; color:var(--text-sheet-muted); padding:4px; text-align:center; font-style:italic; background:var(--bg-sheet-bar); border-radius:4px; border:1px dashed var(--border-sheet);">
+                  ${filterVerticalKey ? 'Sin actividad en esta vertical' : 'Sin partners activos'}
+                </div>
+              `}
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function showWarehouseDetailInfoWindow(w, position) {
+      if (!map) return;
+      if (hoverInfoWindow) hoverInfoWindow.close();
+      activeInfoWindowVerticalKey = null;
+      if (!currentDetailInfoWindow) {
+        currentDetailInfoWindow = new google.maps.InfoWindow();
+      }
+      currentDetailInfoWindow.setContent(getWarehouseInfoWindowContent(w, null));
+      currentDetailInfoWindow.setPosition(position || { lat: Number(w.lat), lng: Number(w.lng) });
+      currentDetailInfoWindow.open(map);
+    }
+
+    function getRingInfoAtPosition(w, latLng) {
+      if (!w || !latLng) return null;
+      let wLat = Number(w.lat);
+      let wLng = Number(w.lng);
+      if (isNaN(wLat) || isNaN(wLng) || wLat === 0) {
+        if (w.centroid_lat && w.centroid_lng) {
+          wLat = Number(w.centroid_lat);
+          wLng = Number(w.centroid_lng);
+        }
+      }
+      if (isNaN(wLat) || isNaN(wLng)) return null;
+
+      const storeLatLng = new google.maps.LatLng(wLat, wLng);
+      let distMeters = 0;
+      if (google.maps.geometry && google.maps.geometry.spherical) {
+        distMeters = google.maps.geometry.spherical.computeDistanceBetween(latLng, storeLatLng);
+      } else {
+        const dLat = (latLng.lat() - wLat) * (Math.PI / 180);
+        const dLng = (latLng.lng() - wLng) * (Math.PI / 180);
+        const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                  Math.cos(wLat * Math.PI / 180) * Math.cos(latLng.lat() * Math.PI / 180) *
+                  Math.sin(dLng / 2) * Math.sin(dLng / 2);
+        distMeters = 6371000 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      }
+
+      const distKm = distMeters / 1000;
+
+      if (distKm <= 1.0) {
+        return { label: '< 1 KM', distKm, color: '#ea044e', bg: 'rgba(234,4,78,0.14)' };
+      } else if (distKm <= 2.0) {
+        return { label: '1 - 2 KM', distKm, color: '#f97316', bg: 'rgba(249,115,22,0.14)' };
+      } else if (distKm <= 3.0) {
+        return { label: '2 - 3 KM', distKm, color: '#f59e0b', bg: 'rgba(245,158,11,0.14)' };
+      } else if (distKm <= 4.0) {
+        return { label: '3 - 4 KM', distKm, color: '#10b981', bg: 'rgba(16,185,129,0.14)' };
+      } else if (distKm <= 5.0) {
+        return { label: '4 - 5 KM', distKm, color: '#6366f1', bg: 'rgba(99,102,241,0.14)' };
+      } else {
+        return { label: '> 5 KM', distKm, color: '#94a3b8', bg: 'rgba(148,163,184,0.14)' };
+      }
+    }
+
+    function buildHoverCardHtml(w, latLng, isInsideCoverage = true) {
+      const currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
+      const isDark = currentTheme === 'dark';
+      const cardBg = isDark ? '#0f172a' : '#ffffff';
+      const cardText = isDark ? '#ffffff' : '#0f172a';
+      const cardMuted = isDark ? '#94a3b8' : '#64748b';
+      const cardBorder = isDark ? 'rgba(255,255,255,0.16)' : '#cbd5e1';
+      const cardInnerBg = isDark ? 'rgba(30,41,59,0.7)' : '#f8fafc';
+      const cardInnerBorder = isDark ? 'rgba(255,255,255,0.06)' : '#e2e8f0';
+      const cardShadow = isDark ? '0 14px 35px rgba(0,0,0,0.6)' : '0 10px 25px rgba(0,0,0,0.15)';
+
+      const types = getEnabledPartnerTypes(w);
+      const isStoreActive = isWarehouseActiveInMonth(w);
+      // REGLA: Si está sobre la zona gris (fuera de la cobertura), NO mostrar radio o anillo
+      const ring = isInsideCoverage ? getRingInfoAtPosition(w, latLng) : null;
+
+      return `
+        <div class="dark-hover-card" style="font-family:'Outfit',system-ui,sans-serif; padding:8px 11px; min-width:220px; max-width:275px; background:${cardBg}; color:${cardText}; border-radius:10px; box-shadow:${cardShadow}; border:1px solid ${cardBorder}; pointer-events:none;">
+          <!-- Cabecera: Bandera, Nombre y Badge Estado -->
+          <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:8px; margin-bottom:3px;">
+            <div style="display:flex; align-items:center; gap:6px; min-width:0; flex:1;">
+              ${getCountryFlagImg(w)}
+              <span style="font-weight:800; font-size:12px; color:${cardText}; line-height:1.2; word-break:break-word;">${w.warehouse_name}</span>
+            </div>
+            <span style="font-size:8.5px; font-weight:800; color:${isStoreActive ? '#10b981' : '#64748b'}; background:${isStoreActive ? 'rgba(16,185,129,0.14)' : 'rgba(100,116,139,0.14)'}; border:1px solid ${isStoreActive ? 'rgba(16,185,129,0.3)' : 'rgba(100,116,139,0.3)'}; padding:1px 5px; border-radius:99px; white-space:nowrap; display:inline-flex; align-items:center; gap:3px;">
+              <span style="width:4px; height:4px; border-radius:50%; background:${isStoreActive ? '#10b981' : '#64748b'}; display:inline-block;"></span> ${isStoreActive ? 'Activo' : 'Inactivo'}
+            </span>
+          </div>
+
+          <!-- Ubicación -->
+          <div style="font-size:10px; color:${cardMuted}; font-weight:500; margin-bottom:5px;">
+            ${w.neighborhood || w.city} • ${w.country}
+          </div>
+
+          <!-- Micro Métricas -->
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:5px; margin-bottom:5px; background:${cardInnerBg}; padding:4px 8px; border-radius:6px; border:1px solid ${cardInnerBorder};">
+            <div>
+              <div style="font-size:8px; color:${cardMuted}; text-transform:uppercase; font-weight:700;">Cobertura</div>
+              <div style="font-size:12px; font-weight:800; color:#ea044e; font-family:'JetBrains Mono',monospace;">
+                ${w.coverage_area_km2 ? w.coverage_area_km2 + ' km²' : '—'}
+              </div>
+            </div>
+            <div>
+              <div style="font-size:8px; color:${cardMuted}; text-transform:uppercase; font-weight:700;">Órdenes / Mes</div>
+              <div style="font-size:12px; font-weight:800; color:${cardText}; font-family:'JetBrains Mono',monospace;">
+                ${w.orders ? w.orders.toLocaleString('es-AR') : '—'}
+              </div>
+            </div>
+          </div>
+
+          <!-- Fila de Verticales -->
+          <div style="display:flex; align-items:center; gap:3px; flex-wrap:wrap; padding-top:3px; border-top:1px solid ${cardInnerBorder};">
+            ${types.slice(0, 6).map(t => `
+              <span style="display:inline-flex; align-items:center; justify-content:center; width:16px; height:16px; border-radius:50%; background:${t.bg}; border:1px solid ${t.color};">
+                <span style="display:inline-flex; transform:scale(0.75);">${t.svg}</span>
+              </span>
+            `).join('')}
+            ${types.length > 6 ? `<span style="font-size:9px; font-weight:700; color:${cardMuted};">+${types.length - 6}</span>` : ''}
+          </div>
+
+          <!-- Fila Dinámica de Radio / Anillo Actual (Solo si está dentro de la cobertura) -->
+          ${ring ? `
+            <div style="margin-top:5px; padding-top:4px; border-top:1px solid ${cardInnerBorder}; display:flex; align-items:center; justify-content:space-between; gap:6px;">
+              <span style="font-size:8.5px; font-weight:700; color:${cardMuted}; text-transform:uppercase; letter-spacing:0.4px;">
+                Radio / Anillo:
+              </span>
+              <span style="font-size:9px; font-weight:800; color:${ring.color}; background:${ring.bg}; border:1px solid ${ring.color}; padding:1px 6px; border-radius:99px; display:inline-flex; align-items:center; gap:4px; font-family:'JetBrains Mono',monospace;">
+                <span style="width:5px; height:5px; border-radius:50%; background:${ring.color}; display:inline-block;"></span>
+                ${ring.label} (${ring.distKm.toFixed(2)} km)
+              </span>
+            </div>
+          ` : ''}
+        </div>
+      `;
+    }
+
+    function isPointInsideWarehouseCoverage(w, latLng) {
+      if (!w || !latLng) return false;
+      const whId = String(w.warehouse_id).trim();
+      const entry = activePolygonsMap.get(whId);
+      if (entry && entry.polygon && typeof google !== 'undefined' && google.maps && google.maps.geometry && google.maps.geometry.poly) {
+        return google.maps.geometry.poly.containsLocation(latLng, entry.polygon);
+      }
+      const curMonth = document.getElementById('filter-month').value || '2026-09-01';
+      const pData = CLIENT_MEMORY_CACHE.polygons.get(`${whId}__${curMonth}`);
+      if (pData && pData.geojson && typeof turf !== 'undefined') {
+        try {
+          const lat = typeof latLng.lat === 'function' ? latLng.lat() : latLng.lat;
+          const lng = typeof latLng.lng === 'function' ? latLng.lng() : latLng.lng;
+          const pt = turf.point([lng, lat]);
+          return turf.booleanPointInPolygon(pt, pData.geojson);
+        } catch (e) {}
+      }
+      return false;
+    }
+
+    function showHoverCardForWarehouse(w, latLng, isInsideCoverage = true) {
+      // REGLA ESTRICTA: Si el cursor no está dentro del polígono de cobertura (ej. zona gris de anillos), jamás activar
+      if (!isInsideCoverage || !isPointInsideWarehouseCoverage(w, latLng)) {
+        if (hoverInfoWindow) hoverInfoWindow.close();
+        return;
+      }
+
+      if (!hoverInfoWindow) {
+        hoverInfoWindow = new google.maps.InfoWindow({
+          disableAutoPan: true,
+          headerDisabled: true,
+          pixelOffset: new google.maps.Size(0, -32)
+        });
+        hoverInfoWindow.addListener('domready', () => {
+          const darkCard = document.querySelector('.dark-hover-card');
+          if (darkCard) {
+            const iwContainer = darkCard.closest('.gm-style-iw-c');
+            if (iwContainer) {
+              iwContainer.style.background = 'transparent';
+              iwContainer.style.backgroundColor = 'transparent';
+              iwContainer.style.boxShadow = 'none';
+              iwContainer.style.padding = '0';
+              iwContainer.style.border = 'none';
+              const closeBtn = iwContainer.querySelector('.gm-ui-hover-effect');
+              if (closeBtn) closeBtn.style.display = 'none';
+              const arrow = iwContainer.parentElement && iwContainer.parentElement.querySelector('.gm-style-iw-tc');
+              if (arrow) arrow.style.display = 'none';
+            }
+          }
+        });
+      } else {
+        hoverInfoWindow.setOptions({ pixelOffset: new google.maps.Size(0, -32) });
+      }
+
+      hoverInfoWindow.setContent(buildHoverCardHtml(w, latLng, true));
+      hoverInfoWindow.setPosition(latLng);
+      hoverInfoWindow.open(map);
+    }
+
+    function bindPolygonEvents(polygon, w) {
+      if (!polygon || !w) return;
+
+      polygon.addListener('mouseover', (e) => {
+        polygon.setOptions({
+          strokeWeight: 3.5,
+          strokeColor: '#b40443',
+          fillOpacity: 0.28
+        });
+        showHoverCardForWarehouse(w, e.latLng, true);
+      });
+
+      polygon.addListener('mousemove', (e) => {
+        showHoverCardForWarehouse(w, e.latLng, true);
+      });
+
+      polygon.addListener('mouseout', () => {
+        polygon.setOptions({
+          strokeWeight: 2.2,
+          strokeColor: '#ea044e',
+          fillOpacity: 0.16
+        });
+        if (hoverInfoWindow) hoverInfoWindow.close();
+      });
+
+      polygon.addListener('click', (e) => {
+        if (hoverInfoWindow) hoverInfoWindow.close();
+        showWarehouseDetailInfoWindow(w, e.latLng);
+      });
+    }
+
+    // ============================================================
+    // FILTRO INTELIGENTE DE PARTNERS & SELECCIÓN
+    // ============================================================
+    let selectedPartnerFilter = 'ALL';
+    let selectedStatusFilter = 'ACTIVE'; // 'ACTIVE' | 'ALL' | 'INACTIVE'
+
+    function setStatusFilter(val) {
+      selectedStatusFilter = val;
+      updateActiveFilterToggleUi();
+      renderWarehouseCards();
+      
+      const filtered = getCurrentlyFilteredWarehouses();
+      if (filtered.length > 0) {
+        const anySelectedVisible = filtered.some(w => selectedWarehouseIds.has(String(w.warehouse_id).trim()));
+        if (!anySelectedVisible) {
+          selectedWarehouseIds.clear();
+          selectedWarehouseIds.add(String(filtered[0].warehouse_id).trim());
+          updateSelectionAndRefresh();
+        }
+      }
+    }
+
+    function toggleActiveStatusFilter() {
+      if (selectedStatusFilter === 'ACTIVE') {
+        selectedStatusFilter = 'ALL';
+      } else {
+        selectedStatusFilter = 'ACTIVE';
+      }
+      const select = document.getElementById('filter-status-select');
+      if (select) select.value = selectedStatusFilter;
+      updateActiveFilterToggleUi();
+      renderWarehouseCards();
+
+      const filtered = getCurrentlyFilteredWarehouses();
+      if (filtered.length > 0) {
+        const anySelectedVisible = filtered.some(w => selectedWarehouseIds.has(String(w.warehouse_id).trim()));
+        if (!anySelectedVisible) {
+          selectedWarehouseIds.clear();
+          selectedWarehouseIds.add(String(filtered[0].warehouse_id).trim());
+          updateSelectionAndRefresh();
+        }
+      }
+    }
+
+    function updateActiveFilterToggleUi() {
+      const btn = document.getElementById('toggle-active-btn');
+      const dot = document.getElementById('toggle-active-dot');
+      const text = document.getElementById('toggle-active-text');
+      const badge = document.getElementById('filter-status-pill-text');
+
+      if (selectedStatusFilter === 'ACTIVE') {
+        if (btn) {
+          btn.style.background = 'rgba(16, 185, 129, 0.12)';
+          btn.style.borderColor = '#10b981';
+          btn.style.color = '#10b981';
+        }
+        if (dot) dot.style.background = '#10b981';
+        if (text) text.textContent = 'Solo Activos';
+        if (badge) {
+          badge.textContent = 'Solo Activos';
+          badge.style.color = '#10b981';
+        }
+      } else if (selectedStatusFilter === 'INACTIVE') {
+        if (btn) {
+          btn.style.background = 'rgba(100, 116, 139, 0.15)';
+          btn.style.borderColor = '#64748b';
+          btn.style.color = '#64748b';
+        }
+        if (dot) dot.style.background = '#64748b';
+        if (text) text.textContent = 'Solo Inactivos';
+        if (badge) {
+          badge.textContent = 'Solo Inactivos';
+          badge.style.color = '#64748b';
+        }
+      } else {
+        if (btn) {
+          btn.style.background = 'transparent';
+          btn.style.borderColor = 'var(--border-color)';
+          btn.style.color = 'var(--text-secondary)';
+        }
+        if (dot) dot.style.background = '#94a3b8';
+        if (text) text.textContent = 'Todos los WHS';
+        if (badge) {
+          badge.textContent = 'Todos';
+          badge.style.color = 'var(--text-muted)';
+        }
+      }
+    }
+
+    function getCurrentlyFilteredWarehouses() {
+      const country = document.getElementById('filter-country').value;
+      const city = document.getElementById('filter-city').value;
+      const neighborhood = document.getElementById('filter-neighborhood').value;
+      const search = (document.getElementById('whs-search-input').value || '').toLowerCase();
+      const bounds = (isViewportFilterActive && map) ? map.getBounds() : null;
+
+      return allWarehouses.filter(w => {
+        const cLower = (w.country || '').toLowerCase().trim();
+        if (cLower === 'desconocido' || cLower === 'costa rica' || cLower === 'cr') return false;
+
+        if (country && w.country !== country) return false;
+        if (city && w.city !== city) return false;
+        if (neighborhood && w.neighborhood !== neighborhood) return false;
+        if (search && !w.warehouse_name.toLowerCase().includes(search) && !String(w.warehouse_id).toLowerCase().includes(search)) return false;
+        
+        // Filtro por estado activo / inactivo en el mes seleccionado
+        const isStoreActive = isWarehouseActiveInMonth(w);
+        if (selectedStatusFilter === 'ACTIVE' && !isStoreActive) return false;
+        if (selectedStatusFilter === 'INACTIVE' && isStoreActive) return false;
+
+        if (selectedPartnerFilter !== 'ALL') {
+          const enabledTypes = getEnabledPartnerTypes(w);
+          if (!enabledTypes.some(t => t.key === selectedPartnerFilter)) return false;
+        }
+
+        // Autofiltrado opcional según vista visible del mapa (Viewport)
+        if (bounds && w.lat !== null && w.lng !== null && !isNaN(w.lat) && !isNaN(w.lng)) {
+          const pos = new google.maps.LatLng(Number(w.lat), Number(w.lng));
+          if (!bounds.contains(pos)) {
+            return false;
+          }
+        }
+
+        return true;
+      });
+    }
+
+    // ============================================================
+    // SELECTOR DE VERTICALES / PARTNERS CON ICONOS (POPOVER SUPERIOR)
+    // ============================================================
+    function renderPartnerSmartFilterOptions() {
+      const menu = document.getElementById('vertical-dropdown-menu');
+      if (!menu) return;
+
+      const counts = {};
+      PARTNER_TYPE_DEFINITIONS.forEach(def => {
+        counts[def.key] = 0;
+      });
+
+      allWarehouses.forEach(w => {
+        const enabled = getEnabledPartnerTypes(w);
+        enabled.forEach(t => {
+          counts[t.key] = (counts[t.key] || 0) + 1;
+        });
+      });
+
+      let menuHtml = `
+        <div class="popover-menu-item ${selectedPartnerFilter === 'ALL' ? 'active' : ''}" onclick="selectVerticalOption('ALL', event)">
+          <span style="display:inline-flex; align-items:center; justify-content:center; width:18px; height:18px; border-radius:50%; background:var(--bg-chip); border:1px solid var(--border-sheet); flex-shrink:0;">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+          </span>
+          <span style="flex:1;">Todas las Verticales</span>
+          <span style="font-size:9.5px; color:var(--text-sheet-muted); font-weight:700;">(${allWarehouses.length})</span>
+        </div>
+      `;
+
+      PARTNER_TYPE_DEFINITIONS.forEach(def => {
+        const count = counts[def.key] || 0;
+        const isSel = (selectedPartnerFilter === def.key);
+        menuHtml += `
+          <div class="popover-menu-item ${isSel ? 'active' : ''}" onclick="selectVerticalOption('${def.key}', event)">
+            <span style="display:inline-flex; align-items:center; justify-content:center; width:18px; height:18px; border-radius:50%; background:${def.bg}; border:1px solid ${def.color}; flex-shrink:0;">
+              ${def.svg}
+            </span>
+            <span style="flex:1;">${def.label}</span>
+            <span style="font-size:9.5px; color:var(--text-sheet-muted); font-weight:700;">(${count})</span>
+          </div>
+        `;
+      });
+
+      menu.innerHTML = menuHtml;
+      updateVerticalTriggerView();
+    }
+
+    function updateVerticalTriggerView() {
+      const view = document.getElementById('vertical-selected-view');
+      const badge = document.getElementById('partner-filter-badge-label');
+      if (!view) return;
+
+      if (selectedPartnerFilter === 'ALL') {
+        view.innerHTML = `
+          <span style="display:inline-flex; align-items:center; justify-content:center; width:16px; height:16px; border-radius:50%; background:var(--bg-chip); border:1px solid var(--border-sheet); flex-shrink:0;">
+            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+          </span>
+          <span style="font-weight:700; font-size:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Todas las Verticales</span>
+        `;
+        if (badge) badge.textContent = 'Todas';
+      } else {
+        const def = PARTNER_TYPE_DEFINITIONS.find(d => d.key === selectedPartnerFilter);
+        if (def) {
+          view.innerHTML = `
+            <span style="display:inline-flex; align-items:center; justify-content:center; width:16px; height:16px; border-radius:50%; background:${def.bg}; border:1px solid ${def.color}; flex-shrink:0;">
+              ${def.svg}
+            </span>
+            <span style="font-weight:700; font-size:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${def.label}</span>
+          `;
+          if (badge) badge.textContent = def.label.split(' ')[0];
+        }
+      }
+    }
+
+    function selectVerticalOption(val, e) {
+      if (e) e.stopPropagation();
+      selectedPartnerFilter = val;
+      updateVerticalTriggerView();
+      toggleVerticalMenu(null, false);
+
+      renderPartnerSmartFilterOptions();
+      renderWarehouseCards();
+
+      const filtered = getCurrentlyFilteredWarehouses();
+      if (filtered.length > 0) {
+        const anySelectedVisible = filtered.some(w => selectedWarehouseIds.has(String(w.warehouse_id).trim()));
+        if (!anySelectedVisible) {
+          selectedWarehouseIds.clear();
+          selectedWarehouseIds.add(String(filtered[0].warehouse_id).trim());
+          updateSelectionAndRefresh();
+        }
+      }
+    }
+
+    function toggleVerticalMenu(e, force) {
+      if (e) e.stopPropagation();
+      const menu = document.getElementById('vertical-dropdown-menu');
+      const btn = document.getElementById('vertical-dropdown-btn');
+      const dateMenu = document.getElementById('unified-date-dropdown-menu');
+      if (dateMenu) dateMenu.classList.remove('open');
+
+      if (!menu || !btn) return;
+      const isOpen = force !== undefined ? force : !menu.classList.contains('open');
+
+      if (isOpen) {
+        if (menu.parentElement !== document.body) {
+          document.body.appendChild(menu);
+        }
+
+        const rect = btn.getBoundingClientRect();
+        menu.style.position = 'fixed';
+        menu.style.left = `${rect.left}px`;
+        menu.style.width = `${Math.max(220, rect.width)}px`;
+        menu.style.zIndex = '999999';
+
+        const spaceBelow = window.innerHeight - rect.bottom;
+        const estimatedHeight = 220;
+
+        if (spaceBelow >= estimatedHeight || spaceBelow >= rect.top) {
+          // Desplegar hacia ABAJO
+          menu.style.top = `${rect.bottom + 4}px`;
+          menu.style.bottom = 'auto';
+          menu.style.boxShadow = '0 12px 35px rgba(0, 0, 0, 0.35)';
+        } else {
+          // Desplegar hacia ARRIBA si no hay lugar abajo
+          menu.style.bottom = `${window.innerHeight - rect.top + 4}px`;
+          menu.style.top = 'auto';
+          menu.style.boxShadow = '0 -12px 35px rgba(0, 0, 0, 0.35)';
+        }
+
+        menu.classList.add('open');
+      } else {
+        menu.classList.remove('open');
+      }
+    }
+
+    // ============================================================
+    // SUPERPOSICIÓN DE FECHAS EN EL MAPA (POPOVER SUPERIOR)
+    // ============================================================
+    const DATE_COLOR_PALETTE = [
+      { stroke: '#ea044e', fill: '#ea044e', fillOp: 0.18, name: 'Rojo PeYa', hex: '#ea044e' },
+      { stroke: '#0284c7', fill: '#0284c7', fillOp: 0.15, name: 'Azul Eléctrico', hex: '#0284c7' },
+      { stroke: '#10b981', fill: '#10b981', fillOp: 0.15, name: 'Verde Esmeralda', hex: '#10b981' },
+      { stroke: '#8b5cf6', fill: '#8b5cf6', fillOp: 0.15, name: 'Violeta / Púrpura', hex: '#8b5cf6' },
+      { stroke: '#f59e0b', fill: '#f59e0b', fillOp: 0.15, name: 'Ámbar / Naranja', hex: '#f59e0b' },
+      { stroke: '#06b6d4', fill: '#06b6d4', fillOp: 0.15, name: 'Cian', hex: '#06b6d4' }
+    ];
+
+    let allAvailableMonths = [];
+    let activeOverlayMonths = new Set();
+    let multiDatePolygonsMap = new Map(); // `${whId}__${monthDate}` -> Polygon
+
+    function getMonthColorDef(monthDate) {
+      const idx = allAvailableMonths.findIndex(m => (m.month_date || m) === monthDate);
+      const palIdx = idx >= 0 ? (idx % DATE_COLOR_PALETTE.length) : 0;
+      return DATE_COLOR_PALETTE[palIdx];
+    }
+
+    function toggleUnifiedDateMenu(e, force) {
+      if (e) e.stopPropagation();
+      const menu = document.getElementById('unified-date-dropdown-menu');
+      const btn = document.getElementById('unified-date-dropdown-btn');
+      const vertMenu = document.getElementById('vertical-dropdown-menu');
+      if (vertMenu) vertMenu.classList.remove('open');
+
+      if (!menu || !btn) return;
+      const isOpen = force !== undefined ? force : !menu.classList.contains('open');
+
+      if (isOpen) {
+        if (menu.parentElement !== document.body) {
+          document.body.appendChild(menu);
+        }
+
+        const rect = btn.getBoundingClientRect();
+        menu.style.position = 'fixed';
+        menu.style.left = `${rect.left}px`;
+        menu.style.width = `${Math.max(250, rect.width)}px`;
+        menu.style.zIndex = '999999';
+
+        const spaceBelow = window.innerHeight - rect.bottom;
+        const estimatedHeight = 230;
+
+        if (spaceBelow >= estimatedHeight || spaceBelow >= rect.top) {
+          // Desplegar hacia ABAJO
+          menu.style.top = `${rect.bottom + 4}px`;
+          menu.style.bottom = 'auto';
+          menu.style.boxShadow = '0 12px 35px rgba(0, 0, 0, 0.35)';
+        } else {
+          // Desplegar hacia ARRIBA si no hay lugar abajo
+          menu.style.bottom = `${window.innerHeight - rect.top + 4}px`;
+          menu.style.top = 'auto';
+          menu.style.boxShadow = '0 -12px 35px rgba(0, 0, 0, 0.35)';
+        }
+
+        menu.classList.add('open');
+      } else {
+        menu.classList.remove('open');
+      }
+    }
+
+    function setPrimaryMonth(monthDate, e) {
+      if (e) e.stopPropagation();
+      const filterMonthSel = document.getElementById('filter-month');
+      if (filterMonthSel) filterMonthSel.value = monthDate;
+
+      onMonthChange(monthDate);
+      renderUnifiedDateControls();
+    }
+
+    function toggleDateOverlayCheckbox(monthDate, checked, e) {
+      if (e) e.stopPropagation();
+      const primary = document.getElementById('filter-month').value;
+      if (monthDate === primary) {
+        return; // La fecha principal siempre está activa
+      }
+
+      if (!checked) {
+        activeOverlayMonths.delete(monthDate);
+        multiDatePolygonsMap.forEach((entry, key) => {
+          if (key.endsWith(`__${monthDate}`)) {
+            if (entry && entry.polygon) {
+              entry.polygon.setMap(null);
+              google.maps.event.clearInstanceListeners(entry.polygon);
+            }
+            multiDatePolygonsMap.delete(key);
+          }
+        });
+      } else {
+        if (activeOverlayMonths.size >= 5) {
+          showToast('Máximo 5 fechas simultáneas para mantener legibilidad.', 'warning');
+          renderUnifiedDateControls();
+          return;
+        }
+        activeOverlayMonths.add(monthDate);
+      }
+
+      renderUnifiedDateControls();
+      drawWarehousesOnMap();
+    }
+
+    function resetToSinglePrimaryMonth(e) {
+      if (e) e.stopPropagation();
+      const primary = document.getElementById('filter-month').value;
+      activeOverlayMonths.clear();
+      activeOverlayMonths.add(primary);
+
+      multiDatePolygonsMap.forEach((entry, key) => {
+        if (!key.endsWith(`__${primary}`)) {
+          if (entry && entry.polygon) {
+            entry.polygon.setMap(null);
+            google.maps.event.clearInstanceListeners(entry.polygon);
+          }
+          multiDatePolygonsMap.delete(key);
+        }
+      });
+
+      renderUnifiedDateControls();
+      drawWarehousesOnMap();
+      showToast('Superposición restablecida al mes base.', 'info');
+    }
+
+    function onPrimaryMonthRadioChange(monthDate, e) {
+      if (e) e.stopPropagation();
+      const filterMonthSel = document.getElementById('filter-month');
+      if (filterMonthSel) filterMonthSel.value = monthDate;
+
+      onMonthChange(monthDate);
+      renderUnifiedDateControls();
+    }
+
+    function renderUnifiedDateControls() {
+      const container = document.getElementById('unified-date-list-container');
+      const selectedView = document.getElementById('unified-date-selected-view');
+      const badgeLabel = document.getElementById('unified-date-badge-label');
+      const counterLabel = document.getElementById('unified-date-legend-counter');
+      const legend = document.getElementById('map-dates-legend');
+      const legendList = document.getElementById('map-dates-legend-list');
+      const legendCount = document.getElementById('map-dates-legend-count');
+
+      const primary = document.getElementById('filter-month').value || (allAvailableMonths[0] && (allAvailableMonths[0].month_date || allAvailableMonths[0])) || '2026-09-01';
+      if (!activeOverlayMonths.has(primary)) {
+        activeOverlayMonths.add(primary);
+      }
+
+      const activeCount = activeOverlayMonths.size;
+      const extraCount = activeCount - 1;
+
+      // Actualizar vista del botón disparador
+      if (selectedView) {
+        const primObj = allAvailableMonths.find(m => (m.month_date || m) === primary);
+        const primLabel = primObj ? (primObj.month_label || primary) : primary;
+        const colorDef = getMonthColorDef(primary);
+
+        selectedView.innerHTML = `
+          <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:${colorDef.stroke}; box-shadow:0 0 4px ${colorDef.stroke}; flex-shrink:0;"></span>
+          <span style="font-weight:700; font-size:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${primLabel}</span>
+          ${extraCount > 0 ? `<span style="font-size:8.5px; font-weight:800; background:rgba(234,4,78,0.12); color:var(--brand-red); border:1px solid rgba(234,4,78,0.25); padding:1px 5px; border-radius:99px; margin-left:2px;">+${extraCount} capa${extraCount === 1 ? '' : 's'}</span>` : ''}
+        `;
+      }
+
+      if (badgeLabel) {
+        badgeLabel.textContent = `${activeCount} fecha${activeCount === 1 ? '' : 's'}`;
+      }
+      if (counterLabel) {
+        counterLabel.textContent = `${activeCount} activa${activeCount === 1 ? '' : 's'}`;
+      }
+      if (legendCount) {
+        legendCount.textContent = `${activeCount} fecha${activeCount === 1 ? '' : 's'}`;
+      }
+
+      // Renderizar listado de meses con las 2 columnas de checkboxes: Principal (izq) y Capa (der)
+      if (container && allAvailableMonths.length > 0) {
+        container.innerHTML = '';
+        allAvailableMonths.forEach(m => {
+          const mDate = m.month_date || m;
+          const mLabel = m.month_label || mDate;
+          const isPrimary = (mDate === primary);
+          const isChecked = activeOverlayMonths.has(mDate);
+          const colorDef = getMonthColorDef(mDate);
+
+          const row = document.createElement('div');
+          row.className = `popover-menu-item ${isPrimary ? 'active' : ''}`;
+          row.style.display = 'flex';
+          row.style.alignItems = 'center';
+          row.style.justifyContent = 'space-between';
+          row.style.padding = '4px 6px';
+          row.style.borderRadius = '5px';
+          row.style.border = `1px solid ${isPrimary ? colorDef.stroke : (isChecked ? `${colorDef.stroke}40` : 'transparent')}`;
+          row.style.background = isPrimary 
+            ? (document.documentElement.getAttribute('data-theme') === 'dark' ? 'rgba(234,4,78,0.2)' : 'rgba(234,4,78,0.08)') 
+            : (isChecked ? `${colorDef.stroke}10` : 'transparent');
+
+          row.innerHTML = `
+            <!-- COLUMNA 1 (IZQUIERDA): NOMBRE DEL MES SIN CORTAR Y COLOR DOT -->
+            <div onclick="onPrimaryMonthRadioChange('${mDate}', event)" style="display:flex; align-items:center; gap:5px; flex:1; min-width:0; padding:0 2px; cursor:pointer;" title="Establecer ${mLabel} como Mes Principal">
+              <span style="display:inline-block; width:7px; height:7px; border-radius:50%; background:${colorDef.stroke}; flex-shrink:0;"></span>
+              <span style="font-size:10.5px; font-weight:${isPrimary ? '800' : '600'}; color:${isPrimary ? 'var(--brand-red)' : 'var(--text-sheet-body)'}; white-space:nowrap;">
+                ${mLabel}
+              </span>
+            </div>
+
+            <!-- COLUMNA 2 (MEDIO): PRINCIPAL ABREVIADO (RADIO BUTTON) -->
+            <div style="width:38px; display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+              <input type="radio" 
+                     name="primary_month_radio_group" 
+                     ${isPrimary ? 'checked' : ''} 
+                     onchange="onPrimaryMonthRadioChange('${mDate}', event)" 
+                     title="Seleccionar ${mLabel} como Mes Principal único"
+                     style="cursor:pointer; accent-color:#ea044e; width:13px; height:13px; margin:0;">
+            </div>
+
+            <!-- COLUMNA 3 (DERECHA): SUPERPONER CAPA (CHECKBOX) -->
+            <div style="width:44px; display:flex; align-items:center; justify-content:center; flex-shrink:0;" onclick="event.stopPropagation()">
+              <input type="checkbox" 
+                     ${isChecked ? 'checked' : ''} 
+                     ${isPrimary ? 'disabled' : ''} 
+                     onchange="toggleDateOverlayCheckbox('${mDate}', this.checked, event)" 
+                     title="${isPrimary ? 'El mes principal siempre está visible' : 'Superponer silueta en el mapa'}"
+                     style="cursor:${isPrimary ? 'default' : 'pointer'}; accent-color:${colorDef.stroke}; width:13px; height:13px; margin:0;">
+            </div>
+          `;
+          container.appendChild(row);
+        });
+      }
+
+      // Actualizar Leyenda Flotante en el Mapa
+      if (legend && legendList) {
+        if (activeCount > 1) {
+          legend.style.display = 'flex';
+          legendList.innerHTML = '';
+          activeOverlayMonths.forEach(mDate => {
+            const mObj = allAvailableMonths.find(m => (m.month_date || m) === mDate);
+            const mLabel = mObj ? (mObj.month_label || mDate) : mDate;
+            const colorDef = getMonthColorDef(mDate);
+            const isPrimary = (mDate === primary);
+
+            const item = document.createElement('div');
+            item.style.display = 'flex';
+            item.style.alignItems = 'center';
+            item.style.justifyContent = 'space-between';
+            item.style.gap = '8px';
+            item.style.fontSize = '10.5px';
+            item.style.fontWeight = '600';
+
+            item.innerHTML = `
+              <div style="display:flex; align-items:center; gap:6px;">
+                <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:${colorDef.stroke}; box-shadow:0 0 5px ${colorDef.stroke};"></span>
+                <span style="color:${colorDef.stroke}; font-weight:700;">${mLabel}</span>
+                ${isPrimary ? '<span style="font-size:8px; opacity:0.7;">(Principal)</span>' : ''}
+              </div>
+              ${!isPrimary ? `
+                <button type="button" onclick="event.stopPropagation(); event.preventDefault(); toggleDateOverlay('${mDate}');" title="Ocultar fecha" style="background:transparent; border:none; cursor:pointer; font-size:11px; color:var(--text-sheet-muted); font-weight:800; padding:1px 4px; border-radius:3px; line-height:1; transition:color 0.12s;" onmouseover="this.style.color='#ea044e'" onmouseout="this.style.color='var(--text-sheet-muted)'">✕</button>
+              ` : ''}
+            `;
+            legendList.appendChild(item);
+          });
+        } else {
+          legend.style.display = 'none';
+        }
+      }
+    }
+
+    document.addEventListener('click', (e) => {
+      const vertMenu = document.getElementById('vertical-dropdown-menu');
+      const vertBtn = document.getElementById('vertical-dropdown-btn');
+      if (vertMenu && vertMenu.classList.contains('open') && !vertMenu.contains(e.target) && !vertBtn.contains(e.target)) {
+        vertMenu.classList.remove('open');
+      }
+
+      const dateMenu = document.getElementById('unified-date-dropdown-menu');
+      const dateBtn = document.getElementById('unified-date-dropdown-btn');
+      if (dateMenu && dateMenu.classList.contains('open') && !dateMenu.contains(e.target) && !dateBtn.contains(e.target)) {
+        dateMenu.classList.remove('open');
+      }
+    });
+
+    function toggleDateOverlay(monthDate) {
+      const primary = document.getElementById('filter-month').value;
+      if (monthDate === primary && activeOverlayMonths.has(monthDate)) {
+        return; // No apagar la fecha principal
+      }
+
+      if (activeOverlayMonths.has(monthDate)) {
+        activeOverlayMonths.delete(monthDate);
+        multiDatePolygonsMap.forEach((entry, key) => {
+          if (key.endsWith(`__${monthDate}`)) {
+            if (entry && entry.polygon) {
+              entry.polygon.setMap(null);
+              google.maps.event.clearInstanceListeners(entry.polygon);
+            }
+            multiDatePolygonsMap.delete(key);
+          }
+        });
+      } else {
+        if (activeOverlayMonths.size >= 5) {
+          showToast('Máximo 5 fechas simultáneas para mantener legibilidad.', 'warning');
+          return;
+        }
+        activeOverlayMonths.add(monthDate);
+      }
+
+      renderUnifiedDateControls();
+      drawWarehousesOnMap();
+    }
+    window.toggleDateOverlay = toggleDateOverlay;
+
+    function renderWarehouseCards() {
+      const container = document.getElementById('whs-cards-container');
+      const filtered = getCurrentlyFilteredWarehouses();
+
+      const countBadgeText = isViewportFilterActive ? `(${filtered.length} en vista)` : `(${filtered.length})`;
+      document.getElementById('whs-count-badge').textContent = countBadgeText;
+      container.innerHTML = '';
+
+      if (filtered.length === 0) {
+        container.innerHTML = '<div style="color:var(--text-muted); font-size:12px; grid-column:1/-1; text-align:center; padding:20px;">No se encontraron almacenes con los filtros actuales.</div>';
+        return;
+      }
+
+      filtered.forEach(w => {
+        const strId = String(w.warehouse_id).trim();
+        const isSelected = selectedWarehouseIds.has(strId);
+        const card = document.createElement('div');
+        const isStoreActive = Boolean(w.is_active);
+
+        card.className = `whs-card ${isSelected ? 'selected' : ''}`;
+        if (!isStoreActive) {
+          card.style.opacity = '0.72';
+          card.style.borderStyle = 'dashed';
+        }
+
+        card.onclick = () => toggleWarehouseSelection(strId);
+
+        card.innerHTML = `
+          <!-- Fila Superior: Bandera, Nombre Completo sin cortar, Badge Estado Mes -->
+          <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:7px; width:100%;">
+            <div style="display:flex; align-items:flex-start; gap:7px; min-width:0; flex:1;">
+              <div style="margin-top:1px;">${getCountryFlagImg(w)}</div>
+              <div class="whs-card-info" style="min-width:0; flex:1;">
+                <div class="whs-card-name">${w.warehouse_name}</div>
+                <div class="whs-card-meta">
+                  <span>${w.neighborhood || w.city}</span>
+                  <span>•</span>
+                  <span>${w.country}</span>
+                </div>
+              </div>
+            </div>
+            <div class="whs-card-badge" style="${isStoreActive ? 'background:#10b981; color:#ffffff;' : 'background:#64748b; color:#f8fafc;'}">
+              <span style="width:4px; height:4px; border-radius:50%; background:${isStoreActive ? '#ffffff' : '#cbd5e1'}; display:inline-block;"></span>
+              ${isStoreActive ? 'Activo' : 'Inactivo'}
+            </div>
+          </div>
+
+          <!-- Fila Inferior: Circulitos con Iconos de Verticales Habilitadas y Estado en Mes -->
+          ${renderPartnerTypeCircles(w)}
+        `;
+        container.appendChild(card);
+      });
+    }
+
+    function toggleWarehouseSelection(id) {
+      const normId = String(id).trim();
+      if (selectedWarehouseIds.has(normId)) {
+        selectedWarehouseIds.delete(normId);
+        manuallyDeselectedIds.add(normId);
+        removePolygonsForWarehouse(normId);
+
+        // Eliminación reactiva instantánea en 0ms de la tabla comparativa
+        if (lastLoadedMetricsPayload && lastLoadedMetricsPayload.stores) {
+          lastLoadedMetricsPayload.stores = lastLoadedMetricsPayload.stores.filter(
+            s => String(s.warehouse_id).trim() !== normId
+          );
+          renderComparativeKpiTable(lastLoadedMetricsPayload);
+        }
+      } else {
+        selectedWarehouseIds.add(normId);
+        manuallyDeselectedIds.delete(normId);
+      }
+      renderWarehouseCards();
+      updateSelectionAndRefresh();
+    }
+
+    function selectAllWarehouses(select) {
+      const filtered = getCurrentlyFilteredWarehouses();
+      if (select) {
+        manuallyDeselectedIds.clear();
+        filtered.forEach(w => {
+          const idStr = String(w.warehouse_id).trim();
+          selectedWarehouseIds.add(idStr);
+        });
+      } else {
+        filtered.forEach(w => {
+          const idStr = String(w.warehouse_id).trim();
+          selectedWarehouseIds.delete(idStr);
+          manuallyDeselectedIds.add(idStr);
+          removePolygonsForWarehouse(idStr);
+        });
+        if (lastLoadedMetricsPayload) {
+          lastLoadedMetricsPayload.stores = [];
+          renderComparativeKpiTable(lastLoadedMetricsPayload);
+        }
+      }
+      renderWarehouseCards();
+      updateSelectionAndRefresh();
+    }
+
+    function updateSelectionAndRefresh() {
+      const count = selectedWarehouseIds.size;
+      const text = `${count} tienda${count === 1 ? '' : 's'} activa${count === 1 ? '' : 's'}`;
+
+      const elTrigger = document.getElementById('trigger-label');
+      if (elTrigger) elTrigger.textContent = `Controles y Métricas de Tiendas (${text})`;
+
+      const elHeader = document.getElementById('sheet-header-badge');
+      if (elHeader) elHeader.textContent = text;
+
+      const elTotal = document.getElementById('kpi-total-whs');
+      if (elTotal) elTotal.textContent = count;
+
+      const elRings = document.getElementById('rings-selected-store-count');
+      if (elRings) elRings.textContent = count;
+
+      renderKpiWhsChips();
+      drawWarehousesOnMap();
+      loadTotalMetrics();
+    }
+
+    function renderKpiWhsChips() {
+      const container = document.getElementById('kpi-whs-chips-list');
+      if (!container) return;
+      container.innerHTML = '';
+      
+      const selected = allWarehouses.filter(w => selectedWarehouseIds.has(String(w.warehouse_id).trim()));
+      const badge = document.getElementById('kpi-whs-count-badge');
+      if (badge) badge.textContent = `${selected.length} tienda${selected.length === 1 ? '' : 's'} seleccionada${selected.length === 1 ? '' : 's'}`;
+
+      if (selected.length === 0) {
+        container.innerHTML = '<span style="font-size:12px; color:var(--text-muted);">Ninguna tienda seleccionada. Por favor seleccioná al menos un almacén en la pestaña "Filtros & Selección".</span>';
+        return;
+      }
+
+      selected.forEach(w => {
+        const idStr = String(w.warehouse_id).trim();
+        const chip = document.createElement('div');
+        chip.className = 'kpi-whs-chip';
+        chip.style.display = 'inline-flex';
+        chip.style.alignItems = 'center';
+        chip.style.gap = '5px';
+        chip.style.padding = '2px 7px';
+        chip.style.fontSize = '10.5px';
+        chip.style.fontWeight = '700';
+        chip.style.borderRadius = '5px';
+        chip.style.background = 'var(--bg-chip)';
+        chip.style.border = '1px solid var(--border-sheet)';
+        chip.style.color = 'var(--text-sheet-title)';
+
+        chip.innerHTML = `
+          <span>${w.warehouse_name}</span>
+          <button type="button" onclick="quickRemoveWarehouseFromKpis('${idStr}')" title="Quitar tienda" style="background:transparent; border:none; color:#ef4444; font-size:11px; font-weight:800; cursor:pointer; padding:0 2px; line-height:1; transition:color 0.12s;" onmouseover="this.style.color='#dc2626'" onmouseout="this.style.color='#ef4444'">✕</button>
+        `;
+        container.appendChild(chip);
+      });
+    }
+
+    // ============================================================
+    // CACHÉ EN MEMORIA DEL CLIENTE (RESPUESTA INSTANTÁNEA 0ms)
+    // ============================================================
+    const CLIENT_MEMORY_CACHE = {
+      polygons: new Map(), // key: `${whId}__${month}` -> pData
+      metrics: new Map()   // key: `${sortedIds}__${month}` -> metricsData
+    };
+
+    // ============================================================
+    // TRANSICIÓN DE COBERTURA: MOVIMIENTO SIN ROTACIÓN & TITILEO SOLO EN PARTES MODIFICADAS
+    // ============================================================
+    let activeDiffPolygons = [];
+
+    function clearActiveDiffPolygons() {
+      activeDiffPolygons.forEach(p => {
+        try { p.setMap(null); } catch (e) {}
+      });
+      activeDiffPolygons = [];
+    }
+
+    function dismissTransitionBanner() {
+      const banner = document.getElementById('shape-transition-banner');
+      if (banner) banner.style.display = 'none';
+      clearActiveDiffPolygons();
+      activePolygonsMap.forEach(entry => {
+        if (entry.ghostPolygon) {
+          entry.ghostPolygon.setMap(null);
+          entry.ghostPolygon = null;
+        }
+      });
+    }
+
+    function extractPolygonCoordinates(geojson) {
+      if (!geojson || !geojson.coordinates) return [];
+      
+      let ring = null;
+      if (geojson.type === 'MultiPolygon') {
+        let maxLen = 0;
+        if (Array.isArray(geojson.coordinates)) {
+          geojson.coordinates.forEach(poly => {
+            if (Array.isArray(poly) && poly.length > 0 && Array.isArray(poly[0])) {
+              if (poly[0].length > maxLen) {
+                maxLen = poly[0].length;
+                ring = poly[0];
+              }
+            }
+          });
+        }
+      } else if (geojson.type === 'Polygon') {
+        ring = Array.isArray(geojson.coordinates) ? geojson.coordinates[0] : null;
+      } else if (Array.isArray(geojson.coordinates)) {
+        let curr = geojson.coordinates;
+        while (Array.isArray(curr) && curr.length > 0 && Array.isArray(curr[0]) && Array.isArray(curr[0][0])) {
+          curr = curr[0];
+        }
+        ring = curr;
+      }
+
+      if (!ring || !Array.isArray(ring)) return [];
+
+      return ring.map(coord => ({
+        lat: Number(coord[1]),
+        lng: Number(coord[0])
+      })).filter(pt => !isNaN(pt.lat) && !isNaN(pt.lng) && pt.lat !== 0 && pt.lng !== 0);
+    }
+
+    function arePathsEqual(pathA, pathB) {
+      if (!pathA || !pathB) return false;
+      if (pathA.length !== pathB.length) return false;
+      for (let i = 0; i < pathA.length; i++) {
+        if (Math.abs(pathA[i].lat - pathB[i].lat) > 0.00005 || Math.abs(pathA[i].lng - pathB[i].lng) > 0.00005) {
+          return false;
+        }
+      }
+      return true;
+    }
+
+    // Remuestreo de puntos equidistantes
+    function resamplePath(coords, targetCount) {
+      if (!coords || coords.length < 3) return coords || [];
+      const pts = [...coords];
+      const first = pts[0];
+      const last = pts[pts.length - 1];
+      if (first.lat !== last.lat || first.lng !== last.lng) {
+        pts.push({ lat: first.lat, lng: first.lng });
+      }
+
+      const dists = [0];
+      let totalDist = 0;
+      for (let i = 0; i < pts.length - 1; i++) {
+        const d = Math.hypot(pts[i+1].lat - pts[i].lat, pts[i+1].lng - pts[i].lng);
+        totalDist += d;
+        dists.push(totalDist);
+      }
+      if (totalDist === 0) return pts.slice(0, targetCount);
+
+      const resampled = [];
+      const step = totalDist / targetCount;
+      let segIdx = 0;
+
+      for (let i = 0; i < targetCount; i++) {
+        const targetD = i * step;
+        while (segIdx < dists.length - 2 && dists[segIdx + 1] < targetD) {
+          segIdx++;
+        }
+        const segStartD = dists[segIdx];
+        const segEndD = dists[segIdx + 1];
+        const segLen = segEndD - segStartD;
+        const t = segLen > 0 ? (targetD - segStartD) / segLen : 0;
+        const p1 = pts[segIdx];
+        const p2 = pts[segIdx + 1];
+        resampled.push({
+          lat: p1.lat + (p2.lat - p1.lat) * t,
+          lng: p1.lng + (p2.lng - p1.lng) * t
+        });
+      }
+      return resampled;
+    }
+
+    // Alineación matemática de vértices por mínima distancia para eliminar giros o rotaciones
+    function alignPolygonPaths(pathA, pathB) {
+      const N = pathA.length;
+      let bestShift = 0;
+      let bestDist = Infinity;
+      for (let s = 0; s < N; s++) {
+        let dist = 0;
+        for (let i = 0; i < N; i++) {
+          const pA = pathA[i];
+          const pB = pathB[(i + s) % N];
+          dist += Math.hypot(pA.lat - pB.lat, pA.lng - pB.lng);
+        }
+        if (dist < bestDist) {
+          bestDist = dist;
+          bestShift = s;
+        }
+      }
+      const alignedB = [];
+      for (let i = 0; i < N; i++) {
+        alignedB.push(pathB[(i + bestShift) % N]);
+      }
+      return { pathA, pathB: alignedB };
+    }
+
+    // Extrae ÚNICAMENTE los polígonos que corresponden a las áreas que se modificaron
+    function extractDifferencePolygons(pathA, pathB, thresholdMeters = 30) {
+      if (!pathA || !pathB || pathA.length !== pathB.length) return [];
+      const N = pathA.length;
+      const dists = [];
+
+      for (let i = 0; i < N; i++) {
+        const dLat = (pathA[i].lat - pathB[i].lat) * 111320;
+        const dLng = (pathA[i].lng - pathB[i].lng) * 111320 * Math.cos(pathA[i].lat * Math.PI / 180);
+        dists.push(Math.hypot(dLat, dLng));
+      }
+
+      const ranges = [];
+      let inRange = false;
+      let startIdx = 0;
+
+      for (let i = 0; i < N; i++) {
+        if (dists[i] >= thresholdMeters) {
+          if (!inRange) {
+            inRange = true;
+            startIdx = i;
+          }
+        } else {
+          if (inRange) {
+            inRange = false;
+            if (i - startIdx >= 2) {
+              ranges.push({ start: startIdx, end: i - 1 });
+            }
+          }
+        }
+      }
+      if (inRange && (N - startIdx >= 2)) {
+        ranges.push({ start: startIdx, end: N - 1 });
+      }
+
+      // Si casi toda la cobertura cambió, envolver ambas
+      if (ranges.length === 1 && (ranges[0].end - ranges[0].start) > N * 0.8) {
+        const patch = [...pathA];
+        for (let i = pathB.length - 1; i >= 0; i--) {
+          patch.push(pathB[i]);
+        }
+        return [patch];
+      }
+
+      const patches = [];
+      ranges.forEach(r => {
+        const patch = [];
+        for (let i = r.start; i <= r.end; i++) {
+          patch.push(pathA[i]);
+        }
+        for (let i = r.end; i >= r.start; i--) {
+          patch.push(pathB[i]);
+        }
+        if (patch.length >= 3) {
+          patches.push(patch);
+        }
+      });
+
+      return patches;
+    }
+
+    // Animación de desplazamiento elástico y fluido de los bordes (140 vértices)
+    function animatePolygonTransition(polygon, oldCoords, newCoords, onComplete) {
+      if (!polygon || !oldCoords || !newCoords) return;
+      const N = 140; // Mayor fidelidad para curvas y manzanas urbanas
+      const rawA = resamplePath(oldCoords, N);
+      const rawB = resamplePath(newCoords, N);
+      const { pathA, pathB } = alignPolygonPaths(rawA, rawB);
+
+      const startTime = performance.now();
+      const durationMs = 1100; // 1.1s de desplazamiento natural y orgánico
+
+      function step(now) {
+        const elapsed = now - startTime;
+        const progress = Math.min(1, elapsed / durationMs);
+
+        // Deceleración orgánica cuártica (suave al frenar)
+        const ease = 1 - Math.pow(1 - progress, 4);
+
+        // Resaltado dinámico del borde en movimiento
+        const strokeW = 3.2 - (0.8 * progress);
+        const strokeOp = 0.95 + (0.05 * Math.sin(progress * Math.PI));
+
+        polygon.setOptions({
+          strokeColor: '#990334',
+          strokeWeight: strokeW,
+          strokeOpacity: strokeOp,
+          fillColor: '#660221',
+          fillOpacity: 0.18 + (0.04 * (1 - progress)),
+          zIndex: 3
+        });
+
+        const currentPath = [];
+        for (let i = 0; i < N; i++) {
+          currentPath.push({
+            lat: pathA[i].lat + (pathB[i].lat - pathA[i].lat) * ease,
+            lng: pathA[i].lng + (pathB[i].lng - pathA[i].lng) * ease
+          });
+        }
+        polygon.setPath(currentPath);
+
+        if (progress < 1) {
+          requestAnimationFrame(step);
+        } else {
+          polygon.setPath(newCoords);
+          if (onComplete) onComplete();
+        }
+      }
+
+      requestAnimationFrame(step);
+    }
+
+    // Titila ÚNICAMENTE el área modificada (parche) durante 1.3 segundos
+    function pulseModifiedDifferencePatch(diffPoly, durationMs = 1300) {
+      if (!diffPoly) return;
+      const startTime = performance.now();
+
+      function stepPulse(now) {
+        const elapsed = now - startTime;
+        if (elapsed > durationMs) {
+          diffPoly.setMap(null);
+          const idx = activeDiffPolygons.indexOf(diffPoly);
+          if (idx >= 0) activeDiffPolygons.splice(idx, 1);
+          return;
+        }
+
+        const t = (elapsed / 1000) * 2.5;
+        const wave = 0.5 + 0.5 * Math.sin(t * Math.PI * 2);
+
+        diffPoly.setOptions({
+          strokeColor: '#80022a',
+          strokeWeight: 2.2 + 1.8 * wave,
+          strokeOpacity: 0.9 + 0.1 * wave,
+          fillColor: '#660221',
+          fillOpacity: 0.22 + 0.25 * wave
+        });
+
+        requestAnimationFrame(stepPulse);
+      }
+
+      requestAnimationFrame(stepPulse);
+    }
+
+    function processPolygonsComparison(polygonsData, newMonth) {
+      const banner = document.getElementById('shape-transition-banner');
+      const bannerText = document.getElementById('shape-transition-text');
+      let anyChanged = false;
+
+      clearActiveDiffPolygons();
+
+      polygonsData.forEach(pData => {
+        if (!pData || !pData.geojson || !pData.geojson.coordinates) return;
+
+        const normWhId = String(pData.warehouse_id).trim();
+        if (!selectedWarehouseIds.has(normWhId)) return;
+
+        CLIENT_MEMORY_CACHE.polygons.set(`${normWhId}__${newMonth}`, pData);
+
+        const newCoords = extractPolygonCoordinates(pData.geojson);
+        if (!newCoords || newCoords.length < 3) return;
+
+        const entry = activePolygonsMap.get(normWhId);
+
+        if (entry && entry.polygon && entry.coords && entry.coords.length > 0) {
+          const oldCoords = entry.coords;
+          const hasDifference = !arePathsEqual(oldCoords, newCoords);
+
+          if (hasDifference) {
+            anyChanged = true;
+
+            // 1. Capa fantasma fija: Mes Anterior en azul cian contrastante
+            if (entry.ghostPolygon) {
+              entry.ghostPolygon.setMap(null);
+            }
+            const ghost = new google.maps.Polygon({
+              paths: oldCoords,
+              strokeColor: '#0284c7',
+              strokeOpacity: 0.95,
+              strokeWeight: 2.8,
+              fillColor: '#0284c7',
+              fillOpacity: 0.12,
+              map: map,
+              zIndex: 1,
+              clickable: false
+            });
+            entry.ghostPolygon = ghost;
+
+            // 2. Extraer ÚNICAMENTE las partes modificadas
+            const N = 80;
+            const rawA = resamplePath(oldCoords, N);
+            const rawB = resamplePath(newCoords, N);
+            const { pathA, pathB } = alignPolygonPaths(rawA, rawB);
+            const diffPatches = extractDifferencePolygons(pathA, pathB, 30);
+
+            // 3. Mover suavemente la forma hacia las nuevas coordenadas (sin rotaciones)
+            animatePolygonTransition(entry.polygon, oldCoords, newCoords, () => {
+              // El polígono principal NO titila, queda estático en rojo oficial
+              entry.polygon.setOptions({
+                strokeColor: '#ea044e',
+                strokeWeight: 2.2,
+                strokeOpacity: 0.9,
+                fillColor: '#ea044e',
+                fillOpacity: 0.16
+              });
+
+              // Titilan ÚNICAMENTE las zonas que se agregaron o retiraron
+              if (diffPatches && diffPatches.length > 0) {
+                diffPatches.forEach(patchCoords => {
+                  const diffPoly = new google.maps.Polygon({
+                    paths: patchCoords,
+                    strokeColor: '#80022a',
+                    strokeWeight: 2.8,
+                    strokeOpacity: 1,
+                    fillColor: '#660221',
+                    fillOpacity: 0.35,
+                    map: map,
+                    zIndex: 10,
+                    clickable: false
+                  });
+                  activeDiffPolygons.push(diffPoly);
+                  pulseModifiedDifferencePatch(diffPoly, 1300);
+                });
+              }
+            });
+
+            entry.coords = newCoords;
+            entry.month = newMonth;
+          } else {
+            if (entry.ghostPolygon) {
+              entry.ghostPolygon.setMap(null);
+              entry.ghostPolygon = null;
+            }
+            entry.month = newMonth;
+          }
+        } else {
+          // Si no existía, dibujarlo de inmediato
+          const polygon = new google.maps.Polygon({
+            paths: newCoords,
+            strokeColor: '#ea044e',
+            strokeOpacity: 0.9,
+            strokeWeight: 2.2,
+            fillColor: '#ea044e',
+            fillOpacity: 0.16,
+            map: map,
+            zIndex: 2
+          });
+          const whsObj = allWarehouses.find(item => String(item.warehouse_id).trim() === normWhId);
+          bindPolygonEvents(polygon, whsObj);
+
+          activePolygonsMap.set(normWhId, {
+            polygon: polygon,
+            ghostPolygon: null,
+            coords: newCoords,
+            month: newMonth
+          });
+        }
+      });
+
+      if (banner && bannerText) {
+        if (anyChanged) {
+          bannerText.innerHTML = `Comparación de Cobertura: <span style="display:inline-block; width:12px; height:3px; background:#0284c7; vertical-align:middle; margin:0 3px;"></span> <strong style="color:#38bdf8;">Mes Anterior</strong> vs <span style="display:inline-block; width:12px; height:3px; background:#ea044e; vertical-align:middle; margin:0 3px;"></span> <strong style="color:#ea044e;">Mes Seleccionado</strong> <span onclick="dismissTransitionBanner()" style="margin-left:12px; background:rgba(255,255,255,0.2); padding:1px 6px; border-radius:4px; cursor:pointer; font-size:10px; font-weight:800;" title="Ocultar comparativa">✕ Cerrar</span>`;
+          banner.style.display = 'flex';
+
+          if (transitionTimer) clearTimeout(transitionTimer);
+          transitionTimer = setTimeout(() => {
+            dismissTransitionBanner();
+          }, 6000);
+        } else {
+          bannerText.innerHTML = `La cobertura se mantuvo sin modificaciones respecto al mes anterior. <span onclick="dismissTransitionBanner()" style="margin-left:12px; background:rgba(255,255,255,0.2); padding:1px 6px; border-radius:4px; cursor:pointer; font-size:10px; font-weight:800;">✕</span>`;
+          banner.style.display = 'flex';
+
+          if (transitionTimer) clearTimeout(transitionTimer);
+          transitionTimer = setTimeout(() => {
+            dismissTransitionBanner();
+          }, 2500);
+        }
+      }
+    }
+
+    function refreshPolygonsWithTransition(newMonth) {
+      if (!map || selectedWarehouseIds.size === 0) return;
+      const idsArray = Array.from(selectedWarehouseIds);
+
+      // Comprobar si todos los polígonos están en memoria
+      const cached = [];
+      const missingIds = [];
+      idsArray.forEach(id => {
+        const key = `${id}__${newMonth}`;
+        if (CLIENT_MEMORY_CACHE.polygons.has(key)) {
+          cached.push(CLIENT_MEMORY_CACHE.polygons.get(key));
+        } else {
+          missingIds.push(id);
+        }
+      });
+
+      // Si todos están en la memoria, respuesta inmediata (0ms)
+      if (missingIds.length === 0) {
+        processPolygonsComparison(cached, newMonth);
+        return;
+      }
+
+      const banner = document.getElementById('shape-transition-banner');
+      const bannerText = document.getElementById('shape-transition-text');
+      if (banner && bannerText) {
+        bannerText.innerHTML = `Comparando cobertura con el mes anterior...`;
+        banner.style.display = 'flex';
+      }
+
+      showShapeLoading(true);
+
+      google.script.run
+        .withSuccessHandler(polygonsData => {
+          try {
+            const fullList = [...cached, ...(polygonsData || [])];
+            processPolygonsComparison(fullList, newMonth);
+          } finally {
+            showShapeLoading(false);
+          }
+        })
+        .withFailureHandler(err => {
+          showShapeLoading(false);
+          if (banner) banner.style.display = 'none';
+          showToast('Error cargando cobertura del nuevo mes: ' + err.message, 'error');
+        })
+        .getWarehousesPolygons(missingIds, newMonth);
+    }
+
+    function drawMultiDatePolygonOnMap(pData, mDate, colorDef, isPrimary) {
+      if (!pData || !pData.geojson) return;
+      const pId = String(pData.warehouse_id).trim();
+      const mapKey = `${pId}__${mDate}`;
+
+      const existing = multiDatePolygonsMap.get(mapKey);
+      if (existing && existing.polygon) {
+        existing.polygon.setMap(null);
+        google.maps.event.clearInstanceListeners(existing.polygon);
+        multiDatePolygonsMap.delete(mapKey);
+      }
+
+      const coords = extractPolygonCoordinates(pData.geojson);
+      if (!coords || coords.length < 3) return;
+
+      const polygon = new google.maps.Polygon({
+        paths: coords,
+        strokeColor: colorDef.stroke,
+        strokeOpacity: 0.95,
+        strokeWeight: isPrimary ? 2.5 : 2.0,
+        fillColor: colorDef.fill,
+        fillOpacity: isPrimary ? 0.18 : colorDef.fillOp,
+        map: map,
+        zIndex: isPrimary ? 5 : 2
+      });
+
+      const whsObj = allWarehouses.find(item => String(item.warehouse_id).trim() === pId);
+      bindPolygonEvents(polygon, whsObj);
+
+      multiDatePolygonsMap.set(mapKey, {
+        polygon: polygon,
+        coords: coords,
+        month: mDate,
+        colorDef: colorDef
+      });
+
+      if (isPrimary) {
+        activePolygonsMap.set(pId, {
+          polygon: polygon,
+          ghostPolygon: null,
+          coords: coords,
+          month: mDate
+        });
+      }
+    }
+
+    function getWarehousePosition(w) {
+      if (!w) return null;
+      let lat = Number(w.lat);
+      let lng = Number(w.lng);
+
+      if (isNaN(lat) || isNaN(lng) || lat === 0) {
+        if (w.centroid_lat && w.centroid_lng && !isNaN(w.centroid_lat)) {
+          lat = Number(w.centroid_lat);
+          lng = Number(w.centroid_lng);
+        } else {
+          const entry = activePolygonsMap.get(String(w.warehouse_id).trim());
+          if (entry && entry.coords && entry.coords.length > 0) {
+            lat = entry.coords[0].lat;
+            lng = entry.coords[0].lng;
+          }
+        }
+      }
+
+      if (isNaN(lat) || isNaN(lng) || lat === 0) return null;
+      return { lat: lat, lng: lng };
+    }
+
+    // Dibuja los anillos concéntricos recortando geométricamente contra la cobertura
+    function drawWarehouseRings(w, pos, currentMonth) {
+      if (!isRingsVisible || !w || !pos) return;
+      const whId = String(w.warehouse_id).trim();
+      const cacheKey = `${whId}__${currentMonth}`;
+      const pData = CLIENT_MEMORY_CACHE.polygons.get(cacheKey);
+
+      let coverageFeature = null;
+      if (pData && pData.geojson && typeof turf !== 'undefined') {
+        try {
+          if (pData.geojson.type === 'Polygon' || pData.geojson.type === 'MultiPolygon') {
+            coverageFeature = turf.cleanCoords(turf.feature(pData.geojson));
+          }
+        } catch (err) {
+          console.warn('Aviso parseando GeoJSON para recorte de anillos:', err);
+        }
+      }
+
+      // REGLA FUNDAMENTAL: Primero se carga y dibuja la cobertura. 
+      // Si la cobertura no está lista, NO dibujar círculos prematuros; esperar a que llegue la cobertura.
+      if (!coverageFeature) {
+        return;
+      }
+
+      const RING_LABELS = ['< 1 KM', '1-2 KM', '2-3 KM', '3-4 KM', '> 4 KM'];
+
+      RING_RADII_METERS.forEach((radiusMeters, rIdx) => {
+        const ringColor = RING_COLORS[rIdx % RING_COLORS.length];
+        const radiusKm = radiusMeters / 1000;
+        const ringZIndex = 30 + (RING_RADII_METERS.length - rIdx);
+        const ringLabel = RING_LABELS[rIdx] || `${radiusKm} KM`;
+
+        try {
+          const centerPt = turf.point([pos.lng, pos.lat]);
+          const circleFeature = turf.circle(centerPt, radiusKm, { steps: 64, units: 'kilometers' });
+
+          // 1. Intersección: Parte del círculo DENTRO de la cobertura
+          const insideFeature = turf.intersect(circleFeature, coverageFeature);
+          // 2. Diferencia: Parte del círculo FUERA de la cobertura
+          const outsideFeature = turf.difference(circleFeature, coverageFeature);
+
+          if (insideFeature && insideFeature.geometry) {
+            const insideCoords = extractPolygonCoordinates(insideFeature.geometry);
+            if (insideCoords && insideCoords.length >= 3) {
+              const insidePoly = new google.maps.Polygon({
+                map: map,
+                paths: insideCoords,
+                strokeColor: ringColor,
+                strokeOpacity: 0.95,
+                strokeWeight: 2.3,
+                fillColor: ringColor,
+                fillOpacity: 0.16,
+                zIndex: ringZIndex,
+                clickable: true
+              });
+
+              insidePoly._ringLabel = ringLabel;
+              insidePoly._whId = whId;
+
+              insidePoly.addListener('mouseover', (e) => showHoverCardForWarehouse(w, e.latLng, true));
+              insidePoly.addListener('mousemove', (e) => showHoverCardForWarehouse(w, e.latLng, true));
+              insidePoly.addListener('mouseout', () => { if (hoverInfoWindow) hoverInfoWindow.close(); });
+              insidePoly.addListener('click', (e) => showWarehouseDetailInfoWindow(w, e.latLng));
+
+              ringCircles.push(insidePoly);
+            }
+          }
+
+          if (outsideFeature && outsideFeature.geometry) {
+            const outsideCoords = extractPolygonCoordinates(outsideFeature.geometry);
+            if (outsideCoords && outsideCoords.length >= 3) {
+              const outsidePoly = new google.maps.Polygon({
+                map: map,
+                paths: outsideCoords,
+                strokeColor: '#94a3b8',
+                strokeOpacity: 0.35,
+                strokeWeight: 1.2,
+                fillColor: '#94a3b8',
+                fillOpacity: 0.03, // Opacidad bajísima fuera de cobertura
+                zIndex: ringZIndex - 1,
+                clickable: false // ZONA GRIS TRANSPARENTE: NO INTERCEPTA NI DISPARA EVENTOS DE MOUSE
+              });
+
+              outsidePoly._ringLabel = ringLabel;
+              outsidePoly._whId = whId;
+
+              ringCircles.push(outsidePoly);
+            }
+          }
+        } catch (e) {
+          console.warn('Error calculando corte de anillo con Turf:', e);
+        }
+      });
+
+      if (typeof applyRingsFilterAndSyncMap === 'function') {
+        applyRingsFilterAndSyncMap();
+      }
+    }
+
+    function drawWarehousesOnMap(skipCenter = false) {
+      if (!map) return;
+      const currentMonth = document.getElementById('filter-month').value || '2026-09-01';
+      const idsArray = Array.from(selectedWarehouseIds);
+
+      // Si no hay ninguna tienda seleccionada, limpiar todo
+      if (idsArray.length === 0) {
+        clearMapOverlays();
+        return;
+      }
+
+      // 1. Limpiar polígonos huérfanos de fechas o tiendas no seleccionadas
+      multiDatePolygonsMap.forEach((entry, key) => {
+        const parts = key.split('__');
+        const whId = parts[0];
+        const mDate = parts[1];
+        if (!selectedWarehouseIds.has(whId) || !activeOverlayMonths.has(mDate)) {
+          if (entry.polygon) {
+            entry.polygon.setMap(null);
+            google.maps.event.clearInstanceListeners(entry.polygon);
+          }
+          multiDatePolygonsMap.delete(key);
+        }
+      });
+
+      activePolygonsMap.forEach((entry, whId) => {
+        const normId = String(whId).trim();
+        if (!selectedWarehouseIds.has(normId)) {
+          if (entry.polygon) {
+            entry.polygon.setMap(null);
+            google.maps.event.clearInstanceListeners(entry.polygon);
+          }
+          if (entry.ghostPolygon) {
+            entry.ghostPolygon.setMap(null);
+            google.maps.event.clearInstanceListeners(entry.ghostPolygon);
+          }
+          activePolygonsMap.delete(whId);
+        }
+      });
+
+      // 2. Actualizar marcadores físicos en el mapa y limpiar anillos anteriores
+      warehouseMarkers.forEach(m => m.setMap(null));
+      warehouseMarkers = [];
+
+      ringCircles.forEach(c => {
+        c.setMap(null);
+        google.maps.event.clearInstanceListeners(c);
+      });
+      ringCircles = [];
+
+      const bounds = new google.maps.LatLngBounds();
+      const selectedWarehousesList = allWarehouses.filter(w => selectedWarehouseIds.has(String(w.warehouse_id).trim()));
+
+      selectedWarehousesList.forEach((w) => {
+        const pos = getWarehousePosition(w);
+        if (!pos) return;
+        bounds.extend(pos);
+
+        // Marcador con casita SIEMPRE PRESENTE
+        const marker = new google.maps.Marker({
+          position: pos,
+          map: map,
+          title: w.warehouse_name,
+          icon: getWarehouseMarkerIcon(w.warehouse_name)
+        });
+
+        marker.addListener('click', () => {
+          showWarehouseDetailInfoWindow(w, marker.getPosition());
+        });
+
+        warehouseMarkers.push(marker);
+      });
+
+      // 3. PRIMERO: Dibujar polígonos (cobertura) para cada fecha activa
+      activeOverlayMonths.forEach(mDate => {
+        const colorDef = getMonthColorDef(mDate);
+        const isPrimary = (mDate === currentMonth);
+        const missingFromMap = idsArray.filter(id => !multiDatePolygonsMap.has(`${id}__${mDate}`));
+        const toFetchIds = [];
+
+        missingFromMap.forEach(id => {
+          const cacheKey = `${id}__${mDate}`;
+          if (CLIENT_MEMORY_CACHE.polygons.has(cacheKey)) {
+            const pData = CLIENT_MEMORY_CACHE.polygons.get(cacheKey);
+            // 1. PRIMERO: Dibujar cobertura
+            drawMultiDatePolygonOnMap(pData, mDate, colorDef, isPrimary);
+
+            // 2. DESPUÉS: Si es el mes principal y los anillos están activos, dibujar anillos ya recortados
+            if (isPrimary && isRingsVisible) {
+              const wObj = selectedWarehousesList.find(w => String(w.warehouse_id).trim() === id);
+              if (wObj) {
+                const pos = getWarehousePosition(wObj);
+                if (pos) drawWarehouseRings(wObj, pos, mDate);
+              }
+            }
+          } else {
+            toFetchIds.push(id);
+          }
+        });
+
+        if (toFetchIds.length > 0) {
+          showShapeLoading(true);
+          google.script.run
+            .withSuccessHandler(polygonsData => {
+              try {
+                if (polygonsData) {
+                  polygonsData.forEach(pData => {
+                    const pId = String(pData.warehouse_id).trim();
+                    CLIENT_MEMORY_CACHE.polygons.set(`${pId}__${mDate}`, pData);
+                    if (selectedWarehouseIds.has(pId) && activeOverlayMonths.has(mDate)) {
+                      // 1. PRIMERO: Dibujar cobertura en el mapa
+                      drawMultiDatePolygonOnMap(pData, mDate, colorDef, isPrimary);
+
+                      // 2. DESPUÉS: Dibujar anillos recortados contra la cobertura recién pintada
+                      if (isPrimary && isRingsVisible) {
+                        const wObj = allWarehouses.find(w => String(w.warehouse_id).trim() === pId);
+                        if (wObj) {
+                          const pos = getWarehousePosition(wObj);
+                          if (pos) {
+                            drawWarehouseRings(wObj, pos, mDate);
+                          }
+                        }
+                      }
+                    }
+                  });
+                }
+              } finally {
+                showShapeLoading(false);
+              }
+            })
+            .withFailureHandler(err => {
+              showShapeLoading(false);
+              console.error('Error cargando polígonos multi-fecha:', err);
+            })
+            .getWarehousesPolygons(toFetchIds, mDate);
+        }
+      });
+
+      // 4. Si los anillos están activos, dibujarlos para cada almacén cuya cobertura principal ya esté renderizada
+      if (isRingsVisible) {
+        idsArray.forEach(id => {
+          const cacheKey = `${id}__${currentMonth}`;
+          if (CLIENT_MEMORY_CACHE.polygons.has(cacheKey) && multiDatePolygonsMap.has(cacheKey)) {
+            const wObj = selectedWarehousesList.find(w => String(w.warehouse_id).trim() === id);
+            if (wObj) {
+              const pos = getWarehousePosition(wObj);
+              if (pos) drawWarehouseRings(wObj, pos, currentMonth);
+            }
+          }
+        });
+      }
+
+      // NO mover la vista del mapa cuando skipCenter sea true o cuando el usuario esté usando autofiltrado por viewport
+      if (!skipCenter && !isViewportFilterActive && !bounds.isEmpty()) {
+        if (selectedWarehousesList.length === 1) {
+          const singlePos = getWarehousePosition(selectedWarehousesList[0]);
+          if (singlePos) {
+            map.setCenter(singlePos);
+            map.setZoom(14); // Nivel 5 por defecto (14x)
+          } else {
+            map.fitBounds(bounds, 65);
+          }
+        } else {
+          // Ajustar encuadre para ver TODAS las tiendas en la misma pantalla con margen
+          map.fitBounds(bounds, 65);
+        }
+      }
+    }
+
+    function toggleRingsVisibility(visible) {
+      if (visible !== undefined) {
+        isRingsVisible = visible;
+      } else {
+        const toggle = document.getElementById('rings-toggle');
+        isRingsVisible = !toggle.checked;
+        toggle.checked = isRingsVisible;
+      }
+
+      const toggle = document.getElementById('rings-toggle');
+      if (toggle) toggle.checked = isRingsVisible;
+
+      // REGLA: Activar o desactivar anillos SIN centrar el mapa (skipCenter = true)
+      drawWarehousesOnMap(true);
+      showToast(isRingsVisible ? 'Anillos de cobertura activados (R)' : 'Anillos desactivados (R)', 'info');
+    }
+
+    function clearMapOverlays() {
+      warehouseMarkers.forEach(m => m.setMap(null));
+      warehouseMarkers = [];
+      activePolygonsMap.forEach(entry => {
+        if (entry.polygon) entry.polygon.setMap(null);
+        if (entry.ghostPolygon) entry.ghostPolygon.setMap(null);
+      });
+      activePolygonsMap.clear();
+
+      multiDatePolygonsMap.forEach(entry => {
+        if (entry.polygon) {
+          entry.polygon.setMap(null);
+          google.maps.event.clearInstanceListeners(entry.polygon);
+        }
+      });
+      multiDatePolygonsMap.clear();
+
+      warehousePolygons = [];
+      ringCircles.forEach(c => {
+        c.setMap(null);
+        google.maps.event.clearInstanceListeners(c);
+      });
+      ringCircles = [];
+      dismissTransitionBanner();
+    }
+
+    function centerMapOnSelected() {
+      if (warehouseMarkers.length === 0) return;
+      if (warehouseMarkers.length === 1) {
+        map.panTo(warehouseMarkers[0].getPosition());
+        map.setZoom(14); // Nivel 5 por defecto (14x)
+        return;
+      }
+      const bounds = new google.maps.LatLngBounds();
+      warehouseMarkers.forEach(m => bounds.extend(m.getPosition()));
+      // Ajustar encuadre para que TODAS las tiendas seleccionadas se vean en la pantalla al mismo tiempo
+      map.fitBounds(bounds, 65);
+    }
+
+    // ============================================================
+    // MAPA DE CALOR NATIVO DE GOOGLE MAPS (HeatmapLayer)
+    // ============================================================
+    let gHeatmapLayer = null;
+
+    function changeHeatmapLayer(layerType) {
+      currentHeatmapLayer = layerType;
+      if (gHeatmapLayer) {
+        gHeatmapLayer.setMap(null);
+        gHeatmapLayer = null;
+      }
+
+      if (layerType === 'none') {
+        showToast('Mapa de calor desactivado', 'info');
+        return;
+      }
+
+      showLoading('Cargando mapa de calor...');
+      const currentMonth = document.getElementById('filter-month').value || '2026-05-01';
+
+      google.script.run
+        .withSuccessHandler(points => {
+          hideLoading();
+          let dataPoints = points;
+          if (!dataPoints || dataPoints.length === 0) {
+            dataPoints = generateLocalHeatmapPoints();
+          }
+          renderGoogleHeatmap(dataPoints, layerType);
+        })
+        .withFailureHandler(err => {
+          hideLoading();
+          const fallbackPoints = generateLocalHeatmapPoints();
+          renderGoogleHeatmap(fallbackPoints, layerType);
+        })
+        .getHeatmapGridData(currentMonth, layerType);
+    }
+
+    function generateLocalHeatmapPoints() {
+      const activeStores = allWarehouses.filter(w => selectedWarehouseIds.has(w.warehouse_id));
+      const stores = activeStores.length > 0 ? activeStores : allWarehouses;
+      const points = [];
+
+      stores.forEach(s => {
+        const baseLat = Number(s.lat);
+        const baseLng = Number(s.lng);
+        for (let i = 0; i < 90; i++) {
+          const angle = Math.random() * Math.PI * 2;
+          const r = Math.sqrt(Math.random()) * 0.032;
+          points.push({
+            lat: baseLat + r * Math.sin(angle),
+            lng: baseLng + r * Math.cos(angle),
+            weight: Math.floor(Math.random() * 45) + 12
+          });
+        }
+      });
+      return points;
+    }
+
+    function renderGoogleHeatmap(data, layerType) {
+      if (gHeatmapLayer) {
+        gHeatmapLayer.setMap(null);
+        gHeatmapLayer = null;
+      }
+
+      if (!map || !google.maps.visualization) return;
+
+      const heatmapData = data.map(d => ({
+        location: new google.maps.LatLng(Number(d.lat), Number(d.lng)),
+        weight: Math.max(1, Number(d.weight || 1))
+      }));
+
+      const gradients = {
+        users: [
+          'rgba(0, 255, 255, 0)',
+          'rgba(0, 255, 255, 1)',
+          'rgba(0, 191, 255, 1)',
+          'rgba(0, 127, 255, 1)',
+          'rgba(255, 0, 127, 1)',
+          'rgba(234, 4, 78, 1)'
+        ],
+        gmv_peya: [
+          'rgba(102, 255, 0, 0)',
+          'rgba(147, 255, 0, 1)',
+          'rgba(193, 255, 0, 1)',
+          'rgba(238, 255, 0, 1)',
+          'rgba(255, 153, 0, 1)',
+          'rgba(234, 4, 78, 1)'
+        ],
+        gmv_dmart: [
+          'rgba(255, 204, 0, 0)',
+          'rgba(255, 153, 0, 1)',
+          'rgba(255, 102, 0, 1)',
+          'rgba(255, 51, 0, 1)',
+          'rgba(234, 4, 78, 1)',
+          'rgba(180, 4, 67, 1)'
+        ]
+      };
+
+      gHeatmapLayer = new google.maps.visualization.HeatmapLayer({
+        data: heatmapData,
+        map: map,
+        radius: 38,
+        opacity: 0.85,
+        gradient: gradients[layerType] || gradients.users
+      });
+
+      const labelNames = {
+        users: 'Densidad PeYa Users',
+        gmv_peya: 'GMV PeYa Total',
+        gmv_dmart: 'GMV DMart'
+      };
+      showToast('Capa de calor (' + (labelNames[layerType] || layerType) + ') proyectada en el mapa', 'success');
+    }
+
+    // ============================================================
+    // MÉTRICAS BY WHS (DESDE PLANILLA "2. WHS ORDERS") & TABLA COMPARATIVA
+    // ============================================================
+    const KPI_MATRIX_DEFINITIONS = [
+      // BLOQUE 1: TRANSACCIONALES
+      { isBlock: true, title: 'Bloque 1: Métricas Transaccionales', color: 'var(--brand-red)' },
+      { key: 'total_orders', label: 'Órdenes Totales', desc: 'Órdenes confirmadas fact_orders', fmt: v => formatNumber(v), better: 'high' },
+      { key: 'total_net_sales', label: 'Net Sales Facturación', desc: 'Venta neta neta de desc.', fmt: v => formatCurrency(v), better: 'high' },
+      { key: 'afv_aov_amount', label: 'Ticket Promedio (AOV)', desc: 'AFV / Gasto por orden', fmt: v => formatCurrency(v), better: 'high' },
+      { key: 'total_units_sold', label: 'Unidades Vendidas', desc: 'Artículos físicos despachados', fmt: v => formatNumber(v), better: 'high' },
+      { key: 'basket_size_units', label: 'Basket Size', desc: 'Unidades por carrito', fmt: v => (v || 0) + ' un.', better: 'high' },
+      { key: 'total_discounts', label: 'Total Descuentos', desc: 'Monto en promociones', fmt: v => formatCurrency(v), better: 'low' },
+      { key: 'discount_intensity_pct', label: 'Intensidad Descuento %', desc: '% Descuento s/ Gross', fmt: v => (v || 0) + '%', better: 'low' },
+      { key: 'uf_orders', label: 'Órdenes Ultra Fresh', desc: 'Carnes, frutas o verduras', fmt: v => formatNumber(v), better: 'high' },
+      { key: 'uf_orders_share_pct', label: 'Share Ultra Fresh %', desc: '% órdenes con frescos', fmt: v => (v || 0) + '%', better: 'high' },
+
+      // BLOQUE 2: USUARIOS Y PENETRACIÓN
+      { isBlock: true, title: 'Bloque 2: Demografía de Usuarios & Penetración', color: '#2563eb' },
+      { key: 'peya_users', label: 'PeYa Users (Universo)', desc: 'Clientes cubiertos en el shape', fmt: v => formatNumber(v), better: 'high' },
+      { key: 'dmart_users', label: 'DMart MAUs', desc: 'Compradores únicos en WHS', fmt: v => formatNumber(v), better: 'high' },
+      { key: 'penetration_pct', label: 'Penetración %', desc: 'DMart Users / PeYa Users', fmt: v => (v || 0) + '%', better: 'high' },
+      { key: 'monthly_frequency', label: 'Frecuencia Mensual', desc: 'Órdenes promedio por cliente', fmt: v => (v || 0) + ' órd/mes', better: 'high' },
+      { key: 'core_users_pct', label: 'Clientes Core %', desc: 'Segmento Core de PeYa', fmt: v => (v || 0) + '%', better: 'high' },
+      { key: 'high_income_users_pct', label: 'Clientes High Income %', desc: 'Nivel socioeconómico alto', fmt: v => (v || 0) + '%', better: 'high' },
+      { key: 'uf_users', label: 'Clientes Ultra Fresh', desc: 'Compradores de frescos', fmt: v => formatNumber(v), better: 'high' },
+      { key: 'uf_users_penetration_pct', label: 'Penetración UF %', desc: 'UF Users / DMart Users', fmt: v => (v || 0) + '%', better: 'high' },
+
+      // BLOQUE 3: OPERACIONES Y LOGÍSTICA
+      { isBlock: true, title: 'Bloque 3: Operaciones & Calidad Logística', color: '#16a34a' },
+      { key: 'seamless_delivery_pct', label: '% Seamless Delivery', desc: 'Entregas perfectas sin roces', fmt: v => (v || 0) + '%', better: 'high' },
+      { key: 'fail_rate_pct', label: '% Fail Rate (Rechazos)', desc: 'Tasa órdenes rechazadas', fmt: v => (v || 0) + '%', better: 'low' },
+      { key: 'order_late_pct', label: '% Órdenes Tardías', desc: 'Entregadas fuera de tiempo', fmt: v => (v || 0) + '%', better: 'low' },
+      { key: 'avg_delivery_time_min', label: 'Avg Delivery Time', desc: 'Minutos totales de entrega', fmt: v => (v || 0) + ' min', better: 'low' },
+      { key: 'pct_late_10', label: '% Tardías >10m', desc: 'Demora logística crítica', fmt: v => (v || 0) + '%', better: 'low' },
+      { key: 'picking_time', label: 'Tiempo de Picking', desc: 'Minutos armando pedidos', fmt: v => (v || 0) + ' min', better: 'low' },
+      { key: 'assignment_time', label: 'Tiempo de Asignación', desc: 'Minutos hasta inicio picker', fmt: v => (v || 0) + ' min', better: 'low' },
+      { key: 'inaccuracy_rate_pct', label: 'Tasa Inexactitud %', desc: 'Reclamos sobre pedidos', fmt: v => (v || 0) + '%', better: 'low' }
+    ];
+
+    let lastLoadedMetricsPayload = null;
+
+    function updateQuickAddSelect() {
+      const select = document.getElementById('quick-add-whs-select');
+      if (!select) return;
+      select.innerHTML = '<option value="">+ Agregar almacén al comparador...</option>';
+      
+      const unselected = allWarehouses.filter(w => !selectedWarehouseIds.has(String(w.warehouse_id).trim()));
+      unselected.sort((a,b) => (a.warehouse_name || '').localeCompare(b.warehouse_name || ''));
+
+      unselected.forEach(w => {
+        const id = String(w.warehouse_id).trim();
+        const opt = document.createElement('option');
+        opt.value = id;
+        opt.textContent = `${w.warehouse_name} (${w.neighborhood || w.city})`;
+        select.appendChild(opt);
+      });
+    }
+
+    function onQuickAddWarehouse(whId) {
+      if (!whId) return;
+      const normId = String(whId).trim();
+
+      selectedWarehouseIds.add(normId);
+      manuallyDeselectedIds.delete(normId);
+      
+      const select = document.getElementById('quick-add-whs-select');
+      if (select) select.value = '';
+
+      renderWarehouseCards();
+      updateSelectionAndRefresh();
+    }
+
+    function quickRemoveWarehouseFromKpis(whId) {
+      const normId = String(whId).trim();
+      selectedWarehouseIds.delete(normId);
+      manuallyDeselectedIds.add(normId);
+      removePolygonsForWarehouse(normId);
+
+      // Eliminación reactiva instantánea en 0ms de la tabla comparativa
+      if (lastLoadedMetricsPayload && lastLoadedMetricsPayload.stores) {
+        lastLoadedMetricsPayload.stores = lastLoadedMetricsPayload.stores.filter(
+          s => String(s.warehouse_id).trim() !== normId
+        );
+        renderComparativeKpiTable(lastLoadedMetricsPayload);
+      }
+
+      renderWarehouseCards();
+      updateSelectionAndRefresh();
+    }
+
+    function quickClearAllKpiWarehouses() {
+      selectedWarehouseIds.clear();
+      if (lastLoadedMetricsPayload) {
+        lastLoadedMetricsPayload.stores = [];
+        renderComparativeKpiTable(lastLoadedMetricsPayload);
+      }
+      selectAllWarehouses(false);
+    }
+
+    function focusWarehouseOnMap(whId) {
+      const normId = String(whId).trim();
+      const w = allWarehouses.find(item => String(item.warehouse_id).trim() === normId);
+      if (!w || !map) return;
+
+      const lat = Number(w.lat);
+      const lng = Number(w.lng);
+      if (!isNaN(lat) && !isNaN(lng) && lat !== 0) {
+        map.panTo({ lat, lng });
+        if (map.getZoom() < 14) map.setZoom(14);
+        showWarehouseDetailInfoWindow(w, { lat, lng });
+      }
+    }
+
+    function renderComparativeKpiTable(m) {
+      lastLoadedMetricsPayload = m;
+      updateQuickAddSelect();
+
+      const table = document.getElementById('kpi-matrix-table');
+      const badge = document.getElementById('kpi-total-whs');
+      if (!table) return;
+
+      let stores = (m && m.stores) ? [...m.stores] : [];
+
+      // Rescatar de allWarehouses si alguna tienda seleccionada no tiene fila en 2. WHS orders
+      selectedWarehouseIds.forEach(id => {
+        if (!stores.some(s => String(s.warehouse_id).trim() === id)) {
+          const w = allWarehouses.find(item => String(item.warehouse_id).trim() === id);
+          if (w) {
+            stores.push({
+              warehouse_id: w.warehouse_id,
+              warehouse_name: w.warehouse_name,
+              city: w.city,
+              country: w.country,
+              total_orders: w.orders || 0
+            });
+          }
+        }
+      });
+
+      if (badge) {
+        badge.textContent = `${stores.length} tienda${stores.length === 1 ? '' : 's'}`;
+      }
+
+      if (stores.length === 0) {
+        table.innerHTML = `
+          <tbody>
+            <tr>
+              <td style="text-align:center; padding:40px; color:var(--text-sheet-muted); font-size:12px;">
+                No hay almacenes seleccionados para comparar. Usá el selector <strong>+ Agregar almacén...</strong> arriba o la pestaña <em>Filtros & Selección</em>.
+              </td>
+            </tr>
+          </tbody>
+        `;
+        return;
+      }
+
+      // 1. Encabezados de la tabla (THEAD)
+      let theadHtml = `
+        <thead>
+          <tr>
+            <th style="text-align:left; width:175px; min-width:175px; max-width:175px; padding:5px 8px;">
+              <div style="font-weight:800; font-size:10.5px; color:var(--text-sheet-title); text-transform:uppercase; letter-spacing:0.4px;">Métrica</div>
+              <div style="font-size:8.5px; color:var(--text-sheet-muted); font-weight:600;">25 indicadores oficiales</div>
+            </th>
+      `;
+
+      stores.forEach(s => {
+        const whObj = allWarehouses.find(w => String(w.warehouse_id).trim() === String(s.warehouse_id).trim()) || s;
+        const flag = getCountryFlagImg(whObj);
+        theadHtml += `
+          <th style="width:122px; min-width:122px; max-width:122px; padding:5px 4px; text-align:center;">
+            <div style="display:flex; flex-direction:column; gap:2px;">
+              <div style="display:flex; align-items:center; justify-content:space-between; gap:4px;">
+                <div style="display:flex; align-items:center; gap:4px; min-width:0; flex:1;">
+                  ${flag}
+                  <span style="font-weight:800; font-size:10px; color:var(--text-sheet-title); word-break:break-word; line-height:1.2; text-align:left;" title="${s.warehouse_name}">${s.warehouse_name}</span>
+                </div>
+                <button type="button" onclick="quickRemoveWarehouseFromKpis('${s.warehouse_id}')" title="Quitar tienda" style="background:transparent; border:none; cursor:pointer; padding:0 2px; font-size:11px; color:#ef4444; font-weight:800; line-height:1; flex-shrink:0;" onmouseover="this.style.color='#dc2626'" onmouseout="this.style.color='#ef4444'">✕</button>
+              </div>
+              <div style="display:flex; align-items:center; justify-content:space-between; font-size:8.5px; color:var(--text-sheet-muted); margin-top:2px;">
+                <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${s.city || s.country || ''}</span>
+                <button type="button" onclick="focusWarehouseOnMap('${s.warehouse_id}')" title="Centrar en mapa" style="background:transparent; border:none; cursor:pointer; padding:0 1px; display:inline-flex; align-items:center; opacity:0.85; color:var(--text-sheet-title);">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="3"></circle></svg>
+                </button>
+              </div>
+            </div>
+          </th>
+        `;
+      });
+
+      theadHtml += `
+          </tr>
+        </thead>
+      `;
+
+      // 2. Filas de datos (TBODY)
+      let tbodyHtml = '<tbody>';
+
+      KPI_MATRIX_DEFINITIONS.forEach(def => {
+        if (def.isBlock) {
+          tbodyHtml += `
+            <tr class="matrix-block-header">
+              <td colspan="${stores.length + 1}" style="color:${def.color};">
+                ${def.title}
+              </td>
+            </tr>
+          `;
+          return;
+        }
+
+        // Determinar el mejor valor si hay 2 o más tiendas
+        let bestVal = null;
+        if (stores.length > 1) {
+          const numVals = stores.map(s => Number(s[def.key])).filter(n => !isNaN(n) && n !== null && n !== undefined);
+          if (numVals.length > 0) {
+            bestVal = def.better === 'high' ? Math.max(...numVals) : Math.min(...numVals);
+          }
+        }
+
+        tbodyHtml += `
+          <tr>
+            <td style="padding:4px 8px; width:175px; min-width:175px; max-width:175px;">
+              <div style="font-weight:700; font-size:10px; color:var(--text-sheet-title); line-height:1.2;">${def.label}</div>
+              <div style="font-size:8.5px; color:var(--text-sheet-muted); line-height:1.1;">${def.desc}</div>
+            </td>
+        `;
+
+        stores.forEach(s => {
+          const rawVal = s[def.key];
+          const formatted = def.fmt(rawVal);
+          const isBest = (bestVal !== null && Number(rawVal) === bestVal && (def.better === 'high' ? bestVal > 0 : true));
+          
+          tbodyHtml += `
+            <td class="matrix-val-cell ${isBest ? 'matrix-val-best' : ''}" style="width:122px; min-width:122px; max-width:122px; padding:4px 6px; font-size:11px; font-family:'Outfit',sans-serif; text-align:center;">
+              ${formatted}
+            </td>
+          `;
+        });
+
+        tbodyHtml += `</tr>`;
+      });
+
+      tbodyHtml += '</tbody>';
+      table.innerHTML = theadHtml + tbodyHtml;
+    }
+
+    function applyMetricsToUI(m) {
+      if (!m) return;
+      renderComparativeKpiTable(m);
+    }
+
+    function loadTotalMetrics() {
+      if (selectedWarehouseIds.size === 0) {
+        applyMetricsToUI({ stores: [] });
+        return;
+      }
+      const idsArray = Array.from(selectedWarehouseIds);
+      const currentMonth = document.getElementById('filter-month').value || '2026-09-01';
+      const cacheKey = `${[...idsArray].sort().join(',')}__${currentMonth}`;
+
+      if (CLIENT_MEMORY_CACHE.metrics.has(cacheKey)) {
+        applyMetricsToUI(CLIENT_MEMORY_CACHE.metrics.get(cacheKey));
+        return;
+      }
+
+      google.script.run
+        .withSuccessHandler(m => {
+          if (!m) return;
+          CLIENT_MEMORY_CACHE.metrics.set(cacheKey, m);
+          applyMetricsToUI(m);
+        })
+        .withFailureHandler(err => {
+          console.warn('Aviso cargando métricas by WHS:', err.message);
+        })
+        .getStoreTotalMetrics(idsArray, currentMonth);
+    }
+
+    let allRingsData = [];
+    let currentRingDistanceFilter = 'ALL';
+    let currentRingsStoreFilter = 'ALL';
+
+    function loadRingsData() {
+      if (selectedWarehouseIds.size === 0) return;
+      const idsArray = Array.from(selectedWarehouseIds);
+      const currentMonth = document.getElementById('filter-month').value || '2026-05-01';
+
+      // Actualizar el dropdown de tiendas del análisis por anillos
+      const storeSelect = document.getElementById('rings-store-filter-select');
+      if (storeSelect) {
+        storeSelect.innerHTML = `<option value="ALL">Todas las tiendas (${idsArray.length})</option>`;
+        idsArray.forEach(id => {
+          const w = allWarehouses.find(item => String(item.warehouse_id).trim() === id);
+          if (w) {
+            const opt = document.createElement('option');
+            opt.value = id;
+            opt.textContent = w.warehouse_name;
+            if (id === currentRingsStoreFilter) opt.selected = true;
+            storeSelect.appendChild(opt);
+          }
+        });
+      }
+
+      google.script.run
+        .withSuccessHandler(rings => {
+          allRingsData = rings || [];
+          applyRingsFilterAndSyncMap();
+        })
+        .getMultipleStoreRingsData(idsArray, currentMonth);
+    }
+
+    function onRingsStoreFilterChange(whId) {
+      currentRingsStoreFilter = whId || 'ALL';
+      applyRingsFilterAndSyncMap();
+    }
+
+    function filterRingTable(ringFilter, btn) {
+      if (btn) {
+        document.querySelectorAll('.ring-pill-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+      }
+      currentRingDistanceFilter = ringFilter;
+      applyRingsFilterAndSyncMap();
+    }
+
+    function applyRingsFilterAndSyncMap() {
+      // 1. Filtrar datos de la tabla
+      let filtered = allRingsData;
+      if (currentRingsStoreFilter !== 'ALL') {
+        filtered = filtered.filter(r => String(r.warehouse_id).trim() === String(currentRingsStoreFilter).trim());
+      }
+      if (currentRingDistanceFilter !== 'ALL') {
+        filtered = filtered.filter(r => r.anillo === currentRingDistanceFilter);
+      }
+      renderRingsTable(filtered);
+
+      // 2. Filtrar polígonos de anillos en el mapa en tiempo real
+      ringCircles.forEach(poly => {
+        if (!poly) return;
+        const matchRing = (currentRingDistanceFilter === 'ALL' || poly._ringLabel === currentRingDistanceFilter);
+        const matchStore = (currentRingsStoreFilter === 'ALL' || poly._whId === currentRingsStoreFilter);
+        poly.setVisible(matchRing && matchStore);
+      });
+    }
+
+    function renderRingsTable(data) {
+      const tbody = document.getElementById('rings-table-body');
+      if (!tbody) return;
+      tbody.innerHTML = '';
+
+      if (!data || data.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="10" style="text-align:center; padding:30px; color:var(--text-muted);">Sin datos de anillos disponibles para los filtros seleccionados.</td></tr>';
+        return;
+      }
+
+      data.forEach(r => {
+        const tr = document.createElement('tr');
+        const isLateHigh = Number(r.pct_late) > 15;
+        const isPenLow = Number(r.penetration_pct) < 6;
+
+        tr.innerHTML = `
+          <td style="font-weight:700;">${r.warehouse_name}</td>
+          <td><span class="status-badge" style="background:#f1f5f9; color:var(--navy-900);">${r.anillo}</span></td>
+          <td>${formatNumber(r.covered_maus)}</td>
+          <td>${formatNumber(r.dmart_maus_covered)}</td>
+          <td style="font-weight:700; color:${isPenLow ? 'var(--danger-text)' : 'inherit'};">${r.penetration_pct}%</td>
+          <td>${formatNumber(r.dmart_orders)}</td>
+          <td>${formatCurrency(r.net_sales)}</td>
+          <td>${formatCurrency(r.aov)}</td>
+          <td>${r.avg_dt_min || '—'} min</td>
+          <td>
+            <span class="status-badge ${isLateHigh ? 'status-badge-danger' : 'status-badge-success'}">
+              ${r.pct_late}%
+            </span>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+  </script>

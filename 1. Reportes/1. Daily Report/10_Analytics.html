@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<!--
+  10_Analytics.html — sirve en /exec?pagina=analytics (solo admin).
+  Muestra cuántas personas miran el reporte: total, usuarios únicos, origen
+  (mail vs link directo), una matriz usuarios (filas) × período (columnas:
+  Día/Semana/Mes) con filtro por página y paginación, y otra tabla por página.
+  Backend: fetchAnalytics() en Code.gs (lee la hoja "Vistas").
+-->
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Analytics — PeYa Markets</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  :root{--primary:#e50044;--text:#0f172a;--sub:#475569;--light:#94a3b8;--border:#e2e8f0;--bg:#f8fafc;--pos:#059669;--blue:#2563eb;--violet:#7c3aed;}
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--text);font-size:13px;-webkit-font-smoothing:antialiased}
+  #splash{position:fixed;inset:0;background:rgba(255,255,255,.95);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;transition:opacity .3s;backdrop-filter:blur(4px)}
+  #splash.out{opacity:0;pointer-events:none}
+  .spinner{width:42px;height:42px;border:4px solid rgba(229,0,68,.12);border-top-color:var(--primary);border-radius:50%;animation:spin .75s linear infinite;margin-bottom:14px}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  nav{background:#fff;border-bottom:1px solid var(--border);height:52px;display:flex;align-items:center;padding:0 20px;position:sticky;top:0;z-index:300}
+  .n-brand{display:flex;align-items:center;gap:7px;margin-right:18px;flex-shrink:0}
+  .n-dot{width:7px;height:7px;border-radius:50%;background:var(--primary)}
+  .n-divider{width:1px;height:20px;background:var(--border);margin:0 10px;flex-shrink:0}
+  .n-tabs{display:flex;gap:2px}
+  .n-tab{display:flex;align-items:center;gap:5px;padding:5px 11px;border-radius:7px;font-size:12px;font-weight:500;color:var(--sub);background:transparent;border:none;cursor:pointer;text-decoration:none;white-space:nowrap}
+  .n-tab svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+  .n-tab.active{background:var(--bg);color:var(--text);font-weight:600}
+  .n-tab:hover:not(.active){background:#f1f5f9;color:var(--text)}
+  .n-right{margin-left:auto;display:flex;gap:8px}
+  .n-btn{height:30px;border:1px solid var(--border);background:#fff;border-radius:7px;padding:0 11px;font-size:11px;font-weight:600;color:var(--sub);cursor:pointer;display:flex;align-items:center;gap:5px}
+
+  .page{max-width:1080px;margin:0 auto;padding:22px 18px;display:flex;flex-direction:column;gap:18px}
+  .head{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .title{font-size:21px;font-weight:900}.title b{color:var(--primary)}
+  .asof{font-size:11px;color:var(--light);margin-left:auto}
+
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+  .kpi{background:#fff;border:1px solid var(--border);border-radius:10px;padding:14px 16px;box-shadow:0 1px 2px rgba(0,0,0,.03)}
+  .kpi .l{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;color:var(--light)}
+  .kpi .v{font-size:26px;font-weight:900;letter-spacing:-.5px;margin-top:3px}
+  .kpi.v-total .v{color:var(--text)}.kpi.v-users .v{color:var(--violet)}.kpi.v-mail .v{color:var(--primary)}.kpi.v-dir .v{color:var(--blue)}
+  .kpi-cap{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--primary);margin-bottom:9px;display:flex;align-items:center;gap:6px}
+  .kpi-cap::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--primary);flex-shrink:0}
+
+  .card{background:#fff;border:1px solid var(--border);border-radius:10px;overflow:hidden;box-shadow:0 1px 2px rgba(0,0,0,.03)}
+  .card-h{padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px}
+  .card-h h2{font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:.3px}
+  .seg{margin-left:auto;display:flex;gap:2px;background:#f1f5f9;border-radius:8px;padding:3px}
+  .seg button{border:none;background:transparent;font-size:11px;font-weight:700;color:var(--sub);padding:5px 12px;border-radius:6px;cursor:pointer}
+  .seg button.on{background:#fff;color:var(--primary);box-shadow:0 1px 2px rgba(0,0,0,.06)}
+  table{width:100%;border-collapse:collapse;background:#fff;font-size:12px}
+  th{padding:8px 14px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;color:var(--light);border-bottom:1px solid var(--border);text-align:right;white-space:nowrap}
+  th:first-child{text-align:left}
+  td{padding:8px 14px;text-align:right;border-bottom:1px solid #f1f5f9;font-variant-numeric:tabular-nums;white-space:nowrap}
+  td:first-child{text-align:left;font-weight:600;color:var(--sub)}
+  tbody tr:nth-child(even) td{background:#fbfcff}
+  tr.row-total td{background:#f1f5f9 !important;font-weight:800;border-bottom:2px solid var(--border)}
+  tr.row-total td:first-child{color:var(--text);font-weight:900}
+  tr.row-total td.v-strong{color:var(--primary);font-weight:900}
+  .v-strong{font-weight:800;color:var(--text)}
+  .tag{display:inline-block;font-size:10px;font-weight:700;padding:1px 7px;border-radius:20px;background:#f1f5f9;color:var(--sub)}
+  .tag.mail{background:#fff1f4;color:var(--primary)}.tag.dir{background:#eff6ff;color:var(--blue)}
+  .empty{padding:34px;text-align:center;color:var(--sub)}
+  #period-body,#pages-body,#maildaily-body{overflow-x:auto}
+  #period-body td.z,#pages-body td.z,#maildaily-body td.z{color:var(--light)}
+  .sel{height:30px;max-width:200px;border:1px solid var(--border);border-radius:7px;padding:0 8px;font-size:12px;font-weight:600;font-family:inherit;color:var(--text);background:#fff;outline:none;cursor:pointer;}
+  .sel:focus{border-color:var(--primary);}
+  .h-ctrls{margin-left:auto;display:flex;align-items:center;gap:10px}
+  .pager{display:flex;align-items:center;justify-content:flex-end;gap:10px;padding:10px 16px;border-top:1px solid var(--border)}
+  .pg-info{font-size:11px;font-weight:600;color:var(--sub);font-variant-numeric:tabular-nums}
+  .pg-btn{width:28px;height:28px;border:1px solid var(--border);background:#fff;border-radius:7px;font-size:14px;font-weight:700;color:var(--sub);cursor:pointer;display:flex;align-items:center;justify-content:center}
+  .pg-btn:hover:not(:disabled){background:#f1f5f9;color:var(--text)}
+  .pg-btn:disabled{opacity:.4;cursor:default}
+  @media(max-width:760px){.kpis{grid-template-columns:repeat(2,1fr)}.h-ctrls{flex-wrap:wrap;gap:6px}.sel{max-width:150px}}
+</style>
+</head>
+<body>
+
+<div id="splash">
+  <div style="font-weight:700;font-size:15px;color:var(--sub);margin-bottom:4px;">PedidosYa Markets</div>
+  <div style="font-weight:900;font-size:22px;margin-bottom:20px;"><b style="color:var(--primary)">Analytics</b></div>
+  <div class="spinner"></div>
+  <div style="font-weight:600;color:var(--light);font-size:12px;">Cargando…</div>
+</div>
+
+<script>window.PAGE_ID='analytics';</script>
+<?!= include('_nav'); ?>
+
+<!-- Mock local para preview (sin backend GAS) -->
+<script>
+if (typeof google === 'undefined' || !google.script) {
+  (function(){
+    // Genera una fila de período con celdas {page,email,views,mail,directo},
+    // espejando el backend (desglose por página × usuario, disperso).
+    var MOCK_PAGES=['daily','mtd','grafic','mtd-whs'];
+    var MOCK_USERS=['matias.cagliero@pedidosya.com','nicolas.mendez@pedidosya.com','esteban@pedidosya.com','pablo.setuain@pedidosya.com'];
+    function row(period, seed){
+      var cells=[];
+      MOCK_PAGES.forEach(function(pg,pi){
+        MOCK_USERS.forEach(function(em,ui){
+          if((pi+ui+seed)%3===0 && !(pi===0&&ui===0)) return;   // disperso: salteo combos
+          var v=Math.max(1, ((seed+pi*2+ui)%5)+1+(pi===0?2:0));
+          var m=Math.round(v*0.6);
+          cells.push({page:pg, email:em, views:v, mail:m, directo:v-m});
+        });
+      });
+      return {period:period, cells:cells};
+    }
+    var days=[]; for(var d=30; d>=1; d--){ days.push(row('2026-06-'+(d<10?'0'+d:d), d)); } // 30 días → prueba paginación (matriz de accesos y card de mail)
+    var weeks=[ row('2026-06-15',3), row('2026-06-08',7), row('2026-06-01',2) ];
+    var months=[ row('2026-06',5), row('2026-05',9) ];
+    var data = {
+      totals:{views:412,users:23,mail:268,directo:144},
+      byPeriod:{ day:days, week:weeks, month:months },
+      users:[
+        {email:'matias.cagliero@pedidosya.com',views:64,last:'2026-06-22 11:40'},
+        {email:'nicolas.mendez@pedidosya.com',views:41,last:'2026-06-22 09:12'},
+        {email:'esteban@pedidosya.com',views:33,last:'2026-06-21 18:03'},
+        {email:'pablo.setuain@pedidosya.com',views:27,last:'2026-06-20 14:55'}
+      ],
+      pages:[ {page:'daily',views:240},{page:'mtd',views:96},{page:'grafic',views:51},{page:'mtd-whs',views:25} ],
+      asOf:'2026-06-22 11:56'
+    };
+    var _cb=null, runner={
+      withSuccessHandler:function(cb){_cb=cb;return runner;},
+      withFailureHandler:function(){return runner;},
+      fetchAnalytics:function(){var c=_cb;_cb=null;setTimeout(function(){c&&c(data);},250);}
+    };
+    window.google={script:{run:runner}};
+  })();
+}
+</script>
+
+<div class="page">
+  <div class="head">
+    <div class="title">Analytics <span style="font-size:13px;font-weight:600;color:var(--light)">· vistas del reporte</span></div>
+    <div class="asof" id="asof"></div>
+    <div class="n-right"><button class="n-btn" onclick="load()">↻ Recargar</button></div>
+  </div>
+
+  <div class="kpi-block">
+    <div class="kpi-cap" id="kpi-caption">Valores de ayer</div>
+    <div class="kpis">
+      <div class="kpi v-total"><div class="l">Vistas</div><div class="v" id="k-views">—</div></div>
+      <div class="kpi v-users"><div class="l">Usuarios únicos</div><div class="v" id="k-users">—</div></div>
+      <div class="kpi v-mail"><div class="l">Desde el mail</div><div class="v" id="k-mail">—</div></div>
+      <div class="kpi v-dir"><div class="l">Link directo</div><div class="v" id="k-dir">—</div></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-h">
+      <h2>Vistas por usuario y período</h2>
+      <div class="h-ctrls">
+        <input type="text" class="sel" id="p-user-search" placeholder="Filtrar por usuario..." style="margin:0; width:150px; cursor:text" />
+        <select class="sel" id="p-page-filter" title="Filtrar por página"></select>
+        <div class="seg" id="seg" style="margin-left:0">
+          <button data-g="day" class="on">Día</button>
+          <button data-g="week">Semana</button>
+          <button data-g="month">Mes</button>
+        </div>
+      </div>
+    </div>
+    <div id="period-body"><div class="empty">Cargando…</div></div>
+    <div class="pager" id="period-pager"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-h">
+      <h2>Por página</h2>
+      <div class="h-ctrls">
+        <div class="seg" id="seg-pages" style="margin-left:0">
+          <button data-g="day" class="on">Día</button>
+          <button data-g="week">Semana</button>
+          <button data-g="month">Mes</button>
+        </div>
+      </div>
+    </div>
+    <div id="pages-body"><div class="empty">Cargando…</div></div>
+    <div class="pager" id="pages-pager"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-h">
+      <h2>Ingresos desde el mail · <span id="mail-gran-lbl">por día</span></h2>
+      <div class="h-ctrls">
+        <select class="sel" id="m-type-filter" style="margin:0; width:150px;" title="Filtrar tipo de mail">
+          <option value="all">Todos los mails</option>
+          <option value="diario">Mail Diario</option>
+          <option value="semanal">Mail Semanal</option>
+        </select>
+        <div class="seg" id="seg-mail" style="margin-left:0">
+          <button data-g="day" class="on">Día</button>
+          <button data-g="week">Semana</button>
+          <button data-g="month">Mes</button>
+        </div>
+      </div>
+    </div>
+    <div id="maildaily-body"><div class="empty">Cargando…</div></div>
+    <div class="pager" id="maildaily-pager"></div>
+  </div>
+</div>
+
+<script>
+  var DATA = null;
+  var GRAN = 'day', P_PAGE = '__all', P_OFFSET = 0, SORT_KEY = 'total', SORT_DIR = -1;
+  var GRAN_PAGES = 'day', PAGES_OFFSET = 0, GRAN_MAIL = 'day', MAIL_OFFSET = 0;   // granularidad y paginación propias de cada tarjeta
+  var PAGES_SORT_KEY = '__total', PAGES_SORT_DIR = -1, MAIL_SORT_KEY = '__total', MAIL_SORT_DIR = -1;   // orden propio de cada tarjeta
+  const PAGE_SIZE = 7;
+  function $(id){ return document.getElementById(id); }
+  function nf(n){ return (n==null||isNaN(n))?'—':Number(n).toLocaleString('es-AR'); }
+  const PAGE_NAMES={daily:'Daily',mtd:'MTD by Country','mtd-whs':'MTD by WHS',grafic:'Gráfico vs ' + window.BE_LABEL,'whs-date':'WHS by Metric','country-metric':'WHS all Metrics',email:'Email',rrcompare:'RR Compare',analytics:'Analytics'};
+
+  // Fecha de "ayer" (yyyy-MM-dd) derivada de asOf, que viene con la hora del
+  // server en la TZ correcta. Aritmética en UTC para no correrse por DST/huso.
+  // Fallback: reloj local del navegador si asOf faltara.
+  function yesterdayKey(){
+    var base;
+    if(DATA && DATA.asOf && /^\d{4}-\d{2}-\d{2}/.test(DATA.asOf)){
+      var p=DATA.asOf.slice(0,10).split('-'); base=new Date(Date.UTC(+p[0],+p[1]-1,+p[2]));
+    } else { var n=new Date(); base=new Date(Date.UTC(n.getFullYear(),n.getMonth(),n.getDate())); }
+    base.setUTCDate(base.getUTCDate()-1);
+    var mm=('0'+(base.getUTCMonth()+1)).slice(-2), dd=('0'+base.getUTCDate()).slice(-2);
+    return { key: base.getUTCFullYear()+'-'+mm+'-'+dd, dm: dd+'/'+mm };
+  }
+
+  // Los 4 recuadros de arriba muestran SOLO lo de ayer (no el histórico): se toma
+  // el bucket del día de ayer en byPeriod.day y se agregan sus celdas. Usuarios
+  // únicos = emails distintos con vista (excluye '(anónimo)', igual que totals.users).
+  function renderKpis(){
+    const y=yesterdayKey();
+    const dayArr=(DATA.byPeriod&&DATA.byPeriod.day)||[];
+    const bucket=dayArr.filter(function(d){return d.period===y.key;})[0];
+    var views=0, mail=0, dir=0; const usersSet={};
+    if(bucket){
+      (bucket.cells||[]).forEach(function(c){
+        views += c.views||0; mail += c.mail||0; dir += c.directo||0;
+        if((c.views||0)>0 && c.email && c.email!=='(anónimo)') usersSet[c.email]=1;
+      });
+    }
+    $('k-views').textContent=nf(views); $('k-users').textContent=nf(Object.keys(usersSet).length);
+    $('k-mail').textContent=nf(mail);   $('k-dir').textContent=nf(dir);
+    const cap=$('kpi-caption'); if(cap) cap.textContent='Valores de ayer · '+y.dm;
+    $('asof').textContent = DATA.asOf ? ('actualizado: '+DATA.asOf) : '';
+  }
+
+  // Llena el dropdown de páginas (default "Todas"), preservando la selección
+  // actual si la página sigue existiendo entre los datos.
+  function fillPageFilter(){
+    const sel=$('p-page-filter'); if(!sel) return;
+    let opts='<option value="__all">Todas las páginas</option>';
+    (DATA.pages||[]).forEach(p=>{ opts+=`<option value="${p.page}">${PAGE_NAMES[p.page]||p.page}</option>`; });
+    sel.innerHTML=opts;
+    if(P_PAGE!=='__all' && !(DATA.pages||[]).some(p=>p.page===P_PAGE)) P_PAGE='__all';
+    sel.value=P_PAGE;
+  }
+
+  // Etiqueta de período según granularidad. periodLabel usa la granularidad global
+  // (matriz de accesos); periodLabelG la recibe explícita (tarjetas Por página / mail).
+  function periodLabelG(p, gran){
+    if(gran==='month') return p.slice(5,7)+'/'+p.slice(0,4);           // mm/yyyy
+    const dm = p.slice(8,10)+'/'+p.slice(5,7);                          // dd/mm
+    return gran==='week' ? ('Sem. '+dm) : dm;
+  }
+  function periodLabel(p){ return periodLabelG(p, GRAN); }
+
+  // ── Orden de la matriz al tocar el header ──────────────────────────
+  // SORT_KEY: 'email' (col. Usuario), 'total', o el string de un período.
+  // Click en un header: si ya estaba activo, invierte; si no, lo activa (texto asc,
+  // números desc por defecto). La flecha ▲/▼ marca la columna y el sentido.
+  function thSort(label, key){
+    var active=(SORT_KEY===key);
+    var arrow=active?(SORT_DIR===1?' ▲':' ▼'):'';
+    return '<th onclick="sortBy(\''+key+'\')" style="cursor:pointer;user-select:none;white-space:nowrap;'+(active?'color:#e50044;':'')+'" title="Ordenar">'+label+arrow+'</th>';
+  }
+  function sortUsers(list){
+    var k=SORT_KEY, d=SORT_DIR;
+    return list.slice().sort(function(a,b){
+      if(k==='email'){ var ea=(a.email||'').toLowerCase(), eb=(b.email||'').toLowerCase(); return ea<eb?-d:ea>eb?d:0; }
+      var va=(k==='total')?a.total:(a.per[k]||0);
+      var vb=(k==='total')?b.total:(b.per[k]||0);
+      return (va-vb)*d;
+    });
+  }
+  function sortBy(key){
+    if(SORT_KEY===key){ SORT_DIR=-SORT_DIR; }       // mismo header → invierte
+    else { SORT_KEY=key; SORT_DIR=(key==='email')?1:-1; }  // nuevo → texto asc, números desc
+    renderPeriod();
+  }
+
+  // Matriz: filas = usuarios (Y), columnas = períodos (X según granularidad),
+  // celda = vistas de ese usuario en ese período (respeta el filtro de página).
+  // La columna Total es el acumulado del usuario en TODOS los períodos. Se ve
+  // una ventana de PAGE_SIZE períodos (los más recientes) y se pagina hacia atrás.
+  function renderPeriod(){
+    if(!DATA||!DATA.byPeriod){ $('period-body').innerHTML='<div class="empty">Sin datos.</div>'; $('period-pager').innerHTML=''; return; }
+    const src=DATA.byPeriod[GRAN]||[];   // períodos, más nuevo primero
+    if(!src.length){ $('period-body').innerHTML='<div class="empty">Sin datos.</div>'; $('period-pager').innerHTML=''; return; }
+    const totalPeriods=src.length;
+    if(P_OFFSET>=totalPeriods) P_OFFSET=0;
+    const win=src.slice(P_OFFSET, P_OFFSET+PAGE_SIZE);   // ventana (nuevo→viejo)
+    const cols=win.slice().reverse();                    // mostrar cronológico (viejo→nuevo)
+
+    // Agregar por usuario: total global + vistas por período (con filtro de página).
+    const byUser={};
+    src.forEach(p=>{
+      (p.cells||[]).forEach(c=>{
+        if(P_PAGE!=='__all' && c.page!==P_PAGE) return;
+        const u=byUser[c.email] || (byUser[c.email]={total:0, per:{}});
+        u.total += c.views||0;
+        u.per[p.period] = (u.per[p.period]||0) + (c.views||0);
+      });
+    });
+    let users=Object.keys(byUser).map(e=>({email:e, total:byUser[e].total, per:byUser[e].per}))
+      .filter(u=>u.total>0);
+
+    // Filtrar por nombre de usuario (búsqueda interactiva)
+    const userSearch = ($('p-user-search') ? $('p-user-search').value : '').trim().toLowerCase();
+    if (userSearch) {
+      users = users.filter(u => (u.email || '').toLowerCase().includes(userSearch));
+    }
+
+    if(!users.length){ $('period-body').innerHTML='<div class="empty">Sin datos para esta selección.</div>'; $('period-pager').innerHTML=''; return; }
+
+    // Si el orden activo era por un período que ya no se ve (paginaste), volver a Total.
+    if(SORT_KEY!=='email' && SORT_KEY!=='total' && !cols.some(p=>p.period===SORT_KEY)){ SORT_KEY='total'; SORT_DIR=-1; }
+    const sorted=sortUsers(users);
+
+    // Fila TOTAL por período (día/semana/mes) en la primera fila
+    const colTotals={};
+    let grandTotal=0;
+    cols.forEach(p=>{ colTotals[p.period]=0; });
+    users.forEach(u=>{
+      grandTotal += (u.total||0);
+      cols.forEach(p=>{ colTotals[p.period] += (u.per[p.period]||0); });
+    });
+
+    let totalRow=`<tr class="row-total"><td>TOTAL</td>`;
+    cols.forEach(p=>{
+      const v=colTotals[p.period]||0;
+      totalRow += v>0 ? `<td class="v-strong">${nf(v)}</td>` : `<td class="z">—</td>`;
+    });
+    totalRow += `<td class="v-strong">${nf(grandTotal)}</td></tr>`;
+
+    let head=thSort('Usuario','email');
+    cols.forEach(p=>{ head+=thSort(periodLabel(p.period), p.period); });
+    head+=thSort('Total','total');
+    let body=totalRow;
+    sorted.forEach(u=>{
+      body+=`<tr><td>${u.email||'(anónimo)'}</td>`;
+      cols.forEach(p=>{
+        const v=u.per[p.period]||0;
+        body+= v>0 ? `<td class="v-strong">${nf(v)}</td>` : `<td class="z">—</td>`;
+      });
+      body+=`<td class="v-strong">${nf(u.total)}</td></tr>`;
+    });
+    $('period-body').innerHTML=`<table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
+
+    // Paginador sobre períodos (columnas): muestra los más recientes y va hacia atrás.
+    if(totalPeriods>PAGE_SIZE){
+      const from=P_OFFSET+1, to=Math.min(P_OFFSET+PAGE_SIZE,totalPeriods);
+      const unit=GRAN==='day'?'días':GRAN==='week'?'semanas':'meses';
+      $('period-pager').innerHTML=
+        `<span class="pg-info">${from}–${to} de ${totalPeriods} ${unit}</span>`+
+        `<button class="pg-btn" ${P_OFFSET<=0?'disabled':''} onclick="periodPage(-1)" title="Más recientes">‹</button>`+
+        `<button class="pg-btn" ${P_OFFSET+PAGE_SIZE>=totalPeriods?'disabled':''} onclick="periodPage(1)" title="Más antiguos">›</button>`;
+    } else { $('period-pager').innerHTML=''; }
+  }
+  function periodPage(dir){ P_OFFSET=Math.max(0, P_OFFSET+dir*PAGE_SIZE); renderPeriod(); }
+
+  // ── Orden clickeable genérico (tarjetas "Por página" e "Ingresos desde el mail") ──
+  // Cada tarjeta tiene su propio estado de orden. Claves: '__name' (col. entidad),
+  // '__total', o el string de un período. Header activo en rojo con ▲/▼.
+  function thSortCell(label, key, activeKey, dir, cbName){
+    var active=(activeKey===key), arrow=active?(dir===1?' ▲':' ▼'):'';
+    return '<th onclick="'+cbName+'(\''+key+'\')" style="cursor:pointer;user-select:none;white-space:nowrap;'+(active?'color:#e50044;':'')+'" title="Ordenar">'+label+arrow+'</th>';
+  }
+  // Ordena filas {name,total,per}. Texto (col. entidad) alfabético; números por valor.
+  function sortRows(rows, key, dir){
+    return rows.slice().sort(function(a,b){
+      if(key==='__name'){ var na=(a.name||'').toLowerCase(), nb=(b.name||'').toLowerCase(); return na<nb?-dir:na>nb?dir:0; }
+      var va=(key==='__total')?a.total:(a.per[key]||0), vb=(key==='__total')?b.total:(b.per[key]||0);
+      return (va-vb)*dir;
+    });
+  }
+
+  // Matriz por PÁGINA: filas = páginas, columnas = períodos (Día/Semana/Mes según el
+  // toggle de esta tarjeta), celda = vistas de esa página en ese período. La columna
+  // Total es el acumulado de la página en TODOS los períodos. Ventana + paginador,
+  // igual que la matriz de accesos de arriba.
+  function renderPages(){
+    if(!DATA||!DATA.byPeriod){ $('pages-body').innerHTML='<div class="empty">Sin datos.</div>'; $('pages-pager').innerHTML=''; return; }
+    const srcP=DATA.byPeriod[GRAN_PAGES]||[];
+    if(!srcP.length){ $('pages-body').innerHTML='<div class="empty">Sin datos.</div>'; $('pages-pager').innerHTML=''; return; }
+    const totalP=srcP.length;
+    if(PAGES_OFFSET>=totalP) PAGES_OFFSET=0;
+    const cols=srcP.slice(PAGES_OFFSET, PAGES_OFFSET+PAGE_SIZE).reverse();   // viejo→nuevo
+    const byPage={};
+    const userSearch = ($('p-user-search') ? $('p-user-search').value : '').trim().toLowerCase();
+    srcP.forEach(p=>{
+      (p.cells||[]).forEach(c=>{
+        if (userSearch && !(c.email || '').toLowerCase().includes(userSearch)) return;
+        const g=byPage[c.page] || (byPage[c.page]={total:0, per:{}});
+        g.total += c.views||0;
+        g.per[p.period] = (g.per[p.period]||0) + (c.views||0);
+      });
+    });
+    let pages=Object.keys(byPage).map(pg=>({name:(PAGE_NAMES[pg]||pg), total:byPage[pg].total, per:byPage[pg].per}))
+      .filter(p=>p.total>0);
+    if(!pages.length){ $('pages-body').innerHTML='<div class="empty">Sin datos para esta selección.</div>'; $('pages-pager').innerHTML=''; return; }
+    // Si el orden activo era un período que ya no se ve (paginaste), volver a Total.
+    if(PAGES_SORT_KEY!=='__name' && PAGES_SORT_KEY!=='__total' && !cols.some(p=>p.period===PAGES_SORT_KEY)){ PAGES_SORT_KEY='__total'; PAGES_SORT_DIR=-1; }
+    pages=sortRows(pages, PAGES_SORT_KEY, PAGES_SORT_DIR);
+
+    // Fila TOTAL por período en la primera fila
+    const colTotalsP={};
+    let grandTotalP=0;
+    cols.forEach(p=>{ colTotalsP[p.period]=0; });
+    pages.forEach(pg=>{
+      grandTotalP += (pg.total||0);
+      cols.forEach(p=>{ colTotalsP[p.period] += (pg.per[p.period]||0); });
+    });
+
+    let totalRowP='<tr class="row-total"><td>TOTAL</td>';
+    cols.forEach(c=>{
+      const v=colTotalsP[c.period]||0;
+      totalRowP += v>0 ? '<td class="v-strong">'+nf(v)+'</td>' : '<td class="z">—</td>';
+    });
+    totalRowP += '<td class="v-strong">'+nf(grandTotalP)+'</td></tr>';
+
+    let head=thSortCell('Página','__name',PAGES_SORT_KEY,PAGES_SORT_DIR,'pagesSort');
+    cols.forEach(p=>{ head+=thSortCell(periodLabelG(p.period,GRAN_PAGES), p.period, PAGES_SORT_KEY, PAGES_SORT_DIR, 'pagesSort'); });
+    head+=thSortCell('Total','__total',PAGES_SORT_KEY,PAGES_SORT_DIR,'pagesSort');
+    let body=totalRowP;
+    pages.forEach(p=>{
+      body+='<tr><td>'+p.name+'</td>';
+      cols.forEach(c=>{ const v=p.per[c.period]||0; body+= v>0 ? '<td class="v-strong">'+nf(v)+'</td>' : '<td class="z">—</td>'; });
+      body+='<td class="v-strong">'+nf(p.total)+'</td></tr>';
+    });
+    $('pages-body').innerHTML='<table><thead><tr>'+head+'</tr></thead><tbody>'+body+'</tbody></table>';
+    if(totalP>PAGE_SIZE){
+      const from=PAGES_OFFSET+1, to=Math.min(PAGES_OFFSET+PAGE_SIZE,totalP);
+      const unit=GRAN_PAGES==='day'?'días':GRAN_PAGES==='week'?'semanas':'meses';
+      $('pages-pager').innerHTML=
+        '<span class="pg-info">'+from+'–'+to+' de '+totalP+' '+unit+'</span>'+
+        '<button class="pg-btn" '+(PAGES_OFFSET<=0?'disabled':'')+' onclick="pagesPage(-1)" title="Más recientes">‹</button>'+
+        '<button class="pg-btn" '+(PAGES_OFFSET+PAGE_SIZE>=totalP?'disabled':'')+' onclick="pagesPage(1)" title="Más antiguos">›</button>';
+    } else { $('pages-pager').innerHTML=''; }
+  }
+  function pagesPage(dir){ PAGES_OFFSET=Math.max(0, PAGES_OFFSET+dir*PAGE_SIZE); renderPages(); }
+  function pagesSort(key){
+    if(PAGES_SORT_KEY===key){ PAGES_SORT_DIR=-PAGES_SORT_DIR; }
+    else { PAGES_SORT_KEY=key; PAGES_SORT_DIR=(key==='__name')?1:-1; }
+    renderPages();
+  }
+
+  // "Ingresos desde el mail" como MATRIZ (igual que las otras tablas): filas =
+  // usuarios que entraron desde el mail, columnas = períodos (Día/Semana/Mes según
+  // el toggle), celda = ingresos desde el mail de ese usuario en ese período, +
+  // Total. Ventana de PAGE_SIZE columnas (más recientes) con paginador ‹ › hacia
+  // atrás, igual que "Vistas por usuario y período".
+  function renderMailDaily(){
+    const lbl=$('mail-gran-lbl'); if(lbl) lbl.textContent='por '+(GRAN_MAIL==='day'?'día':GRAN_MAIL==='week'?'semana':'mes');
+    if(!DATA||!DATA.byPeriod){ $('maildaily-body').innerHTML='<div class="empty">Sin datos.</div>'; $('maildaily-pager').innerHTML=''; return; }
+    const srcM=DATA.byPeriod[GRAN_MAIL]||[];
+    if(!srcM.length){ $('maildaily-body').innerHTML='<div class="empty">Sin datos.</div>'; $('maildaily-pager').innerHTML=''; return; }
+    const totalM=srcM.length;
+    if(MAIL_OFFSET>=totalM) MAIL_OFFSET=0;
+    const cols=srcM.slice(MAIL_OFFSET, MAIL_OFFSET+PAGE_SIZE).reverse();   // viejo→nuevo
+    
+    // Obtener tipo de mail seleccionado y campo correspondiente
+    const mType = $('m-type-filter') ? $('m-type-filter').value : 'all';
+    var countField = 'mail';
+    if (mType === 'diario') countField = 'mailDiario';
+    else if (mType === 'semanal') countField = 'mailSemanal';
+
+    // Agrega por usuario contando SOLO vistas de origen mail filtrado.
+    const byUser={};
+    srcM.forEach(p=>{
+      (p.cells||[]).forEach(c=>{
+        var count = c[countField] || 0;
+        if(!(count>0)) return;
+        const em=c.email||'(anónimo)';
+        const u=byUser[em] || (byUser[em]={total:0, per:{}});
+        u.total += count;
+        u.per[p.period] = (u.per[p.period]||0) + count;
+      });
+    });
+    let users=Object.keys(byUser).map(em=>({name:em, total:byUser[em].total, per:byUser[em].per}))
+      .filter(u=>u.total>0);
+
+    // Filtrar por nombre de usuario (búsqueda interactiva)
+    const userSearch = ($('p-user-search') ? $('p-user-search').value : '').trim().toLowerCase();
+    if (userSearch) {
+      users = users.filter(u => (u.name || '').toLowerCase().includes(userSearch));
+    }
+    if(!users.length){ 
+      const mailTypeLabel = mType === 'diario' ? 'el mail diario' : mType === 'semanal' ? 'el mail semanal' : 'el mail';
+      $('maildaily-body').innerHTML='<div class="empty">Nadie entró desde ' + mailTypeLabel + ' en este rango.</div>'; 
+      $('maildaily-pager').innerHTML=''; 
+      return; 
+    }
+    // Si el orden activo era un período que ya no se ve (paginaste), volver a Total.
+    if(MAIL_SORT_KEY!=='__name' && MAIL_SORT_KEY!=='__total' && !cols.some(p=>p.period===MAIL_SORT_KEY)){ MAIL_SORT_KEY='__total'; MAIL_SORT_DIR=-1; }
+    users=sortRows(users, MAIL_SORT_KEY, MAIL_SORT_DIR);
+
+    // Fila TOTAL por período en la primera fila
+    const colTotalsM={};
+    let grandTotalM=0;
+    cols.forEach(p=>{ colTotalsM[p.period]=0; });
+    users.forEach(u=>{
+      grandTotalM += (u.total||0);
+      cols.forEach(p=>{ colTotalsM[p.period] += (u.per[p.period]||0); });
+    });
+
+    let totalRowM='<tr class="row-total"><td>TOTAL</td>';
+    cols.forEach(c=>{
+      const v=colTotalsM[c.period]||0;
+      totalRowM += v>0 ? '<td class="v-strong">'+nf(v)+'</td>' : '<td class="z">—</td>';
+    });
+    totalRowM += '<td class="v-strong">'+nf(grandTotalM)+'</td></tr>';
+
+    let head=thSortCell('Usuario','__name',MAIL_SORT_KEY,MAIL_SORT_DIR,'mailSort');
+    cols.forEach(p=>{ head+=thSortCell(periodLabelG(p.period,GRAN_MAIL), p.period, MAIL_SORT_KEY, MAIL_SORT_DIR, 'mailSort'); });
+    head+=thSortCell('Total','__total',MAIL_SORT_KEY,MAIL_SORT_DIR,'mailSort');
+    let body=totalRowM;
+    users.forEach(u=>{
+      body+='<tr><td>'+u.name+'</td>';
+      cols.forEach(c=>{ const v=u.per[c.period]||0; body+= v>0 ? '<td class="v-strong">'+nf(v)+'</td>' : '<td class="z">—</td>'; });
+      body+='<td class="v-strong">'+nf(u.total)+'</td></tr>';
+    });
+    $('maildaily-body').innerHTML='<table><thead><tr>'+head+'</tr></thead><tbody>'+body+'</tbody></table>';
+    if(totalM>PAGE_SIZE){
+      const from=MAIL_OFFSET+1, to=Math.min(MAIL_OFFSET+PAGE_SIZE,totalM);
+      const unit=GRAN_MAIL==='day'?'días':GRAN_MAIL==='week'?'semanas':'meses';
+      $('maildaily-pager').innerHTML=
+        '<span class="pg-info">'+from+'–'+to+' de '+totalM+' '+unit+'</span>'+
+        '<button class="pg-btn" '+(MAIL_OFFSET<=0?'disabled':'')+' onclick="mailPage(-1)" title="Más recientes">‹</button>'+
+        '<button class="pg-btn" '+(MAIL_OFFSET+PAGE_SIZE>=totalM?'disabled':'')+' onclick="mailPage(1)" title="Más antiguos">›</button>';
+    } else { $('maildaily-pager').innerHTML=''; }
+  }
+  function mailPage(dir){ MAIL_OFFSET=Math.max(0, MAIL_OFFSET+dir*PAGE_SIZE); renderMailDaily(); }
+  function mailSort(key){
+    if(MAIL_SORT_KEY===key){ MAIL_SORT_DIR=-MAIL_SORT_DIR; }
+    else { MAIL_SORT_KEY=key; MAIL_SORT_DIR=(key==='__name')?1:-1; }
+    renderMailDaily();
+  }
+
+  function renderAll(){ renderKpis(); fillPageFilter(); renderPeriod(); renderPages(); renderMailDaily(); }
+
+  function load(){
+    $('period-body').innerHTML='<div class="empty">Cargando…</div>';
+    google.script.run
+      .withSuccessHandler(function(res){
+        if(!res||res.error){ $('period-body').innerHTML='<div class="empty">Error: '+((res&&res.error)||'sin datos')+'</div>'; return; }
+        DATA=res; renderAll();
+      })
+      .withFailureHandler(function(e){ $('period-body').innerHTML='<div class="empty">Error: '+((e&&e.message)||e)+'</div>'; })
+      .fetchAnalytics();
+  }
+
+  // Toggle Día/Semana/Mes: cambia la granularidad y vuelve a la primera página.
+  $('seg').addEventListener('click', function(e){
+    const b=e.target.closest('button'); if(!b) return;
+    GRAN=b.getAttribute('data-g'); P_OFFSET=0;
+    Array.from(this.children).forEach(x=>x.classList.toggle('on', x===b));
+    if(DATA) renderPeriod();
+  });
+  // Filtro por usuario (escribiendo nombre/email): renderiza dinámicamente todas las tablas al escribir.
+  $('p-user-search').addEventListener('input', function(){
+    if(DATA) {
+      renderPeriod();
+      renderPages();
+      renderMailDaily();
+    }
+  });
+  // Filtro por página: resetea la paginación al cambiar.
+  $('p-page-filter').addEventListener('change', function(){
+    P_PAGE=this.value; P_OFFSET=0;
+    if(DATA) renderPeriod();
+  });
+  // Filtro por tipo de mail: resetea la paginación al cambiar.
+  $('m-type-filter').addEventListener('change', function(){
+    MAIL_OFFSET=0;
+    if(DATA) renderMailDaily();
+  });
+  // Toggle Día/Semana/Mes de la tarjeta "Por página" (independiente de accesos).
+  $('seg-pages').addEventListener('click', function(e){
+    const b=e.target.closest('button'); if(!b) return;
+    GRAN_PAGES=b.getAttribute('data-g'); PAGES_OFFSET=0;
+    Array.from(this.children).forEach(x=>x.classList.toggle('on', x===b));
+    if(DATA) renderPages();
+  });
+  // Toggle Día/Semana/Mes de la tarjeta "Ingresos desde el mail" (independiente).
+  $('seg-mail').addEventListener('click', function(e){
+    const b=e.target.closest('button'); if(!b) return;
+    GRAN_MAIL=b.getAttribute('data-g'); MAIL_OFFSET=0;
+    Array.from(this.children).forEach(x=>x.classList.toggle('on', x===b));
+    if(DATA) renderMailDaily();
+  });
+
+  function doRefresh(){ load(); }
+  window.addEventListener('load', function(){ load(); $('splash').classList.add('out'); });
+</script>
+</body>
+</html>

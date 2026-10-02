@@ -1,0 +1,101 @@
+<!-- _nav.html — Navegación y estilos compartidos para Store Explorer (Mapster 3.0 Redesign) -->
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<!-- Google Maps API -->
+<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAlvfKkIkT-vh01-T9tCeZ6KV5mA3eiscM"></script>
+<!-- deck.gl CDN for high-performance WebGL Heatmaps -->
+<script src="https://unpkg.com/deck.gl@latest/dist.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+<style>
+  :root {
+    --red: #e50044; --red-bg: #fff0f3; --green: #15803d; --green-bg: #f0fdf4;
+    --t1: #0f172a; --t2: #475569; --t3: #94a3b8; --border: #e2e8f0; --border2: #f1f5f9;
+    --bg: #f8fafc; --card: #fff; --radius: 10px;
+    --shadow: 0 1px 3px rgba(0,0,0,.05), 0 1px 2px rgba(0,0,0,.04);
+    --shadow-lg: 0 4px 16px rgba(0,0,0,.06), 0 1px 4px rgba(0,0,0,.03);
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Inter', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--t1);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    font-size: 13px;
+  }
+
+  /* ── Header y Navegación ── */
+  nav {
+    background: var(--card);
+    border-bottom: 1px solid var(--border);
+    height: 52px;
+    display: flex;
+    align-items: center;
+    padding: 0 20px;
+    position: sticky;
+    top: 0;
+    z-index: 300;
+  }
+  .n-brand { display: flex; align-items: center; gap: 7px; margin-right: 18px; }
+  .n-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--red); }
+  .n-title { font-size: 14px; font-weight: 700; color: var(--t1); letter-spacing: -0.3px; }
+  .n-title em { color: var(--red); font-style: normal; }
+  .n-divider { width: 1px; height: 20px; background: var(--border); margin: 0 10px; }
+  
+  .n-tabs { display: flex; gap: 4px; }
+  .n-tab {
+    display: flex; align-items: center; gap: 6px; padding: 6px 14px;
+    border-radius: 7px; border: none; background: transparent;
+    font-size: 13px; font-weight: 600; color: var(--t2);
+    cursor: pointer; transition: all .15s; text-decoration: none;
+  }
+  .n-tab.active { background: var(--red); color: #fff; box-shadow: 0 2px 6px rgba(229,0,68,.3); }
+  .n-tab:hover:not(.active) { background: var(--border2); color: var(--t1); }
+  
+  /* ── Splash de Carga ── */
+  #loading-overlay {
+    position: fixed; inset: 0; background: rgba(255,255,255,0.8); backdrop-filter: blur(4px);
+    display: flex; align-items: center; justify-content: center; z-index: 9999;
+  }
+  .spinner {
+    width: 44px; height: 44px; border: 4px solid var(--border);
+    border-top-color: var(--red); border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  main { flex: 1; display: flex; flex-direction: column; }
+</style>
+
+<div id="loading-overlay" style="display:none;"><div class="spinner"></div></div>
+
+<nav>
+  <div class="n-brand">
+    <div class="n-dot"></div>
+    <span class="n-title">Store <em>Intelligence</em> <span id="script-version" style="color: #94a3b8; font-size: 10px; font-weight: 500;"></span></span>
+  </div>
+  <div class="n-divider"></div>
+  <div class="n-tabs">
+    <a class="n-tab <?= activePage === 'explorer' ? 'active' : '' ?>" href="<?= scriptUrl ?>?page=explorer">Analizador de Performance</a>
+    <a class="n-tab <?= activePage === 'opportunity' ? 'active' : '' ?>" href="<?= scriptUrl ?>?page=opportunity">Explorador de Oportunidades</a>
+    <a class="n-tab <?= activePage === 'debug' ? 'active' : '' ?>" href="<?= scriptUrl ?>?page=debug" style="margin-left: auto;">🔧</a>
+  </div>
+</nav>
+
+<script>
+  function showLoading() { document.getElementById('loading-overlay').style.display = 'flex'; }
+  function hideLoading() { document.getElementById('loading-overlay').style.display = 'none'; }
+  function showError(e) {
+    console.error(e);
+    alert('Error: ' + (e.message || 'Ocurrió un error inesperado.'));
+    hideLoading();
+  }
+  window.addEventListener('load', function() {
+    if (typeof google === 'undefined' || !google.script) return;
+    google.script.run.withSuccessHandler(function(version) {
+      if (version) document.getElementById('script-version').textContent = 'v' + version;
+    }).getScriptVersion();
+  });
+</script>

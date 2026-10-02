@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<!--
+  8_RR_Compare.html — "RR View" (ruta ?pagina=rrcompare).
+  Sirve para VER el run-rate (RR) por país a lo largo de los días del año.
+  RR Mes = BE Mes × (Actual MTD / BE MTD), calculado AL DÍA elegido (varía por día).
+  El día se elige con un date-picker (1° enero → último día con dato). Cada tabla
+  se puede copiar (TSV) para pegar en Sheets/Excel. Backend: fetchRRCompare(asOfDay).
+  NOTA: esta vista NO cambia el RR de las demás páginas (no escribe caché/props).
+-->
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RR View</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --primary: #e50044;
+    --text: #0f172a;
+    --sub: #475569;
+    --light: #94a3b8;
+    --border: #e2e8f0;
+    --border2: #f1f5f9;
+    --bg: #f8fafc;
+    --pos: #166534;
+    --pos-bg: #f0fdf4;
+    --neg: #991b1b;
+    --neg-bg: #fff1f2;
+    --sh: 0 4px 6px -1px rgba(15, 23, 42, 0.03), 0 2px 4px -2px rgba(15, 23, 42, 0.03);
+    --sh-card: 0 1px 3px rgba(0,0,0,.05), 0 1px 2px rgba(0,0,0,.02);
+  }
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--text);font-size:13px;-webkit-font-smoothing:antialiased}
+  nav{background:#fff;border-bottom:1px solid var(--border);height:52px;display:flex;align-items:center;padding:0 20px;position:sticky;top:0;z-index:300}
+  .n-brand{display:flex;align-items:center;gap:7px;margin-right:18px;flex-shrink:0}
+  .n-dot{width:7px;height:7px;border-radius:50%;background:var(--primary)}
+  .n-divider{width:1px;height:20px;background:var(--border);margin:0 10px;flex-shrink:0}
+  .n-tabs{display:flex;gap:2px}
+  .n-tab{display:flex;align-items:center;gap:5px;padding:5px 11px;border-radius:7px;font-size:12px;font-weight:500;color:var(--sub);background:transparent;border:none;cursor:pointer;text-decoration:none;white-space:nowrap}
+  .n-tab svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+  .n-tab:hover{background:#f1f5f9;color:var(--text)}
+  .head-right{margin-left:auto;display:flex;align-items:center;gap:10px}
+  .n-right{margin-left:auto;display:flex;gap:8px}
+  .n-btn{height:32px;border:1px solid var(--border);background:#fff;border-radius:8px;padding:0 14px;font-size:11.5px;font-weight:600;color:var(--sub);cursor:pointer;display:flex;align-items:center;gap:6px;white-space:nowrap;transition:all 0.15s ease}
+  .n-btn:hover{border-color:var(--primary);color:var(--primary);box-shadow:0 0 0 2px rgba(229,0,68,0.12)}
+  .n-btn svg{width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round}
+
+  .page{max-width:1100px;margin:0 auto;padding:24px 20px;display:flex;flex-direction:column;gap:18px}
+  .head{display:flex;align-items:center;gap:16px;flex-wrap:wrap;border-bottom:1px solid var(--border);padding-bottom:16px}
+  .title{font-size:22px;font-weight:900;letter-spacing:-0.5px}
+  .title b{color:var(--primary)}
+  .meta{font-size:12.5px;color:var(--sub);display:flex;gap:16px;flex-wrap:wrap;align-items:center}
+  .meta b{color:var(--text)}
+
+  /* Banner de última fecha disponible */
+  .as-of-banner {
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    border-radius: 10px;
+    padding: 12px 18px;
+    color: #1e40af;
+    font-size: 13px;
+    font-weight: 600;
+    display: flex;
+    flex-direction: column;
+    box-shadow: var(--sh);
+    gap: 4px;
+    margin-bottom: 2px;
+  }
+  .pulse-dot {
+    width: 8px;
+    height: 8px;
+    background-color: #3b82f6;
+    border-radius: 50%;
+    display: inline-block;
+    animation: bluePulse 1.5s infinite;
+  }
+  @keyframes bluePulse {
+    0% { transform: scale(0.9); box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.45); }
+    70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(59, 130, 246, 0); }
+    100% { transform: scale(0.9); box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
+  }
+
+  .card{background:#fff;border:1px solid var(--border);border-radius:10px;overflow:hidden;box-shadow:var(--sh-card); transition: transform 0.15s;}
+  .card:hover{transform:translateY(-1px);box-shadow:0 4px 6px -1px rgba(15,23,42,0.05);}
+  .card.orders{border-top:4px solid var(--primary)}
+  .card.gmv{border-top:4px solid #2563eb}
+  
+  .card-h{padding:12px 16px;border-bottom:1px solid var(--border);font-weight:800;font-size:12.5px;text-transform:uppercase;letter-spacing:.5px;display:flex;align-items:center;justify-content:space-between;gap:10px;background:#fff}
+  .card-h.orders{color:var(--primary)}
+  .card-h.gmv{color:#2563eb}
+  
+  table{width:100%;border-collapse:collapse;background:#fff}
+  th{padding:10px 14px;font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--light);border-bottom:1px solid var(--border);white-space:nowrap;text-align:right;background:#fafafa}
+  th:first-child{text-align:left;padding-left:16px}
+  th.sep,td.sep{border-left:1px solid var(--border2)}
+  td{padding:8px 14px;text-align:right;border-bottom:1px solid var(--border2);white-space:nowrap;font-variant-numeric:tabular-nums;font-size:12.5px;line-height:1.4;font-weight:500}
+  td:first-child{text-align:left;font-weight:600;color:var(--text);padding-left:16px}
+  
+  tr:nth-child(even):not(.latam) td{background:#fafafa}
+  tr.latam td{background:var(--border2);font-weight:800;border-top:2px solid var(--border);color:var(--text);font-size:13px}
+  
+  .delta-ok{color:var(--pos);font-weight:700;background:var(--pos-bg);padding:2px 8px;border-radius:20px;font-size:11.5px;display:inline-block}
+  .delta-bad{color:var(--neg);font-weight:700;background:var(--neg-bg);padding:2px 8px;border-radius:20px;font-size:11.5px;display:inline-block}
+  .dim{color:var(--light)}
+  .adv{color:var(--sub);font-weight:700}
+  .empty{padding:48px 34px;text-align:center;color:var(--sub);font-size:13px}
+  .legend{font-size:12px;color:var(--sub);display:flex;flex-direction:column;gap:6px;line-height:1.6;background:#fff;border:1px solid var(--border);border-radius:10px;padding:14px 18px;box-shadow:var(--sh-card)}
+  .legend-row{display:flex;gap:8px;align-items:flex-start}
+  .legend-row b{color:var(--text)}
+  
+  input[type=date]{font-family:inherit;outline:none;border:1.5px solid var(--border);border-radius:8px;padding:6px 12px;font-size:12.5px;font-weight:600;cursor:pointer;transition:all 0.15s ease;height:32px;background:#fff}
+  input[type=date]:focus{border-color:var(--primary);box-shadow:0 0 0 2px rgba(229,0,68,0.12)}
+</style>
+</head>
+<body>
+
+<script>window.PAGE_ID='rrcompare';</script>
+<?!= include('_nav'); ?>
+
+<!-- Mock local para preview (sin backend GAS) -->
+<script>
+if (typeof google === 'undefined' || !google.script) {
+  (function(){
+    function mk(kpi,pais,rrC,beC,act,bmtd,latam){return {kpi:kpi,pais:pais,rrExport:null,beExport:null,rrCalc:rrC,beCalc:beC,actual:(act==null?null:act),beMtd:(bmtd==null?null:bmtd),latam:!!latam};}
+    var rows=[
+      mk('orders','AR',2287000,2377200,1450000,1507000), mk('orders','CL',372100,360000,236000,228000), mk('orders','CO',1610000,1500000,1020000,950000),
+      mk('orders','LATAM',4269100,4237200,null,null,true),
+      mk('gmv','AR',4980000,5050000,3150000,3195000), mk('gmv','CL',2002000,1975000,1265000,1248000),
+      mk('gmv','LATAM',6982000,7025000,null,null,true)
+    ];
+    var _cb=null, runner={
+      withSuccessHandler:function(cb){_cb=cb;return runner;},
+      withFailureHandler:function(){return runner;},
+      fetchRRCompare:function(asOfDay){var c=_cb;_cb=null;var eff=/^\d{4}-\d{2}-\d{2}$/.test(asOfDay||'')?asOfDay:'2026-06-21';
+        setTimeout(function(){c&&c({rows:rows,asOf:eff,monthKey:eff.slice(0,7),complete:{orders:true,gmv:true},lastByKpi:{orders:'2026-06-21',gmv:'2026-06-20'},firstDay:'2026-01-01',realAsOf:'2026-06-21'});},200);},
+      forceRefreshCache:function(){var c=_cb;_cb=null;setTimeout(function(){if(c)c(true);},100);},
+      getScriptUrl:function(){var c=_cb;_cb=null;setTimeout(function(){c&&c('');},20);}
+    };
+    window.google={script:{run:runner}};
+  })();
+}
+</script>
+
+<div class="page">
+  <div class="head">
+    <div class="title">RR <b>View</b> <span style="font-size:13px;font-weight:600;color:var(--light)">· run-rate por país y día</span></div>
+    <div class="meta" id="meta"></div>
+    <div class="head-right">
+      <label style="font-size:12.5px;color:var(--text);font-weight:700;display:flex;align-items:center;gap:6px;white-space:nowrap">
+        Ver RR al día:
+        <input type="date" id="daypick" onchange="onPick(this.value)" style="padding:5px 8px;border:1.5px solid var(--border);border-radius:8px;font-size:12.5px;font-weight:600;cursor:pointer">
+      </label>
+      <button class="n-btn" id="btn-reload" onclick="doRefresh()">↻ Recargar</button>
+    </div>
+  </div>
+  <!-- Banner destacado con la última fecha disponible de datos reales -->
+  <div class="as-of-banner" id="as-of-banner" style="display:none;">
+    <div style="display:flex; align-items:center; gap:8px;">
+      <div class="pulse-dot"></div>
+      <span>Última fecha con datos reales cargados (BigQuery/OKRs): <b id="as-of-real-date">—</b></span>
+    </div>
+    <div style="font-size:11.5px; opacity:0.85; margin-left:16px;">
+      Pedidos confirmados cargados hasta el <b id="as-of-orders-date">—</b> · Facturación (GMV) cargada hasta el <b id="as-of-gmv-date">—</b>
+    </div>
+  </div>
+
+  <div class="legend">
+    <div class="legend-row"><span><b>Act. MTD</b> / <b>BE MTD</b> = actual y budget acumulados del mes al día elegido.</span></div>
+    <div class="legend-row"><span><b>Avance</b> = Act. MTD ÷ BE MTD.</span></div>
+    <div class="legend-row"><span><b>RR Mes</b> = <b>BE Mes × Avance</b> (proyección mensual al día).</span></div>
+    <div class="legend-row"><span><b>Var vs BE</b> = (RR Mes − BE Mes) / BE Mes.</span></div>
+    <div class="legend-row"><span>Cambiá el día para ver el RR a lo largo del año · con <b>Copiar</b> pegás la tabla en Sheets/Excel.</span></div>
+  </div>
+
+  <div id="content"><div class="empty">Cargando…</div></div>
+</div>
+
+<script>
+  const CCN={AR:'Argentina',BO:'Bolivia',CL:'Chile',CO:'Colombia',CR:'Costa Rica',EC:'Ecuador',SV:'El Salvador',GT:'Guatemala',HN:'Honduras',NI:'Nicaragua',PA:'Panamá',PY:'Paraguay',PE:'Perú',UY:'Uruguay',DO:'Rep. Dominicana',MX:'México',LATAM:'LATAM'};
+  let LAST=null;   // último payload (para Copiar)
+
+  function fmtN(v,kpi){
+    if(v==null||isNaN(v)) return '<span class="dim">—</span>';
+    const a=Math.abs(v), suf=kpi==='gmv'?'€':'';
+    if(a>=1e6) return (v/1e6).toFixed(2)+'M'+suf;
+    if(a>=1e3) return (v/1e3).toFixed(1)+'k'+suf;
+    return v.toFixed(0)+suf;
+  }
+  function rawN(v){ return (v==null||isNaN(v))?'':v; }
+  function varOf(rr,be){ if(rr==null||be==null||be===0) return null; return (rr-be)/Math.abs(be)*100; }
+  function fmtPct(v){ if(v==null||isNaN(v)) return '<span class="dim">—</span>'; const s=v>=0?'+':''; return `<span class="${v>=0?'delta-ok':'delta-bad'}">${s}${v.toFixed(1)}%</span>`; }
+  function fmtAdv(v){ if(v==null||isNaN(v)) return '<span class="dim">—</span>'; return `<span class="adv">${v.toFixed(1)}%</span>`; }
+
+  function buildCard(rows, kpi, label){
+    const rs=rows.filter(r=>r.kpi===kpi);
+    if(!rs.length) return `<div class="card"><div class="card-h ${kpi}">${label}</div><div class="empty">Sin datos.</div></div>`;
+    // El backend deja actual/beMtd en null para la fila LATAM → los sumo acá.
+    let tAct=0,tBe=0,hAct=false,hBe=false;
+    rs.forEach(r=>{ if(!r.latam){ if(r.actual!=null){tAct+=r.actual;hAct=true;} if(r.beMtd!=null){tBe+=r.beMtd;hBe=true;} } });
+    let body='';
+    rs.forEach(r=>{
+      const act = r.latam ? (hAct?tAct:null) : r.actual;
+      const bmtd= r.latam ? (hBe?tBe:null)  : r.beMtd;
+      const adv = (act!=null && bmtd) ? act/bmtd*100 : null;
+      const v=varOf(r.rrCalc,r.beCalc);
+      body+=`<tr class="${r.latam?'latam':''}">
+        <td>${CCN[r.pais]||r.pais}</td>
+        <td>${fmtN(act,kpi)}</td>
+        <td>${fmtN(bmtd,kpi)}</td>
+        <td>${fmtAdv(adv)}</td>
+        <td class="sep">${fmtN(r.rrCalc,kpi)}</td>
+        <td>${fmtN(r.beCalc,kpi)}</td>
+        <td>${fmtPct(v)}</td>
+      </tr>`;
+    });
+    return `<div class="card">
+      <div class="card-h ${kpi}"><span>${label}</span>
+        <button class="n-btn" onclick="copyKpi('${kpi}',this)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copiar</button>
+      </div>
+      <table><thead><tr><th>País</th><th>Act. MTD</th><th>BE MTD</th><th>Avance</th><th class="sep">RR Mes</th><th>BE Mes</th><th>Var vs BE</th></tr></thead><tbody>${body}</tbody></table>
+    </div>`;
+  }
+
+  function copyKpi(kpi, btn){
+    if(!LAST) return;
+    const rs=(LAST.rows||[]).filter(r=>r.kpi===kpi);
+    const label=kpi==='orders'?'Confirmed Orders':'GMV User Dmarts';
+    let tAct=0,tBe=0,hAct=false,hBe=false;
+    rs.forEach(r=>{ if(!r.latam){ if(r.actual!=null){tAct+=r.actual;hAct=true;} if(r.beMtd!=null){tBe+=r.beMtd;hBe=true;} } });
+    let tsv=`RR VIEW — ${label}\nDía:\t${LAST.asOf||''}\tMes:\t${LAST.monthKey||''}\n\nPaís\tAct. MTD\tBE MTD\tAvance (%)\tRR Mes\tBE Mes\tVar vs BE (%)\n`;
+    rs.forEach(r=>{
+      const act=r.latam?(hAct?tAct:null):r.actual, bmtd=r.latam?(hBe?tBe:null):r.beMtd;
+      const adv=(act!=null&&bmtd)?act/bmtd*100:null, v=varOf(r.rrCalc,r.beCalc);
+      tsv+=(CCN[r.pais]||r.pais)+'\t'+rawN(act)+'\t'+rawN(bmtd)+'\t'+(adv==null?'':adv.toFixed(1))+'\t'+rawN(r.rrCalc)+'\t'+rawN(r.beCalc)+'\t'+(v==null?'':v.toFixed(1))+'\n';
+    });
+    const orig=btn.innerHTML;
+    navigator.clipboard.writeText(tsv).then(()=>{ btn.innerHTML='<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="vertical-align:-1px;margin-right:4px;"><polyline points="20 6 9 17 4 12"/></svg>Copiado'; btn.style.color='var(--pos)'; setTimeout(()=>{btn.innerHTML=orig;btn.style.color='';},1800); })
+      .catch(()=>{ btn.innerHTML='Error'; setTimeout(()=>{btn.innerHTML=orig;},1800); });
+  }
+
+  function render(res){
+    LAST=res;
+    const meta=document.getElementById('meta'), cont=document.getElementById('content');
+    if(!res||res.error){ cont.innerHTML='<div class="empty">Error: '+((res&&res.error)||'sin datos')+'</div>'; return; }
+    const dp=document.getElementById('daypick');
+    if(dp){ if(res.firstDay)dp.min=res.firstDay; if(res.realAsOf)dp.max=res.realAsOf; if(res.asOf)dp.value=res.asOf; }
+    
+    const lb=res.lastByKpi||{};
+    
+    // Formatear fechas para el banner de última fecha disponible
+    const fmtDateStr = dStr => {
+      if (!dStr) return '—';
+      const p = dStr.split('-');
+      if (p.length !== 3) return dStr;
+      return `${p[2]}/${p[1]}/${p[0]}`;
+    };
+
+    if (res.realAsOf) {
+      document.getElementById('as-of-banner').style.display = 'flex';
+      document.getElementById('as-of-real-date').textContent = fmtDateStr(res.realAsOf);
+      document.getElementById('as-of-orders-date').textContent = fmtDateStr(lb.orders);
+      document.getElementById('as-of-gmv-date').textContent = fmtDateStr(lb.gmv);
+    } else {
+      document.getElementById('as-of-banner').style.display = 'none';
+    }
+
+    meta.innerHTML=
+      `<span>Día seleccionado: <b>${fmtDateStr(res.asOf)}</b></span>`+
+      `<span>Mes: <b style="text-transform: uppercase;">${res.monthKey||'—'}</b></span>`;
+      
+    const comp=res.complete||{orders:true,gmv:true};
+    let html='';
+    [['orders','Confirmed Orders'],['gmv','GMV User Dmarts']].forEach(t=>{
+      const kpi=t[0], label=t[1];
+      if(comp[kpi]===false){
+        html+=`<div class="card ${kpi}"><div class="card-h ${kpi}">${label}</div><div class="empty">No hay dato del día <b>${fmtDateStr(res.asOf)}</b> para ${label} (último: <b>${fmtDateStr((res.lastByKpi||{})[kpi])}</b>).</div></div>`;
+      } else {
+        html+=buildCard(res.rows||[],kpi,label);
+      }
+    });
+    cont.innerHTML=html;
+  }
+
+  function getRunner(){
+    if (typeof google !== 'undefined' && google.script && google.script.run) return google.script.run;
+    if (typeof window !== 'undefined' && window.google && window.google.script && window.google.script.run) return window.google.script.run;
+    return null;
+  }
+
+  function load(asOfDay, onDone){
+    document.getElementById('content').innerHTML='<div class="empty">Cargando…</div>';
+    const runner = getRunner();
+    if (!runner || typeof runner.fetchRRCompare !== 'function') {
+      render({error:'google.script.run no disponible'});
+      if (typeof onDone === 'function') onDone(new Error('google.script.run no disponible'));
+      return;
+    }
+    runner
+      .withSuccessHandler(function(res){
+        render(res);
+        if(typeof onDone==='function') onDone(null, res);
+      })
+      .withFailureHandler(function(e){
+        render({error:(e&&e.message)||String(e)});
+        if(typeof onDone==='function') onDone(e);
+      })
+      .fetchRRCompare(asOfDay||'');
+  }
+  function onPick(v){ if(v) load(v); }
+
+  function doRefresh(){
+    const btn=document.getElementById('btn-ref');
+    const mBtn=document.querySelector('.n-tab-refresh');
+    const rBtn=document.getElementById('btn-reload');
+    if(btn){ btn.disabled=true; btn.style.opacity='.5'; }
+    if(mBtn){ mBtn.disabled=true; mBtn.style.opacity='.5'; }
+    if(rBtn){ rBtn.disabled=true; rBtn.style.opacity='.5'; }
+
+    const dp=document.getElementById('daypick');
+    let dateToFetch=(dp&&dp.value)?dp.value:'';
+    // Si estaba mostrando el último día disponible (o no hay fecha seleccionada),
+    // enviamos cadena vacía para que el backend detecte si ingresaron datos más recientes.
+    if(LAST && LAST.realAsOf && dateToFetch===LAST.realAsOf){
+      dateToFetch='';
+    }
+
+    let done=false;
+    const finish=function(){
+      if(done) return;
+      done=true;
+      clearTimeout(safety);
+      if(btn){ btn.disabled=false; btn.style.opacity='1'; }
+      if(mBtn){ mBtn.disabled=false; mBtn.style.opacity='1'; }
+      if(rBtn){ rBtn.disabled=false; rBtn.style.opacity='1'; }
+    };
+
+    const safety=setTimeout(function(){
+      finish();
+      const cont=document.getElementById('content');
+      if(cont && cont.innerHTML.indexOf('Cargando')!==-1){
+        cont.innerHTML='<div class="empty">La actualización tardó demasiado.<br><br><button class="n-btn" style="margin:0 auto" onclick="doRefresh()">↻ Reintentar</button></div>';
+      }
+    },45000);
+
+    const fetchFresh=function(){
+      load(dateToFetch, finish);
+    };
+
+    const runner = getRunner();
+    if(runner && typeof runner.forceRefreshCache==='function'){
+      runner.withSuccessHandler(fetchFresh).withFailureHandler(fetchFresh).forceRefreshCache();
+    } else {
+      fetchFresh();
+    }
+  }
+
+  window.addEventListener('load', function(){ load(); });
+</script>
+</body>
+</html>

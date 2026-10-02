@@ -1,0 +1,82 @@
+// ##########################################################################################
+// #  TAREA: "10 ANALISIS UF" (CON BLOQUEO DE CELDA DE PAÍS)                                #
+// ##########################################################################################
+
+const CONFIG_ANALISIS_UF = {
+  nombreHoja: "10 Analisis UF",
+  celdaPais: "C4"
+};
+
+function _analisisUFWorker(targetCountry) {
+  try {
+    Logger.log(`--- [TAREA 10 ANALISIS UF] Iniciando para ${targetCountry.country.toUpperCase()} ---`);
+    
+    // 1. Abrir origen
+    const sourceSpreadsheet = SpreadsheetApp.openById(SOURCE_SPREADSHEET_ID);
+    const sourceSheet = sourceSpreadsheet.getSheetByName(CONFIG_ANALISIS_UF.nombreHoja);
+    if (!sourceSheet) throw new Error(`La hoja de origen '${CONFIG_ANALISIS_UF.nombreHoja}' no fue encontrada.`);
+    
+    // 2. Abrir destino
+    const targetSpreadsheet = SpreadsheetApp.openById(targetCountry.id);
+    const existingSheet = targetSpreadsheet.getSheetByName(CONFIG_ANALISIS_UF.nombreHoja);
+    
+    let newSheet;
+
+    // 3. Reemplazar o Copiar hoja (MANTENIENDO EL ORDEN)
+    if (existingSheet) {
+      const originalIndex = existingSheet.getIndex(); // Guarda la posición actual
+      targetSpreadsheet.deleteSheet(existingSheet);
+      newSheet = sourceSheet.copyTo(targetSpreadsheet);
+      newSheet.setName(CONFIG_ANALISIS_UF.nombreHoja);
+      targetSpreadsheet.setActiveSheet(newSheet);
+      targetSpreadsheet.moveActiveSheet(originalIndex); // Restaura la posición
+    } else {
+      newSheet = sourceSheet.copyTo(targetSpreadsheet);
+      newSheet.setName(CONFIG_ANALISIS_UF.nombreHoja);
+    }
+
+    // 4. Escribir el País en la celda configurada y bloquearla
+    const celdaPais = newSheet.getRange(CONFIG_ANALISIS_UF.celdaPais);
+    celdaPais.setValue(targetCountry.country);
+
+    // ---- INICIO DEL BLOQUEO ----
+    // Creamos la protección para el rango (celda C4 según configuración)
+    const proteccion = celdaPais.protect().setDescription('Bloqueo automático de celda de país');
+    
+    // Removemos a todos los editores para dejar únicamente al dueño/ejecutor del script
+    const editores = proteccion.getEditors();
+    proteccion.removeEditors(editores);
+    
+    // Restringimos la edición dentro de dominios de Google Workspace (si aplica)
+    if (proteccion.canDomainEdit()) {
+      proteccion.setDomainEdit(false);
+    }
+    // ---- FIN DEL BLOQUEO ----
+
+    Logger.log(`>>> [TAREA 10 ANALISIS UF] Proceso completado y celda bloqueada para ${targetCountry.country.toUpperCase()}.`);
+  } catch (error) {
+    Logger.log(`ERROR en [TAREA 10 ANALISIS UF] para ${targetCountry.country.toUpperCase()}: ${error.toString()}`);
+  }
+}
+
+// --- Funciones Individuales ---
+function copiarAnalisisUF_Para_Argentina() { _analisisUFWorker(PAISES_DE_DESTINO.find(p => p.country === "Argentina")); }
+function copiarAnalisisUF_Para_Bolivia() { _analisisUFWorker(PAISES_DE_DESTINO.find(p => p.country === "Bolivia")); }
+function copiarAnalisisUF_Para_Chile() { _analisisUFWorker(PAISES_DE_DESTINO.find(p => p.country === "Chile")); }
+function copiarAnalisisUF_Para_Costa_Rica() { _analisisUFWorker(PAISES_DE_DESTINO.find(p => p.country === "Costa Rica")); }
+function copiarAnalisisUF_Para_Republica_Dominicana() { _analisisUFWorker(PAISES_DE_DESTINO.find(p => p.country === "Republica Dominicana")); }
+function copiarAnalisisUF_Para_Ecuador() { _analisisUFWorker(PAISES_DE_DESTINO.find(p => p.country === "Ecuador")); }
+function copiarAnalisisUF_Para_El_Salvador() { _analisisUFWorker(PAISES_DE_DESTINO.find(p => p.country === "El Salvador")); }
+function copiarAnalisisUF_Para_Guatemala() { _analisisUFWorker(PAISES_DE_DESTINO.find(p => p.country === "Guatemala")); }
+function copiarAnalisisUF_Para_Honduras() { _analisisUFWorker(PAISES_DE_DESTINO.find(p => p.country === "Honduras")); }
+function copiarAnalisisUF_Para_Nicaragua() { _analisisUFWorker(PAISES_DE_DESTINO.find(p => p.country === "Nicaragua")); }
+function copiarAnalisisUF_Para_Panama() { _analisisUFWorker(PAISES_DE_DESTINO.find(p => p.country === "Panama")); }
+function copiarAnalisisUF_Para_Paraguay() { _analisisUFWorker(PAISES_DE_DESTINO.find(p => p.country === "Paraguay")); }
+function copiarAnalisisUF_Para_Peru() { _analisisUFWorker(PAISES_DE_DESTINO.find(p => p.country === "Peru")); }
+function copiarAnalisisUF_Para_Uruguay() { _analisisUFWorker(PAISES_DE_DESTINO.find(p => p.country === "Uruguay")); }
+
+function copiarAnalisisUF_Para_TODOS() {
+  Logger.log("INICIANDO TAREA '10 ANALISIS UF' PARA TODOS LOS PAÍSES");
+  PAISES_DE_DESTINO.forEach(pais => _analisisUFWorker(pais));
+  Logger.log("TAREA '10 ANALISIS UF' FINALIZADA");
+}

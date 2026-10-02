@@ -1,0 +1,585 @@
+<!-- _nav.html — Navegación y componentes compartidos de Mapster 2 -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<!-- Google Maps JavaScript API -->
+<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAlvfKkIkT-vh01-T9tCeZ6KV5mA3eiscM&libraries=geometry,drawing,visualization"></script>
+<!-- deck.gl para renderizado de Heatmaps de alto rendimiento con WebGL -->
+<script src="https://unpkg.com/deck.gl@latest/dist.min.js"></script>
+<!-- Chart.js para visualización analítica -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<!-- Turf.js para operaciones geoespaciales avanzadas (intersección de anillos vs cobertura) -->
+<script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
+
+<style>
+  :root {
+    --brand-red: #ea044e;
+    --brand-red-hover: #c90342;
+    --brand-red-light: #fff0f4;
+    --brand-red-glow: rgba(234, 4, 78, 0.25);
+    
+    --navy-900: #0b0f19;
+    --navy-800: #111827;
+    --navy-700: #1f2937;
+    --navy-600: #374151;
+    
+    --text-primary: #0f172a;
+    --text-secondary: #475569;
+    --text-muted: #94a3b8;
+    
+    --bg-page: #f8fafc;
+    --bg-card: #ffffff;
+    --bg-card-subtle: #f1f5f9;
+    
+    --border-color: #e2e8f0;
+    --border-subtle: #edf2f7;
+    
+    --success-text: #166534;
+    --success-bg: #dcfce7;
+    --warning-text: #854d0e;
+    --warning-bg: #fef9c3;
+    --danger-text: #991b1b;
+    --danger-bg: #fee2e2;
+    
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 14px;
+    --radius-full: 9999px;
+    
+    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+    --shadow-lg: 0 10px 25px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+    --shadow-floating: 0 20px 35px -5px rgba(15, 23, 42, 0.15), 0 8px 10px -6px rgba(15, 23, 42, 0.1);
+    
+    --transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  *, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  body {
+    font-family: 'Outfit', system-ui, -apple-system, sans-serif;
+    background-color: var(--bg-page);
+    color: var(--text-primary);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    font-size: 13px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ── Header Principal Compacto y Pro ── */
+  header.app-header {
+    background: #ffffff;
+    border-bottom: 1px solid var(--border-color);
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 14px;
+    position: relative;
+    z-index: 500;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+  }
+
+  .brand-container {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .brand-badge {
+    background: linear-gradient(135deg, var(--brand-red), #b40443);
+    color: #ffffff;
+    width: 25px;
+    height: 25px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    font-size: 11.5px;
+    box-shadow: 0 2px 6px var(--brand-red-glow);
+  }
+
+  .brand-text {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .brand-title {
+    font-size: 13px;
+    font-weight: 800;
+    color: var(--navy-900);
+    letter-spacing: -0.3px;
+    line-height: 1.15;
+  }
+
+  .brand-title span {
+    color: var(--brand-red);
+  }
+
+  .brand-subtitle {
+    font-size: 8.5px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+  }
+
+  .nav-divider {
+    width: 1px;
+    height: 18px;
+    background: var(--border-color);
+    margin: 0 8px;
+  }
+
+  /* ── Navigation Tabs ── */
+  nav.main-nav {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    background: var(--bg-card-subtle);
+    padding: 2px;
+    border-radius: 7px;
+    border: 1px solid var(--border-color);
+  }
+
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 10px;
+    border-radius: 5px;
+    font-size: 11.5px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-decoration: none;
+    transition: var(--transition);
+    cursor: pointer;
+    border: none;
+    background: transparent;
+  }
+
+  .nav-item:hover {
+    color: var(--navy-900);
+    background: rgba(255, 255, 255, 0.6);
+  }
+
+  .nav-item.active {
+    background: #990334 !important;
+    color: #ffffff !important;
+    box-shadow: 0 2px 8px rgba(153, 3, 52, 0.35);
+    font-weight: 800;
+  }
+
+  .nav-item.active .nav-item-icon svg {
+    stroke: #ffffff !important;
+  }
+
+  .nav-item-icon {
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+  }
+
+  /* ── Acciones a la derecha ── */
+  .header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .status-pill {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 10px;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: var(--radius-full);
+    background: var(--bg-card-subtle);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-color);
+    height: 26px;
+  }
+
+  .status-indicator {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #22c55e;
+    box-shadow: 0 0 6px rgba(34, 197, 94, 0.6);
+  }
+
+  /* ── Loading Overlay ── */
+  #loading-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.45);
+    backdrop-filter: blur(5px);
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    z-index: 9999;
+    color: #ffffff;
+  }
+
+  /* ── Variables y Reglas Tema Oscuro (Modo Noche) ── */
+  [data-theme="dark"] {
+    --navy-900: #f8fafc;
+    --navy-800: #f1f5f9;
+    --navy-700: #e2e8f0;
+    --navy-600: #cbd5e1;
+    
+    --text-primary: #f8fafc;
+    --text-secondary: #94a3b8;
+    --text-muted: #64748b;
+    
+    --bg-page: #0b0f19;
+    --bg-card: #131b2e;
+    --bg-card-subtle: #1e293b;
+    
+    --border-color: #27354f;
+    --border-subtle: #1e293b;
+  }
+
+  /* ── Variables y Reglas Tema Claro (Modo Día) ── */
+  [data-theme="light"] {
+    --navy-900: #0f172a;
+    --navy-800: #1e293b;
+    --navy-700: #334155;
+    --navy-600: #475569;
+    
+    --text-primary: #0f172a;
+    --text-secondary: #475569;
+    --text-muted: #64748b;
+    
+    --bg-page: #f8fafc;
+    --bg-card: #ffffff;
+    --bg-card-subtle: #f1f5f9;
+    
+    --border-color: #e2e8f0;
+    --border-subtle: #edf2f7;
+  }
+
+  [data-theme="dark"] header.app-header {
+    background: #0f172a;
+    border-bottom-color: #1e293b;
+  }
+
+  [data-theme="dark"] .brand-title {
+    color: #f8fafc;
+  }
+
+  [data-theme="dark"] nav.main-nav {
+    background: #1e293b;
+    border-color: #334155;
+  }
+
+  [data-theme="dark"] .nav-item {
+    color: #94a3b8;
+  }
+
+  [data-theme="dark"] .nav-item:hover {
+    color: #ffffff;
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  [data-theme="dark"] .nav-item.active {
+    background: #0f172a;
+    color: var(--brand-red);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+  }
+
+  [data-theme="dark"] .status-pill {
+    background: #1e293b;
+    border-color: #334155;
+    color: #cbd5e1;
+  }
+
+  [data-theme="dark"] .toast {
+    background: #1e293b;
+    border-color: #334155;
+    color: #f8fafc;
+  }
+
+  .theme-toggle-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 5px 12px;
+    border-radius: var(--radius-full);
+    border: 1.5px solid var(--border-color);
+    background: var(--bg-card);
+    color: var(--text-primary);
+    cursor: pointer;
+    font-size: 11.5px;
+    font-weight: 700;
+    transition: var(--transition);
+    user-select: none;
+  }
+
+  .theme-toggle-btn:hover {
+    border-color: var(--brand-red);
+    color: var(--brand-red);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-sm);
+  }
+
+  [data-theme="dark"] .theme-toggle-btn {
+    background: #1e293b;
+    border-color: #334155;
+    color: #f8fafc;
+  }
+
+  /* ── Notificaciones Toast Centradas en Top (No tapan el panel inferior) ── */
+  #toast-container {
+    position: fixed;
+    top: 66px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    z-index: 99999;
+    pointer-events: none;
+  }
+
+  .spinner {
+    width: 44px;
+    height: 44px;
+    border: 3.5px solid rgba(255, 255, 255, 0.2);
+    border-top-color: var(--brand-red);
+    border-radius: 50%;
+    animation: spin 0.75s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+
+  .loading-text {
+    font-size: 13.5px;
+    font-weight: 600;
+    letter-spacing: -0.2px;
+  }
+
+  .toast {
+    pointer-events: auto;
+    background: #ffffff;
+    border: 1px solid var(--border-color);
+    box-shadow: 0 10px 25px -3px rgba(0, 0, 0, 0.2);
+    border-radius: var(--radius-md);
+    padding: 8px 16px;
+    font-size: 12px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 200px;
+    max-width: 420px;
+    animation: slideInToast 0.2s ease-out;
+    transition: var(--transition);
+  }
+
+  [data-theme="dark"] .toast {
+    background: #1e293b;
+    border-color: #334155;
+    color: #f8fafc;
+  }
+
+  .toast.toast-error {
+    border-left: 4px solid var(--brand-red);
+    color: var(--danger-text);
+  }
+
+  .toast.toast-success {
+    border-left: 4px solid #16a34a;
+    color: var(--success-text);
+  }
+
+  @keyframes slideInToast {
+    from {
+      opacity: 0;
+      transform: translateY(-10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+</style>
+
+<!-- Overlay de Carga -->
+<div id="loading-overlay">
+  <div class="spinner"></div>
+  <div class="loading-text" id="loading-message">Cargando Mapster 2...</div>
+</div>
+
+<!-- Contenedor de Toasts -->
+<div id="toast-container"></div>
+
+<!-- Header y Barra de Navegación -->
+<header class="app-header">
+  <div class="brand-container">
+    <div class="brand-badge">M2</div>
+    <div class="brand-text">
+      <div class="brand-title">Mapster <span>2</span></div>
+      <div class="brand-subtitle">Footprint & Store Intelligence</div>
+    </div>
+    <div class="nav-divider"></div>
+    <nav class="main-nav">
+      <a href="<?= scriptUrl ?>?page=explorer" class="nav-item <?= activePage === 'explorer' ? 'active' : '' ?>">
+        <span class="nav-item-icon">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+        </span>
+        <span>Página 1: Store Explorer</span>
+      </a>
+      <? if (typeof isAdmin !== 'undefined' && isAdmin) { ?>
+      <a href="<?= scriptUrl ?>?page=benchmark" class="nav-item <?= activePage === 'benchmark' ? 'active' : '' ?>">
+        <span class="nav-item-icon">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
+        </span>
+        <span>Página 2: Benchmark Tiendas</span>
+      </a>
+      <a href="<?= scriptUrl ?>?page=city" class="nav-item <?= activePage === 'city' ? 'active' : '' ?>">
+        <span class="nav-item-icon">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
+        </span>
+        <span>Página 3: City Explorer</span>
+      </a>
+      <? } ?>
+    </nav>
+  </div>
+
+  <div class="header-actions">
+    <!-- Botón de Alternancia Modo Día / Noche -->
+    <button id="theme-toggle-btn" class="theme-toggle-btn" onclick="toggleTheme()" title="Alternar Modo Día / Noche">
+      <span id="theme-icon-sun" style="display:inline-flex; align-items:center;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+      </span>
+      <span id="theme-icon-moon" style="display:none; align-items:center;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+      </span>
+      <span id="theme-text-label">Modo Día</span>
+    </button>
+
+    <div class="status-pill">
+      <div class="status-indicator"></div>
+      <span id="header-status-text">Sheets Conectado</span>
+    </div>
+  </div>
+</header>
+
+<script>
+  // ── Gestión Global de Tema Día / Noche (Modo Día por Defecto) ──
+  let currentTheme = localStorage.getItem('mapster_theme') || 'light';
+
+  function applyTheme(theme) {
+    currentTheme = theme;
+    localStorage.setItem('mapster_theme', theme);
+    document.documentElement.setAttribute('data-theme', theme);
+    if (document.body) {
+      document.body.setAttribute('data-theme', theme);
+    }
+    
+    const sunIcon = document.getElementById('theme-icon-sun');
+    const moonIcon = document.getElementById('theme-icon-moon');
+    const textLabel = document.getElementById('theme-text-label');
+
+    // Muestra el icono y nombre del modo ACTIVO
+    if (theme === 'dark') {
+      if (sunIcon) sunIcon.style.display = 'none';
+      if (moonIcon) moonIcon.style.display = 'inline-flex';
+      if (textLabel) textLabel.textContent = 'Modo Noche';
+    } else {
+      if (sunIcon) sunIcon.style.display = 'inline-flex';
+      if (moonIcon) moonIcon.style.display = 'none';
+      if (textLabel) textLabel.textContent = 'Modo Día';
+    }
+
+    if (typeof window.onThemeChangeCallback === 'function') {
+      try {
+        window.onThemeChangeCallback(theme);
+      } catch (e) {
+        console.error('Error invocando onThemeChangeCallback:', e);
+      }
+    }
+
+    window.dispatchEvent(new CustomEvent('mapsterThemeChanged', { detail: { theme: theme } }));
+  }
+
+  function setAppTheme(theme) {
+    applyTheme(theme);
+    showToast(theme === 'dark' ? 'Modo Noche activado' : 'Modo Día activado', 'info');
+  }
+
+  function toggleTheme() {
+    const nextTheme = currentTheme === 'dark' ? 'light' : 'dark';
+    setAppTheme(nextTheme);
+  }
+
+  // Aplicar tema inmediatamente
+  applyTheme(currentTheme);
+
+  // Funciones de utilidad global
+  function showLoading(msg = 'Cargando...') {
+    const overlay = document.getElementById('loading-overlay');
+    const label = document.getElementById('loading-message');
+    if (label) label.textContent = msg;
+    if (overlay) overlay.style.display = 'flex';
+  }
+
+  function hideLoading() {
+    const overlay = document.getElementById('loading-overlay');
+    if (overlay) overlay.style.display = 'none';
+  }
+
+  function showToast(message, type = 'info') {
+    const container = document.getElementById('toast-container');
+    if (!container) return;
+    // Evitar que múltiples mensajes se acumulen tapando controles
+    container.innerHTML = '';
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+    toast.textContent = message;
+    container.appendChild(toast);
+    setTimeout(() => {
+      toast.style.opacity = '0';
+      toast.style.transform = 'translateY(-10px)';
+      setTimeout(() => toast.remove(), 250);
+    }, 2200);
+  }
+
+  function formatNumber(num, decimals = 0) {
+    if (num === null || num === undefined || isNaN(num)) return '—';
+    return Number(num).toLocaleString('es-AR', {
+      minimumFractionDigits: decimals,
+      maximumFractionDigits: decimals
+    });
+  }
+
+  function formatPercent(num, decimals = 1) {
+    if (num === null || num === undefined || isNaN(num)) return '—';
+    return Number(num).toLocaleString('es-AR', {
+      minimumFractionDigits: decimals,
+      maximumFractionDigits: decimals
+    }) + '%';
+  }
+
+  function formatCurrency(num, symbol = '$', decimals = 0) {
+    if (num === null || num === undefined || isNaN(num)) return '—';
+    return symbol + ' ' + Number(num).toLocaleString('es-AR', {
+      minimumFractionDigits: decimals,
+      maximumFractionDigits: decimals
+    });
+  }
+</script>

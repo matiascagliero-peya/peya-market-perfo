@@ -1,0 +1,869 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gráfico vs <?= BE_LABEL ?> — PeYa Markets</title>
+<!-- tipografía: Arial en toda la página para consistencia con los gráficos -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<style>
+:root{
+  --red:#e50044; --red-bg:rgba(229,0,68,.07); --red-mid:rgba(229,0,68,.18);
+  --blue:#2563eb; --blue-bg:rgba(37,99,235,.07);
+  --t1:#0f172a; --t2:#475569; --t3:#94a3b8; --t4:#cbd5e1;
+  --border:#e2e8f0; --border2:#f1f5f9; --bg:#f8fafc; --card:#fff;
+  --sh:0 1px 3px rgba(0,0,0,.05),0 1px 2px rgba(0,0,0,.04);
+  --sh2:0 4px 16px rgba(0,0,0,.06); --r:10px;
+  --green:#16a34a; --rose:#dc2626;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--t1);min-height:100vh;font-size:13px;font-family:Arial,sans-serif}
+
+/* ── SPLASH ── */
+#splash{position:fixed;inset:0;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;transition:opacity .3s;gap:12px}
+#splash.out{opacity:0;pointer-events:none}
+.spinner{width:36px;height:36px;border:3px solid rgba(229,0,68,.12);border-top-color:var(--red);border-radius:50%;animation:sp .75s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+
+/* ── FILTER BAR ── */
+.fbar{background:rgba(255,255,255,.98);backdrop-filter:blur(8px);border-bottom:1px solid var(--border);padding:10px 20px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;position:sticky;top:52px;z-index:290}
+.fg{display:flex;align-items:center;gap:8px}
+.fl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--t3);white-space:nowrap}
+.fs{border:1px solid var(--border);background:#fff;border-radius:7px;padding:6px 10px;font-size:12px;font-weight:600;color:var(--t1);font-family:Arial,sans-serif;cursor:pointer;outline:none;transition:border-color .15s;min-width:140px}
+.fs:focus{border-color:var(--red)}
+.date-input{border:1px solid var(--border);background:#fff;border-radius:7px;padding:6px 10px;font-size:12px;font-weight:500;color:var(--t1);font-family:Arial,sans-serif;outline:none;transition:border-color .15s;width:125px}
+.date-input:focus{border-color:var(--red)}
+.date-arrow{color:var(--t3);font-size:12px;font-weight:500}
+.btn-mtd{height:30px;padding:0 10px;border:1px solid var(--border);border-radius:7px;background:#fff;color:var(--t2);font-family:Arial,sans-serif;font-size:11px;font-weight:700;cursor:pointer;transition:all .15s;text-transform:uppercase;letter-spacing:.4px}
+.btn-mtd.active,.btn-mtd:hover{background:var(--red);border-color:var(--red);color:#fff}
+.fsep{width:1px;height:20px;background:var(--border);flex-shrink:0}
+
+/* ── PAGE ── */
+.page{padding:20px;max-width:1200px;margin:0 auto;display:flex;flex-direction:column;gap:20px}
+
+/* ── CHART PANEL ── */
+.chart-panel{background:var(--card);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;box-shadow:var(--sh)}
+.panel-accent{height:3px}
+.panel-body{padding:18px 20px 20px}
+.panel-header{display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;margin-bottom:14px}
+.ph-left{}
+.metric-name{font-size:18px;font-weight:700;font-family:Arial,sans-serif;letter-spacing:-.3px;margin-bottom:3px;display:flex;align-items:center;gap:8px}
+.metric-period{font-size:11px;color:var(--t3);font-weight:500;font-family:monospace}
+.be-badge{display:inline-block;background:rgba(100,116,139,.1);color:var(--t2);font-size:9px;font-weight:700;padding:2px 8px;border-radius:12px;letter-spacing:.5px;text-transform:uppercase;font-family:Arial,sans-serif;white-space:nowrap;line-height:1.6}
+.kpi-strip{display:flex;gap:8px;flex-wrap:wrap}
+.kpi-card{background:var(--bg);border:1px solid var(--border2);border-radius:8px;padding:8px 14px;min-width:110px}
+.kpi-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--t3);margin-bottom:3px}
+.kpi-val{font-size:20px;font-weight:700;letter-spacing:-.5px;line-height:1.1;font-variant-numeric:tabular-nums}
+.kpi-val.muted{color:var(--t3);font-size:16px;font-weight:500}
+.kpi-val.up{color:var(--green)}
+.kpi-val.down{color:var(--rose)}
+.btn-copy{display:flex;align-items:center;gap:5px;height:27px;padding:0 10px;border:1px solid var(--border);border-radius:7px;background:transparent;color:var(--t2);font-family:Arial,sans-serif;font-size:11px;font-weight:600;cursor:pointer;transition:all .15s;white-space:nowrap}
+.btn-copy:hover{background:var(--bg);border-color:var(--t4);color:var(--t1)}
+.btn-copy svg{width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round}
+.panel-actions{display:flex;flex-direction:column;align-items:flex-end;gap:8px}
+.chart-legend{display:flex;gap:14px;margin-bottom:10px;flex-wrap:wrap}
+.legend-item{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600;color:var(--t2)}
+.legend-bar{width:12px;height:10px;border-radius:3px;flex-shrink:0}
+.legend-line{width:20px;height:2px;flex-shrink:0;border-radius:1px}
+.canvas-wrap{position:relative;width:100%;height:306px}
+.canvas-wrap canvas{display:block}
+
+@media(max-width:700px){
+  .fbar{position:static;padding:8px 12px;gap:10px}
+  .page{padding:12px;gap:14px}
+  .panel-body{padding:12px 14px 14px}
+  .kpi-val{font-size:17px}
+  .canvas-wrap{height:246px}
+  .date-input{width:105px}
+  .panel-header{flex-direction:column}
+  .panel-actions{align-items:flex-start}
+}
+/* ── NAV ── */
+nav{background:#fff;border-bottom:1px solid var(--border);height:52px;display:flex;align-items:center;padding:0 20px;position:sticky;top:0;z-index:300;box-shadow:0 1px 0 var(--border)}
+.n-brand{display:flex;align-items:center;gap:7px;margin-right:18px;flex-shrink:0}
+.n-dot{width:7px;height:7px;border-radius:50%;background:var(--red)}
+.n-divider{width:1px;height:20px;background:var(--border);margin:0 10px;flex-shrink:0}
+.n-tabs{display:flex;gap:2px}
+.n-tab{display:flex;align-items:center;gap:5px;padding:5px 11px;border-radius:7px;border:none;background:transparent;font-size:12px;font-weight:500;color:var(--t3);cursor:pointer;transition:all .15s;font-family:Arial,sans-serif;white-space:nowrap;text-decoration:none}
+.n-tab svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.n-tab.active{background:var(--bg);color:var(--t1);font-weight:600}
+.n-tab:hover:not(.active){background:var(--border2);color:var(--t2)}
+.n-right{margin-left:auto;display:flex;align-items:center;gap:8px}
+.n-btn{height:30px;border:1px solid var(--border);background:#fff;border-radius:7px;padding:0 11px;font-size:11px;font-weight:600;color:var(--t2);cursor:pointer;display:flex;align-items:center;gap:5px;transition:all .15s;font-family:Arial,sans-serif}
+.n-btn:hover{border-color:var(--t4);color:var(--t1)}
+.n-btn svg{width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round}
+</style>
+</head>
+<body>
+
+<div id="splash">
+  <div style="font-weight:700;font-size:15px;color:var(--t2)">PedidosYa Markets</div>
+  <div class="spinner"></div>
+  <div style="font-size:12px;color:var(--t3);font-weight:500">Cargando gráficos...</div>
+</div>
+
+<script>window.PAGE_ID='grafic';</script>
+<?!= include('_nav'); ?>
+<script>
+if (typeof google === 'undefined' || !google.script) {
+  (function(){
+    var FD={AR:[45200,380000],CL:[28400,215000],CO:[21900,165000],PE:[18600,140000],UY:[11800,95000],EC:[8400,64000],DO:[7600,58000],PA:[6200,48000],BO:[5100,38000],GT:[4600,35000],PY:[4100,31000],SV:[3300,25000],HN:[2900,22000],NI:[1600,12000]};
+    var CCS=Object.keys(FD);
+    function buildCharts(){
+      var now=new Date(),y=now.getFullYear(),m=now.getMonth(),today=now.getDate(),recs=[];
+      var rrData={orders:{},gmv:{}},soR=0,sbR=0,soG=0,sbG=0;
+      CCS.forEach(function(cc){
+        var bo=FD[cc][0],bg=FD[cc][1];
+        for(var day=1;day<=today;day++){
+          var dt=new Date(y,m,day),dd=('0'+day).slice(-2),mo=dt.toLocaleString('en-US',{month:'short'}),n=0.9+Math.random()*.2;
+          recs.push({c:cc,d:dt.getTime(),lbl:dd+'-'+mo,o:Math.round(bo*n*(0.85+day*.005)),g:Math.round(bg*n*(0.85+day*.005)),tarO:Math.round(bo),tarG:Math.round(bg)});
+        }
+        var rrO=Math.round(bo*30*(0.95+Math.random()*.1)),beO=Math.round(bo*30);
+        var rrG=Math.round(bg*30*(0.95+Math.random()*.1)),beG=Math.round(bg*30);
+        rrData.orders[cc]={rr:rrO,be:beO,varBe:beO?((rrO-beO)/Math.abs(beO))*100:null,varLY:null,ly:null};
+        rrData.gmv[cc]={rr:rrG,be:beG,varBe:beG?((rrG-beG)/Math.abs(beG))*100:null,varLY:null,ly:null};
+        soR+=rrO;sbR+=beO;soG+=rrG;sbG+=beG;
+      });
+      rrData.orders.LATAM={rr:soR,be:sbR,varBe:sbR?((soR-sbR)/Math.abs(sbR))*100:null,varLY:null,ly:null};
+      rrData.gmv.LATAM={rr:soG,be:sbG,varBe:sbG?((soG-sbG)/Math.abs(sbG))*100:null,varLY:null,ly:null};
+      return{records:recs,countries:CCS,months:[],rrData:rrData};
+    }
+    var _cb=null;
+    var runner={
+      withSuccessHandler:function(cb){_cb=cb;return runner;},
+      withFailureHandler:function(){return runner;},
+      fetchDailyCharts:function(){var c=_cb;_cb=null;setTimeout(function(){c&&c(buildCharts());},400);},
+      fetchRRData:function(){var c=_cb;_cb=null;setTimeout(function(){c&&c(buildCharts().rrData);},300);},
+      forceRefreshDataFast:function(){var c=_cb;_cb=null;setTimeout(function(){if(c)c(true);},100);},
+      getScriptUrl:function(){var c=_cb;_cb=null;setTimeout(function(){c&&c('');},20);}
+    };
+    window.google={script:{run:runner}};
+  })();
+}
+</script>
+
+<div class="fbar">
+  <div class="fg">
+    <span class="fl">País</span>
+    <select class="fs" id="f-country" onchange="renderCharts()">
+      <option value="LATAM">LATAM — Todos</option>
+    </select>
+  </div>
+  <div class="fsep"></div>
+  <div class="fg">
+    <span class="fl">Rango</span>
+    <input type="date" class="date-input" id="f-start" onchange="onDateChange()">
+    <span class="date-arrow">→</span>
+    <input type="date" class="date-input" id="f-end" onchange="onDateChange()">
+    <button class="btn-mtd active" id="btn-mtd" onclick="setMTD()">MTD</button>
+  </div>
+</div>
+
+<div id="grafic-error" style="display:none;margin:20px auto;max-width:600px;padding:14px 18px;background:#fff1f2;border:1px solid #fecdd3;border-radius:8px;color:#be123c;font-size:12px;font-weight:600;"></div>
+
+<div class="page">
+  <!-- ORDERS -->
+  <div class="chart-panel" id="panel-orders">
+    <div class="panel-accent" style="background:var(--red)"></div>
+    <div class="panel-body">
+      <div class="panel-header">
+        <div class="ph-left">
+          <div class="metric-name" style="color:var(--red)">Confirmed Orders</div>
+          <div class="metric-period" id="orders-period">—</div>
+        </div>
+        <div class="panel-actions">
+          <button class="btn-copy" onclick="copyPNG('panel-orders',this)">
+            <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>PNG
+          </button>
+          <div class="kpi-strip">
+            <div class="kpi-card">
+              <div class="kpi-lbl" style="color:var(--red)">Acumulado</div>
+              <div class="kpi-val" id="orders-total">—</div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-lbl"><span class="be-badge be-label" style="font-size:8px;padding:1px 6px;vertical-align:middle"></span></div>
+              <div class="kpi-val muted" id="orders-target">—</div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-lbl">vs <span class="be-label"></span></div>
+              <div class="kpi-val" id="orders-vs-target">—</div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-lbl" style="color:#7c3aed"><span id="orders-rr-lbl">RR Mes</span> <span id="orders-rr-dt" style="font-weight:600;font-size:8px;color:#94a3b8"></span></div>
+              <div class="kpi-val" id="orders-rr">—</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="chart-legend">
+        <span class="legend-item"><span class="legend-bar" style="background:#16a34a;opacity:.8"></span>≥ <span class="be-label"></span></span>
+        <span class="legend-item"><span class="legend-bar" style="background:#dc2626;opacity:.8"></span>&lt; <span class="be-label"></span></span>
+        <span class="legend-item"><span class="legend-line" style="background:#1e293b"></span><span class="be-badge be-label" style="font-size:8px;padding:1px 6px;vertical-align:middle"></span></span>
+      </div>
+      <div class="canvas-wrap"><canvas id="chart-orders"></canvas></div>
+    </div>
+  </div>
+
+  <!-- GMV -->
+  <div class="chart-panel" id="panel-gmv">
+    <div class="panel-accent" style="background:var(--blue)"></div>
+    <div class="panel-body">
+      <div class="panel-header">
+        <div class="ph-left">
+          <div class="metric-name" style="color:var(--blue)">GMV User Dmarts</div>
+          <div class="metric-period" id="gmv-period">—</div>
+        </div>
+        <div class="panel-actions">
+          <button class="btn-copy" onclick="copyPNG('panel-gmv',this)">
+            <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>PNG
+          </button>
+          <div class="kpi-strip">
+            <div class="kpi-card">
+              <div class="kpi-lbl" style="color:var(--blue)">Acumulado</div>
+              <div class="kpi-val" id="gmv-total">—</div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-lbl"><span class="be-badge be-label" style="font-size:8px;padding:1px 6px;vertical-align:middle"></span></div>
+              <div class="kpi-val muted" id="gmv-target">—</div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-lbl">vs <span class="be-label"></span></div>
+              <div class="kpi-val" id="gmv-vs-target">—</div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-lbl" style="color:#7c3aed"><span id="gmv-rr-lbl">RR Mes</span> <span id="gmv-rr-dt" style="font-weight:600;font-size:8px;color:#94a3b8"></span></div>
+              <div class="kpi-val" id="gmv-rr">—</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="chart-legend">
+        <span class="legend-item"><span class="legend-bar" style="background:#16a34a;opacity:.8"></span>≥ <span class="be-label"></span></span>
+        <span class="legend-item"><span class="legend-bar" style="background:#dc2626;opacity:.8"></span>&lt; <span class="be-label"></span></span>
+        <span class="legend-item"><span class="legend-line" style="background:#1e293b"></span><span class="be-badge be-label" style="font-size:8px;padding:1px 6px;vertical-align:middle"></span></span>
+      </div>
+      <div class="canvas-wrap"><canvas id="chart-gmv"></canvas></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Tipografía Arial + plugin datalabels ────────────────────────
+if(typeof Chart!=='undefined'){
+  Chart.defaults.font.family="Arial,sans-serif";
+  Chart.defaults.font.size=12;
+  Chart.defaults.color='#64748b';
+  if(typeof ChartDataLabels!=='undefined') Chart.register(ChartDataLabels);
+}
+
+// ── Cache localStorage ──────────────────────────────────────────
+const GRAFIC_CACHE_KEY='peya_grafic_v3', GRAFIC_CACHE_TTL=30*60*1000;
+function getGraficCache(){try{const c=localStorage.getItem(GRAFIC_CACHE_KEY);if(!c)return null;const p=JSON.parse(c);if(Date.now()>p.expiry){localStorage.removeItem(GRAFIC_CACHE_KEY);return null;}return p.data;}catch(e){return null;}}
+function setGraficCache(d){try{localStorage.setItem(GRAFIC_CACHE_KEY,JSON.stringify({data:d,expiry:Date.now()+GRAFIC_CACHE_TTL}));}catch(e){}}
+
+function doRefresh() {
+  localStorage.removeItem(GRAFIC_CACHE_KEY);
+  fetchData(true);
+}
+
+const CCN = {AR:'Argentina',BO:'Bolivia',CL:'Chile',CO:'Colombia',EC:'Ecuador',SV:'El Salvador',GT:'Guatemala',HN:'Honduras',NI:'Nicaragua',PA:'Panamá',PY:'Paraguay',PE:'Perú',UY:'Uruguay',DO:'Rep. Dominicana',MX:'México'};
+
+let RAW = null, dataMaxDate = null, isMTD = true, RR_DATA = {orders:{},gmv:{}};
+let chOrders = null, chGmv = null;
+let _splashTimer = null;
+
+// ── Helpers de control del splash ────────────────────────────────
+function splashOut() {
+  if (_splashTimer) { clearTimeout(_splashTimer); _splashTimer = null; }
+  document.getElementById('splash').classList.add('out');
+}
+function splashError(msg) {
+  splashOut();
+  const el = document.getElementById('grafic-error');
+  if (el) { el.textContent = msg || 'Error al cargar datos.'; el.style.display = 'block'; }
+}
+
+// ── Init ────────────────────────────────────────────────────────
+window.addEventListener('load', () => fetchData(false));
+
+function fetchData(force) {
+  const splash = document.getElementById('splash');
+  splash.classList.remove('out');
+  const errEl = document.getElementById('grafic-error');
+  if (errEl) errEl.style.display = 'none';
+
+  // Seguro antibloqueo: si en 45s no cargó, quita el splash y muestra error
+  if (_splashTimer) clearTimeout(_splashTimer);
+  _splashTimer = setTimeout(() => splashOut(), 45000);
+
+  const onData = res => {
+    try { setGraficCache(res); processData(res); }
+    catch(e) { console.error('[grafic] processData error:', e); splashError('Error al procesar datos: ' + e.message); }
+  };
+  const onFail = err => splashError('Error del servidor: ' + (err && err.message ? err.message : String(err)));
+
+  if (force) {
+    google.script.run
+      .withSuccessHandler(() =>
+        google.script.run.withSuccessHandler(onData).withFailureHandler(onFail).fetchDailyCharts()
+      )
+      .withFailureHandler(() =>
+        google.script.run.withSuccessHandler(onData).withFailureHandler(onFail).fetchDailyCharts()
+      )
+      .forceRefreshDataFast();
+  } else {
+    const cached = getGraficCache();
+    if (cached) {
+      try { processData(cached); }
+      catch(e) {
+        console.error('[grafic] cache processData error:', e);
+        localStorage.removeItem(GRAFIC_CACHE_KEY);
+        // Reintentar sin caché
+        google.script.run.withSuccessHandler(onData).withFailureHandler(onFail).fetchDailyCharts();
+      }
+      return;
+    }
+    google.script.run.withSuccessHandler(onData).withFailureHandler(onFail).fetchDailyCharts();
+  }
+}
+
+function processData(res) {
+  if (!res || res.error) {
+    splashError(res && res.error ? 'Error: ' + res.error : 'Sin datos del servidor.');
+    return;
+  }
+  RAW = res.records || [];
+  RR_DATA = res.rrData || {orders:{},gmv:{}};
+
+  // Country selector
+  const sel = document.getElementById('f-country');
+  sel.innerHTML = '<option value="LATAM">LATAM — Todos</option>';
+  (res.countries || []).filter(c => c !== 'LATAM' && c !== 'LATAM ex AR').forEach(c => {
+    const o = document.createElement('option');
+    o.value = c; o.textContent = CCN[c] || c;
+    sel.appendChild(o);
+  });
+
+  // Max date CON DATO REAL (actual de orders o gmv). Ignoramos días que solo tienen
+  // TARGET (p. ej. los días futuros del mes en curso, que vienen con target cargado
+  // pero sin actual): antes esos hacían que dataMaxDate apuntara a un mes futuro y el
+  // MTD saliera vacío. Así el MTD arranca en el ÚLTIMO MES CON DATOS (p. ej. junio
+  // completo si estamos a principios del mes siguiente).
+  let maxMs = -Infinity;
+  RAW.forEach(r => { if ((r.o != null || r.g != null) && r.d > maxMs) maxMs = r.d; });
+  dataMaxDate = maxMs !== -Infinity ? new Date(maxMs) : new Date();
+
+  setMTD();
+  splashOut();
+  loadGraficRR();   // RR Mes aparte (no bloquea el gráfico); rellena los KPIs al llegar
+}
+
+// ── RR Mes (run-rate mensual, NO varía con los días) ─────────────
+// Se pide aparte con fetchRRData() y se muestra el RR del país seleccionado.
+function loadGraficRR() {
+  if (typeof google === 'undefined' || !google.script || !google.script.run) return;
+  google.script.run
+    .withSuccessHandler(function(rr){ if(rr){ RR_DATA = rr; updateRRKpis(); } })
+    .withFailureHandler(function(){})
+    .fetchRRData();
+}
+// Texto "hasta DD/MM" del último día con dato del KPI (aviso si está atrasado vs el corte).
+function rrDtHtml(kpiKey){
+  const meta = RR_DATA && RR_DATA.meta;
+  if (!meta || !meta.lastByKpi) return '';
+  const dt = meta.lastByKpi[kpiKey]; if (!dt) return '';
+  const behind = meta.cutoff && dt < meta.cutoff;
+  const warnIco = behind ? '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="vertical-align:-1px;margin-right:3px"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>' : '';
+  return warnIco + 'hasta ' + dt.slice(8,10) + '/' + dt.slice(5,7);
+}
+function updateRRKpis() {
+  const c = (document.getElementById('f-country').value) || 'LATAM';
+  const o = (RR_DATA && RR_DATA.orders && RR_DATA.orders[c]) ? RR_DATA.orders[c].rr : null;
+  const g = (RR_DATA && RR_DATA.gmv && RR_DATA.gmv[c]) ? RR_DATA.gmv[c].rr : null;
+  const oe = document.getElementById('orders-rr'), ge = document.getElementById('gmv-rr');
+  if (oe) oe.textContent = (o != null) ? fmtK(o)   : '—';
+  if (ge) ge.textContent = (g != null) ? fmtEur(g) : '—';
+  const inc = (RR_DATA && RR_DATA.meta && RR_DATA.meta.incomplete) || {};
+  const od = document.getElementById('orders-rr-dt'), gd = document.getElementById('gmv-rr-dt');
+  if (od) { od.innerHTML = rrDtHtml('orders'); od.style.color = inc.orders ? '#e11d48' : '#94a3b8'; }
+  if (gd) { gd.innerHTML = rrDtHtml('gmv');    gd.style.color = inc.gmv    ? '#e11d48' : '#94a3b8'; }
+  // Si el mes ya cerró, el KPI "RR Mes" pasa a "Cierre de mes" (flag isMonthClose).
+  const closeLbl = (RR_DATA && RR_DATA.meta && RR_DATA.meta.isMonthClose) ? 'Cierre de mes' : 'RR Mes';
+  const ol = document.getElementById('orders-rr-lbl'), gl = document.getElementById('gmv-rr-lbl');
+  if (ol) ol.textContent = closeLbl;
+  if (gl) gl.textContent = closeLbl;
+}
+
+// ── Date controls ───────────────────────────────────────────────
+function setMTD() {
+  isMTD = true;
+  document.getElementById('btn-mtd').classList.add('active');
+  const ref = dataMaxDate || new Date();
+  const y = ref.getFullYear(), m = ref.getMonth();
+  const fmt = d => d.toISOString().slice(0,10);
+  document.getElementById('f-start').value = fmt(new Date(y, m, 1));
+  document.getElementById('f-end').value   = fmt(new Date(y, m+1, 0)); // último día del mes
+  enforceSingleMonth();
+  renderCharts();
+}
+
+// ── Rango limitado a un único mes (el inicio manda) ──────────────
+function monthEndOf(d){ const p=d.split('-'); const last=new Date(+p[0],+p[1],0).getDate(); return d.slice(0,7)+'-'+('0'+last).slice(-2); }
+function enforceSingleMonth(){
+  const s=document.getElementById('f-start'), e=document.getElementById('f-end');
+  if(!s.value) return;
+  const cap=monthEndOf(s.value);
+  e.min=s.value; e.max=cap;
+  if(!e.value||e.value<s.value) e.value=s.value;
+  else if(e.value>cap) e.value=cap;
+}
+
+function onDateChange() {
+  isMTD = false;
+  document.getElementById('btn-mtd').classList.remove('active');
+  enforceSingleMonth();
+  renderCharts();
+}
+
+// ── Variación diaria vs Target ───────────────────────────────────
+function computeVariations(pts, key, tarKey) {
+  return pts.map(r => {
+    const cur = r[key], tar = r[tarKey];
+    if (cur == null || tar == null || tar === 0) return null;
+    return (cur - tar) / tar * 100;
+  });
+}
+
+// ── Render ──────────────────────────────────────────────────────
+function renderCharts() {
+  if (!RAW) return;
+  const country   = document.getElementById('f-country').value;
+  const startStr  = document.getElementById('f-start').value;
+  const endStr    = document.getElementById('f-end').value;
+  if (!startStr || !endStr) return;
+
+  const startTs = new Date(startStr + 'T00:00:00').getTime();
+  const endTs   = new Date(endStr   + 'T23:59:59').getTime();
+
+  // Aggregate by day
+  const temp = {};
+  RAW.forEach(r => {
+    if (r.c === 'LATAM') return;
+    if (country !== 'LATAM' && r.c !== country) return;
+    if (r.d < startTs || r.d > endTs) return;
+    if (!temp[r.d]) temp[r.d] = { d:r.d, lbl:r.lbl, o:null, g:null, tarO:0, tarG:0 };
+    if (r.o != null) temp[r.d].o = (temp[r.d].o == null ? 0 : temp[r.d].o) + r.o;
+    if (r.g != null) temp[r.d].g = (temp[r.d].g == null ? 0 : temp[r.d].g) + r.g;
+    if (r.tarO != null) temp[r.d].tarO += r.tarO;
+    if (r.tarG != null) temp[r.d].tarG += r.tarG;
+  });
+
+  let pts = Object.values(temp).sort((a,b) => a.d - b.d);
+
+  // Extender hasta endStr — días sin actuals muestran línea de target
+  const lastPtTs = pts.length ? pts[pts.length-1].d : startTs;
+  if (endTs > lastPtTs) {
+    let lastTarO = 0, lastTarG = 0;
+    for (let i = pts.length-1; i >= 0; i--) {
+      if (!lastTarO && pts[i].tarO > 0) lastTarO = pts[i].tarO;
+      if (!lastTarG && pts[i].tarG > 0) lastTarG = pts[i].tarG;
+      if (lastTarO && lastTarG) break;
+    }
+    const dayMs = 86400000;
+    let cur = new Date(lastPtTs + dayMs);
+    while (cur.getTime() <= endTs) {
+      const dd = ('0'+cur.getDate()).slice(-2);
+      const mo = cur.toLocaleString('en-US', {month:'short'});
+      pts.push({ d:cur.getTime(), lbl:dd+'-'+mo, o:null, g:null, tarO:lastTarO, tarG:lastTarG });
+      cur = new Date(cur.getTime() + dayMs);
+    }
+  }
+
+  const labels = pts.map(r => r.lbl);
+  const dataO  = pts.map(r => r.o);
+  const dataG  = pts.map(r => r.g);
+
+  // Check if there is any positive target in the series to decide if we draw the line
+  const hasTargetO = pts.some(r => r.tarO > 0);
+  const hasTargetG = pts.some(r => r.tarG > 0);
+
+  const tarO   = pts.map(r => hasTargetO ? r.tarO : null);
+  const tarG   = pts.map(r => hasTargetG ? r.tarG : null);
+
+  // Variación diaria vs Target
+  const varO = computeVariations(pts, 'o', 'tarO');
+  const varG = computeVariations(pts, 'g', 'tarG');
+
+  const sumO = dataO.reduce((s,v)=>s+(v||0),0);
+  const sumG = dataG.reduce((s,v)=>s+(v||0),0);
+  // Target solo para los días con datos reales (para comparar manzanas con manzanas)
+  // Target acumulado SOLO hasta donde hay actuals reales (>0). Un día con
+  // actual 0/null = "sin datos todavía" (GMV suele llegar más tarde) y no suma.
+  const sumTarO = pts.filter(r => r.o != null && r.o > 0).reduce((s,r) => s + (r.tarO||0), 0);
+  const sumTarG = pts.filter(r => r.g != null && r.g > 0).reduce((s,r) => s + (r.tarG||0), 0);
+
+  // vs Target (%)
+  const vsO = sumTarO > 0 ? (sumO - sumTarO) / sumTarO * 100 : null;
+  const vsG = sumTarG > 0 ? (sumG - sumTarG) / sumTarG * 100 : null;
+
+  const cName = country==='LATAM'?'LATAM':(CCN[country]||country);
+  const pS = pts.length?pts[0].lbl:'—';
+  const pE = pts.length?pts[pts.length-1].lbl:'—';
+  const period = `${cName}  ·  ${pS} → ${pE}`;
+
+  document.getElementById('orders-period').textContent = period;
+  document.getElementById('gmv-period').textContent    = period;
+  document.getElementById('orders-total').textContent  = fmtK(sumO);
+  document.getElementById('orders-target').textContent = sumTarO > 0 ? fmtK(sumTarO) : '—';
+  document.getElementById('gmv-total').textContent     = fmtEur(sumG);
+  document.getElementById('gmv-target').textContent    = sumTarG > 0 ? fmtEur(sumTarG) : '—';
+
+  // vs Target KPI
+  setVsTarget('orders-vs-target', vsO);
+  setVsTarget('gmv-vs-target', vsG);
+
+  buildBarChart('chart-orders', labels, dataO, tarO, '#e50044', 'rgba(229,0,68,.70)', chOrders, inst=>chOrders=inst, false, varO);
+  buildBarChart('chart-gmv',    labels, dataG, tarG, '#2563eb', 'rgba(37,99,235,.70)', chGmv,    inst=>chGmv=inst,    true,  varG);
+
+  updateRRKpis();   // RR Mes del país seleccionado (no depende del rango de fechas)
+}
+
+// ── Helper: actualiza el chip "vs Target" ─────────────────────────
+function setVsTarget(elId, val) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  if (val == null) { el.textContent = '—'; el.className = 'kpi-val'; return; }
+  const sign = val >= 0 ? '+' : '';
+  el.textContent = sign + val.toFixed(1) + '%';
+  el.className = 'kpi-val ' + (val >= 0 ? 'up' : 'down');
+}
+
+// ── Chart builder: bars (actuals) + solid line (target) + var diaria ──
+// Las barras se colorean según la variación vs target del día:
+// verde si actual ≥ target, rojo si actual < target, gris si no hay target.
+function buildBarChart(canvasId, labels, actual, target, lineColor, barColor, existing, setInst, isGmv, varData) {
+  if (existing) existing.destroy();
+  const ctx = document.getElementById(canvasId).getContext('2d');
+  const fmtShortLocal = v => isGmv ? fmtShort(v)+'€' : fmtShort(v);
+
+  const GREEN_BG='rgba(22,163,74,.75)',  GREEN_BD='#16a34a';
+  const ROSE_BG ='rgba(220,38,38,.75)',  ROSE_BD ='#dc2626';
+  const NEU_BG  ='rgba(148,163,184,.55)',NEU_BD  ='#94a3b8';
+  const barBg = actual.map((v,i)=>{
+    const d = varData && varData[i];
+    if (v == null || d == null) return NEU_BG;
+    return d >= 0 ? GREEN_BG : ROSE_BG;
+  });
+  const barBd = actual.map((v,i)=>{
+    const d = varData && varData[i];
+    if (v == null || d == null) return NEU_BD;
+    return d >= 0 ? GREEN_BD : ROSE_BD;
+  });
+
+  // Índice del último punto con valor real de target
+  const lastTgtIdx = target.reduce((acc, v, i) => v != null ? i : acc, -1);
+
+  // Plugin inline: dibuja la variación diaria en color debajo del eje X
+  const dayVarPlugin = {
+    id: 'dayVar_' + canvasId,
+    afterDraw(chart) {
+      if (!varData || !varData.length) return;
+      const cCtx = chart.ctx;
+      const xs   = chart.scales && chart.scales.x;
+      if (!xs) return;
+      const yv = xs.bottom + 5;
+      const barMeta = chart.getDatasetMeta(0);
+      varData.forEach((v, i) => {
+        if (v == null) return;
+        const el = barMeta && barMeta.data && barMeta.data[i];
+        if (!el) return;
+        const x = el.x;
+        if (!isFinite(x)) return;
+        const isPos = v >= 0;
+        const text  = (isPos ? '▲+' : '▼') + v.toFixed(1) + '%';
+        cCtx.save();
+        cCtx.translate(x, yv);
+        cCtx.rotate(-Math.PI / 4);
+        cCtx.font         = '700 8px Arial, sans-serif';
+        cCtx.textAlign    = 'right';
+        cCtx.textBaseline = 'alphabetic';
+        cCtx.fillStyle    = isPos ? '#16a34a' : '#dc2626';
+        cCtx.fillText(text, 0, 0);
+        cCtx.restore();
+      });
+    }
+  };
+
+  const inst = new Chart(ctx, {
+    plugins: [dayVarPlugin],
+    data: {
+      labels,
+      datasets: [
+        {
+          type: 'bar',
+          label: 'Actuals',
+          data: actual,
+          backgroundColor: barBg,
+          borderColor: barBd,
+          borderWidth: 1,
+          borderRadius: 3,
+          borderSkipped: false,
+          barPercentage: 0.95,
+          categoryPercentage: 0.95,
+          order: 2,
+          datalabels: {
+            anchor: 'center',
+            align: 'center',
+            color: 'rgba(255,255,255,0.95)',
+            font: { family:"Arial,sans-serif", size:9, weight:'800' },
+            formatter: (v) => {
+              if (v == null) return null;
+              const a = Math.abs(v);
+              if (a >= 1e6) return (v/1e6).toFixed(2) + (isGmv ? 'M€' : 'M');
+              if (a >= 1e3) return (v/1e3).toFixed(0) + (isGmv ? 'k€' : 'k');
+              return v.toFixed(0);
+            },
+            display: (ctx) => {
+              const v = ctx.dataset.data[ctx.dataIndex];
+              if (v == null || v === 0) return false;
+              const meta = ctx.chart.getDatasetMeta(ctx.datasetIndex);
+              const bar  = meta.data[ctx.dataIndex];
+              return bar && bar.width >= 26;
+            }
+          }
+        },
+        {
+          type: 'line',
+          label: window.BE_LABEL,
+          data: target,
+          borderColor: '#1e293b',
+          borderWidth: 2,
+          fill: false,
+          tension: 0.1,
+          pointRadius: 0,
+          pointHoverRadius: 4,
+          spanGaps: true,
+          order: 1,
+          datalabels: {
+            anchor: 'end',
+            align: 'right',
+            offset: 6,
+            color: '#1e293b',
+            backgroundColor: 'rgba(255,255,255,0.92)',
+            borderColor: '#1e293b',
+            borderRadius: 5,
+            borderWidth: 1,
+            padding: { top:2, bottom:2, left:5, right:5 },
+            font: { family:"Arial,sans-serif", size:9, weight:'700' },
+            formatter: (v) => v == null ? null : '▶ ' + fmtShortLocal(v),
+            display: (ctx) => ctx.dataIndex === lastTgtIdx,
+          }
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      layout: { padding: { right: 68, bottom: 30 } },
+      interaction: { mode:'index', intersect:false },
+      plugins: {
+        legend: { display:false },
+        tooltip: {
+          backgroundColor: '#1e293b',
+          titleColor: '#f1f5f9',
+          bodyColor: 'rgba(241,245,249,.75)',
+          titleFont: { family:"Arial,sans-serif", size:11, weight:'600' },
+          bodyFont:  { family:"Arial,sans-serif", size:11 },
+          padding:   { x:12, y:9 },
+          cornerRadius: 8,
+          displayColors: true,
+          boxWidth: 10, boxHeight: 10,
+          callbacks: {
+            label: function(ctx) {
+              const v = ctx.raw;
+              if (v===null) return null;
+              const fmt = isGmv ? fmtEur : fmtK;
+              return ` ${ctx.dataset.label}: ${fmt(v)}`;
+            },
+            afterBody: function(items) {
+              // Muestra la variación diaria vs target en el tooltip
+              const i = items[0] && items[0].dataIndex;
+              if (i == null) return;
+              const v = varData && varData[i];
+              if (v == null) return;
+              const sign = v >= 0 ? '+' : '';
+              return ` vs ${window.BE_LABEL}: ${sign}${v.toFixed(1)}%`;
+            }
+          }
+        },
+        datalabels: { display: false },
+      },
+      scales: {
+        x: {
+          grid: { display:false },
+          border: { display:false },
+          ticks: {
+            font: { family:"Arial,sans-serif", size:10 },
+            color: '#94a3b8',
+            maxRotation: 0,
+            autoSkip: true,
+            maxTicksLimit: 15,
+          }
+        },
+        y: {
+          grid: { color:'#f1f5f9', lineWidth:1 },
+          border: { display:false },
+          ticks: {
+            font: { family:"Arial,sans-serif", size:10 },
+            color: '#94a3b8',
+            callback: v => isGmv ? fmtShort(v)+'€' : fmtShort(v),
+          }
+        }
+      }
+    }
+  });
+
+  setInst(inst);
+}
+
+// ── Formatters (todos con 1 decimal) ────────────────────────────
+function fmtK(v) {
+  if (v==null||isNaN(v)) return '—';
+  const a=Math.abs(v);
+  if(a>=1e6) return (v/1e6).toFixed(2)+'M';
+  if(a>=1e3) return (v/1e3).toFixed(1)+'k';
+  return v.toFixed(1);
+}
+function fmtEur(v) {
+  if (v==null||isNaN(v)) return '—';
+  const a=Math.abs(v);
+  if(a>=1e6) return (v/1e6).toFixed(2)+'M €';
+  if(a>=1e3) return (v/1e3).toFixed(1)+'k €';
+  return v.toFixed(1)+' €';
+}
+function fmtShort(v) {
+  if(v==null||isNaN(v)) return '';
+  const a=Math.abs(v);
+  if(a>=1e6) return (v/1e6).toFixed(2)+'M';
+  if(a>=1e3) return (v/1e3).toFixed(1)+'k';
+  return v.toFixed(1);
+}
+// Para métricas en porcentaje (WIS, WIS UF, etc.)
+function fmtPct(v) {
+  if (v==null||isNaN(v)) return '—';
+  return v.toFixed(1)+'%';
+}
+
+// ── DEBUG ────────────────────────────────────────────────────────
+window.debugGrafic = function() {
+  const lines = [];
+
+  // 1. Caché
+  const cacheRaw = localStorage.getItem(GRAFIC_CACHE_KEY);
+  if (cacheRaw) {
+    try {
+      const cp = JSON.parse(cacheRaw);
+      const age = Math.round((Date.now() - (cp.expiry - GRAFIC_CACHE_TTL)) / 1000);
+      lines.push('CACHÉ: activa, edad=' + age + 's, expira en ' + Math.round((cp.expiry - Date.now())/1000) + 's');
+    } catch(e) { lines.push('CACHÉ: inválida'); }
+  } else {
+    lines.push('CACHÉ: vacía (datos frescos del servidor)');
+  }
+
+  // 2. RAW
+  if (!RAW) { lines.push('RAW: null (sin datos cargados)'); }
+  else {
+    lines.push('RAW: ' + RAW.length + ' registros totales');
+    const countries = [...new Set(RAW.map(r => r.c))].sort();
+    lines.push('Países en RAW: ' + countries.join(', '));
+
+    const allDates = RAW.map(r => r.d).filter(Boolean);
+    if (allDates.length) {
+      const minD = new Date(Math.min(...allDates));
+      const maxD = new Date(Math.max(...allDates));
+      lines.push('Rango de fechas en RAW: ' + minD.toISOString().slice(0,10) + ' → ' + maxD.toISOString().slice(0,10));
+    }
+
+    // Contar registros por fecha
+    const byDate = {};
+    RAW.forEach(r => {
+      const k = new Date(r.d).toISOString().slice(0,10);
+      byDate[k] = (byDate[k] || 0) + 1;
+    });
+    const dateKeys = Object.keys(byDate).sort();
+    lines.push('Días con datos (' + dateKeys.length + '): ' + dateKeys.join(', '));
+
+    // Registros con o null (sin actuals)
+    const noActuals = RAW.filter(r => r.o == null);
+    if (noActuals.length) lines.push('Registros sin orders (o=null): ' + noActuals.length);
+  }
+
+  // 3. dataMaxDate
+  lines.push('dataMaxDate: ' + (dataMaxDate ? dataMaxDate.toISOString().slice(0,10) : 'null'));
+
+  // 4. Filtros actuales
+  const fs = document.getElementById('f-start')?.value;
+  const fe = document.getElementById('f-end')?.value;
+  const fc = document.getElementById('f-country')?.value;
+  lines.push('Filtro actual: país=' + fc + '  start=' + fs + '  end=' + fe);
+
+  // 5. Simulación del aggregation con los filtros actuales
+  if (RAW && fs && fe) {
+    const startTs = new Date(fs + 'T00:00:00').getTime();
+    const endTs   = new Date(fe + 'T23:59:59').getTime();
+    const country = fc;
+    const temp = {};
+    RAW.forEach(r => {
+      if (r.c === 'LATAM') return;
+      if (country !== 'LATAM' && r.c !== country) return;
+      if (r.d < startTs || r.d > endTs) return;
+      if (!temp[r.d]) temp[r.d] = { d:r.d, o:null, g:null };
+      if (r.o != null) temp[r.d].o = (temp[r.d].o == null ? 0 : temp[r.d].o) + r.o;
+      if (r.g != null) temp[r.d].g = (temp[r.d].g == null ? 0 : temp[r.d].g) + r.g;
+    });
+    const pts = Object.values(temp).sort((a,b) => a.d - b.d);
+    const ptsConActuals = pts.filter(r => r.o != null);
+    lines.push('Puntos agregados en rango: ' + pts.length + ' días, ' + ptsConActuals.length + ' con actuals');
+    if (pts.length) {
+      const first = new Date(pts[0].d).toISOString().slice(0,10);
+      const last  = new Date(pts[pts.length-1].d).toISOString().slice(0,10);
+      lines.push('Primer punto: ' + first + '  Último punto: ' + last);
+    }
+  }
+
+  const msg = lines.join('\n');
+  console.group('%c[debugGrafic]', 'color:#e50044;font-weight:700');
+  lines.forEach(l => console.log(l));
+  console.groupEnd();
+  alert('[debugGrafic]\n\n' + msg);
+  return msg;
+};
+
+// ── Copy PNG ─────────────────────────────────────────────────────
+function copyPNG(id, btn) {
+  const orig = btn.innerHTML;
+  btn.style.visibility = 'hidden';
+  const panel = document.getElementById(id);
+  setTimeout(async () => {
+    try {
+      const canvas = await html2canvas(panel, { backgroundColor:'#fff', scale:2, useCORS:true });
+      canvas.toBlob(async blob => {
+        try {
+          await navigator.clipboard.write([new ClipboardItem({'image/png':blob})]);
+          btn.style.visibility='visible'; btn.innerHTML='<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="vertical-align:-1px;margin-right:4px;"><polyline points="20 6 9 17 4 12"/></svg>Copiado'; btn.style.color='#16a34a';
+          setTimeout(()=>{ btn.innerHTML=orig; btn.style.color=''; },2500);
+        } catch(e) {
+          const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=id+'.png'; a.click();
+          btn.style.visibility='visible'; btn.innerHTML=orig;
+        }
+      });
+    } catch(e) {
+      btn.style.visibility='visible'; btn.innerHTML=orig;
+    }
+  }, 80);
+}
+</script>
+</body>
+</html>

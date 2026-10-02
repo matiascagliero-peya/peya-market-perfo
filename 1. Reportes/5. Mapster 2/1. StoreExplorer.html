@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Página 1: Store Explorer — Mapster 2</title>
+  <?!= include('1.3 StoreExplorer_styles'); ?>
+</head>
+<body>
+
+  <!-- Navegación Compartida -->
+  <?!= include('_nav', { activePage: 'explorer', scriptUrl: scriptUrl, isAdmin: (typeof isAdmin !== 'undefined' ? isAdmin : false) }); ?>
+
+  <div id="app-container">
+    <!-- ── MINI MENSAJE DE CARGA DE SHAPE ── -->
+    <div id="shape-loading-pill" class="shape-loading-pill" style="display:none;">
+      <span class="mini-spinner"></span>
+      <span>Cargando shape...</span>
+    </div>
+
+    <!-- ── LEYENDA FLOTANTE DE FECHAS EN EL MAPA ── -->
+    <div id="map-dates-legend" class="map-dates-legend" style="display:none;">
+      <div style="font-size:9.5px; font-weight:800; text-transform:uppercase; letter-spacing:0.5px; color:var(--text-sheet-muted); display:flex; align-items:center; justify-content:space-between; margin-bottom:2px;">
+        <span>Capas por Fecha</span>
+        <span id="map-dates-legend-count" style="font-size:9px; color:var(--brand-red); font-weight:700;">1 activa</span>
+      </div>
+      <div id="map-dates-legend-list" style="display:flex; flex-direction:column; gap:4px;">
+        <!-- Inyectado dinámicamente -->
+      </div>
+    </div>
+
+    <!-- ── BANNER DE TRANSICIÓN SUAVE DE COBERTURA ── -->
+    <div id="shape-transition-banner" class="shape-transition-banner" style="display:none;">
+      <span class="transition-indicator-pulse"></span>
+      <span id="shape-transition-text">Analizando transición de cobertura...</span>
+      <button onclick="dismissTransitionBanner()" class="banner-close-btn" title="Cerrar">&times;</button>
+    </div>
+    <!-- ── MAPA GRANDE A PANTALLA COMPLETA ── -->
+    <div id="main-map"></div>
+
+    <!-- ── BARRA FLOTANTE DE CAPAS SOBRE EL MAPA (TOP RIGHT) ── -->
+    <div class="map-floating-toolbar">
+      <div class="toolbar-card">
+        <div class="toolbar-title">
+          <span>Capas & Análisis</span>
+        </div>
+
+        <!-- Toggle Autofiltrado por Vista del Mapa (Viewport) -->
+        <div class="toolbar-row" onclick="toggleViewportFilter()">
+          <span>Autofiltrar por vista mapa</span>
+          <label class="toggle-switch" onclick="event.stopPropagation()">
+            <input type="checkbox" id="viewport-filter-toggle" onchange="toggleViewportFilter(this.checked)">
+            <span class="slider"></span>
+          </label>
+        </div>
+        
+        <!-- Toggle Anillos Concéntricos (Desactivados por defecto para vista limpia) -->
+        <div class="toolbar-row" onclick="toggleRingsVisibility()">
+          <span>Radios de Entrega (Anillos)</span>
+          <label class="toggle-switch" onclick="event.stopPropagation()">
+            <input type="checkbox" id="rings-toggle" onchange="toggleRingsVisibility(this.checked)">
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <!-- Selector Heatmap -->
+        <div style="display:flex; flex-direction:column; gap:4px; margin-top:4px;">
+          <label class="toolbar-title">Mapa de Calor (Heatmap)</label>
+          <select id="heatmap-layer-select" class="toolbar-select" onchange="changeHeatmapLayer(this.value)">
+            <option value="none">Sin Heatmap</option>
+            <option value="users">Densidad PeYa Users</option>
+            <option value="gmv_peya">GMV PeYa Total</option>
+            <option value="gmv_dmart">GMV DMart</option>
+          </select>
+        </div>
+
+        <button class="toolbar-select" style="text-align:center; font-weight:700; background:var(--bg-sheet-card); border:1px solid var(--border-sheet); color:var(--text-sheet-body); margin-top:4px; display:flex; align-items:center; justify-content:center; gap:6px; cursor:pointer;" onclick="centerMapOnSelected()">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="3"></circle></svg>
+          Centrar Tiendas
+        </button>
+
+        <!-- Botón para Ocultar/Ver Ventana Inferior Adaptado a Tema -->
+        <button id="toolbar-toggle-sheet-btn" class="toolbar-select" style="text-align:center; font-weight:700; background:var(--bg-sheet-card); border:1px solid var(--border-sheet); color:var(--text-sheet-body); margin-top:2px; display:flex; align-items:center; justify-content:center; gap:6px; cursor:pointer;" onclick="toggleBottomSheet()">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+          <span id="toolbar-sheet-btn-text">Ocultar Panel</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- ── PILL FLOTANTE CUANDO EL PANEL ESTÁ MINIMIZADO (BOTTOM CENTER) ── -->
+    <button id="bottom-sheet-trigger" onclick="toggleBottomSheet(true)">
+      <span style="display:flex; align-items:center;">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+      </span>
+      <span id="trigger-label">Controles y Métricas de Tiendas (1 seleccionada)</span>
+      <span style="opacity:0.8; font-size:11px; display:flex; align-items:center; gap:4px;">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 3 21 3 21 9"></polyline><polyline points="9 21 3 21 3 15"></polyline><line x1="21" y1="3" x2="14" y2="10"></line><line x1="3" y1="21" x2="10" y2="14"></line></svg>
+        Abrir
+      </span>
+    </button>
+
+    <!-- ── VENTANA INFERIOR TOTALMENTE FLOTANTE (FLOATING COCKPIT) ── -->
+    <div id="bottom-sheet" class="open">
+      <!-- Barra Superior Flotante del Panel -->
+      <div class="sheet-handle-bar">
+        <div class="sheet-title-badge">
+          <div class="sheet-title-icon">M2</div>
+          <span id="sheet-header-badge" class="sheet-whs-badge">1 tienda activa</span>
+        </div>
+
+        <!-- Pestañas Segmentadas -->
+        <div class="sheet-tabs">
+          <button class="sheet-tab-btn active" onclick="switchSheetTab('filtros')">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+            Filtros & Selección
+          </button>
+          <button class="sheet-tab-btn" onclick="switchSheetTab('kpis')">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></svg>
+            Métricas by WHS
+          </button>
+          <button class="sheet-tab-btn" onclick="switchSheetTab('anillos')">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="6"></circle><circle cx="12" cy="12" r="2"></circle></svg>
+            Análisis por Anillos
+          </button>
+        </div>
+
+        <!-- Acciones de Ventana -->
+        <div class="sheet-actions">
+          <button class="sheet-icon-btn" title="Expandir/Reducir ventana flotante" onclick="toggleExpandSheet()">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 3 21 3 21 9"></polyline><polyline points="9 21 3 21 3 15"></polyline><line x1="21" y1="3" x2="14" y2="10"></line><line x1="3" y1="21" x2="10" y2="14"></line></svg>
+          </button>
+          <button class="sheet-icon-btn" title="Minimizar a barra inferior" onclick="toggleBottomSheet(false)">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+          </button>
+          <button class="sheet-icon-btn" title="Cerrar panel" onclick="toggleBottomSheet(false)">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Área de Contenido de la Ventana Flotante -->
+      <div class="sheet-content-area">
+        
+        <!-- PESTAÑA 1: FILTROS & SELECCIÓN -->
+        <div id="tab-filtros" class="tab-panel active">
+          <div class="filters-layout">
+            <!-- Columna Filtros en Cascada -->
+            <div class="filters-col">
+              <!-- Selector Oculto para compatibilidad con código existente -->
+              <select id="filter-month" style="display:none;" onchange="onMonthChange(this.value)"></select>
+
+              <!-- Selector Único y Mejorado de Fecha & Capas (Popover hacia arriba) -->
+              <div class="filter-item">
+                <label class="filter-label" style="display:flex; justify-content:space-between; align-items:center;">
+                  <span>Mes de Análisis & Capas</span>
+                  <span id="unified-date-badge-label" style="color:var(--brand-red); font-size:9.5px; font-weight:700;">1 activa</span>
+                </label>
+                <div style="position:relative; width:100%;">
+                  <button type="button" id="unified-date-dropdown-btn" class="filter-input" onclick="toggleUnifiedDateMenu(event)" style="width:100%; display:flex; align-items:center; justify-content:space-between; cursor:pointer; text-align:left;">
+                    <div id="unified-date-selected-view" style="display:flex; align-items:center; gap:6px; overflow:hidden;">
+                      <span style="font-weight:700; font-size:11px;">Cargando fechas...</span>
+                    </div>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="flex-shrink:0;"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                  </button>
+
+                  <div id="unified-date-dropdown-menu" class="custom-popover-menu" style="min-width:250px; max-width:270px; padding:6px 8px;">
+                    <!-- Cabecera del Popover -->
+                    <div style="display:flex; align-items:center; justify-content:space-between; padding-bottom:5px; border-bottom:1px solid var(--border-sheet); margin-bottom:5px;">
+                      <div>
+                        <div style="font-size:10px; font-weight:800; text-transform:uppercase; color:var(--brand-red); letter-spacing:0.4px;">
+                          Fechas de Cobertura
+                        </div>
+                        <div style="font-size:8px; color:var(--text-sheet-muted); margin-top:1px;">
+                          Elegí 1 mes principal y capas a superponer
+                        </div>
+                      </div>
+                      <button type="button" onclick="toggleUnifiedDateMenu(event, false)" style="background:transparent; border:none; color:var(--text-sheet-muted); font-size:12px; cursor:pointer; font-weight:800; padding:0 3px;">✕</button>
+                    </div>
+
+                    <!-- Encabezado de Columnas Pegadas -->
+                    <div style="display:flex; align-items:center; justify-content:space-between; padding:2px 4px; font-size:8.5px; font-weight:800; text-transform:uppercase; color:var(--text-sheet-muted); border-bottom:1px solid var(--border-sheet); margin-bottom:3px; letter-spacing:0.3px;">
+                      <span style="flex:1; text-align:left;">Mes / Fecha</span>
+                      <span style="width:38px; text-align:center;" title="Mes Principal para métricas y silueta roja base">Princ.</span>
+                      <span style="width:44px; text-align:center;" title="Superponer capas en el mapa">Capas</span>
+                    </div>
+
+                    <!-- Lista de Meses con las 3 Columnas Pegadas -->
+                    <div id="unified-date-list-container" style="display:flex; flex-direction:column; gap:2px; max-height:220px; overflow-y:auto;">
+                      <!-- Inyectado dinámicamente -->
+                    </div>
+
+                    <!-- Pie del Popover -->
+                    <div style="display:flex; align-items:center; justify-content:space-between; margin-top:5px; padding-top:4px; border-top:1px solid var(--border-sheet);">
+                      <button type="button" class="ring-pill-btn" onclick="resetToSinglePrimaryMonth(event)" style="font-size:8.5px; padding:1px 6px; font-weight:700;">
+                        Solo principal
+                      </button>
+                      <span id="unified-date-legend-counter" style="font-size:8.5px; font-weight:700; color:var(--text-sheet-muted);">
+                        1 activo
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Selector de Verticales / Partners con Iconos y Apertura hacia Arriba -->
+              <div class="filter-item">
+                <label class="filter-label" style="display:flex; justify-content:space-between; align-items:center;">
+                  <span>Vertical / Partner</span>
+                  <span id="partner-filter-badge-label" style="color:var(--brand-red); font-size:9.5px; font-weight:700;">Todas</span>
+                </label>
+                <div style="position:relative; width:100%;">
+                  <button type="button" id="vertical-dropdown-btn" class="filter-input" onclick="toggleVerticalMenu(event)" style="width:100%; display:flex; align-items:center; justify-content:space-between; cursor:pointer; text-align:left;">
+                    <div id="vertical-selected-view" style="display:flex; align-items:center; gap:6px; overflow:hidden;">
+                      <span style="font-weight:700; font-size:11px;">Todas las Verticales</span>
+                    </div>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                  </button>
+
+                  <div id="vertical-dropdown-menu" class="custom-popover-menu">
+                    <!-- Opciones con iconos inyectadas dinámicamente -->
+                  </div>
+                </div>
+              </div>
+
+              <div class="filter-item">
+                <label class="filter-label">País</label>
+                <select id="filter-country" class="filter-input" onchange="onCountryChange(this.value)">
+                  <option value="">Todos los países</option>
+                </select>
+              </div>
+
+              <div class="filter-item">
+                <label class="filter-label">Ciudad</label>
+                <select id="filter-city" class="filter-input" onchange="onCityChange(this.value)">
+                  <option value="">Todas las ciudades</option>
+                </select>
+              </div>
+
+              <div class="filter-item">
+                <label class="filter-label">Zona / Barrio</label>
+                <select id="filter-neighborhood" class="filter-input" onchange="onNeighborhoodChange(this.value)">
+                  <option value="">Todas las zonas</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Columna Listado de Almacenes con Selección Múltiple -->
+            <div class="whs-selection-col">
+              <div class="whs-header-row">
+                <div class="whs-header-title">
+                  <span>Almacenes</span>
+                  <span id="whs-count-badge" style="color:var(--text-muted); font-size:11.5px; font-weight:700;">(0)</span>
+                </div>
+                <div style="display:flex; align-items:center; gap:5px; flex-wrap:wrap;">
+                  <!-- Buscador de Almacenes Integrado en la Barra de Acciones -->
+                  <input type="text" id="whs-search-input" class="filter-input" placeholder="Buscar almacén o ID..." oninput="filterWarehouseCards()" style="width:160px; padding:3px 7px; font-size:10.5px; height:24px; border-radius:5px;">
+
+                  <!-- Botón Rápido para Ocultar / Ver Inactivos con 1 click -->
+                  <button type="button" id="toggle-active-btn" class="ring-pill-btn active-toggle-pill" onclick="toggleActiveStatusFilter()" title="Alternar entre ver solo activos o todos los locales" style="display:inline-flex; align-items:center; gap:4px; font-weight:700; padding:2px 8px; font-size:10.5px; border-color:#10b981; color:#10b981; background:rgba(16,185,129,0.08);">
+                    <span id="toggle-active-dot" style="width:6px; height:6px; border-radius:50%; background:#10b981; display:inline-block;"></span>
+                    <span id="toggle-active-text">Solo Activos</span>
+                  </button>
+                  <button type="button" class="ring-pill-btn" onclick="selectAllWarehouses(true)" style="background:var(--brand-red); color:#ffffff; border-color:var(--brand-red); font-weight:700; display:inline-flex; align-items:center; gap:4px; padding:2px 9px; font-size:10.5px;">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                    Seleccionar Todo
+                  </button>
+                  <button type="button" class="ring-pill-btn" onclick="selectAllWarehouses(false)" style="font-weight:700; display:inline-flex; align-items:center; gap:4px; padding:2px 9px; font-size:10.5px;">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                    Limpiar
+                  </button>
+                </div>
+              </div>
+
+              <div class="whs-grid" id="whs-cards-container">
+                <!-- Se inyecta dinámicamente con renderWarehouseCards() -->
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- PESTAÑA 2: MÉTRICAS BY WHS (MATRIZ COMPARATIVA POR COLUMNAS) -->
+        <div id="tab-kpis" class="tab-panel">
+          <!-- Barra de Gestión Rápida: Buscador desplegable + Acciones directas -->
+          <div class="kpi-whs-banner" style="margin-bottom:6px; padding:6px 10px; flex-shrink:0;">
+            <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:6px;">
+              <div style="display:flex; align-items:center; gap:6px; flex:1; min-width:280px; flex-wrap:wrap;">
+                <span style="font-weight:700; font-size:11px; color:var(--text-sheet-title); white-space:nowrap; display:flex; align-items:center; gap:5px;">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--brand-red)" stroke-width="2.5"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline></svg>
+                  Comparador:
+                </span>
+                <!-- Selector explícito de Mes para Métricas -->
+                <select id="kpi-month-select" class="filter-input" onchange="onKpiMonthChange(this.value)" style="max-width:130px; padding:2px 7px; font-size:10.5px; height:24px; border-radius:5px; font-weight:700; color:var(--brand-red);" title="Mes analizado en la tabla de métricas"></select>
+                <select id="quick-add-whs-select" class="filter-input" onchange="onQuickAddWarehouse(this.value)" style="max-width:210px; padding:2px 7px; font-size:10.5px; height:24px; border-radius:5px;">
+                  <option value="">+ Agregar almacén al comparador...</option>
+                </select>
+                <span id="kpi-whs-count-badge" style="font-size:10.5px; font-weight:700; color:var(--text-sheet-muted);">
+                  <span id="kpi-total-whs">0</span> tiendas
+                </span>
+              </div>
+
+              <div style="display:flex; align-items:center; gap:5px;">
+                <button type="button" class="ring-pill-btn" onclick="quickClearAllKpiWarehouses()" style="font-weight:700; font-size:10px; padding:2px 8px; color:#ef4444; border-color:rgba(239,68,68,0.3);" title="Quitar todas las tiendas de la comparación">
+                  ✕ Limpiar todas
+                </button>
+              </div>
+            </div>
+
+            <!-- Chips de tiendas seleccionadas con botón ✕ para remover al instante -->
+            <div class="kpi-whs-chips-wrap" id="kpi-whs-chips-list" style="margin-top:5px; max-height:48px; overflow-y:auto;">
+              <!-- Se inyecta dinámicamente -->
+            </div>
+          </div>
+
+          <!-- Matriz Pivot: Filas = Métricas (3 Bloques), Columnas = Almacenes Seleccionados + Cluster Total/Promedio -->
+          <div class="kpi-matrix-wrap" id="kpi-matrix-container">
+            <table class="kpi-matrix-table" id="kpi-matrix-table">
+              <!-- Inyectado dinámicamente por renderComparativeKpiTable() -->
+            </table>
+          </div>
+        </div>
+
+        <!-- PESTAÑA 4: ANÁLISIS POR ANILLOS (MULTI-TIENDA) -->
+        <div id="tab-anillos" class="tab-panel">
+          <div class="rings-view-header" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px;">
+            <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+              <!-- Selector de Tienda a visualizar -->
+              <div style="display:flex; align-items:center; gap:5px;">
+                <span style="font-size:11px; font-weight:700; color:var(--text-sheet-title);">Tienda:</span>
+                <select id="rings-store-filter-select" class="filter-input" onchange="onRingsStoreFilterChange(this.value)" style="max-width:185px; padding:2px 7px; font-size:10.5px; height:24px; border-radius:5px; font-weight:700;">
+                  <option value="ALL">Todas las tiendas</option>
+                </select>
+              </div>
+
+              <!-- Filtro de Radio con botones pill -->
+              <div class="rings-filter-pills" id="ring-pills-container">
+                <span style="font-size:10.5px; font-weight:700; color:var(--text-muted); text-transform:uppercase;">Radio:</span>
+                <button class="ring-pill-btn active" onclick="filterRingTable('ALL', this)">Todos los radios</button>
+                <button class="ring-pill-btn" onclick="filterRingTable('< 1 KM', this)">&lt; 1 KM</button>
+                <button class="ring-pill-btn" onclick="filterRingTable('1-2 KM', this)">1-2 KM</button>
+                <button class="ring-pill-btn" onclick="filterRingTable('2-3 KM', this)">2-3 KM</button>
+                <button class="ring-pill-btn" onclick="filterRingTable('3-4 KM', this)">3-4 KM</button>
+                <button class="ring-pill-btn" onclick="filterRingTable('> 4 KM', this)">&gt; 4 KM</button>
+              </div>
+            </div>
+            <div style="font-size:11.5px; color:var(--text-secondary); font-weight:600;">
+              Comparando <span id="rings-selected-store-count" style="color:var(--brand-red); font-weight:700;">0</span> tiendas
+            </div>
+          </div>
+
+          <div class="rings-table-wrap">
+            <table class="rings-table">
+              <thead>
+                <tr>
+                  <th>Almacén</th>
+                  <th>Radio / Anillo</th>
+                  <th>Covered MAUs</th>
+                  <th>DMart MAUs</th>
+                  <th>Penetración %</th>
+                  <th>Órdenes</th>
+                  <th>Net Sales</th>
+                  <th>AOV</th>
+                  <th>Avg Delivery Time</th>
+                  <th>% Late (>10m)</th>
+                </tr>
+              </thead>
+              <tbody id="rings-table-body">
+                <tr><td colspan="10" style="text-align:center; padding:30px; color:var(--text-muted);">Seleccioná almacenes para analizar sus anillos</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <?!= include('1.2 StoreExplorer_scripts'); ?>
+</body>
+</html>

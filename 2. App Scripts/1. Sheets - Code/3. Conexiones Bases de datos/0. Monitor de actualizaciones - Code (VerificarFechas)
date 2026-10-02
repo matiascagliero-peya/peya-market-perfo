@@ -1,0 +1,862 @@
+/**
+ * ====================================================================================
+ * MONITOR DE ACTUALIZACIONES & AUDITORIA DE SEGURIDAD (BIGQUERY + SHEETS)
+ * ====================================================================================
+ *
+ * CUAL FUNCION DEBERIAS CORRER?
+ * ────────────────────────────────────────────────────────────────────────────────────
+ *   SIEMPRE CORRE: ejecutarSincronizacionTotal()
+ *   (O desde el Menu: "Monitor de Actualizaciones" > "1. Actualizar todo (Fechas y Seguridad)")
+ *
+ *   Esta funcion ejecuta todo de forma integral en un solo clic:
+ *     1. Pestana "1. Tablas en Sheets":
+ *        - Escribe la fecha de refresco de BigQuery en Columna D.
+ *        - Escribe el Estado de Seguridad de Drive en Columna N (detallando personas/grupos).
+ *        - Si una fila no tiene ID del archivo (Col F vacia, titulos o filas en blanco),
+ *          deja Columnas D y N totalmente vacias ("") para no arrastrar fechas erroneas.
+ *     2. Pestana "2. Querys":
+ *        - Verifica la columna "Table Id" (Col H). Si no hay Table ID valido, NO pone fecha
+ *          y deja Columnas D y K totalmente vacias ("").
+ *        - Si el Table ID es valido, escribe la fecha en Col D y el Estado de Seguridad
+ *          enriquecido en Col K (indicando grupos, usuarios, cuentas de servicio o tipo de vista).
+ * ────────────────────────────────────────────────────────────────────────────────────
+ */
+
+/**
+ * Menu sin emojis en la barra superior de Google Sheets
+ */
+function onOpen() {
+  const ui = SpreadsheetApp.getUi();
+  ui.createMenu('Monitor de Actualizaciones')
+    .addItem('1. Actualizar todo (Fechas y Seguridad)', 'ejecutarSincronizacionTotal')
+    .addSeparator()
+    .addItem('2. Actualizar tablas en Sheets (Fechas Col D y Seguridad Col N)', 'sincronizarTablasSheets')
+    .addItem('3. Actualizar solo Querys en BigQuery (Fechas Col D y Seguridad Col K)', 'sincronizarSoloQuerys')
+    .addItem('4. Actualizar solo estados de seguridad (Col N en Tablas y Col K en Querys)', 'sincronizarSoloSeguridad')
+    .addSeparator()
+    .addItem('5. Forzar refresco de tablas atrasadas', 'refrescarTablasAtrasadas')
+    .addToUi();
+}
+
+// ====================================================================================
+// FUNCION PRINCIPAL
+// ====================================================================================
+function ejecutarSincronizacionTotal() {
+  const tiempoInicio = new Date().getTime();
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+
+  // 1. Sincronizar pestana de Tablas en Sheets (Col D: Fechas, Col N: Seguridad)
+  let sheetTablas = ss.getSheetByName("1. Tablas en Sheets") || ss.getSheetByName("1. Sheets") || ss.getSheets()[0];
+  let procesadasTablas = 0;
+  if (sheetTablas && sheetTablas.getName() !== "2. Querys") {
+    console.log("Iniciando sincronizacion de Tablas en Sheets: " + sheetTablas.getName());
+    procesadasTablas = sincronizarTablasSheets(sheetTablas);
+  }
+
+  // 2. Sincronizar pestana de Querys en BigQuery (Col D: Fechas, Col K: Seguridad)
+  let sheetQuerys = ss.getSheetByName("2. Querys");
+  let procesadasQuerys = 0;
+  if (sheetQuerys) {
+    console.log("Iniciando sincronizacion de Querys en BigQuery: " + sheetQuerys.getName());
+    procesadasQuerys = sincronizarSoloQuerys(sheetQuerys);
+  }
+
+  const duracionSegundos = ((new Date().getTime() - tiempoInicio) / 1000).toFixed(1);
+  const mensajeFinal = `Proceso completado en ${duracionSegundos}s. Tablas: ${procesadasTablas} | Querys: ${procesadasQuerys}`;
+  console.log(mensajeFinal);
+  ss.toast(mensajeFinal, "Sincronizacion Finalizada");
+}
+
+// Alias de retrocompatibilidad
+function actualizarFechasAmbasPaginas() { ejecutarSincronizacionTotal(); }
+
+
+// ====================================================================================
+// PROCESO 1: TABLAS EN SHEETS (Fechas Col D + Seguridad Col N)
+// ====================================================================================
+function sincronizarTablasSheets(targetSheet) {
+  try {
+    SpreadsheetApp.enableBigQueryExecution();
+  } catch (e) {
+    Logger.log("Aviso BigQueryExecution: " + e.message);
+  }
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = (targetSheet && typeof targetSheet.getRange === 'function') ? targetSheet : ss.getActiveSheet();
+  const startRow = 8;
+
+  const maxRowsInSheet = sheet.getMaxRows();
+  if (maxRowsInSheet < startRow) return 0;
+
+  // Deteccion dinamica de columnas por encabezado en Fila 7
+  let colFechaIdx = 4;      // Default Col D (4)
+  let colFileIdIdx = 6;     // Default Col F (6)
+  let colExtractIdx = 7;    // Default Col G (7)
+  let colSeguridadIdx = 14; // Default Col N (14)
+
+  try {
+    const headerCols = sheet.getLastColumn() || 20;
+    const headerValues = sheet.getRange(7, 1, 1, headerCols).getValues()[0];
+    for (let c = 0; c < headerValues.length; c++) {
+      const h = String(headerValues[c] || "").trim().toLowerCase();
+      if (h.includes("actualiz")) colFechaIdx = c + 1;
+      else if (h.includes("id del archivo") || h.includes("file id") || h.includes("id archivo")) colFileIdIdx = c + 1;
+      else if (h.includes("extracto") || h.includes("extract")) colExtractIdx = c + 1;
+      else if (h.includes("seguridad") || h.includes("security")) colSeguridadIdx = c + 1;
+    }
+  } catch(e) {}
+
+  const totalRangeRows = maxRowsInSheet - startRow + 1;
+  const valuesB = sheet.getRange(startRow, 2, totalRangeRows, 1).getValues(); // Col B: Nombre
+  const valuesF = sheet.getRange(startRow, colFileIdIdx, totalRangeRows, 1).getValues(); // ID Archivo
+
+  // Busqueda de la ultima fila real con datos validos
+  let lastRowConDatos = startRow;
+  for (let r = valuesF.length - 1; r >= 0; r--) {
+    const valF = String(valuesF[r][0] || "").trim();
+    const valB = String(valuesB[r][0] || "").trim();
+    if ((valF && valF !== "" && valF !== "." && valF !== "--" && !valF.startsWith("=")) ||
+        (valB && valB !== "" && valB !== "." && valB !== "--" && !valB.startsWith("="))) {
+      lastRowConDatos = startRow + r;
+      break;
+    }
+  }
+
+  if (lastRowConDatos < startRow) return 0;
+
+  const numRows = lastRowConDatos - startRow + 1;
+
+  // Lectura masiva de Col F (ID) y Col G (Extracto)
+  const dataFileId = sheet.getRange(startRow, colFileIdIdx, numRows, 1).getValues();
+  const dataExtract = sheet.getRange(startRow, colExtractIdx, numRows, 1).getValues();
+
+  const nuevosEstadosFechas = [];
+  const nuevosEstadosSeguridad = [];
+
+  const cacheSS = {};
+  const cacheSeguridad = {};
+  let tablasAuditadas = 0;
+
+  for (let i = 0; i < numRows; i++) {
+    const rawFileId   = String(dataFileId[i][0] || "").trim();
+    const extractName = String(dataExtract[i][0] || "").trim();
+
+    // REGLA ESTRICTA: Si en Col F no hay nada o es invalido, NO poner fecha en Col D
+    if (!rawFileId || rawFileId === "" || rawFileId === "." || rawFileId === "-" || rawFileId === "--" || rawFileId.startsWith("=")) {
+      nuevosEstadosFechas.push([""]);
+      nuevosEstadosSeguridad.push([""]);
+      continue;
+    }
+
+    const cleanId = extraerId(rawFileId);
+    if (!cleanId || cleanId.length < 15) {
+      nuevosEstadosFechas.push([""]);
+      nuevosEstadosSeguridad.push([""]);
+      continue;
+    }
+
+    // Si falta la pagina de extracto, no se puede obtener fecha BQ
+    if (!extractName || extractName === "") {
+      nuevosEstadosFechas.push([""]);
+      const valSeguridad = verificarEstadoSeguridad(cleanId, cacheSeguridad);
+      nuevosEstadosSeguridad.push([valSeguridad]);
+      continue;
+    }
+
+    // 1. Obtener fecha de BigQuery
+    const resultFecha = obtenerFechaBQ(cleanId, extractName, cacheSS);
+    let valFecha = "";
+    if (resultFecha instanceof Date) {
+      valFecha = Utilities.formatDate(resultFecha, Session.getScriptTimeZone(), "dd/MM/yyyy HH:mm:ss");
+    } else {
+      valFecha = resultFecha || "";
+    }
+    nuevosEstadosFechas.push([valFecha]);
+
+    // 2. Obtener estado de seguridad (Col N)
+    const valSeguridad = verificarEstadoSeguridad(cleanId, cacheSeguridad);
+    nuevosEstadosSeguridad.push([valSeguridad]);
+
+    tablasAuditadas++;
+  }
+
+  // Escritura masiva en batch
+  sheet.getRange(startRow, colFechaIdx, numRows, 1).setValues(nuevosEstadosFechas);
+  sheet.getRange(startRow, colSeguridadIdx, numRows, 1).setValues(nuevosEstadosSeguridad);
+
+  // Ajuste de filas excedentes con margen de seguridad
+  const maxRows = sheet.getMaxRows();
+  if (maxRows > lastRowConDatos + 10) {
+    sheet.deleteRows(lastRowConDatos + 11, maxRows - (lastRowConDatos + 10));
+  }
+
+  marcarUltimaEjecucion(sheet, "Ultima actualizacion: ");
+  return tablasAuditadas;
+}
+
+// Alias de retrocompatibilidad
+function leerFechasTodasSheets(targetSheet) { return sincronizarTablasSheets(targetSheet); }
+
+
+// ====================================================================================
+// PROCESO 2: QUERYS EN BIGQUERY (Verifica Table Id -> Fechas Col D + Seguridad Col K)
+// ====================================================================================
+function sincronizarSoloQuerys(targetSheet) {
+  const NOMBRE_HOJA = "2. Querys";
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = (targetSheet && typeof targetSheet.getRange === 'function') ? targetSheet : ss.getSheetByName(NOMBRE_HOJA);
+
+  if (!sheet) {
+    console.warn("Pestana no encontrada: " + NOMBRE_HOJA);
+    return 0;
+  }
+
+  const startRow = 8;
+  const maxRowsInSheet = sheet.getMaxRows();
+  if (maxRowsInSheet < startRow) return 0;
+
+  // Deteccion dinamica de columnas por encabezado en Fila 7 de 2. Querys
+  let colFechaIdx = 4;      // Default Col D (4)
+  let colTableIdIdx = 8;    // Default Col H (8)
+  let colSeguridadIdx = 11; // Default Col K (11)
+
+  try {
+    const headerCols = sheet.getLastColumn() || 20;
+    const headerValues = sheet.getRange(7, 1, 1, headerCols).getValues()[0];
+    for (let c = 0; c < headerValues.length; c++) {
+      const h = String(headerValues[c] || "").trim().toLowerCase();
+      if (h.includes("actualiz")) {
+        colFechaIdx = c + 1;
+      } else if (h.includes("table id") || h.includes("table_id") || h.includes("table path") || h.includes("tableid")) {
+        colTableIdIdx = c + 1;
+      } else if (h.includes("seguridad") || h.includes("security")) {
+        colSeguridadIdx = c + 1;
+      }
+    }
+  } catch(e) {}
+
+  const totalRangeRows = maxRowsInSheet - startRow + 1;
+  const valuesB = sheet.getRange(startRow, 2, totalRangeRows, 1).getValues(); // Col B: Nombre de referencia
+  const valuesTableId = sheet.getRange(startRow, colTableIdIdx, totalRangeRows, 1).getValues(); // Table Id
+
+  let lastRowConDatos = startRow;
+  for (let r = valuesTableId.length - 1; r >= 0; r--) {
+    const valT = String(valuesTableId[r][0] || "").trim();
+    const valB = String(valuesB[r][0] || "").trim();
+    if ((valT && valT !== "" && valT !== "." && valT !== "--" && !valT.startsWith("=")) ||
+        (valB && valB !== "" && valB !== "." && valB !== "--" && !valB.startsWith("="))) {
+      lastRowConDatos = startRow + r;
+      break;
+    }
+  }
+
+  if (lastRowConDatos < startRow) return 0;
+
+  const numRows = lastRowConDatos - startRow + 1;
+
+  // Lectura directa de la columna Table Id
+  const dataTableId = sheet.getRange(startRow, colTableIdIdx, numRows, 1).getValues();
+
+  const nuevosEstadosFechas = [];
+  const nuevosEstadosSeguridad = [];
+
+  const cacheSeguridadBQ = {};
+  const cacheSeguridadDrive = {};
+  let querysProcesadas = 0;
+
+  const servicioDisponible = typeof BigQuery !== 'undefined' && BigQuery.Tables && BigQuery.Tables.get;
+
+  for (let i = 0; i < numRows; i++) {
+    const rawTableId = String(dataTableId[i][0] || "").trim();
+
+    // REGLA ESTRICTA: Si en Table Id no hay nada, es invalido, es un titulo o fila vacia:
+    // NO PONER FECHA EN COL D ("") Y NO PONER SEGURIDAD EN COL K ("").
+    if (!rawTableId || rawTableId === "" || rawTableId === "." || rawTableId === "-" || rawTableId === "--" || rawTableId.startsWith("=")) {
+      nuevosEstadosFechas.push([""]);
+      nuevosEstadosSeguridad.push([""]);
+      continue;
+    }
+
+    const cleanTableId = rawTableId.trim();
+
+    // Verificamos si es un Table ID valido de BigQuery (project.dataset.table -> 3 partes)
+    const parts = cleanTableId.split('.');
+    if (parts.length === 3 && parts[0].trim() !== "" && parts[1].trim() !== "" && parts[2].trim() !== "") {
+      if (!servicioDisponible) {
+        nuevosEstadosFechas.push(["Activar servicio BigQuery"]);
+        nuevosEstadosSeguridad.push([""]);
+        continue;
+      }
+
+      try {
+        // 1. Obtener fecha de ultima modificacion y tipo de tabla en BigQuery
+        const table = BigQuery.Tables.get(parts[0].trim(), parts[1].trim(), parts[2].trim());
+        const timestamp = parseInt(table.lastModifiedTime, 10);
+        const fechaFinal = new Date(timestamp);
+        const fechaFormateada = Utilities.formatDate(fechaFinal, Session.getScriptTimeZone(), "dd/MM/yyyy HH:mm:ss");
+        nuevosEstadosFechas.push([fechaFormateada]);
+
+        // 2. Obtener estado de seguridad enriquecido del Dataset / Tabla y colocarlo en Col K
+        const valSeguridad = verificarSeguridadBigQuery(parts[0].trim(), parts[1].trim(), table.type || "", cacheSeguridadBQ);
+        nuevosEstadosSeguridad.push([valSeguridad]);
+
+        querysProcesadas++;
+      } catch (e) {
+        nuevosEstadosFechas.push(["Sin acceso"]);
+        nuevosEstadosSeguridad.push(["Sin acceso"]);
+      }
+    } else if (cleanTableId.includes("spreadsheets/d/") || cleanTableId.length >= 20) {
+      // Si contiene un ID o link de Google Drive
+      const cleanId = extraerId(cleanTableId);
+      const valSeguridad = verificarEstadoSeguridad(cleanId, cacheSeguridadDrive);
+      nuevosEstadosFechas.push([""]);
+      nuevosEstadosSeguridad.push([valSeguridad]);
+    } else {
+      // Si no es un Table ID valido de BigQuery ni enlace de Drive, NO poner fecha
+      nuevosEstadosFechas.push([""]);
+      nuevosEstadosSeguridad.push([""]);
+    }
+  }
+
+  // Escritura masiva en batch:
+  // Columna D: Ultima actualizacion
+  sheet.getRange(startRow, colFechaIdx, numRows, 1).setValues(nuevosEstadosFechas);
+
+  // Columna K: Estado de Seguridad
+  sheet.getRange(startRow, colSeguridadIdx, numRows, 1).setValues(nuevosEstadosSeguridad);
+
+  // Ajuste de filas excedentes
+  const maxRows = sheet.getMaxRows();
+  if (maxRows > lastRowConDatos + 10) {
+    sheet.deleteRows(lastRowConDatos + 11, maxRows - (lastRowConDatos + 10));
+  }
+
+  QuerysMarcarUltimaEjecucion(sheet, "Ultima actualizacion: ");
+  return querysProcesadas;
+}
+
+// Alias de retrocompatibilidad
+function leerFechasBigQuery(targetSheet) { return sincronizarSoloQuerys(targetSheet); }
+
+
+// ====================================================================================
+// PROCESO 3: ACTUALIZAR SOLO ESTADOS DE SEGURIDAD (Col N en Tablas y Col K en Querys)
+// ====================================================================================
+function sincronizarSoloSeguridad() {
+  const tiempoInicio = new Date().getTime();
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+
+  let sheetTablas = ss.getSheetByName("1. Tablas en Sheets") || ss.getSheetByName("1. Sheets");
+  let sheetQuerys = ss.getSheetByName("2. Querys");
+
+  let totalTablas = 0;
+  let totalQuerys = 0;
+
+  // Actualizar Col N en Tablas
+  if (sheetTablas) {
+    totalTablas = auditarSeguridadTablasSheets(sheetTablas);
+  }
+
+  // Actualizar Col K en Querys
+  if (sheetQuerys) {
+    totalQuerys = auditarSeguridadQuerys(sheetQuerys);
+  }
+
+  const duracion = ((new Date().getTime() - tiempoInicio) / 1000).toFixed(1);
+  const msg = `Seguridad actualizada en ${duracion}s. Tablas (Col N): ${totalTablas} | Querys (Col K): ${totalQuerys}`;
+  console.log(msg);
+  ss.toast(msg, "Seguridad");
+}
+
+// Alias de retrocompatibilidad
+function actualizarSoloSeguridad(targetSheet) { sincronizarSoloSeguridad(); }
+
+/**
+ * Funcion interna para auditar solo Col N en Tablas
+ */
+function auditarSeguridadTablasSheets(sheet) {
+  const startRow = 8;
+  const maxRowsInSheet = sheet.getMaxRows();
+  if (maxRowsInSheet < startRow) return 0;
+
+  let colFileIdIdx = 6;     // Default Col F (6)
+  let colSeguridadIdx = 14; // Default Col N (14)
+  try {
+    const headerCols = sheet.getLastColumn() || 20;
+    const headerValues = sheet.getRange(7, 1, 1, headerCols).getValues()[0];
+    for (let c = 0; c < headerValues.length; c++) {
+      const h = String(headerValues[c] || "").trim().toLowerCase();
+      if (h.includes("id del archivo") || h.includes("file id") || h.includes("id archivo")) colFileIdIdx = c + 1;
+      else if (h.includes("seguridad") || h.includes("security")) colSeguridadIdx = c + 1;
+    }
+  } catch(e) {}
+
+  const totalRangeRows = maxRowsInSheet - startRow + 1;
+  const valuesB = sheet.getRange(startRow, 2, totalRangeRows, 1).getValues();
+  const valuesF = sheet.getRange(startRow, colFileIdIdx, totalRangeRows, 1).getValues();
+
+  let lastRowConDatos = startRow;
+  for (let r = valuesF.length - 1; r >= 0; r--) {
+    const valF = String(valuesF[r][0] || "").trim();
+    const valB = String(valuesB[r][0] || "").trim();
+    if ((valF && valF !== "" && valF !== "." && valF !== "--" && !valF.startsWith("=")) ||
+        (valB && valB !== "" && valB !== "." && valB !== "--" && !valB.startsWith("="))) {
+      lastRowConDatos = startRow + r;
+      break;
+    }
+  }
+
+  if (lastRowConDatos < startRow) return 0;
+
+  const numRows = lastRowConDatos - startRow + 1;
+  const dataF = sheet.getRange(startRow, colFileIdIdx, numRows, 1).getValues();
+
+  const nuevosEstadosSeguridad = [];
+  const cacheSeguridad = {};
+  let totalArchivos = 0;
+
+  for (let i = 0; i < numRows; i++) {
+    const rawFileId = String(dataF[i][0] || "").trim();
+
+    if (!rawFileId || rawFileId === "" || rawFileId === "." || rawFileId === "-" || rawFileId === "--" || rawFileId.startsWith("=")) {
+      nuevosEstadosSeguridad.push([""]);
+      continue;
+    }
+
+    const cleanId = extraerId(rawFileId);
+    if (!cleanId || cleanId.length < 15) {
+      nuevosEstadosSeguridad.push([""]);
+      continue;
+    }
+
+    const valSeguridad = verificarEstadoSeguridad(cleanId, cacheSeguridad);
+    nuevosEstadosSeguridad.push([valSeguridad]);
+    totalArchivos++;
+  }
+
+  sheet.getRange(startRow, colSeguridadIdx, numRows, 1).setValues(nuevosEstadosSeguridad);
+  return totalArchivos;
+}
+
+/**
+ * Funcion interna para auditar solo Col K en Querys
+ */
+function auditarSeguridadQuerys(sheet) {
+  const startRow = 8;
+  const maxRowsInSheet = sheet.getMaxRows();
+  if (maxRowsInSheet < startRow) return 0;
+
+  let colTableIdIdx = 8;    // Default Col H (8)
+  let colSeguridadIdx = 11; // Default Col K (11)
+  try {
+    const headerCols = sheet.getLastColumn() || 20;
+    const headerValues = sheet.getRange(7, 1, 1, headerCols).getValues()[0];
+    for (let c = 0; c < headerValues.length; c++) {
+      const h = String(headerValues[c] || "").trim().toLowerCase();
+      if (h.includes("table id") || h.includes("table_id") || h.includes("table path") || h.includes("tableid")) {
+        colTableIdIdx = c + 1;
+      } else if (h.includes("seguridad") || h.includes("security")) {
+        colSeguridadIdx = c + 1;
+      }
+    }
+  } catch(e) {}
+
+  const totalRangeRows = maxRowsInSheet - startRow + 1;
+  const valuesB = sheet.getRange(startRow, 2, totalRangeRows, 1).getValues();
+  const valuesH = sheet.getRange(startRow, colTableIdIdx, totalRangeRows, 1).getValues();
+
+  let lastRowConDatos = startRow;
+  for (let r = valuesH.length - 1; r >= 0; r--) {
+    const valH = String(valuesH[r][0] || "").trim();
+    const valB = String(valuesB[r][0] || "").trim();
+    if ((valH && valH !== "" && valH !== "." && valH !== "--" && !valH.startsWith("=")) ||
+        (valB && valB !== "" && valB !== "." && valB !== "--" && !valB.startsWith("="))) {
+      lastRowConDatos = startRow + r;
+      break;
+    }
+  }
+
+  if (lastRowConDatos < startRow) return 0;
+
+  const numRows = lastRowConDatos - startRow + 1;
+  const dataH = sheet.getRange(startRow, colTableIdIdx, numRows, 1).getValues();
+
+  const nuevosEstadosSeguridad = [];
+  const cacheSeguridadBQ = {};
+  const cacheSeguridadDrive = {};
+  let totalAuditados = 0;
+
+  for (let i = 0; i < numRows; i++) {
+    const rawTableId = String(dataH[i][0] || "").trim();
+
+    if (!rawTableId || rawTableId === "" || rawTableId === "." || rawTableId === "-" || rawTableId === "--" || rawTableId.startsWith("=")) {
+      nuevosEstadosSeguridad.push([""]);
+      continue;
+    }
+
+    const cleanTableId = rawTableId.trim();
+    const parts = cleanTableId.split('.');
+    if (parts.length === 3 && parts[0].trim() !== "" && parts[1].trim() !== "" && parts[2].trim() !== "") {
+      let tableType = "";
+      try {
+        if (typeof BigQuery !== 'undefined' && BigQuery.Tables && BigQuery.Tables.get) {
+          const t = BigQuery.Tables.get(parts[0].trim(), parts[1].trim(), parts[2].trim());
+          tableType = t.type || "";
+        }
+      } catch(errT) {}
+
+      const valSeguridad = verificarSeguridadBigQuery(parts[0].trim(), parts[1].trim(), tableType, cacheSeguridadBQ);
+      nuevosEstadosSeguridad.push([valSeguridad]);
+      totalAuditados++;
+    } else if (cleanTableId.includes("spreadsheets/d/") || cleanTableId.length >= 20) {
+      const cleanId = extraerId(cleanTableId);
+      const valSeguridad = verificarEstadoSeguridad(cleanId, cacheSeguridadDrive);
+      nuevosEstadosSeguridad.push([valSeguridad]);
+      totalAuditados++;
+    } else {
+      nuevosEstadosSeguridad.push([""]);
+    }
+  }
+
+  sheet.getRange(startRow, colSeguridadIdx, numRows, 1).setValues(nuevosEstadosSeguridad);
+  return totalAuditados;
+}
+
+
+// ====================================================================================
+// PROCESO 4: FORZAR REFRESCO DE TABLAS ATRASADAS
+// ====================================================================================
+function refrescarTablasAtrasadas() {
+  try {
+    SpreadsheetApp.enableBigQueryExecution();
+  } catch (e) {
+    Logger.log("Aviso BigQueryExecution: " + e.message);
+  }
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName("1. Tablas en Sheets") || ss.getActiveSheet();
+  const startRow = 8;
+  const lastRow = sheet.getLastRow();
+
+  if (lastRow < startRow) return;
+
+  const numRows = lastRow - startRow + 1;
+  const data = sheet.getRange(startRow, 1, numRows, 8).getValues();
+
+  const cacheSS = {};
+  let totalRefrescadas = 0;
+
+  for (let i = 0; i < data.length; i++) {
+    const estado    = String(data[i][4] || ""); // Col E
+    const rawFileId = String(data[i][5] || ""); // Col F
+    const tabName   = String(data[i][6] || ""); // Col G
+
+    if (!estado || !rawFileId || !tabName) continue;
+    if (!estado.toLowerCase().includes("atras")) continue;
+
+    const fileId = extraerId(rawFileId.trim());
+    const cleanTabName = tabName.trim();
+
+    try {
+      let targetSs = cacheSS[fileId];
+      if (!targetSs) {
+        targetSs = SpreadsheetApp.openById(fileId);
+        cacheSS[fileId] = targetSs;
+      }
+
+      let sheetTarget = targetSs.getSheetByName(cleanTabName);
+      if (!sheetTarget) {
+        sheetTarget = targetSs.getSheets().find(s => s.getName().trim().toLowerCase() === cleanTabName.toLowerCase());
+      }
+      if (!sheetTarget) continue;
+
+      const tables = sheetTarget.getDataSourceTables();
+      for (let t of tables) {
+        t.refreshData();
+      }
+
+      const pivots = sheetTarget.getDataSourcePivotTables();
+      for (let p of pivots) {
+        p.refreshData();
+      }
+
+      totalRefrescadas++;
+      Logger.log("Refresco solicitado para: " + fileId + " [" + cleanTabName + "]");
+    } catch(e) {
+      Logger.log("Error en archivo " + fileId + ": " + e.message);
+    }
+  }
+
+  ss.toast(`Refresco enviado a ${totalRefrescadas} tablas atrasadas`, "Refresco BigQuery");
+}
+
+// Alias de retrocompatibilidad
+function refreshAtrasados() { refrescarTablasAtrasadas(); }
+
+
+// ====================================================================================
+// FUNCIONES AUXILIARES (Auditoria de Accesos, Drive y BigQuery)
+// ====================================================================================
+
+/**
+ * Evalua los permisos de Drive para determinar si el archivo esta restringido, abierto a la organizacion o publico
+ * Logica probada de Auditoria de Accesos con soporte para Drive API y DriveApp nativo
+ */
+function verificarEstadoSeguridad(fileId, cacheSeguridad) {
+  if (cacheSeguridad && cacheSeguridad[fileId]) {
+    return cacheSeguridad[fileId];
+  }
+
+  let estado = "";
+
+  // 1. Intento prioritario con Advanced Drive Service (Drive API v2)
+  try {
+    if (typeof Drive !== 'undefined' && Drive.Permissions && Drive.Permissions.list) {
+      const permisos = Drive.Permissions.list(fileId, { supportsAllDrives: true });
+      const items = (permisos && permisos.items) ? permisos.items : [];
+
+      if (items.some(p => p.type === 'anyone')) {
+        estado = 'Abierto (Publico en Internet)';
+      } else if (items.some(p => p.type === 'domain')) {
+        estado = 'Abierto (Organizacion con enlace)';
+      } else {
+        const cantPersonas = items.filter(p => p.type === 'user' || p.type === 'group').length;
+        estado = cantPersonas > 0 ? `Restringido (${cantPersonas} con acceso)` : 'Restringido (Privado)';
+      }
+    }
+  } catch (errApi) {
+    // Fallback silencioso a DriveApp
+  }
+
+  // 2. Fallback nativo con DriveApp
+  if (!estado) {
+    try {
+      const file = DriveApp.getFileById(fileId);
+      const access = file.getSharingAccess();
+
+      if (access === DriveApp.Access.ANYONE || access === DriveApp.Access.ANYONE_WITH_LINK) {
+        estado = 'Abierto (Publico en Internet)';
+      } else if (access === DriveApp.Access.DOMAIN || access === DriveApp.Access.DOMAIN_WITH_LINK) {
+        estado = 'Abierto (Organizacion con enlace)';
+      } else {
+        estado = 'Restringido';
+      }
+    } catch (e) {
+      estado = 'Sin acceso';
+    }
+  }
+
+  if (cacheSeguridad) cacheSeguridad[fileId] = estado;
+  return estado;
+}
+
+/**
+ * Evalua los permisos de acceso del Dataset y Tabla de BigQuery
+ * Detalla si es publico, de organizacion, o restringido especificando grupos, usuarios y cuentas de servicio
+ */
+function verificarSeguridadBigQuery(projectId, datasetId, tableType, cacheSeguridadBQ) {
+  const cacheKey = `${projectId}.${datasetId}`;
+  if (cacheSeguridadBQ && cacheSeguridadBQ[cacheKey]) {
+    let base = cacheSeguridadBQ[cacheKey];
+    if (tableType === "VIEW" && !base.includes("Vista")) return base + " - Vista";
+    if (tableType === "MATERIALIZED_VIEW" && !base.includes("Vista")) return base + " - Vista Materializada";
+    if (tableType === "EXTERNAL" && !base.includes("Externa")) return base + " - Tabla Externa";
+    return base;
+  }
+
+  let estado = "Restringido";
+
+  try {
+    if (typeof BigQuery !== 'undefined' && BigQuery.Datasets && BigQuery.Datasets.get) {
+      const dataset = BigQuery.Datasets.get(projectId, datasetId);
+      const accessEntries = (dataset && dataset.access) ? dataset.access : [];
+
+      let esPublico = false;
+      let esOrganizacion = false;
+      let dominios = [];
+      let cantGrupos = 0;
+      let cantUsuarios = 0;
+      let cantServiceAccounts = 0;
+      let tieneProjectRoles = false;
+
+      accessEntries.forEach(a => {
+        if (a.specialGroup === 'allUsers' || a.iamMember === 'allUsers') {
+          esPublico = true;
+        }
+        if (a.specialGroup === 'allAuthenticatedUsers' || a.iamMember === 'allAuthenticatedUsers') {
+          esOrganizacion = true;
+        }
+        if (a.domain) {
+          esOrganizacion = true;
+          dominios.push(a.domain);
+        }
+        if (a.groupByEmail) {
+          cantGrupos++;
+        }
+        if (a.userByEmail) {
+          cantUsuarios++;
+        }
+        if (a.specialGroup && a.specialGroup.startsWith("project")) {
+          tieneProjectRoles = true;
+        }
+        if (a.iamMember) {
+          if (a.iamMember.startsWith("group:")) cantGrupos++;
+          else if (a.iamMember.startsWith("user:")) cantUsuarios++;
+          else if (a.iamMember.startsWith("serviceAccount:")) cantServiceAccounts++;
+        }
+      });
+
+      if (esPublico) {
+        estado = "Abierto (Publico en Internet)";
+      } else if (esOrganizacion) {
+        const domStr = dominios.length > 0 ? ` (${dominios.join(", ")})` : "";
+        estado = `Abierto - Organizacion${domStr}`;
+      } else {
+        const componentes = [];
+        if (cantGrupos > 0) componentes.push(`${cantGrupos} grupo${cantGrupos > 1 ? 's' : ''}`);
+        if (cantUsuarios > 0) componentes.push(`${cantUsuarios} usuario${cantUsuarios > 1 ? 's' : ''}`);
+        if (cantServiceAccounts > 0) componentes.push(`${cantServiceAccounts} SA`);
+
+        if (componentes.length > 0) {
+          estado = `Restringido (${componentes.join(", ")})`;
+        } else if (tieneProjectRoles) {
+          estado = "Restringido (Solo Roles del Proyecto)";
+        } else {
+          estado = "Restringido (Privado)";
+        }
+      }
+    } else {
+      estado = "Restringido";
+    }
+  } catch (e) {
+    if (e.message && (e.message.includes("Access Denied") || e.message.includes("403"))) {
+      estado = "Restringido (Sin permiso IAM en Dataset)";
+    } else {
+      estado = "Restringido";
+    }
+  }
+
+  if (cacheSeguridadBQ) cacheSeguridadBQ[cacheKey] = estado;
+
+  if (tableType === "VIEW" && !estado.includes("Vista")) {
+    estado += " - Vista";
+  } else if (tableType === "MATERIALIZED_VIEW" && !estado.includes("Vista")) {
+    estado += " - Vista Materializada";
+  } else if (tableType === "EXTERNAL" && !estado.includes("Externa")) {
+    estado += " - Tabla Externa";
+  }
+
+  return estado;
+}
+
+/**
+ * Extrae ID limpio si se pego un link completo
+ */
+function extraerId(urlOrId){
+  let id = String(urlOrId || "").trim();
+  if (id.includes("spreadsheets/d/")) {
+    id = id.split("spreadsheets/d/")[1].split("/")[0];
+  }
+  id = id.split("/")[0].split("?")[0].split("#")[0];
+  return id.trim();
+}
+
+/**
+ * Obtiene fecha de ultima actualizacion de BigQuery para Tablas en Sheets
+ */
+function obtenerFechaBQ(fileId, extractName, cacheSS) {
+  try {
+    let targetSs;
+    if (cacheSS && cacheSS[fileId]) {
+      targetSs = cacheSS[fileId];
+    } else {
+      targetSs = SpreadsheetApp.openById(fileId);
+      if (cacheSS) cacheSS[fileId] = targetSs;
+    }
+
+    const cleanTab = String(extractName || "").trim();
+    let sheet = targetSs.getSheetByName(cleanTab);
+
+    if (!sheet) {
+      const allSheets = targetSs.getSheets();
+      sheet = allSheets.find(s => s.getName().trim().toLowerCase() === cleanTab.toLowerCase());
+    }
+
+    if (!sheet) return "Pestana no existe";
+
+    let esTablaConexion = false;
+    let fechaMasReciente = null;
+
+    // Tablas BigQuery
+    try {
+      const tables = sheet.getDataSourceTables();
+      if (tables && tables.length > 0) {
+        esTablaConexion = true;
+        for (let t of tables) {
+          const status = t.getStatus();
+          if (status) {
+            const date = status.getLastRefreshedTime();
+            if (date instanceof Date && (!fechaMasReciente || date > fechaMasReciente)) {
+              fechaMasReciente = date;
+            }
+          }
+        }
+      }
+    } catch(err) {
+      Logger.log("Error leyendo tables en " + fileId + ": " + err.message);
+    }
+
+    // Pivot Tables BigQuery
+    try {
+      const pivots = sheet.getDataSourcePivotTables();
+      if (pivots && pivots.length > 0) {
+        esTablaConexion = true;
+        for (let p of pivots) {
+          const status = p.getStatus();
+          if (status) {
+            const date = status.getLastRefreshedTime();
+            if (date instanceof Date && (!fechaMasReciente || date > fechaMasReciente)) {
+              fechaMasReciente = date;
+            }
+          }
+        }
+      }
+    } catch(err) {
+      Logger.log("Error leyendo pivots en " + fileId + ": " + err.message);
+    }
+
+    if (fechaMasReciente) {
+      return fechaMasReciente;
+    }
+
+    if (esTablaConexion) {
+      return "Nunca refrescado";
+    }
+
+    return "No es tabla BigQuery";
+
+  } catch(e) {
+    return "Error acceso: " + e.message;
+  }
+}
+
+/**
+ * Marca ultima ejecucion en celda A5 (Tablas)
+ */
+function marcarUltimaEjecucion(sheet, prefijo) {
+  const fechaActual = new Date();
+  const fechaFormateada = Utilities.formatDate(
+    fechaActual,
+    Session.getScriptTimeZone(),
+    "dd/MM/yyyy HH:mm:ss"
+  );
+  sheet.getRange("A5").setValue(prefijo + fechaFormateada);
+}
+
+/**
+ * Marca ultima ejecucion en celda A5 (Querys)
+ */
+function QuerysMarcarUltimaEjecucion(sheet, prefijo) {
+  const ahora = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "dd/MM/yyyy HH:mm:ss");
+  sheet.getRange("A5").setValue(prefijo + ahora);
+}

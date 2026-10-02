@@ -1,0 +1,785 @@
+<!DOCTYPE html>
+<!--
+  6_MTD_by_WHS.html — MTD by WHS (por warehouse)
+  Datos: WHS Data (fetchDailyMatrix) — agregado por warehouse, rango limitado a
+  un único mes, comparación automática vs período anterior de igual duración.
+  Filtros: por métrica y por país. Estética: misma que 4_MTD.html.
+-->
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MTD by WHS - PeYa Markets</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<link rel="stylesheet" href="https://npmcdn.com/flatpickr/dist/themes/airbnb.css">
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script src="https://npmcdn.com/flatpickr/dist/l10n/es.js"></script>
+<style>
+  :root {
+    --primary:#e50044; --text-main:#0f172a; --text-sub:#475569; --text-light:#94a3b8;
+    --border:#e2e8f0; --border-light:#f1f5f9; --bg-main:#f8fafc; --panel-bg:#ffffff;
+    --positive:#059669; --negative:#e11d48; --neutral:#64748b;
+    --shadow-sm:0 1px 2px 0 rgba(0,0,0,0.03);
+    --shadow-md:0 4px 6px -1px rgba(0,0,0,0.04),0 2px 4px -1px rgba(0,0,0,0.02);
+    --radius:8px;
+  }
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:'Inter',system-ui,sans-serif;background:var(--bg-main);color:var(--text-main);font-size:13px;-webkit-font-smoothing:antialiased;}
+
+  #splash{position:fixed;inset:0;background:rgba(255,255,255,0.95);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;transition:opacity .3s ease;backdrop-filter:blur(4px);}
+  #splash.out{opacity:0;pointer-events:none;}
+  .spinner{width:42px;height:42px;border:4px solid rgba(229,0,68,0.12);border-top-color:var(--primary);border-radius:50%;animation:spin 0.75s linear infinite;margin-bottom:14px;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+
+  nav{background:#fff;border-bottom:1px solid var(--border);height:52px;display:flex;align-items:center;padding:0 20px;position:sticky;top:0;z-index:300;box-shadow:0 1px 0 var(--border);}
+  .n-brand{display:flex;align-items:center;gap:7px;margin-right:18px;flex-shrink:0;}
+  .n-dot{width:7px;height:7px;border-radius:50%;background:var(--primary);}
+  .n-divider{width:1px;height:20px;background:var(--border);margin:0 10px;flex-shrink:0;}
+  .n-tabs{display:flex;gap:2px;}
+  .n-tab{display:flex;align-items:center;gap:5px;padding:5px 11px;border-radius:7px;font-size:12px;font-weight:500;color:var(--text-sub);transition:all .15s;border:none;background:transparent;cursor:pointer;text-decoration:none;white-space:nowrap;}
+  .n-tab svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
+  .n-tab.active{background:var(--bg-main);color:var(--text-main);font-weight:600;}
+  .n-tab:hover:not(.active){background:var(--border-light);color:var(--text-main);}
+  .n-right{margin-left:auto;display:flex;align-items:center;gap:8px;}
+  .n-btn{height:30px;border:1px solid var(--border);background:#fff;border-radius:7px;padding:0 11px;font-size:11px;font-weight:600;color:var(--text-sub);cursor:pointer;display:flex;align-items:center;gap:5px;transition:all .15s;}
+  .n-btn:hover{border-color:var(--text-sub);color:var(--text-main);}
+  .n-btn svg{width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;}
+
+  .fbar{background:rgba(255,255,255,0.98);backdrop-filter:blur(8px);border-bottom:1px solid var(--border);padding:9px 20px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;position:sticky;top:52px;z-index:290;}
+  .fg{display:flex;align-items:center;gap:8px;}
+  .fl{font-size:11px;font-weight:700;color:var(--text-sub);text-transform:uppercase;letter-spacing:0.5px;}
+  .fs{border:1px solid var(--border);background:#fff;border-radius:6px;padding:8px 12px;font-size:12px;font-weight:600;color:var(--text-main);font-family:'Inter';cursor:pointer;outline:none;transition:all 0.2s;min-width:120px;text-align:center;}
+  .fs:focus{border-color:var(--primary);box-shadow:0 0 0 2px rgba(229,0,68,0.15);}
+  .fsrch{border:1px solid var(--border);background:#fff;border-radius:6px;padding:8px 12px;font-size:12px;font-weight:600;color:var(--text-main);font-family:'Inter';outline:none;transition:all 0.2s;min-width:180px;height:32px;}
+  .fsrch:focus{border-color:var(--primary);box-shadow:0 0 0 2px rgba(229,0,68,0.15);}
+  .fsrch::placeholder{color:var(--text-light);font-weight:500;}
+  select.fs{text-align:left;min-width:170px;}
+  .btn-mtd{height:32px;padding:0 12px;border:1px solid var(--border);border-radius:6px;background:#fff;color:var(--text-sub);font-family:'Inter';font-size:11px;font-weight:700;cursor:pointer;transition:all .15s;text-transform:uppercase;letter-spacing:.4px;}
+  .btn-mtd.active,.btn-mtd:hover{background:var(--primary);border-color:var(--primary);color:#fff;}
+
+  .page{padding:20px;max-width:1100px;margin:0 auto;display:flex;flex-direction:column;gap:14px;}
+  .hero-grid{display:grid;grid-template-columns:1fr;gap:20px;margin-bottom:16px;}
+  .hero-panel,.ov-panel{position:relative;background:var(--panel-bg);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;}
+  .hero-panel{box-shadow:var(--shadow-md);border-top:4px solid var(--primary);}
+  .ov-panel{box-shadow:var(--shadow-sm);transition:transform 0.15s;}
+  .ov-panel:hover{transform:translateY(-2px);box-shadow:var(--shadow-md);}
+  .ov-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:20px;align-items:start;}
+  @media(max-width:1200px){.ov-grid{grid-template-columns:1fr;}}
+
+  .p-head{padding:10px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;background:#fff;min-height:58px;flex-wrap:nowrap;}
+  .p-bar{width:4px;height:32px;border-radius:4px;flex-shrink:0;}
+  .p-title-container{flex:1;display:flex;flex-direction:column;overflow:hidden;justify-content:center;gap:2px;}
+  .p-title{font-weight:600;text-transform:uppercase;letter-spacing:-0.2px;color:var(--text-main);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .p-subtitle{font-size:10px;font-weight:500;color:var(--text-light);text-transform:uppercase;letter-spacing:0.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .btn-actions{display:flex;gap:6px;flex-shrink:0;align-items:center;}
+  .btn-copy,.btn-copy-val{background:transparent;border:1px solid var(--border);border-radius:5px;padding:0 10px;height:26px;display:inline-flex;align-items:center;justify-content:center;gap:5px;cursor:pointer;transition:all 0.2s;font-size:11px;font-weight:600;color:var(--text-sub);white-space:nowrap;box-shadow:var(--shadow-sm);flex-shrink:0;}
+  .btn-copy:hover,.btn-copy-val:hover{background:var(--bg-main);color:var(--text-main);border-color:var(--text-sub);}
+  .btn-actions svg{width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:2.2;flex-shrink:0;}
+  .table-wrap{width:100%;overflow-x:auto;}
+  /* Ancho completo dentro del panel contenedor (acotado externamente a 600px) */
+  table{width:100%;border-collapse:collapse;background:#fff;}
+  th{padding:5px 9px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;color:var(--text-sub);text-align:center;border-bottom:1.5px solid var(--border);background:#fff;cursor:pointer;user-select:none;transition:all 0.2s;white-space:nowrap;}
+  th:hover{color:var(--text-main);background:var(--border-light);}
+  th:first-child{text-align:left;border-right:1px solid var(--border-light);width:40%;}
+  td{padding:4px 9px;text-align:center;border-bottom:1px solid var(--border-light);white-space:nowrap;font-size:11px;transition:background 0.15s;line-height:1.3;}
+  td:first-child{text-align:left;font-weight:600;font-size:11px;color:var(--text-sub);border-right:1px solid var(--border-light);}
+  /* Números (ACTUAL y PERÍODO ANT.) alineados a la derecha → más fáciles de comparar. */
+  th:nth-child(2),td:nth-child(2),th:nth-child(3),td:nth-child(3){text-align:right;}
+  tbody tr:nth-child(even) td{background:#fcfcfd;}
+  tbody tr:hover td{background-color:#eef2f7;}
+  tbody tr:last-child td{border-bottom:none;}
+  .sep-l{border-left:1px dashed var(--border);}
+  .number{font-size:12px;font-weight:600;color:var(--text-main);font-variant-numeric:tabular-nums;}
+  .dim{color:var(--text-sub);font-weight:500;font-size:11px;}
+  .sort-icon{display:inline-block;width:10px;text-align:center;color:var(--text-sub);font-size:11px;margin-left:2px;}
+  .badge{display:inline-flex;align-items:center;gap:3px;padding:3px 6px;border-radius:4px;font-size:11px;font-weight:700;white-space:nowrap;line-height:1.2;}
+  .badge-pos{background:rgba(5,150,105,0.08);color:var(--positive);border:1px solid rgba(5,150,105,0.22);}
+  .badge-neg{background:rgba(225,29,72,0.08);color:var(--negative);border:1px solid rgba(225,29,72,0.22);}
+  .badge-neu{background:var(--border-light);color:var(--text-light);border:1px solid var(--border);}
+  .badge svg{width:9px;height:9px;stroke:currentColor;fill:none;stroke-width:3;stroke-linecap:round;stroke-linejoin:round;}
+  /* En pantallas chicas la barra de filtros ocupa varias filas: se hace
+     estática (scrollea con la página) para no tapar el contenido. */
+  @media(max-width:800px){.page{padding:12px;gap:16px;}.hero-grid,.ov-grid{grid-template-columns:1fr;gap:16px;}.fbar{position:static;}}
+
+  /* ── LOADING BAR ── */
+  #date-loading-bar{position:fixed;top:0;left:0;width:100%;height:3px;z-index:9998;display:none;overflow:hidden;background:rgba(229,0,68,.12);}
+  #date-loading-bar::after{content:'';position:absolute;top:0;left:0;width:40%;height:100%;background:var(--primary);border-radius:2px;animation:ldbar 1.2s ease-in-out infinite;}
+  @keyframes ldbar{0%{left:-40%}100%{left:100%}}
+  #date-loading-bar.visible{display:block;}
+  #main-container.date-loading{opacity:.45;pointer-events:none;transition:opacity .15s;}
+  #main-container{transition:opacity .2s;}
+
+  .empty-state{padding:30px 24px;color:var(--text-sub);font-size:12px;line-height:1.8;background:#fff;border:1px solid var(--border);border-radius:var(--radius);}
+  .empty-state strong{color:var(--text-main);}
+  .empty-state code{background:var(--border-light);border-radius:4px;padding:1px 4px;font-family:monospace;font-size:11px;}
+</style>
+</head>
+<body>
+
+<!-- ══ MOCK (preview local — ignorado en AppScript) ══ -->
+<script>
+(function(){
+  if(typeof google!=='undefined'&&google.script&&google.script.run)return;
+  var FD={
+    AR:[45200,380000,12650,87.2,84.2,71.5,38.5,8.2,4.2,15.1],
+    CL:[28400,215000, 7950,88.5,85.5,73.2,37.8,7.9,3.8,14.6],
+    CO:[21900,165000, 6130,86.1,83.1,69.8,41.2,8.8,4.8,16.2],
+    PE:[18600,140000, 5210,85.4,82.4,68.5,42.5,9.1,5.1,15.8],
+    UY:[11800, 95000, 3310,89.1,86.1,74.1,36.2,7.6,3.5,13.9],
+    EC:[ 8400, 64000, 2350,84.8,81.8,67.2,43.1,9.3,5.4,17.1],
+    DO:[ 7600, 58000, 2130,85.9,82.9,70.1,40.8,8.7,4.7,16.5],
+    PA:[ 6200, 48000, 1740,86.5,83.5,71.0,39.5,8.4,4.5,15.5],
+    BO:[ 5100, 38000, 1430,83.2,80.2,65.8,44.5,9.6,5.8,17.8],
+    GT:[ 4600, 35000, 1290,84.1,81.1,66.5,43.8,9.4,5.6,17.4],
+    PY:[ 4100, 31000, 1150,85.0,82.0,68.0,41.5,8.9,5.2,16.8],
+    SV:[ 3300, 25000,  920,83.8,80.8,66.9,44.1,9.5,5.5,17.2],
+    HN:[ 2900, 22000,  810,83.0,80.0,65.2,45.2,9.7,5.9,18.1],
+    NI:[ 1600, 12000,  450,82.5,79.5,64.1,46.5,9.9,6.2,18.5]
+  };
+  var WN={AR:'Argentina',BO:'Bolivia',CL:'Chile',CO:'Colombia',EC:'Ecuador',SV:'El Salvador',GT:'Guatemala',HN:'Honduras',NI:'Nicaragua',PA:'Panamá',PY:'Paraguay',PE:'Perú',UY:'Uruguay',DO:'Rep. Dominicana'};
+  // Países grandes con 2 warehouses (para demostrar la vista por WHS)
+  var MULTI={AR:2,CL:2,CO:2,PE:2};
+  function buildMockRows(n){
+    var rows=[];
+    Object.keys(FD).forEach(function(cc){
+      var f=FD[cc];
+      var nw=MULTI[cc]||1;
+      var shares=nw===2?[0.6,0.4]:[1];
+      shares.forEach(function(share,idx){
+        // pequeña variación de ratios entre warehouses del mismo país
+        var dv=idx===1?[-0.4,-0.3,-0.6,0.3,0.2,0.2,-0.3]:[0,0,0,0,0,0,0];
+        function vals(mult,delta){
+          return { orders:Math.round(f[0]*n*mult), gmv:Math.round(f[1]*n*mult), new_users:Math.round(f[2]*n*mult),
+            wis:f[3]+dv[0]+(delta?-0.6:0), wis_uf:f[4]+dv[1]+(delta?-0.5:0), seamless:f[5]+dv[2]+(delta?-0.9:0),
+            delivery_time:f[6]+dv[3]+(delta?0.4:0), assignment_time:f[7]+dv[4]+(delta?0.3:0),
+            rejected_orders:f[8]+dv[5]+(delta?0.15:0), session_orders:f[9]+dv[6]+(delta?-0.4:0),
+            late_orders:3.8+(delta?0.5:0), slow_orders:11.5+(delta?0.8:0),
+            forced_preorders:0.5+(delta?0.1:0), modified_orders:3.5+(delta?0.4:0),
+            saturation:6.2+(delta?0.6:0), assignment_time_orders_over_6min:6.2+(delta?0.6:0),
+            open_time:94.2+(delta?-0.8:0) };
+        }
+        rows.push({
+          warehouse_id:'wh_'+cc.toLowerCase()+(nw>1?('_'+(idx+1)):''),
+          warehouse_name:WN[cc]+(nw>1?(' · WH'+(idx+1)):''),
+          country:cc,
+          cur: vals(share,false),
+          comp:{ orders:Math.round(f[0]*n*share*.96), gmv:Math.round(f[1]*n*share*.97), new_users:Math.round(f[2]*n*share*.94),
+                 wis:f[3]+dv[0]-0.6, wis_uf:f[4]+dv[1]-0.5, seamless:f[5]+dv[2]-0.9,
+                 delivery_time:f[6]+dv[3]+0.4, assignment_time:f[7]+dv[4]+0.3,
+                 rejected_orders:f[8]+dv[5]+0.15, session_orders:f[9]+dv[6]-0.4,
+                 late_orders:4.3, slow_orders:12.3, forced_preorders:0.6, modified_orders:3.9, assignment_time_orders_over_6min:6.8,
+                 open_time:93.5 },
+          year:{ orders:Math.round(f[0]*n*share*.82), gmv:Math.round(f[1]*n*share*.80), new_users:Math.round(f[2]*n*share*.78),
+                 wis:f[3]+dv[0]-1.4, wis_uf:f[4]+dv[1]-1.2, seamless:f[5]+dv[2]-1.8,
+                 delivery_time:f[6]+dv[3]+0.9, assignment_time:f[7]+dv[4]+0.7,
+                 rejected_orders:f[8]+dv[5]+0.35, session_orders:f[9]+dv[6]-0.9,
+                 late_orders:5.0, slow_orders:13.5, forced_preorders:0.8, modified_orders:4.5, assignment_time_orders_over_6min:7.6,
+                 open_time:92.1 }
+        });
+      });
+    });
+    return rows;
+  }
+  function aggWeighted(rows){
+    var o={cur:{},comp:{},year:{}};
+    ['orders','gmv','new_users'].forEach(function(k){
+      o.cur[k]=rows.reduce(function(s,r){return s+(r.cur[k]||0);},0);
+      o.comp[k]=rows.reduce(function(s,r){return s+(r.comp[k]||0);},0);
+      o.year[k]=rows.reduce(function(s,r){return s+((r.year&&r.year[k])||0);},0);
+    });
+    ['wis','wis_uf','seamless','delivery_time','assignment_time','rejected_orders','session_orders','late_orders','slow_orders','forced_preorders','modified_orders','assignment_time_orders_over_6min','open_time'].forEach(function(k){
+      var ws=0,wc=0,ws2=0,wc2=0,ws3=0,wc3=0;
+      rows.forEach(function(r){ws+=r.cur[k]*r.cur.orders;wc+=r.cur.orders;ws2+=r.comp[k]*r.comp.orders;wc2+=r.comp.orders;if(r.year){ws3+=r.year[k]*r.year.orders;wc3+=r.year.orders;}});
+      o.cur[k]=wc?ws/wc:null;o.comp[k]=wc2?ws2/wc2:null;o.year[k]=wc3?ws3/wc3:null;
+    });
+    return o;
+  }
+  function withTotal(rows){
+    var t=aggWeighted(rows);
+    rows.push({warehouse_id:'__TOTAL__',warehouse_name:'TOTAL',country:'',isTotal:true,cur:t.cur,comp:t.comp,year:t.year});
+    return rows;
+  }
+  function buildSubtotals(rows){
+    var byCc={};
+    rows.forEach(function(r){ if(!r.isTotal){ (byCc[r.country]=byCc[r.country]||[]).push(r); } });
+    var sub={};
+    Object.keys(byCc).forEach(function(cc){ sub[cc]=aggWeighted(byCc[cc]); });
+    return sub;
+  }
+  var VD=(function(){var d=[];var s=new Date('2026-01-01'),e=new Date('2026-06-09');for(var i=new Date(s);i<=e;i.setDate(i.getDate()+1))d.push(new Date(i).toISOString().slice(0,10));return d;})();
+  function daysBetween(sD,eD){
+    var sp=sD.split('-'),ep=eD.split('-');
+    return Math.round((new Date(+ep[0],+ep[1]-1,+ep[2])-new Date(+sp[0],+sp[1]-1,+sp[2]))/86400000)+1;
+  }
+  function shiftMonthYMD(ymd,delta){var p=ymd.split('-'),y=+p[0],m=+p[1]-1,d=+p[2];var b=new Date(y,m+delta,1);var last=new Date(b.getFullYear(),b.getMonth()+1,0).getDate();var x=new Date(b.getFullYear(),b.getMonth(),Math.min(d,last));return x.getFullYear()+'-'+('0'+(x.getMonth()+1)).slice(-2)+'-'+('0'+x.getDate()).slice(-2);}
+  function buildResult(start,end){
+    var maxD='2026-06-09'; // último día con datos en el mock
+    var sD=start||(maxD.slice(0,7)+'-01'),eD=end||maxD; // default = último mes disponible
+    var n=daysBetween(sD,eD);
+    var baseRows=buildMockRows(n);
+    var subtotals=buildSubtotals(baseRows);
+    return { rows:withTotal(baseRows), countries:Object.keys(FD), subtotals:subtotals, currentStart:sD, currentEnd:eD,
+      compStart:shiftMonthYMD(sD,-1), compEnd:shiftMonthYMD(eD,-1), validDates:VD, numDays:n,
+      _debug:{sheetName:'WHS Data (mock)',totalRows:VD.length*18,rowsMatched:18*n,colsFound:[],colsMissing:[]} };
+  }
+  function cr(){var s=null;var runner={withSuccessHandler:function(cb){s=cb;return runner;},withFailureHandler:function(){return runner;},fetchDailyMatrix:function(start,end){var c=s;s=null;setTimeout(function(){if(c)c(buildResult(start,end));},400);},forceRefreshDailyMatrix:function(){var c=s;s=null;setTimeout(function(){if(c)c(true);},100);},getScriptUrl:function(){var c=s;s=null;setTimeout(function(){if(c)c(null);},50);}};return runner;}
+  window.google={script:{run:cr()}};
+})();
+</script>
+<!-- ══ END MOCK ══ -->
+
+<div id="splash">
+  <div style="font-weight:700;font-size:15px;color:var(--text-sub);margin-bottom:4px;">PedidosYa Markets</div>
+  <div style="font-weight:900;font-size:22px;margin-bottom:20px;">MTD <b style="color:var(--primary)">by WHS</b></div>
+  <div class="spinner"></div>
+  <div style="font-weight:600;color:var(--text-light);font-size:12px;" id="sp-note">Cargando datos...</div>
+</div>
+
+<script>window.PAGE_ID='mtd-whs';</script>
+<?!= include('_nav'); ?>
+
+<div class="fbar">
+  <div class="fg"><span class="fl">Periodo:</span><input type="text" class="fs" id="f-start" placeholder="Cargando..."></div>
+  <div class="fg"><span class="fl">Hasta:</span><input type="text" class="fs" id="f-end" placeholder="Cargando..."></div>
+  <button class="btn-mtd active" id="btn-mtd" onclick="setMTDQuick()">MTD</button>
+  <div class="n-divider"></div>
+  <div class="fg">
+    <span class="fl">Métrica:</span>
+    <select class="fs" id="f-metric" onchange="renderPanels()"></select>
+  </div>
+  <div class="fg">
+    <span class="fl">País:</span>
+    <select class="fs" id="f-country" onchange="renderPanels()">
+      <option value="">Todos</option>
+    </select>
+  </div>
+  <div class="fg">
+    <span class="fl">Buscar:</span>
+    <input type="text" class="fsrch" id="f-search" placeholder="Buscar..." oninput="renderPanels()">
+  </div>
+  <div style="margin-left:auto;display:flex;align-items:center;gap:6px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:20px;padding:4px 10px;font-size:11px;font-weight:600;color:#1d4ed8;white-space:nowrap">
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+    <span id="comp-pill">vs período anterior</span>
+  </div>
+</div>
+
+<div id="date-loading-bar"></div>
+<div class="page"><div id="main-container"></div></div>
+
+<script>
+  // ── Cache local (25 min TTL) ───────────────────────────────────
+  const MM_CACHE_KEY='peya_mtdwhs_v3', MM_CACHE_TTL=25*60*1000;
+  function getMMCache(){try{const c=localStorage.getItem(MM_CACHE_KEY);if(!c)return null;const p=JSON.parse(c);if(Date.now()>p.expiry){localStorage.removeItem(MM_CACHE_KEY);return null;}return p.data;}catch(e){return null;}}
+  function setMMCache(d){try{localStorage.setItem(MM_CACHE_KEY,JSON.stringify({data:d,expiry:Date.now()+MM_CACHE_TTL}));}catch(e){}}
+
+  let CURRENT_DATA=null, ALL_ROWS=[], LOCAL_SORTS={}, fpStart=null, fpEnd=null;
+
+  // ── Definición de métricas (WHS Data) ─────────────────────────
+  // fmt: int|eur|pct|min · varFmt: pct_rel|pp|min_abs · hi: true = más es mejor
+  // additive: true → la fila TOTAL se calcula como suma
+  const METRICS=[
+    {key:'orders',          label:'Confirmed Orders',     fmt:'int', varFmt:'pct_rel', hi:true,  additive:true,  color:'#e50044', hero:true},
+    {key:'gmv',             label:'GMV (EUR)',            fmt:'eur', varFmt:'pct_rel', hi:true,  additive:true,  color:'#2563eb', hero:true},
+    {key:'new_users',       label:'New Users',            fmt:'int', varFmt:'pct_rel', hi:true,  additive:true,  color:'#ea580c'},
+    {key:'wis',             label:'WIS %',                fmt:'pct', varFmt:'pp',      hi:true,  additive:false, color:'#0284c7'},
+    {key:'wis_uf',          label:'WIS UF %',             fmt:'pct', varFmt:'pp',      hi:true,  additive:false, color:'#0891b2'},
+    {key:'seamless',        label:'Seamless Delivery %',  fmt:'pct', varFmt:'pp',      hi:true,  additive:false, color:'#16a34a'},
+    {key:'late_orders',     label:'Late Orders %',        fmt:'pct', varFmt:'pp',      hi:false, additive:false, color:'#f59e0b'},
+    {key:'slow_orders',     label:'Slow Orders %',        fmt:'pct', varFmt:'pp',      hi:false, additive:false, color:'#eab308'},
+    {key:'modified_orders', label:'Modified %',           fmt:'pct', varFmt:'pp',      hi:false, additive:false, color:'#0d9488'},
+    {key:'delivery_time',   label:'Delivery Time',        fmt:'min', varFmt:'min_abs', hi:false, additive:false, color:'#d97706'},
+    {key:'assignment_time_orders_over_6min',      label:'Assignment Time > 6 min %',         fmt:'pct', varFmt:'pp',      hi:false, additive:false, color:'#f43f5e'},
+    {key:'open_time',       label:'Weighted Open time %', fmt:'pct', varFmt:'pp',      hi:true,  additive:false, color:'#0ea5e9'},
+    {key:'assignment_time', label:'Assignment Time',      fmt:'min', varFmt:'min_abs', hi:false, additive:false, color:'#9333ea'},
+    {key:'rejected_orders', label:'Rejected %',           fmt:'pct', varFmt:'pp',      hi:false, additive:false, color:'#dc2626'},
+    {key:'session_orders',  label:'HC Sessions orders %', fmt:'pct', varFmt:'pp',      hi:false, additive:false, color:'#7c3aed'},
+  ];
+  const GROUPS=[
+    { hero:true,  keys:['orders','gmv'] },
+    { hero:false, keys:['new_users','wis','wis_uf','seamless'] },
+    { hero:false, keys:['late_orders','slow_orders','rejected_orders','session_orders'] },
+    { hero:false, keys:['forced_preorders','modified_orders','delivery_time','assignment_time_orders_over_6min'] },
+    { hero:false, keys:['open_time','assignment_time'] },
+  ];
+  const CCN={AR:'Argentina',BO:'Bolivia',CL:'Chile',CO:'Colombia',EC:'Ecuador',SV:'El Salvador',GT:'Guatemala',HN:'Honduras',NI:'Nicaragua',PA:'Panamá',PY:'Paraguay',PE:'Perú',UY:'Uruguay',DO:'Rep. Dominicana',MX:'México'};
+
+  // ── Formatters ─────────────────────────────────────────────────
+  function fv(v,fmt){
+    if(v==null||isNaN(v))return '—';
+    if(fmt==='pct') return v.toFixed(1)+'%';
+    if(fmt==='min') return v.toFixed(1)+' min';
+    const a=Math.abs(v);
+    const suf=fmt==='eur'?' €':'';
+    if(a>=1e6) return (v/1e6).toFixed(2)+'M'+suf;
+    if(a>=1e3) return (v/1e3).toFixed(1)+'k'+suf;
+    return (fmt==='eur'?Math.round(v):Math.round(v).toLocaleString('es-AR'))+suf;
+  }
+  function calcVar(cur,comp,varFmt){
+    if(cur==null||comp==null)return null;
+    if(varFmt==='pp'||varFmt==='min_abs')return cur-comp;
+    if(comp===0)return null;
+    return((cur-comp)/Math.abs(comp))*100;
+  }
+  function badge(val,m){
+    if(val==null||isNaN(val))return '<span class="badge badge-neu">—</span>';
+    const sfx=m.varFmt==='pp'?' pp':m.varFmt==='min_abs'?' min':'%';
+    if(Math.abs(val)<0.05)return `<span class="badge badge-neu">0.0${sfx}</span>`;
+    const good=m.hi?val>0:val<0;
+    const cls=good?'badge-pos':'badge-neg';
+    const ico=val>0?'<svg viewBox="0 0 24 24"><polyline points="18 15 12 9 6 15"/></svg>':'<svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>';
+    return `<span class="badge ${cls}">${ico}${val>0?'+':''}${val.toFixed(1)}${sfx}</span>`;
+  }
+
+  // ── Sorting ────────────────────────────────────────────────────
+  function localSort(mkey,col){
+    if(!LOCAL_SORTS[mkey])LOCAL_SORTS[mkey]={col:col,dir:'desc'};
+    else if(LOCAL_SORTS[mkey].col===col)LOCAL_SORTS[mkey].dir=LOCAL_SORTS[mkey].dir==='desc'?'asc':'desc';
+    else LOCAL_SORTS[mkey]={col:col,dir:'desc'};
+    renderPanels();
+  }
+  function sortIcon(mkey,col){
+    if(LOCAL_SORTS[mkey]&&LOCAL_SORTS[mkey].col===col)return `<span class="sort-icon">${LOCAL_SORTS[mkey].dir==='asc'?'↑':'↓'}</span>`;
+    return '<span class="sort-icon" style="opacity:0">↓</span>';
+  }
+
+  function totalRow(){return ALL_ROWS.find(r=>r.isTotal)||null;}
+  function selectedCountry(){return document.getElementById('f-country').value||'';}
+
+  // Fila de resumen al pie: TOTAL global (sin filtro) o subtotal del país filtrado.
+  function summaryRow(){
+    const cc=selectedCountry();
+    if(!cc) return totalRow();
+    const sub=CURRENT_DATA&&CURRENT_DATA.subtotals&&CURRENT_DATA.subtotals[cc];
+    if(!sub) return null;
+    return { isTotal:true, isSubtotal:true, country:cc,
+             warehouse_name:(CCN[cc]||cc)+' · TOTAL', cur:sub.cur, comp:sub.comp, year:sub.year };
+  }
+
+  function sortedRows(m){
+    const cc=selectedCountry();
+    const srch=String(document.getElementById('f-search')?.value||'').trim().toLowerCase();
+    const rows=ALL_ROWS.filter(r=>{
+      if (r.isTotal) return false;
+      if (cc && r.country !== cc) return false;
+      if (r.cur && r.cur[m.key] == null) return false;
+      if (srch) {
+        var nameMatch = String(r.warehouse_name || '').toLowerCase().indexOf(srch) >= 0;
+        var idMatch = String(r.warehouse_id || '').toLowerCase().indexOf(srch) >= 0;
+        if (!nameMatch && !idMatch) return false;
+      }
+      return true;
+    });
+    const s=LOCAL_SORTS[m.key];
+    if(s){
+      rows.sort((a,b)=>{
+        let va,vb;
+        if(s.col==='wh'){va=a.warehouse_name||'';vb=b.warehouse_name||'';return s.dir==='asc'?va.localeCompare(vb):vb.localeCompare(va);}
+        if(s.col==='cur'){va=a.cur[m.key]??-Infinity;vb=b.cur[m.key]??-Infinity;}
+        else if(s.col==='comp'){va=(a.comp&&a.comp[m.key])??-Infinity;vb=(b.comp&&b.comp[m.key])??-Infinity;}
+        else if(s.col==='yvar'){va=calcVar(a.cur[m.key],a.year&&a.year[m.key],m.varFmt)??-Infinity;vb=calcVar(b.cur[m.key],b.year&&b.year[m.key],m.varFmt)??-Infinity;}
+        else {va=calcVar(a.cur[m.key],a.comp&&a.comp[m.key],m.varFmt)??-Infinity;vb=calcVar(b.cur[m.key],b.comp&&b.comp[m.key],m.varFmt)??-Infinity;}
+        return s.dir==='asc'?va-vb:vb-va;
+      });
+    } else {
+      // Orden por defecto: Confirmed Orders del período actual, desc
+      rows.sort((a,b)=>((b.cur&&b.cur.orders)||0)-((a.cur&&a.cur.orders)||0));
+    }
+    return rows;
+  }
+
+  // ── Panel builder ──────────────────────────────────────────────
+  function fmtPeriod(m){
+    if(!CURRENT_DATA)return '';
+    const f=d=>d?d.slice(5).replace('-','/'):'—';
+    if(m && m.key==='open_time'){
+      return `Métrica diaria · Día ${f(CURRENT_DATA.currentStart)} vs ${f(CURRENT_DATA.compStart)}`;
+    }
+    return `${f(CURRENT_DATA.currentStart)} → ${f(CURRENT_DATA.currentEnd)} · vs ${f(CURRENT_DATA.compStart)} → ${f(CURRENT_DATA.compEnd)}`;
+  }
+
+  function buildPanel(m,isHero){
+    const rows=sortedRows(m);
+    const mid=m.key.replace(/[^a-zA-Z0-9]/g,'-');
+    const sum=summaryRow();
+    // VAR. ANUAL se muestra SOLO si hay datos del año pasado; si no, la columna se oculta
+    // (evita una columna entera de "—" cuando la hoja no tiene histórico de un año).
+    const hasYear=rows.concat(sum?[sum]:[]).some(r=>r.year&&r.year[m.key]!=null);
+
+    function rowHtml(r){
+      const cur=r.cur?r.cur[m.key]:null;
+      const comp=r.comp?r.comp[m.key]:null;
+      const v=calcVar(cur,comp,m.varFmt);
+      let nameCell;
+      if(r.isTotal){
+        nameCell=`<td>${r.warehouse_name||'TOTAL'}</td>`;
+      }else{
+        nameCell=`<td><div>${r.warehouse_name||r.warehouse_id}</div>`+
+                 `<div style="font-size:9px;color:var(--text-light);font-weight:500">${CCN[r.country]||r.country}</div></td>`;
+      }
+      const yr=r.year?r.year[m.key]:null;
+      const vy=calcVar(cur,yr,m.varFmt);
+      let tds=nameCell;
+      tds+=`<td><span class="number"${(r.isTotal&&isHero)?' style="color:var(--primary)"':''}>${fv(cur,m.fmt)}</span></td>`;
+      tds+=`<td class="sep-l"><span class="number dim">${fv(comp,m.fmt)}</span></td>`;
+      tds+=`<td>${badge(v,m)}</td>`;
+      if(hasYear) tds+=`<td class="sep-l">${badge(vy,m)}</td>`;
+      return tds;
+    }
+
+    let tbody='';
+    rows.forEach(r=>{tbody+=`<tr>${rowHtml(r)}</tr>`;});
+
+    // Fila de resumen al pie: TOTAL global o subtotal del país filtrado.
+    // Viene del servidor con numeradores/denominadores agregados (ratios ponderados).
+    if(sum&&sum.cur&&sum.cur[m.key]!=null){
+      tbody+=`<tr style="background:#f8fafc;font-weight:800;border-top:2px solid var(--border);">${rowHtml(sum)}</tr>`;
+    }
+
+    // Sin filas → diagnóstico (por qué no hay datos): qué hoja se leyó, qué columnas
+    // faltan y qué rango de fechas tiene la hoja. Convierte el "roto en blanco" en algo
+    // accionable (típico: leyó la hoja vieja, o los nombres de columna no matchean).
+    if(!tbody){
+      const dbg=(CURRENT_DATA&&CURRENT_DATA._debug)||{};
+      const dr=dbg.dateRangeInSheet?`${dbg.dateRangeInSheet.min} → ${dbg.dateRangeInSheet.max}`:'—';
+      const miss=(dbg.colsMissing&&dbg.colsMissing.length)?dbg.colsMissing.join(', '):'ninguna';
+      const real=(dbg.headersAll&&dbg.headersAll.length)?dbg.headersAll.join(' | '):(dbg.headersFirst20||[]).join(' | ')||'—';
+      const ncol=hasYear?5:4;
+      tbody=`<tr><td colspan="${ncol}" style="text-align:left;padding:16px;font-size:11.5px;color:var(--text-sub);line-height:1.8;font-weight:500;white-space:normal">
+        <b style="color:var(--negative)">Sin datos para «${m.label}» en ${CURRENT_DATA.currentStart} → ${CURRENT_DATA.currentEnd}.</b><br>
+        Hoja leída: <code>${dbg.sheetName||'—'}</code> · filas WHS: <b>${dbg.rowsMatched!=null?dbg.rowsMatched:'—'}</b> de ${dbg.totalRows!=null?dbg.totalRows:'—'} · fechas en la hoja: <code>${dr}</code><br>
+        Columnas no encontradas: <code>${miss}</code><br>
+        <span style="color:var(--text-sub)">Encabezados reales de la hoja:</span> <code style="white-space:normal">${real}</code>
+      </td></tr>`;
+    }
+
+    const colActual = (m.key==='open_time' && CURRENT_DATA.currentStart) ? `ACTUAL (${CURRENT_DATA.currentStart.slice(5).replace('-','/')})` : 'ACTUAL';
+    const colComp   = (m.key==='open_time' && CURRENT_DATA.compStart)    ? `MES ANT. (${CURRENT_DATA.compStart.slice(5).replace('-','/')})` : 'PERÍODO ANT.';
+
+    const thead=`<tr>
+      <th style="text-align:left" onclick="localSort('${m.key}','wh')">WAREHOUSE ${sortIcon(m.key,'wh')}</th>
+      <th onclick="localSort('${m.key}','cur')">${colActual} ${sortIcon(m.key,'cur')}</th>
+      <th class="sep-l" onclick="localSort('${m.key}','comp')">${colComp} ${sortIcon(m.key,'comp')}</th>
+      <th onclick="localSort('${m.key}','var')">VAR. ${sortIcon(m.key,'var')}</th>
+      ${hasYear?`<th class="sep-l" onclick="localSort('${m.key}','yvar')">VAR. ANUAL ${sortIcon(m.key,'yvar')}</th>`:''}
+    </tr>`;
+
+    const noteBanner = (m.key==='open_time')
+      ? `<div style="background:#f0f9ff;border-bottom:1px solid #bae6fd;padding:7px 14px;font-size:11px;color:#0369a1;display:flex;align-items:center;gap:6px">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          <span><strong>Métrica diaria:</strong> se compara el <strong>primer día</strong> seleccionado (<strong>${CURRENT_DATA.currentStart||'—'}</strong>) contra el <strong>mismo día del mes pasado</strong> (<strong>${CURRENT_DATA.compStart||'—'}</strong>).</span>
+        </div>`
+      : '';
+
+    return `<div class="${isHero?'hero-panel':'ov-panel'}" id="panel-${mid}">
+      <div class="p-head">
+        <div class="p-bar" style="background:${isHero?'var(--primary)':m.color}"></div>
+        <div class="p-title-container">
+          <div class="p-title" style="font-size:${isHero?'18':'16'}px;${isHero?'color:var(--primary)':''}">${m.label}</div>
+          <div class="p-subtitle">${fmtPeriod(m)}</div>
+        </div>
+        <div class="btn-actions">
+          <button class="btn-copy-val" onclick="copiarTSV('${m.key}',this)"><svg viewBox="0 0 24 24"><path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2"/></svg> Copiar</button>
+          <button class="btn-copy" onclick="copyPNG('panel-${mid}',this)"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg> PNG</button>
+        </div>
+      </div>
+      ${noteBanner}
+      <div class="table-wrap"><table><thead>${thead}</thead><tbody>${tbody}</tbody></table></div>
+    </div>`;
+  }
+
+  // ── Render ─────────────────────────────────────────────────────
+  function renderPanels(){
+    const container=document.getElementById('main-container');
+    if(!CURRENT_DATA){container.innerHTML='';return;}
+
+    const selEl=document.getElementById('f-metric');
+    let m=METRICS.find(x=>x.key===selEl.value);
+    if(!m){ m=METRICS[0]; selEl.value=m.key; }   // fallback a una métrica válida
+
+    if (m && m.key === 'open_time') {
+      document.getElementById('comp-pill').textContent = 'Métrica diaria · ' + (CURRENT_DATA.currentStart||'') + ' vs ' + (CURRENT_DATA.compStart||'');
+    } else {
+      document.getElementById('comp-pill').textContent = 'vs mes pasado · ' + (CURRENT_DATA.compStart||'') + ' → ' + (CURRENT_DATA.compEnd||'');
+    }
+
+    if(ALL_ROWS.length===0){
+      let html='<div class="empty-state"><strong>Sin datos para el período seleccionado.</strong><br>';
+      const dbg=CURRENT_DATA._debug;
+      if(dbg&&dbg.dateRangeInSheet){
+        html+=`Fechas con datos en la hoja: <code>${dbg.dateRangeInSheet.min}</code> → <code>${dbg.dateRangeInSheet.max}</code>`;
+      } else {
+        html+='Probá con otro mes usando el selector de Periodo.';
+      }
+      html+='</div>';
+      container.innerHTML=html;
+      return;
+    }
+
+    // SIEMPRE una sola métrica a la vez (la del select). Tarjeta acotada (≈ ancho
+    // de la tabla) para que no quede media pantalla vacía. El encabezado ordena
+    // (localSort → renderPanels), así que re-renderiza esta misma métrica ya ordenada.
+    container.innerHTML=`<div class="hero-grid" style="max-width:600px;margin:0 auto">${buildPanel(m,true)}</div>`;
+  }
+
+  function populateSelects(){
+    const selM=document.getElementById('f-metric');
+    if(selM.options.length<=1) METRICS.forEach(m=>{const o=document.createElement('option');o.value=m.key;o.textContent=m.label;selM.appendChild(o);});
+    // País: a partir de los países presentes en los datos
+    const selC=document.getElementById('f-country');
+    const prev=selC.value;
+    while(selC.options.length>1)selC.remove(1);
+    const ccs=(CURRENT_DATA&&CURRENT_DATA.countries&&CURRENT_DATA.countries.length)
+      ? CURRENT_DATA.countries.slice()
+      : [...new Set(ALL_ROWS.filter(r=>!r.isTotal).map(r=>r.country))];
+    ccs.sort((a,b)=>(CCN[a]||a).localeCompare(CCN[b]||b)).forEach(c=>{
+      const o=document.createElement('option');o.value=c;o.textContent=CCN[c]||c;selC.appendChild(o);
+    });
+    if(prev)selC.value=prev;
+  }
+
+  // ── Copy helpers ───────────────────────────────────────────────
+  function copiarTSV(mkey,btn){
+    const m=METRICS.find(x=>x.key===mkey);if(!m)return;
+    const orig=btn.innerHTML;btn.innerHTML='Copiando...';
+    let tsv = (m.key==='open_time')
+      ? `${m.label.toUpperCase()} (Métrica diaria: Día ${CURRENT_DATA.currentStart} vs ${CURRENT_DATA.compStart})\n\n`
+      : `${m.label.toUpperCase()}\nPeriodo:\t${CURRENT_DATA.currentStart} al ${CURRENT_DATA.currentEnd}\tvs\t${CURRENT_DATA.compStart} al ${CURRENT_DATA.compEnd}\n\n`;
+    tsv+='Warehouse\tPaís\tActual\tPeríodo Ant.\tVar.\tAño Ant.\tVar. Anual\n';
+    const sum=summaryRow();
+    const list=sortedRows(m).concat(sum?[sum]:[]);
+    list.forEach(r=>{
+      const cur=r.cur?r.cur[m.key]:null, comp=r.comp?r.comp[m.key]:null;
+      const v=calcVar(cur,comp,m.varFmt);
+      const yr=r.year?r.year[m.key]:null, vy=calcVar(cur,yr,m.varFmt);
+      const wh=r.isTotal?(r.warehouse_name||'TOTAL'):(r.warehouse_name||r.warehouse_id);
+      const cc=r.isTotal?(r.country?(CCN[r.country]||r.country):''):(CCN[r.country]||r.country);
+      tsv+=wh+'\t'+cc+'\t'+(cur??'')+'\t'+(comp??'')+'\t'+(v==null?'':v.toFixed(1))+'\t'+(yr??'')+'\t'+(vy==null?'':vy.toFixed(1))+'\n';
+    });
+    navigator.clipboard.writeText(tsv).then(()=>{
+      btn.innerHTML='Copiado';btn.style.color='var(--positive)';
+      setTimeout(()=>{btn.innerHTML=orig;btn.style.color='';},2000);
+    }).catch(()=>{btn.innerHTML='Error';setTimeout(()=>{btn.innerHTML=orig;},2000);});
+  }
+
+  function copyPNG(id,btn){
+    const orig=btn.innerHTML;btn.innerHTML='...';
+    setTimeout(async()=>{
+      try{
+        const panel=document.getElementById(id);
+        const canvas=await html2canvas(panel,{backgroundColor:'#ffffff',scale:1.5});
+        canvas.toBlob(blob=>{
+          navigator.clipboard.write([new ClipboardItem({'image/png':blob})]).then(()=>{
+            btn.innerHTML='Ok!';btn.style.color='var(--positive)';
+            setTimeout(()=>{btn.innerHTML=orig;btn.style.color='';},2000);
+          });
+        });
+      }catch(e){btn.innerHTML='Error';setTimeout(()=>{btn.innerHTML=orig;},2000);}
+    },50);
+  }
+
+  // ── Date pickers (rango limitado a un único mes) ───────────────
+  function monthEndOf(d){const p=d.split('-');const last=new Date(+p[0],+p[1],0).getDate();return d.slice(0,7)+'-'+('0'+last).slice(-2);}
+
+  function initDatepickers(){
+    if(!CURRENT_DATA)return;
+    const validDates=CURRENT_DATA.validDates||[];
+    const maxD=validDates.length>0?validDates[validDates.length-1]:null;
+
+    function endCapFor(startStr){
+      let cap=monthEndOf(startStr);
+      if(maxD&&maxD<cap)cap=maxD;
+      return cap;
+    }
+
+    const baseCfg={locale:'es',dateFormat:'Y-m-d',disableMobile:'true'};
+    if(validDates.length>0)baseCfg.enable=validDates;
+    if(fpStart)fpStart.destroy();
+    if(fpEnd)fpEnd.destroy();
+
+    // Limitar al año actual de los datos (no ir más atrás de 1-Enero de ese año)
+    const currentYear = maxD ? maxD.slice(0, 4) : new Date().getFullYear().toString();
+    const yearStartStr = currentYear + '-01-01';
+    let calcMinDate = validDates[0] || undefined;
+    if (calcMinDate && calcMinDate < yearStartStr) {
+      calcMinDate = yearStartStr;
+    }
+
+    // El INICIO manda: al cambiarlo, el FIN queda limitado al mismo mes
+    fpStart=flatpickr(document.getElementById('f-start'),{...baseCfg,
+      defaultDate:CURRENT_DATA.currentStart,
+      minDate:calcMinDate||undefined,
+      maxDate:maxD||undefined,
+      onChange:function(sel,dateStr){
+        if(!dateStr)return;
+        const cap=endCapFor(dateStr);
+        if(fpEnd){fpEnd.set('minDate',dateStr);fpEnd.set('maxDate',cap);}
+        let ce=(fpEnd&&fpEnd.selectedDates[0])?fpEnd.selectedDates[0].toISOString().slice(0,10):null;
+        if(!ce||ce>cap){fpEnd.setDate(cap,false);ce=cap;}
+        else if(ce<dateStr){fpEnd.setDate(dateStr,false);ce=dateStr;}
+        clearMTDActive();
+        if(dateStr===CURRENT_DATA.currentStart&&ce===CURRENT_DATA.currentEnd)return;
+        triggerDateChange();
+      }
+    });
+    fpEnd=flatpickr(document.getElementById('f-end'),{...baseCfg,
+      defaultDate:CURRENT_DATA.currentEnd,
+      minDate:CURRENT_DATA.currentStart||undefined,
+      maxDate:endCapFor(CURRENT_DATA.currentStart),
+      onChange:function(sel,dateStr){
+        if(!dateStr)return;
+        clearMTDActive();
+        if(dateStr===CURRENT_DATA.currentEnd)return;
+        triggerDateChange();
+      }
+    });
+  }
+
+  function clearMTDActive(){document.getElementById('btn-mtd').classList.remove('active');}
+  function setMTDQuick(){
+    if(!CURRENT_DATA)return;
+    const vd=CURRENT_DATA.validDates||[];
+    const maxD=vd.length>0?vd[vd.length-1]:null;
+    if(!maxD)return;
+    const start=maxD.slice(0,7)+'-01';
+    if(fpStart&&fpEnd){
+      fpEnd.set('minDate',start);fpEnd.set('maxDate',maxD);
+      fpStart.setDate(start,false);fpEnd.setDate(maxD,false);
+    }
+    document.getElementById('btn-mtd').classList.add('active');
+    triggerDateChange();
+  }
+
+  // ── Fetch ──────────────────────────────────────────────────────
+  let _dateTimer=null;
+  function triggerDateChange(){
+    const s=document.getElementById('f-start').value;
+    const e=document.getElementById('f-end').value;
+    if(!s||!e||s>e)return;
+    clearTimeout(_dateTimer);
+    _dateTimer=setTimeout(function(){
+      if(CURRENT_DATA&&s===CURRENT_DATA.currentStart&&e===CURRENT_DATA.currentEnd){renderPanels();return;}
+      document.getElementById('date-loading-bar').classList.add('visible');
+      document.getElementById('main-container').classList.add('date-loading');
+      google.script.run
+        .withSuccessHandler(function(res){
+          document.getElementById('date-loading-bar').classList.remove('visible');
+          document.getElementById('main-container').classList.remove('date-loading');
+          if(!res||res.error){console.warn('fetchDailyMatrix error:',res&&res.error);return;}
+          CURRENT_DATA=res;ALL_ROWS=res.rows||[];
+          if(ALL_ROWS.length>0)setMMCache(res);
+          populateSelects();
+          renderPanels();
+        })
+        .withFailureHandler(function(){
+          document.getElementById('date-loading-bar').classList.remove('visible');
+          document.getElementById('main-container').classList.remove('date-loading');
+        })
+        .fetchDailyMatrix(s,e);
+    },300);
+  }
+
+  // Recargar EN EL LUGAR: location.reload() dentro del iframe de GAS puede fallar
+  // en silencio (la URL sandbox vence) y la página quedaba trabada. Ahora: limpiar
+  // caché → re-traer la matriz del rango actual → re-renderizar, con red de seguridad.
+  function doRefresh(){
+    try{localStorage.removeItem(MM_CACHE_KEY);}catch(e){}
+    const s=document.getElementById('f-start').value||'';
+    const e=document.getElementById('f-end').value||'';
+    const bar=document.getElementById('date-loading-bar'), main=document.getElementById('main-container');
+    if(bar)bar.classList.add('visible');
+    if(main)main.classList.add('date-loading');
+    let done=false;
+    const stop=()=>{ if(bar)bar.classList.remove('visible'); if(main)main.classList.remove('date-loading'); };
+    const safety=setTimeout(()=>{ if(done)return; done=true; stop(); },90000);
+    const fetchFresh=()=>{
+      google.script.run
+        .withSuccessHandler(function(res){
+          if(done)return; done=true; clearTimeout(safety); stop();
+          if(!res||res.error){console.warn('refresh fetchDailyMatrix error:',res&&res.error);return;}
+          CURRENT_DATA=res;ALL_ROWS=res.rows||[];
+          if(ALL_ROWS.length>0)setMMCache(res);
+          populateSelects();
+          renderPanels();
+        })
+        .withFailureHandler(function(){ if(done)return; done=true; clearTimeout(safety); stop(); })
+        .fetchDailyMatrix(s,e);
+    };
+    // Pase lo que pase con la limpieza del server, después SIEMPRE se re-traen los datos.
+    google.script.run.withSuccessHandler(fetchFresh).withFailureHandler(fetchFresh).forceRefreshDailyMatrix(s, e);
+  }
+
+  // ── Init ───────────────────────────────────────────────────────
+  function mmInit(data){
+    CURRENT_DATA=data;ALL_ROWS=data.rows||[];
+    populateSelects();
+    // Por defecto: una sola métrica en pantalla (Confirmed Orders). El usuario
+    // cambia con el selector de Métrica (incluye "Todas las métricas").
+    const selM=document.getElementById('f-metric');
+    if(!selM.value||selM.value==='all') selM.value=(METRICS[0]&&METRICS[0].key)||'orders';
+    initDatepickers();
+    renderPanels();
+    // Marcar MTD si el rango por defecto coincide
+    const vd=data.validDates||[];
+    const maxD=vd.length>0?vd[vd.length-1]:null;
+    if(maxD&&data.currentEnd===maxD&&data.currentStart===maxD.slice(0,7)+'-01')document.getElementById('btn-mtd').classList.add('active');
+    else clearMTDActive();
+  }
+
+  // Muestra un error claro en la página (no solo el spinner)
+  function showLoadError(msg){
+    document.getElementById('splash').classList.add('out');
+    document.getElementById('main-container').innerHTML=
+      '<div class="empty-state"><strong>No se pudieron cargar los datos.</strong><br>'+
+      '<span style="color:var(--negative)">'+(msg||'Error desconocido')+'</span><br><br>'+
+      'Los datos salen de la hoja <code>WHS Data</code> del spreadsheet de BigQuery. '+
+      'Si el error persiste, ejecutá <code>debugDailyMatrix()</code> en el editor de Apps Script (Ver &gt; Registros).<br><br>'+
+      '<button class="btn-mtd active" onclick="location.reload()">Reintentar</button></div>';
+  }
+
+  window.addEventListener('load',function(){
+    var t0=Date.now();
+    // Aviso a los 12s si todavía está cargando (hojas grandes tardan)
+    const slowTimer=setTimeout(function(){
+      var n=document.getElementById('sp-note');
+      if(n) n.textContent='La hoja WHS Data es grande, puede tardar unos segundos...';
+    },12000);
+    const safetyTimer=setTimeout(function(){
+      clearTimeout(slowTimer);
+      showLoadError('Tiempo de espera agotado (la hoja tardó más de 120s).');
+    },120000);
+
+    const cached=getMMCache();
+    if(cached&&cached.rows&&cached.rows.length>0){
+      clearTimeout(safetyTimer);clearTimeout(slowTimer);
+      mmInit(cached);
+      document.getElementById('splash').classList.add('out');
+      return;
+    }
+
+    document.getElementById('sp-note').textContent='Cargando MTD desde WHS Data...';
+    google.script.run
+      .withSuccessHandler(function(result){
+        clearTimeout(safetyTimer);clearTimeout(slowTimer);
+        console.log('fetchDailyMatrix OK en '+(Date.now()-t0)+'ms', result&&result._debug);
+        if(!result||result.error){ showLoadError(result&&result.error); return; }
+        if(!result.rows||result.rows.length===0){
+          mmInit(result); // renderPanels muestra el empty-state con debug
+          document.getElementById('splash').classList.add('out');
+          return;
+        }
+        setMMCache(result);
+        mmInit(result);
+        document.getElementById('splash').classList.add('out');
+      })
+      .withFailureHandler(function(e){
+        clearTimeout(safetyTimer);clearTimeout(slowTimer);
+        console.error('fetchDailyMatrix failure:',e);
+        showLoadError((e&&e.message)?e.message:'Error de conexión con el servidor.');
+      })
+      .fetchDailyMatrix('',''); // servidor usa MTD por defecto
+  });
+</script>
+</body>
+</html>

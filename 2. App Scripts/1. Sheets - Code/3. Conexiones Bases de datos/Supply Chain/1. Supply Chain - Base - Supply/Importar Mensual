@@ -1,0 +1,137 @@
+function Importar_SupplyChain_Mensual() {
+  // IDs de las hojas de cálculo extraídos de tus URLs
+  var sourceSpreadsheetId = "14yjg9Vx6uwgaba-JOECa6sqaNYkh48m2pJax2Om5Rlw";
+  var targetSpreadsheetId = "1aCrgEjh6qT5T8ayT2H22r3iNc55nAR1O9vaOCW6pRBs";
+  
+  // Nombres de las pestañas
+  var sourceSheetName = "//ACTUALS-M";
+  var targetSheetName = "A. TI - SC Data - Monthly";
+  
+  // Lista de métricas permitidas (basadas en tu columna B)
+  var metricasPermitidas = [
+    "DOH",
+    "WIS",
+    "WIS UF",
+    "Velocity",
+    "Active Fast Movers (DOH)",
+    "Active ZM (DOH)",
+    "% Stock ZM (Eur)",
+    "Active SM (eur)",
+    "AVG Stock (Eur)",
+    "F&UF Net Sales Participation",
+    "Net W&DC Cost / GFV (Income St)",
+    "Net W&DC Cost / CMT (Income St)",
+    "W&DC Cost / CMT (SC)",
+    "Expired",
+    "Loss & Damaged (DC/HUB)",
+    "Expiration Impact",
+    "Expire Shrinkage (PVP)",
+    "WLT Lvl3 - Peya Issues",
+    "WLT Lvl3 - Supplier Issues",
+    "WLT UF Lvl3 - Peya Issues",
+    "WLT UF Lvl3 - Supplier Issues",
+    "Assortment Score"
+  ];
+  
+  // Convertimos a Set para una búsqueda ultra rápida y eficiente
+  var setMetricas = new Set(metricasPermitidas);
+  
+  try {
+    // 1. Obtener datos del origen
+    var sourceSs = SpreadsheetApp.openById(sourceSpreadsheetId);
+    var sourceSheet = sourceSs.getSheetByName(sourceSheetName);
+    if (!sourceSheet) {
+      throw new Error("No se encontró la pestaña '" + sourceSheetName + "' en el origen.");
+    }
+    
+    var sourceRange = sourceSheet.getDataRange();
+    var values = sourceRange.getValues();
+    
+    if (values.length <= 1) {
+      Logger.log("La hoja de origen está vacía o solo contiene el encabezado.");
+      return;
+    }
+    
+    // 2. Filtrar las filas conservando la cabecera (fila 0) - Limitado a las columnas A a F (índice 0 a 5) y la columna P (índice 15)
+    var filteredValues = [];
+    var headers = [
+      values[0][0],
+      values[0][1],
+      values[0][2],
+      values[0][3],
+      values[0][4],
+      values[0][5],
+      values[0][15] !== undefined ? values[0][15] : ""
+    ];
+    filteredValues.push(headers); // Agregamos la fila de encabezados
+    
+    // Mapeo de códigos de país (ej: AR, CL, etc.) a nombres completos permitidos
+    var MAPEO_CODIGOS_PAISES = {
+      "AR": "Argentina",
+      "BO": "Bolivia",
+      "CL": "Chile",
+      "CR": "Costa Rica",
+      "DO": "Republica Dominicana",
+      "RD": "Republica Dominicana",
+      "EC": "Ecuador",
+      "GT": "Guatemala",
+      "HN": "Honduras",
+      "NI": "Nicaragua",
+      "PA": "Panama",
+      "UY": "Uruguay",
+      "PY": "Paraguay",
+      "PE": "Peru",
+      "SV": "El Salvador"
+    };
+    
+    for (var i = 1; i < values.length; i++) {
+      var row = values[i];
+      var metrica = String(row[1]).trim(); // Columna B (índice 1)
+      
+      if (setMetricas.has(metrica)) {
+        // Reemplazar código de país por el nombre completo en la columna C (índice 2)
+        var paisRaw = String(row[2]).trim().toUpperCase();
+        if (MAPEO_CODIGOS_PAISES[paisRaw]) {
+          row[2] = MAPEO_CODIGOS_PAISES[paisRaw];
+        }
+        
+        // Guardamos las columnas A a F, y la columna P (índice 15)
+        var newRow = [
+          row[0],
+          row[1],
+          row[2],
+          row[3],
+          row[4],
+          row[5],
+          row[15] !== undefined ? row[15] : ""
+        ];
+        filteredValues.push(newRow);
+      }
+    }
+    
+    Logger.log("Total filas leídas: " + values.length);
+    Logger.log("Filas filtradas para importar: " + filteredValues.length);
+    
+    // 3. Abrir el destino
+    var targetSs = SpreadsheetApp.openById(targetSpreadsheetId);
+    var targetSheet = targetSs.getSheetByName(targetSheetName);
+    if (!targetSheet) {
+      throw new Error("No se encontró la pestaña '" + targetSheetName + "' en el destino.");
+    }
+    
+    // 4. Limpiar contenido previo para evitar solapamientos
+    targetSheet.clearContents();
+    
+    // 5. Escribir los datos filtrados comenzando en la celda A1
+    if (filteredValues.length > 0) {
+      targetSheet.getRange(1, 1, filteredValues.length, filteredValues[0].length).setValues(filteredValues);
+      Logger.log("¡Datos importados y filtrados con éxito!");
+    } else {
+      Logger.log("No se encontraron filas que coincidan con las métricas especificadas.");
+    }
+    
+  } catch (e) {
+    Logger.log("Error durante la importación: " + e.toString());
+    throw e;
+  }
+}

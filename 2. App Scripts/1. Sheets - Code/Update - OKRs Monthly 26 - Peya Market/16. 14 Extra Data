@@ -1,0 +1,144 @@
+/**
+ * =========================================================================================
+ * TAREA: "3 EXTRA DATA (MANUAL)"
+ * Replica la hoja de datos manuales desde el Máster a los Países.
+ * =========================================================================================
+ */
+
+// Configuración específica para esta tarea.
+const CONFIG_EXTRA_DATA = {
+  nombreHoja: "Extra Data (Manual)"
+};
+
+/**
+ * Worker que realiza la copia de la hoja Extra Data.
+ */
+function _extraDataWorker(targetCountry) {
+  // Ajuste: Si viene un 'alias' (del MPC) lo usamos como nombre, si no, usamos 'country'
+  const nombrePais = targetCountry.country || targetCountry.alias || "Desconocido";
+
+  if (!targetCountry || !targetCountry.id) {
+    Logger.log("ERROR: Se intentó ejecutar el worker con datos inválidos.");
+    return;
+  }
+
+  // VALIDACIÓN DE SEGURIDAD
+  if (targetCountry.id === SOURCE_SPREADSHEET_ID) { 
+      Logger.log(`⚠️ SALTO DE SEGURIDAD: Se omitió 'Extra Data' para ${nombrePais} (Es el archivo Maestro).`);
+      return;
+  }
+  
+  try {
+    Logger.log(`--- [TAREA Extra Data] Iniciando para ${nombrePais.toUpperCase()} ---`);
+
+    // 1. Abrir Origen (Máster) y LEER VALORES
+    const sourceSpreadsheet = SpreadsheetApp.openById(SOURCE_SPREADSHEET_ID);
+    const sourceSheet = sourceSpreadsheet.getSheetByName(CONFIG_EXTRA_DATA.nombreHoja);
+    
+    if (!sourceSheet) throw new Error(`La hoja de origen '${CONFIG_EXTRA_DATA.nombreHoja}' no existe en el Máster.`);
+
+    // --- Capturamos los datos LIMPIOS del origen ---
+    const sourceRange = sourceSheet.getDataRange();
+    const sourceValues = sourceRange.getValues(); 
+    // -----------------------------------------------
+
+    // 2. Abrir Destino
+    const targetSpreadsheet = SpreadsheetApp.openById(targetCountry.id);
+    const existingSheet = targetSpreadsheet.getSheetByName(CONFIG_EXTRA_DATA.nombreHoja);
+
+    // 3. Actualizar en lugar de borrar (para no romper referencias/fórmulas #REF! en otras pestañas)
+    if (existingSheet) {
+      Logger.log("   > Actualizando hoja existente en su lugar para no romper #REF!...");
+      
+      // 3.1 Copiar la hoja temporalmente al destino para poder usar copyTo entre rangos del mismo archivo
+      const tempSheet = sourceSheet.copyTo(targetSpreadsheet);
+      
+      // Limpiamos la hoja existente completamente
+      existingSheet.clear();
+      existingSheet.clearNotes();
+      
+      // 3.2 Copiar el formato desde la hoja temporal (mismo archivo)
+      const tempRange = tempSheet.getDataRange();
+      tempRange.copyTo(existingSheet.getRange(1, 1), SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false);
+      
+      // 3.3 Copiar anchos de columna desde la hoja temporal
+      const maxCols = tempSheet.getLastColumn();
+      for (let col = 1; col <= maxCols; col++) {
+        existingSheet.setColumnWidth(col, tempSheet.getColumnWidth(col));
+      }
+      
+      // 3.4 Pegar los valores (rompiendo fórmulas como antes)
+      if (sourceValues.length > 0 && sourceValues[0].length > 0) {
+        existingSheet.getRange(1, 1, sourceValues.length, sourceValues[0].length)
+                     .setValues(sourceValues);
+      }
+      
+      // 3.5 Borrar la hoja temporal
+      targetSpreadsheet.deleteSheet(tempSheet);
+    } else {
+      // Si no existe, crearla y copiarla normalmente
+      Logger.log("   > Creando nueva hoja...");
+      const newSheet = sourceSheet.copyTo(targetSpreadsheet);
+      newSheet.setName(CONFIG_EXTRA_DATA.nombreHoja);
+      
+      if (sourceValues.length > 0 && sourceValues[0].length > 0) {
+        newSheet.getRange(1, 1, sourceValues.length, sourceValues[0].length)
+                .setValues(sourceValues);
+      }
+    }
+
+    Logger.log(`>>> [TAREA Extra Data] Completado para ${nombrePais.toUpperCase()}.`);
+
+  } catch (error) {
+    Logger.log(`❌ ERROR en [TAREA Extra Data] para ${nombrePais}: ${error.toString()}`);
+  }
+}
+
+// --- Función Masiva CON PRIORIDAD ---
+function copiarExtraData_Para_TODOS() {
+  Logger.log("🚀 INICIANDO REPLICACIÓN DE 'EXTRA DATA (MANUAL)'");
+  
+  // 1. FASE PRIORITARIA: MPC S TEAM (Usando DESTINOS_ADICIONALES)
+  if (typeof DESTINOS_ADICIONALES !== 'undefined' && DESTINOS_ADICIONALES.length > 0) {
+      Logger.log("=== 1️⃣ FASE PRIORITARIA: MPC / ADICIONALES ===");
+      DESTINOS_ADICIONALES.forEach(destino => {
+        // Pasamos el objeto tal cual, el Worker ahora sabe leer 'alias'
+        _extraDataWorker(destino); 
+      });
+  }
+
+  // 2. FASE ESTÁNDAR: RESTO DE PAÍSES
+  if (typeof PAISES_DE_DESTINO !== 'undefined' && PAISES_DE_DESTINO.length > 0) {
+      Logger.log("=== 2️⃣ FASE ESTÁNDAR: PAÍSES LATAM ===");
+      PAISES_DE_DESTINO.forEach(pais => _extraDataWorker(pais));
+  } else {
+      Logger.log("❌ ERROR: La variable global 'PAISES_DE_DESTINO' no está definida.");
+  }
+
+  copiarTemplate_Para_TODOS()
+  copiarOKRsMonitor_Para_TODOS()
+  copiarSustainability_Para_TODOS()
+  
+  
+  Logger.log("🏁 TAREA 'EXTRA DATA' FINALIZADA");
+}
+
+// --- FUNCIONES POR PAÍS (INDIVIDUALES) ---
+function copiarExtraData_Para_Argentina() { _extraDataWorker(PAISES_DE_DESTINO.find(p => p.country === "Argentina")); }
+function copiarExtraData_Para_Bolivia() { _extraDataWorker(PAISES_DE_DESTINO.find(p => p.country === "Bolivia")); }
+function copiarExtraData_Para_Chile() { _extraDataWorker(PAISES_DE_DESTINO.find(p => p.country === "Chile")); }
+function copiarExtraData_Para_Costa_Rica() { _extraDataWorker(PAISES_DE_DESTINO.find(p => p.country === "Costa Rica")); }
+function copiarExtraData_Para_Republica_Dominicana() { _extraDataWorker(PAISES_DE_DESTINO.find(p => p.country === "Republica Dominicana")); }
+function copiarExtraData_Para_Ecuador() { _extraDataWorker(PAISES_DE_DESTINO.find(p => p.country === "Ecuador")); }
+function copiarExtraData_Para_El_Salvador() { _extraDataWorker(PAISES_DE_DESTINO.find(p => p.country === "El Salvador")); }
+function copiarExtraData_Para_Guatemala() { _extraDataWorker(PAISES_DE_DESTINO.find(p => p.country === "Guatemala")); }
+function copiarExtraData_Para_Honduras() { _extraDataWorker(PAISES_DE_DESTINO.find(p => p.country === "Honduras")); }
+function copiarExtraData_Para_Nicaragua() { _extraDataWorker(PAISES_DE_DESTINO.find(p => p.country === "Nicaragua")); }
+function copiarExtraData_Para_Panama() { _extraDataWorker(PAISES_DE_DESTINO.find(p => p.country === "Panama")); }
+function copiarExtraData_Para_Paraguay() { _extraDataWorker(PAISES_DE_DESTINO.find(p => p.country === "Paraguay")); }
+function copiarExtraData_Para_Peru() { _extraDataWorker(PAISES_DE_DESTINO.find(p => p.country === "Peru")); }
+function copiarExtraData_Para_Uruguay() { _extraDataWorker(PAISES_DE_DESTINO.find(p => p.country === "Uruguay")); }
+
+// --- FUNCIONES PARA DESTINOS ADICIONALES ---
+function copiarExtraData_Para_MPC_S_Team() { _extraDataWorker(DESTINOS_ADICIONALES.find(d => d.alias === "MPC S Team")); }
+function copiarExtraData_Para_Dmarts_Performance_Commercial() { _extraDataWorker(DESTINOS_ADICIONALES.find(d => d.alias === "Dmarts Perfomance Commercial")); }

@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<!-- WHSByDate_web.html — Warehouses by Date comparison (D-1 vs D-8) -->
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WHS by Metric - PeYa Markets</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<!-- ══ MOCK (preview local — eliminar en AppScript) ══ -->
+<script>
+(function(){
+  var FD={
+    AR:[45200,0.948,0.97,380000,0.950,87.2,84.2,71.5,38.5,8.2,4.2,15.1],
+    CL:[28400,0.961,0.98,215000,0.963,88.5,85.5,73.2,37.8,7.9,3.8,14.6],
+    CO:[21900,0.972,0.99,165000,0.974,86.1,83.1,69.8,41.2,8.8,4.8,16.2],
+    PE:[18600,0.955,0.97,140000,0.957,85.4,82.4,68.5,42.5,9.1,5.1,15.8],
+    UY:[11800,0.968,0.99, 95000,0.970,89.1,86.1,74.1,36.2,7.6,3.5,13.9],
+    EC:[ 8400,0.943,0.96, 64000,0.945,84.8,81.8,67.2,43.1,9.3,5.4,17.1],
+    DO:[ 7600,0.951,0.97, 58000,0.953,85.9,82.9,70.1,40.8,8.7,4.7,16.5],
+    PA:[ 6200,0.975,1.00, 48000,0.977,86.5,83.5,71.0,39.5,8.4,4.5,15.5],
+    BO:[ 5100,0.932,0.95, 38000,0.934,83.2,80.2,65.8,44.5,9.6,5.8,17.8],
+    GT:[ 4600,0.941,0.96, 35000,0.943,84.1,81.1,66.5,43.8,9.4,5.6,17.4],
+    PY:[ 4100,0.953,0.97, 31000,0.955,85.0,82.0,68.0,41.5,8.9,5.2,16.8],
+    SV:[ 3300,0.947,0.97, 25000,0.949,83.8,80.8,66.9,44.1,9.5,5.5,17.2],
+    HN:[ 2900,0.938,0.96, 22000,0.940,83.0,80.0,65.2,45.2,9.7,5.9,18.1],
+    NI:[ 1600,0.925,0.95, 12000,0.927,82.5,79.5,64.1,46.5,9.9,6.2,18.5]
+  };
+  var WN={AR:'Argentina',BO:'Bolivia',CL:'Chile',CO:'Colombia',EC:'Ecuador',SV:'El Salvador',GT:'Guatemala',HN:'Honduras',NI:'Nicaragua',PA:'Panamá',PY:'Paraguay',PE:'Perú',UY:'Uruguay',DO:'Rep. Dominicana'};
+  function r(n){return Math.round(n);}
+  function buildRows(){return Object.keys(FD).map(function(cc){var f=FD[cc],d1o=f[0],d8o=r(d1o*f[1]),lwo=r(d1o*3*f[2]),d1g=f[3],d8g=r(d1g*f[4]),lwg=r(d1g*3*f[2]);var tc=r(d1o*0.95);return{warehouse_id:'wh_'+cc.toLowerCase(),warehouse_name:WN[cc],country:cc,orders:{d1:d1o,d8:d8o,lw:lwo},gmv:{d1:d1g,d8:d8g,lw:lwg},_raw:{d1_orders:d1o,d8_orders:d8o,lw_orders:lwo,d1_gmv:d1g,d8_gmv:d8g,lw_gmv:lwg,d1_new_users:r(d1o*.28),d8_new_users:r(d8o*.27),lw_new_users:r(lwo*.275),d1_wis_numerador:r(d1o*f[5]/100),d8_wis_numerador:r(d8o*f[5]/100*.98),lw_wis_numerador:r(lwo*f[5]/100),d1_wis_denominador:d1o,d8_wis_denominador:d8o,lw_wis_denominador:lwo,d1_wis_uf_numerador:r(d1o*f[6]/100),d8_wis_uf_numerador:r(d8o*f[6]/100*.98),lw_wis_uf_numerador:r(lwo*f[6]/100),d1_wis_uf_denominador:d1o,d8_wis_uf_denominador:d8o,lw_wis_uf_denominador:lwo,d1_seamless_numerador:r(d1o*f[7]/100),d8_seamless_numerador:r(d8o*f[7]/100*.98),lw_seamless_numerador:r(lwo*f[7]/100),d1_total_orders:d1o,d8_total_orders:d8o,lw_total_orders:lwo,d1_delivery_time_sum:r(f[8]*tc),d8_delivery_time_sum:r(f[8]*1.018*r(d8o*.95)),lw_delivery_time_sum:r(f[8]*1.008*r(lwo*.95)),d1_delivery_time_order_count:tc,d8_delivery_time_order_count:r(d8o*.95),lw_delivery_time_order_count:r(lwo*.95),d1_assignment_time_sum:r(f[9]*tc),d8_assignment_time_sum:r(f[9]*1.02*r(d8o*.95)),lw_assignment_time_sum:r(f[9]*1.01*r(lwo*.95)),d1_assignment_time_order_count:tc,d8_assignment_time_order_count:r(d8o*.95),lw_assignment_time_order_count:r(lwo*.95),d1_rejected_orders:r(d1o*f[10]/100),d8_rejected_orders:r(d8o*f[10]/100*1.02),lw_rejected_orders:r(lwo*f[10]/100),d1_session_orders:r(d1o*f[11]/100),d8_session_orders:r(d8o*f[11]/100*.97),lw_session_orders:r(lwo*f[11]/100)}};});}
+  function buildMetricData(key){var data={};Object.keys(FD).forEach(function(cc){var f=FD[cc],d1o=f[0],d8o=r(d1o*f[1]),lwo=r(d1o*3*f[2]),wid='wh_'+cc.toLowerCase(),rk=wid+'||'+cc,tc=r(d1o*.95),tc8=r(d8o*.95),tcl=r(lwo*.95);switch(key){case 'new_users':data[rk]={d1:r(d1o*.28),d8:r(d8o*.27),lw:r(lwo*.275),_raw:{d1_new_users:r(d1o*.28),d8_new_users:r(d8o*.27),lw_new_users:r(lwo*.275)}};break;case 'wis':data[rk]={d1:f[5],d8:f[5]*.98,lw:f[5]*.99,_raw:{d1_wis_numerador:r(d1o*f[5]/100),d8_wis_numerador:r(d8o*f[5]/100*.98),lw_wis_numerador:r(lwo*f[5]/100),d1_wis_denominador:d1o,d8_wis_denominador:d8o,lw_wis_denominador:lwo}};break;case 'wis_uf':data[rk]={d1:f[6],d8:f[6]*.98,lw:f[6]*.99,_raw:{d1_wis_uf_numerador:r(d1o*f[6]/100),d8_wis_uf_numerador:r(d8o*f[6]/100*.98),lw_wis_uf_numerador:r(lwo*f[6]/100),d1_wis_uf_denominador:d1o,d8_wis_uf_denominador:d8o,lw_wis_uf_denominador:lwo}};break;case 'seamless':data[rk]={d1:f[7],d8:f[7]*.98,lw:f[7]*.99,_raw:{d1_seamless_numerador:r(d1o*f[7]/100),d8_seamless_numerador:r(d8o*f[7]/100*.98),lw_seamless_numerador:r(lwo*f[7]/100),d1_total_orders:d1o,d8_total_orders:d8o,lw_total_orders:lwo}};break;case 'delivery_time':data[rk]={d1:f[8],d8:f[8]*1.018,lw:f[8]*1.008,_raw:{d1_delivery_time_sum:r(f[8]*tc),d8_delivery_time_sum:r(f[8]*1.018*tc8),lw_delivery_time_sum:r(f[8]*1.008*tcl),d1_delivery_time_order_count:tc,d8_delivery_time_order_count:tc8,lw_delivery_time_order_count:tcl}};break;case 'assignment_time':data[rk]={d1:f[9],d8:f[9]*1.02,lw:f[9]*1.01,_raw:{d1_assignment_time_sum:r(f[9]*tc),d8_assignment_time_sum:r(f[9]*1.02*tc8),lw_assignment_time_sum:r(f[9]*1.01*tcl),d1_assignment_time_order_count:tc,d8_assignment_time_order_count:tc8,lw_assignment_time_order_count:tcl}};break;case 'rejected_orders':data[rk]={d1:f[10],d8:f[10]*1.02,lw:f[10]*1.005,_raw:{d1_rejected_orders:r(d1o*f[10]/100),d8_rejected_orders:r(d8o*f[10]/100*1.02),lw_rejected_orders:r(lwo*f[10]/100),d1_total_orders:d1o,d8_total_orders:d8o,lw_total_orders:lwo}};break;case 'session_orders':data[rk]={d1:f[11],d8:f[11]*.97,lw:f[11]*.985,_raw:{d1_session_orders:r(d1o*f[11]/100),d8_session_orders:r(d8o*f[11]/100*.97),lw_session_orders:r(lwo*f[11]/100),d1_orders:d1o,d8_orders:d8o,lw_orders:lwo}};break;}});return data;}
+  var ROWS=buildRows();
+  var WHS=Object.keys(FD).map(function(cc){return{id:'wh_'+cc.toLowerCase(),name:WN[cc]};}).sort(function(a,b){return a.name.localeCompare(b.name);});
+  var TGT={orders:{AR:48000,CL:27000,CO:22500,PE:19500,UY:12000,EC:9000,DO:8200,PA:6000,BO:5600,GT:5000,PY:4400,SV:3600,HN:3200,NI:1800},gmv:{AR:404000,CL:205000,CO:170000,PE:148000,UY:97000,EC:68000,DO:62000,PA:46000,BO:41000,GT:38000,PY:33000,SV:27000,HN:24000,NI:13500}};
+  var FAKE_PAYLOAD={rows:ROWS,warehouses:WHS,targets:TGT,rrData:{orders:{},gmv:{}},fechaReferencia:new Date('2026-06-02').getTime()};
+  function cr(){var s=null,runner={withSuccessHandler:function(cb){s=cb;return runner;},withFailureHandler:function(){return runner;},fetchDataFast:function(){var c=s;s=null;setTimeout(function(){c&&c({payload:FAKE_PAYLOAD,fromCache:false});},300);},fetchMetric:function(k){var c=s;s=null;setTimeout(function(){c&&c({key:k,data:buildMetricData(k),fromCache:false});},80+Math.random()*120);},forceRefreshCache:function(){var c=s;s=null;setTimeout(function(){if(c)c(true);},100);}};return runner;}
+  if(typeof google==='undefined'||!google.script||!google.script.run){window.google={script:{run:cr()}};}
+})();
+</script>
+<!-- ══ END MOCK ══ -->
+
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  :root{--red:#e50044;--red-bg:#fff0f3;--green:#15803d;--green-bg:#f0fdf4;--rose:#e11d48;--rose-bg:#fff1f2;--t1:#0f172a;--t2:#475569;--t3:#94a3b8;--t4:#cbd5e1;--border:#e2e8f0;--border2:#f1f5f9;--bg:#f8fafc;--card:#fff;--sh:0 1px 3px rgba(0,0,0,.05);--r:10px}
+  body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t1);min-height:100vh;-webkit-font-smoothing:antialiased;font-size:13px}
+  #splash{position:fixed;inset:0;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:999;transition:opacity .3s}
+  #splash.out{opacity:0;pointer-events:none}
+  .spinner{width:36px;height:36px;border:3px solid rgba(229,0,68,.15);border-top-color:var(--red);border-radius:50%;animation:spin .75s linear infinite;margin-bottom:12px}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  nav{background:#fff;border-bottom:1px solid var(--border);height:52px;display:flex;align-items:center;padding:0 20px;position:sticky;top:0;z-index:300;box-shadow:0 1px 0 var(--border)}
+  .n-brand{display:flex;align-items:center;gap:7px;margin-right:18px;flex-shrink:0}
+  .n-dot{width:7px;height:7px;border-radius:50%;background:var(--red)}
+  .n-name{font-size:14px;font-weight:700;color:var(--t1);letter-spacing:-.3px}
+  .n-name em{color:var(--red);font-style:normal}
+  .n-divider{width:1px;height:20px;background:var(--border);margin:0 10px;flex-shrink:0}
+  .n-tabs{display:flex;gap:2px}
+  .n-tab{display:flex;align-items:center;gap:5px;padding:5px 11px;border-radius:7px;border:none;background:transparent;font-size:12px;font-weight:500;color:var(--t3);cursor:pointer;transition:all .15s;font-family:'Inter',system-ui,sans-serif;white-space:nowrap;text-decoration:none}
+  .n-tab svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+  .n-tab.active{background:var(--bg);color:var(--t1);font-weight:600}
+  .n-tab:hover:not(.active){background:var(--border2);color:var(--t2)}
+  .n-right{margin-left:auto;display:flex;align-items:center;gap:8px}
+  .n-btn{height:30px;border:1px solid var(--border);background:#fff;border-radius:7px;padding:0 11px;font-size:11px;font-weight:600;color:var(--t2);cursor:pointer;display:flex;align-items:center;gap:5px;transition:all .15s;font-family:'Inter',system-ui,sans-serif}
+  .n-btn:hover{border-color:var(--t4);color:var(--t1)}
+  .n-btn svg{width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round}
+  .mp-bar{height:2px;background:var(--red);width:0%;transition:width .3s ease;position:fixed;top:52px;left:0;z-index:299}
+  .fbar{background:#fff;border-bottom:1px solid var(--border);padding:9px 20px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;position:sticky;top:52px;z-index:298}
+  .fg{display:flex;align-items:center;gap:6px}
+  .fl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--t3)}
+  .fs{border:1px solid var(--border);background:#fff;border-radius:7px;padding:5px 26px 5px 9px;font-size:12px;font-weight:500;color:var(--t1);font-family:'Inter',system-ui,sans-serif;cursor:pointer;outline:none;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='11' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2.5' stroke-linecap='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 7px center;transition:border-color .15s;min-width:160px}
+  .fs:focus{border-color:var(--red)}
+  .fsrch{border:1px solid var(--border);background:#fff;border-radius:7px;padding:5px 9px;font-size:12px;font-weight:500;color:var(--t1);font-family:'Inter',system-ui,sans-serif;outline:none;transition:border-color .15s;min-width:160px}
+  .fsrch:focus{border-color:var(--red)}
+  .fsrch::placeholder{color:var(--t4)}
+  .fsep{width:1px;height:20px;background:var(--border)}
+  .fcount{font-size:11px;color:var(--t3);margin-left:auto;white-space:nowrap}
+  .sort-toggle{display:flex;align-items:center;border:1px solid var(--border);border-radius:7px;padding:3px 4px;background:#fff;gap:2px}
+  .st-btn{padding:3px 9px;border-radius:5px;font-size:11px;font-weight:600;cursor:pointer;border:none;background:transparent;color:var(--t3);font-family:'Inter',system-ui,sans-serif;transition:all .15s;white-space:nowrap}
+  .st-btn.active{background:var(--bg);color:var(--t1);box-shadow:0 1px 2px rgba(0,0,0,.06)}
+  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#1e293b;color:#f1f5f9;font-size:12px;font-weight:500;padding:9px 18px;border-radius:8px;z-index:500;opacity:0;transition:opacity .2s;pointer-events:none;white-space:nowrap}
+  .toast.show{opacity:1}
+  .page{padding:16px 20px;max-width:780px;margin:0 auto}
+  .panel{background:var(--card);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;box-shadow:var(--sh)}
+  .ph{padding:9px 14px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border2)}
+  .ph-bar{width:3px;height:14px;border-radius:3px;flex-shrink:0}
+  .ph-title{font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--t1)}
+  .ph-meta{margin-left:auto;display:flex;align-items:center;gap:8px}
+  .ph-count{font-size:10px;color:var(--t3);background:var(--border2);border-radius:20px;padding:2px 8px}
+  .ph-date{font-size:10px;color:var(--t3);font-weight:500;white-space:nowrap}
+  .copy-btn{height:22px;border:1px solid var(--border);background:#fff;border-radius:5px;padding:0 8px;font-size:10px;font-weight:600;color:var(--t3);cursor:pointer;display:inline-flex;align-items:center;gap:4px;transition:all .12s;font-family:'Inter',system-ui,sans-serif;white-space:nowrap}
+  .copy-btn:hover{border-color:var(--t4);color:var(--t1);background:var(--bg)}
+  .copy-btn svg{width:10px;height:10px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round}
+  .tw{overflow:auto;max-height:calc(100vh - 160px)}
+  table{width:100%;border-collapse:collapse}
+  /* Índices fijos: fila de encabezados arriba + columna WAREHOUSE a la izquierda */
+  thead th{position:sticky;top:0;z-index:5;background:var(--card)}
+  th:first-child,td:first-child{position:sticky;left:0;z-index:3;background:var(--card)}
+  thead th:first-child{z-index:6}
+  tbody tr:hover td:first-child{background:#fafbff}
+  th{padding:4px 10px;font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--t3);text-align:right;border-bottom:1px solid var(--border);white-space:nowrap;cursor:pointer;user-select:none;transition:background .1s}
+  th:hover{background:var(--border2);color:var(--t2)}
+  th:first-child{text-align:left;padding-left:14px;cursor:default;min-width:160px;max-width:200px}
+  th:first-child:hover{background:transparent}
+  th.sort-asc::after{content:' ▲';color:var(--red);font-size:7px}
+  th.sort-desc::after{content:' ▼';color:var(--red);font-size:7px}
+  tbody tr{border-bottom:1px solid var(--border2);transition:background .1s}
+  tbody tr:hover{background:#fafbff}
+  tbody tr:last-child{border-bottom:none}
+  td{padding:5px 10px;text-align:center;white-space:nowrap;font-size:12px}
+  td:first-child{text-align:left;padding-left:14px;max-width:200px}
+  .wh-name{font-size:12px;font-weight:600;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px}
+  .wh-cc{font-size:10px;color:var(--t3);margin-top:1px}
+  .v{font-size:12px;font-weight:700;color:var(--t1)}
+  .v8{font-size:11.5px;font-weight:500;color:#64748b}
+  .nd{color:var(--t4);font-size:10px}
+  .skel{display:inline-block;width:44px;height:10px;border-radius:4px;background:linear-gradient(90deg,#f1f5f9 25%,#e2e8f0 50%,#f1f5f9 75%);background-size:200% 100%;animation:skel .9s ease infinite;vertical-align:middle}
+  @keyframes skel{0%{background-position:200%}100%{background-position:-200%}}
+  .vb{display:inline-flex;align-items:center;gap:2px;font-size:9.5px;font-weight:700;border-radius:20px;padding:2px 6px;white-space:nowrap;line-height:1.4}
+  .vb svg{width:7px;height:7px;stroke:currentColor;fill:none;stroke-width:3;stroke-linecap:round}
+  .vb-pos{background:var(--green-bg);color:var(--green)}
+  .vb-neg{background:var(--rose-bg);color:var(--rose)}
+  .vb-neu{background:var(--border2);color:var(--t3)}
+  .empty{padding:40px;text-align:center;color:var(--t3)}
+  footer{text-align:center;padding:16px;font-size:11px;color:var(--t3)}
+  @media(max-width:800px){.page{padding:12px}.fbar{gap:6px;position:static}}
+</style>
+
+<div id="splash">
+  <div class="spinner"></div>
+  <div id="sp-note" style="font-size:13px;font-weight:600;color:var(--t3)">Cargando warehouses...</div>
+</div>
+<div id="mp-bar" class="mp-bar"></div>
+<div class="toast" id="toast"></div>
+
+<script>window.PAGE_ID='whs-date';</script>
+<?!= include('_nav'); ?>
+
+<div class="fbar">
+  <div class="fg"><span class="fl">País</span>
+    <select class="fs" id="f-cc" style="min-width:130px" onchange="applyFilters()"><option value="">Todos los países</option></select>
+  </div>
+  <div class="fsep"></div>
+  <div class="fg"><span class="fl">Métrica</span>
+    <select class="fs" id="f-metric" style="min-width:185px" onchange="applyFilters()"></select>
+  </div>
+  <div class="fsep"></div>
+  <div class="fg">
+    <span class="fl">Buscar</span>
+    <input class="fsrch" id="f-search" placeholder="Nombre warehouse..." oninput="applyFilters()">
+  </div>
+  <div class="fsep"></div>
+  <div class="fg">
+    <span class="fl">Ordenar</span>
+    <div class="sort-toggle">
+      <button class="st-btn active" id="st-best" onclick="setSort('best')">↑ Top</button>
+      <button class="st-btn" id="st-worst" onclick="setSort('worst')">↓ Bottom</button>
+      <button class="st-btn" id="st-orders" onclick="setSort('orders')">≡ Orders</button>
+    </div>
+  </div>
+  <span class="fcount" id="fcount"></span>
+</div>
+
+<div class="page">
+  <div id="main"></div>
+</div>
+<footer>PedidosYa Markets · WHS by Metric</footer>
+
+<script>
+const METRICS=[
+  {key:'orders',         label:'Orders',             fmt:'int', varFmt:'pct_rel', hi:true,  color:'#e50044', lwIsRatio:false},
+  {key:'gmv',            label:'GMV (EUR)',           fmt:'eur', varFmt:'pct_rel', hi:true,  color:'#2563eb', lwIsRatio:false},
+  {key:'new_users',      label:'New Users',           fmt:'int', varFmt:'pct_rel', hi:true,  color:'#ea580c', lwIsRatio:false},
+  {key:'wis',            label:'WIS %',               fmt:'pct', varFmt:'pp',      hi:true,  color:'#0284c7', lwIsRatio:true},
+  {key:'wis_uf',         label:'WIS UF %',            fmt:'pct', varFmt:'pp',      hi:true,  color:'#0891b2', lwIsRatio:true},
+  {key:'seamless',       label:'Seamless Delivery %', fmt:'pct', varFmt:'pp',      hi:true,  color:'#16a34a', lwIsRatio:true},
+  {key:'delivery_time',  label:'AVG Delivery Time',   fmt:'min', varFmt:'min_abs', hi:false, color:'#d97706', lwIsRatio:true},
+  {key:'assignment_time_orders_over_6min',label:'Assignment Time > 6 min %', fmt:'pct', varFmt:'pp',      hi:false, color:'#f43f5e', lwIsRatio:true},
+  {key:'assignment_time',label:'Assignment Time',     fmt:'min', varFmt:'min_abs', hi:false, color:'#9333ea', lwIsRatio:true},
+  {key:'rejected_orders',label:'Rejected Orders %',   fmt:'pct', varFmt:'pp',      hi:false, color:'#dc2626', lwIsRatio:true},
+  {key:'session_orders', label:'HC Sessions orders %', fmt:'pct', varFmt:'pp',      hi:false, color:'#7c3aed', lwIsRatio:true},
+];
+const SECONDARY_METRICS = ['new_users','wis','wis_uf','seamless','delivery_time','assignment_time_orders_over_6min','assignment_time','rejected_orders','session_orders'];
+const CCN={AR:'Argentina',BO:'Bolivia',CL:'Chile',CO:'Colombia',EC:'Ecuador',SV:'El Salvador',GT:'Guatemala',HN:'Honduras',NI:'Nicaragua',PA:'Panamá',PY:'Paraguay',PE:'Perú',UY:'Uruguay',DO:'Rep. Dominicana',MX:'México'};
+
+let ALL_ROWS=[], FECHA=null, sortDir='best', sortCol='d1', sortAsc=false;
+let metricsLoaded = new Set(['orders','gmv']);
+
+// Formatters
+const fI=v=>{if(v==null||isNaN(v))return'—';const a=Math.abs(v);if(a>=1e6)return(v/1e6).toFixed(2)+'M';if(a>=1e3)return(v/1e3).toFixed(1)+'k';return Math.round(v).toLocaleString('es-AR');};
+const fE=v=>{if(v==null||isNaN(v))return'—';const a=Math.abs(v);if(a>=1e6)return(v/1e6).toFixed(2)+'M €';if(a>=1e3)return(v/1e3).toFixed(1)+'k €';return v.toFixed(0)+' €';};
+const fP=v=>v==null||isNaN(v)?'—':v.toFixed(1)+'%';
+const fM=v=>v==null||isNaN(v)?'—':v.toFixed(1)+' min';
+const fV=(v,f)=>f==='eur'?fE(v):f==='pct'?fP(v):f==='min'?fM(v):fI(v);
+const nd=()=>'<span class="nd">—</span>';
+const sk=()=>'<span class="skel"></span>';
+
+function calcVar(d1,ref,vf){if(d1==null||ref==null)return null;if(vf==='pp'||vf==='min_abs')return d1-ref;if(ref===0)return null;return((d1-ref)/Math.abs(ref))*100;}
+function badge(val,m){
+  if(val===null||isNaN(val))return nd();
+  const s=val>0?'+':'',good=m.hi?val>0:val<0,bad=m.hi?val<0:val>0;
+  const cls=good?'vb-pos':bad?'vb-neg':'vb-neu';
+  const u=m.varFmt==='pp'?'pp':m.varFmt==='min_abs'?' min':'%';
+  const arr=val>0?`<svg viewBox="0 0 24 24"><polyline points="18 15 12 9 6 15"/></svg>`:val<0?`<svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>`:'';
+  return`<span class="vb ${cls}">${arr}${s}${val.toFixed(1)}${u}</span>`;
+}
+
+function getDateLabels(){
+  const d=FECHA?new Date(FECHA):new Date(), d8=new Date(d);
+  d8.setDate(d.getDate()-7);
+  const fmt=x=>x.toLocaleDateString('es-AR',{day:'2-digit',month:'short'}).replace('.','');
+  return{d1:fmt(d),d8:fmt(d8)};
+}
+
+function getFiltered(){
+  const cc=document.getElementById('f-cc').value;
+  const srch=(document.getElementById('f-search').value||'').toLowerCase();
+  return ALL_ROWS.filter(r=>(!cc||r.country===cc)&&(!srch||r.warehouse_name.toLowerCase().includes(srch)));
+}
+
+function getMetricVal(row, mKey, period){
+  if(mKey==='orders'||mKey==='gmv'){return row[mKey]?row[mKey][period]:null;}
+  if(row[mKey]&&row[mKey][period]!=null)return row[mKey][period];
+  return null;
+}
+
+function getSortedRows(rows, m){
+  const list=[...rows];
+  if(sortDir==='orders'){
+    list.sort((a,b)=>(getMetricVal(b,'orders','d1')||0)-(getMetricVal(a,'orders','d1')||0));
+  } else {
+    list.sort((a,b)=>{
+      let va=null, vb=null;
+      if(sortCol==='d1'){
+        va=getMetricVal(a,m.key,'d1');
+        vb=getMetricVal(b,m.key,'d1');
+      } else if(sortCol==='d8'){
+        va=getMetricVal(a,m.key,'d8');
+        vb=getMetricVal(b,m.key,'d8');
+      } else if(sortCol==='var_d8'){
+        va=calcVar(getMetricVal(a,m.key,'d1'),getMetricVal(a,m.key,'d8'),m.varFmt);
+        vb=calcVar(getMetricVal(b,m.key,'d1'),getMetricVal(b,m.key,'d8'),m.varFmt);
+      } else if(sortCol==='var_lw'){
+        const la=getMetricVal(a,m.key,'lw'), lb=getMetricVal(b,m.key,'lw');
+        va=calcVar(getMetricVal(a,m.key,'d1'),m.lwIsRatio?la:la/3,m.varFmt);
+        vb=calcVar(getMetricVal(b,m.key,'d1'),m.lwIsRatio?lb:lb/3,m.varFmt);
+      }
+      if(va==null&&vb==null)return 0; if(va==null)return 1; if(vb==null)return -1;
+      return sortAsc ? va-vb : vb-va;
+    });
+  }
+  return list;
+}
+
+function renderTable(){
+  const metKey=document.getElementById('f-metric').value||'orders';
+  const m=METRICS.find(x=>x.key===metKey)||METRICS[0];
+  const filtered=getFiltered();
+  const sorted=getSortedRows(filtered, m);
+  const dl=getDateLabels();
+  const isLoaded=metricsLoaded.has(m.key);
+  const u=m.varFmt==='pp'?'pp':m.varFmt==='min_abs'?' min':'%';
+
+  document.getElementById('fcount').textContent=`${sorted.length} warehouses`;
+
+  const tbody=sorted.map(row=>{
+    const d1=getMetricVal(row,m.key,'d1');
+    const d8=getMetricVal(row,m.key,'d8');
+    const lw=getMetricVal(row,m.key,'lw');
+    const varD8=isLoaded&&d1!=null&&d8!=null?badge(calcVar(d1,d8,m.varFmt),m):sk();
+    const varLW=isLoaded&&d1!=null&&lw!=null?badge(calcVar(d1,m.lwIsRatio?lw:lw/3,m.varFmt),m):sk();
+    return`<tr>
+      <td><div class="wh-name">${row.warehouse_name}</div><div class="wh-cc">${CCN[row.country]||row.country}</div></td>
+      <td><span class="v">${isLoaded?fV(d1,m.fmt):sk()}</span></td>
+      <td><span class="v8">${isLoaded?fV(d8,m.fmt):sk()}</span></td>
+      <td>${varD8}</td>
+      <td>${varLW}</td>
+    </tr>`;
+  }).join('');
+
+  const main=document.getElementById('main');
+  main.innerHTML=`<div class="panel" id="whs-panel">
+    <div class="ph">
+      <div class="ph-bar" style="background:${m.color}"></div>
+      <span class="ph-title">${m.label} — por Warehouse</span>
+      <div class="ph-meta">
+        <span class="ph-date">D-1: ${dl.d1} · D-8: ${dl.d8}</span>
+        <span class="ph-count">${sorted.length} tiendas</span>
+        <button class="copy-btn" onclick="copyTable()"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/></svg> Tabla</button>
+      </div>
+    </div>
+    <div class="tw"><table>
+      <thead><tr>
+        <th style="text-align:left;cursor:default">WAREHOUSE</th>
+        <th onclick="setSortCol('d1')" class="${sortDir!=='orders'&&sortCol==='d1'?(sortAsc?'sort-asc':'sort-desc'):''}">${dl.d1}</th>
+        <th onclick="setSortCol('d8')" class="${sortDir!=='orders'&&sortCol==='d8'?(sortAsc?'sort-asc':'sort-desc'):''}">${dl.d8}</th>
+        <th onclick="setSortCol('var_d8')" class="${sortDir!=='orders'&&sortCol==='var_d8'?(sortAsc?'sort-asc':'sort-desc'):''}">VAR D-8 <span style="font-size:7.5px;font-weight:400;color:#cbd5e1">${u}</span></th>
+        <th onclick="setSortCol('var_lw')" class="${sortDir!=='orders'&&sortCol==='var_lw'?(sortAsc?'sort-asc':'sort-desc'):''}">VAR L3W <span style="font-size:7.5px;font-weight:400;color:#cbd5e1">${u}</span></th>
+      </tr></thead>
+      <tbody>${tbody}</tbody>
+    </table></div>
+  </div>`;
+}
+
+function applyFilters(){renderTable();}
+
+function setSort(dir){
+  sortDir=dir;
+  ['best','worst','orders'].forEach(x=>document.getElementById('st-'+x).classList.toggle('active',x===dir));
+  if (dir === 'best') {
+    sortCol = 'd1';
+    sortAsc = false;
+  } else if (dir === 'worst') {
+    sortCol = 'd1';
+    sortAsc = true;
+  }
+  renderTable();
+}
+
+function setSortCol(col){
+  sortDir = 'column';
+  ['best','worst','orders'].forEach(x=>document.getElementById('st-'+x).classList.remove('active'));
+  if (sortCol === col) {
+    sortAsc = !sortAsc;
+  } else {
+    sortCol = col;
+    sortAsc = false;
+  }
+  renderTable();
+}
+
+function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.className='toast show';setTimeout(()=>t.className='toast',2500);}
+
+function copyTable(){
+  const table=document.querySelector('#whs-panel table');
+  if(!table)return;
+  const rows=[...[...table.querySelectorAll('thead tr')].map(r=>[...r.querySelectorAll('th')].map(c=>c.innerText.replace(/\n/g,' ').trim()).join('\t')),...[...table.querySelectorAll('tbody tr')].map(r=>[...r.querySelectorAll('td')].map(c=>c.innerText.replace(/\n/g,' ').trim()).join('\t'))];
+  navigator.clipboard.writeText(rows.join('\n')).then(()=>showToast('Tabla copiada')).catch(()=>showToast('Error'));
+}
+
+function setMetricProgress(pct){document.getElementById('mp-bar').style.width=pct+'%';}
+
+function loadMetricsBatch(startIdx){
+  const BATCH=3,total=SECONDARY_METRICS.length;
+  if(startIdx>=total){
+    const mc={};
+    ALL_ROWS.forEach(row=>{const rk=`${row.warehouse_id}||${row.country}`;mc[rk]={};SECONDARY_METRICS.forEach(k=>{if(row[k])mc[rk][k]=row[k];});});
+    whsSetMetricsCache(mc);
+    setTimeout(()=>setMetricProgress(0),500);
+    return;
+  }
+  const batch=SECONDARY_METRICS.slice(startIdx,startIdx+BATCH);
+  let done=0;
+  setMetricProgress(Math.round(((startIdx+1)/total)*100));
+  const next=()=>{if(++done===batch.length)loadMetricsBatch(startIdx+BATCH);};
+  batch.forEach(key=>{
+    google.script.run
+      .withSuccessHandler(res=>{
+        try{
+          if(res&&!res.error&&res.data){
+            metricsLoaded.add(key);
+            ALL_ROWS.forEach(row=>{
+              const rk=`${row.warehouse_id}||${row.country}`;
+              const d=res.data[rk];
+              if(d)row[key]={d1:d.d1,d8:d.d8,lw:d.lw,_raw:d._raw};
+            });
+            const cur=document.getElementById('f-metric')?.value||'orders';
+            if(cur===key)renderTable();
+          }
+        }catch(e){console.warn('metric update error:',key,e);}
+        next();
+      })
+      .withFailureHandler(()=>next())
+      .fetchMetric(key);
+  });
+}
+
+// ── Caché local (30 min TTL) — carga instantánea en segunda visita ──
+const WHS_LOCAL_KEY='peya_whs_fast_v2',WHS_METRICS_KEY='peya_whs_metrics_v1',WHS_TTL=30*60*1000;
+function whsGetCache(){try{const r=localStorage.getItem(WHS_LOCAL_KEY);if(!r)return null;const p=JSON.parse(r);if(Date.now()-p.ts>WHS_TTL){localStorage.removeItem(WHS_LOCAL_KEY);return null;}return p.data;}catch(e){return null;}}
+function whsSetCache(data){try{localStorage.setItem(WHS_LOCAL_KEY,JSON.stringify({ts:Date.now(),data}));}catch(e){}}
+function whsGetMetricsCache(){try{const r=localStorage.getItem(WHS_METRICS_KEY);if(!r)return null;const p=JSON.parse(r);if(Date.now()-p.ts>WHS_TTL){localStorage.removeItem(WHS_METRICS_KEY);return null;}return p.data;}catch(e){return null;}}
+function whsSetMetricsCache(data){try{localStorage.setItem(WHS_METRICS_KEY,JSON.stringify({ts:Date.now(),data}));}catch(e){}}
+
+// Recargar EN EL LUGAR: location.reload() dentro del iframe de GAS puede fallar
+// en silencio (la URL sandbox vence) y la página quedaba trabada — había que
+// refrescar el navegador a mano. Ahora: limpiar cachés → re-traer el payload →
+// re-inicializar la vista, con red de seguridad para que el splash siempre salga.
+function whsResetView(){
+  metricsLoaded = new Set(['orders','gmv']);
+  const ccS=document.getElementById('f-cc');
+  // whsInit APPENDEA los países: sin esto se duplicarían las opciones al refrescar.
+  if(ccS){ while(ccS.options.length>1) ccS.remove(1); }
+}
+function doRefresh(){
+  try{localStorage.removeItem(WHS_LOCAL_KEY);localStorage.removeItem(WHS_METRICS_KEY);}catch(e){}
+  const sp=document.getElementById('splash'), note=document.getElementById('sp-note');
+  if(sp) sp.classList.remove('out');
+  if(note) note.textContent='Actualizando datos…';
+  let done=false;
+  const safety=setTimeout(()=>{ if(done)return; done=true;
+    if(note) note.textContent='Tardó demasiado. Tocá Actualizar para reintentar.';
+    if(sp) sp.classList.add('out');
+  },90000);
+  const fetchFresh=()=>{
+    google.script.run
+      .withSuccessHandler(res=>{
+        if(done)return; done=true; clearTimeout(safety);
+        if(!res||res.error||!res.payload){
+          if(note) note.textContent='Sin datos. Tocá Actualizar para reintentar.';
+          if(sp) sp.classList.add('out');
+          return;
+        }
+        whsSetCache(res.payload);
+        whsResetView();
+        whsInit(res.payload);   // re-renderiza y saca el splash en su finally
+      })
+      .withFailureHandler(e=>{
+        if(done)return; done=true; clearTimeout(safety);
+        if(note) note.textContent='Error de conexión. Tocá Actualizar para reintentar.';
+        if(sp) sp.classList.add('out');
+      })
+      .fetchDataFast();
+  };
+  // Pase lo que pase con la limpieza del server, después SIEMPRE se re-traen los datos.
+  google.script.run.withSuccessHandler(fetchFresh).withFailureHandler(fetchFresh).forceRefreshCache();
+}
+
+// ── Inicializa la página con el payload ya obtenido ──────────────
+function whsInit(payload){
+  try {
+    ALL_ROWS = payload.rows || [];
+    FECHA    = payload.fechaReferencia;
+
+    const ccs = [...new Set(ALL_ROWS.map(r=>r.country))].sort();
+    const ccS = document.getElementById('f-cc');
+    ccs.forEach(c=>{const o=document.createElement('option');o.value=c;o.textContent=CCN[c]||c;ccS.appendChild(o);});
+
+    renderTable();
+    const mc=whsGetMetricsCache();
+    if(mc){
+      ALL_ROWS.forEach(row=>{const rk=`${row.warehouse_id}||${row.country}`;if(mc[rk])SECONDARY_METRICS.forEach(k=>{if(mc[rk][k]){row[k]=mc[rk][k];metricsLoaded.add(k);}});});
+      renderTable();
+      setTimeout(()=>setMetricProgress(0),100);
+    } else {
+      setTimeout(()=>loadMetricsBatch(0), 200);
+      setTimeout(()=>setMetricProgress(0), 90000);
+    }
+  } catch(err) {
+    console.error('WHSByDate render error:', err);
+    document.getElementById('sp-note').textContent = 'Error al renderizar. Recargá la página.';
+  } finally {
+    document.getElementById('splash').classList.add('out');
+  }
+}
+
+window.addEventListener('load',()=>{
+  // Llena el selector de métricas
+  const ms = document.getElementById('f-metric');
+  METRICS.forEach(m=>{const o=document.createElement('option');o.value=m.key;o.textContent=m.label;ms.appendChild(o);});
+
+  // Timeout de seguridad: si en 20 s no cargó nada, quita el splash igual
+  const safetyTimer = setTimeout(()=>{
+    document.getElementById('sp-note').textContent = 'Tiempo de espera agotado. Recargá la página.';
+    document.getElementById('splash').classList.add('out');
+  }, 20000);
+
+  // Intento con caché local primero (instantáneo)
+  const cached = whsGetCache();
+  if(cached){
+    clearTimeout(safetyTimer);
+    whsInit(cached);
+    return;
+  }
+
+  document.getElementById('sp-note').textContent = 'Conectando con el spreadsheet...';
+  google.script.run
+    .withSuccessHandler(res=>{
+      clearTimeout(safetyTimer);
+      if(!res || res.error || !res.payload){
+        document.getElementById('sp-note').textContent = 'Sin datos disponibles. Recargá la página.';
+        document.getElementById('splash').classList.add('out');
+        return;
+      }
+      whsSetCache(res.payload);
+      whsInit(res.payload);
+    })
+    .withFailureHandler(e=>{
+      clearTimeout(safetyTimer);
+      console.warn('fetchDataFast error:', e?.message||e);
+      document.getElementById('sp-note').textContent = 'Error de conexión. Recargá la página.';
+      document.getElementById('splash').classList.add('out');
+    })
+    .fetchDataFast();
+});
+</script>
+</body>
+</html>

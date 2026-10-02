@@ -1,0 +1,86 @@
+// ##########################################################################################
+// #  TAREA: "13 USER DATA" (CON BLOQUEO DE CELDA DE PAÍS)                                  #
+// ##########################################################################################
+
+const CONFIG_USER_DATA = {
+  nombreHoja: "13. User data",
+  celdaPais: "D6" // Cambia esto si el país va en otra celda en esta nueva hoja
+};
+
+function _userDataWorker(targetCountry) {
+  try {
+    Logger.log(`--- [TAREA 13 USER DATA] Iniciando para ${targetCountry.country.toUpperCase()} ---`);
+    
+    // 1. Abrir origen
+    const sourceSpreadsheet = SpreadsheetApp.openById(SOURCE_SPREADSHEET_ID);
+    const sourceSheet = sourceSpreadsheet.getSheetByName(CONFIG_USER_DATA.nombreHoja);
+    if (!sourceSheet) throw new Error(`La hoja de origen '${CONFIG_USER_DATA.nombreHoja}' no fue encontrada.`);
+    
+    // 2. Abrir destino
+    const targetSpreadsheet = SpreadsheetApp.openById(targetCountry.id);
+    const existingSheet = targetSpreadsheet.getSheetByName(CONFIG_USER_DATA.nombreHoja);
+    
+    let newSheet;
+
+    // 3. Reemplazar o Copiar hoja (MANTENIENDO EL ORDEN Y VISIBILIDAD)
+    if (existingSheet) {
+      const originalIndex = existingSheet.getIndex(); // Guarda la posición actual
+      targetSpreadsheet.deleteSheet(existingSheet);
+      newSheet = sourceSheet.copyTo(targetSpreadsheet);
+      newSheet.setName(CONFIG_USER_DATA.nombreHoja);
+      targetSpreadsheet.setActiveSheet(newSheet);
+      targetSpreadsheet.moveActiveSheet(originalIndex); // Restaura la posición
+    } else {
+      newSheet = sourceSheet.copyTo(targetSpreadsheet);
+      newSheet.setName(CONFIG_USER_DATA.nombreHoja);
+    }
+
+    // ASEGURAR QUE LA HOJA APAREZCA VISIBLE
+    newSheet.showSheet();
+
+    // 4. Escribir el País en la celda configurada y bloquearla
+    const celdaPais = newSheet.getRange(CONFIG_USER_DATA.celdaPais);
+    celdaPais.setValue(targetCountry.country);
+
+    // ---- INICIO DEL BLOQUEO ----
+    // Creamos la protección para el rango (celda configurada)
+    const proteccion = celdaPais.protect().setDescription('Bloqueo automático de celda de país');
+    
+    // Obtenemos la lista de editores actuales de esa protección y los removemos
+    // (Esto dejará automáticamente solo al propietario/ejecutor del script)
+    const editores = proteccion.getEditors();
+    proteccion.removeEditors(editores);
+    
+    // Si estás en un entorno Google Workspace corporativo, evita que otros miembros del dominio editen
+    if (proteccion.canDomainEdit()) {
+      proteccion.setDomainEdit(false);
+    }
+    // ---- FIN DEL BLOQUEO ----
+
+    Logger.log(`>>> [TAREA 13 USER DATA] Proceso completado y celda bloqueada para ${targetCountry.country.toUpperCase()}.`);
+  } catch (error) {
+    Logger.log(`ERROR en [TAREA 13 USER DATA] para ${targetCountry.country.toUpperCase()}: ${error.toString()}`);
+  }
+}
+
+// --- Funciones Individuales ---
+function copiarUserData_Para_Argentina() { _userDataWorker(PAISES_DE_DESTINO.find(p => p.country === "Argentina")); }
+function copiarUserData_Para_Bolivia() { _userDataWorker(PAISES_DE_DESTINO.find(p => p.country === "Bolivia")); }
+function copiarUserData_Para_Chile() { _userDataWorker(PAISES_DE_DESTINO.find(p => p.country === "Chile")); }
+function copiarUserData_Para_Costa_Rica() { _userDataWorker(PAISES_DE_DESTINO.find(p => p.country === "Costa Rica")); }
+function copiarUserData_Para_Republica_Dominicana() { _userDataWorker(PAISES_DE_DESTINO.find(p => p.country === "Republica Dominicana")); }
+function copiarUserData_Para_Ecuador() { _userDataWorker(PAISES_DE_DESTINO.find(p => p.country === "Ecuador")); }
+function copiarUserData_Para_El_Salvador() { _userDataWorker(PAISES_DE_DESTINO.find(p => p.country === "El Salvador")); }
+function copiarUserData_Para_Guatemala() { _userDataWorker(PAISES_DE_DESTINO.find(p => p.country === "Guatemala")); }
+function copiarUserData_Para_Honduras() { _userDataWorker(PAISES_DE_DESTINO.find(p => p.country === "Honduras")); }
+function copiarUserData_Para_Nicaragua() { _userDataWorker(PAISES_DE_DESTINO.find(p => p.country === "Nicaragua")); }
+function copiarUserData_Para_Panama() { _userDataWorker(PAISES_DE_DESTINO.find(p => p.country === "Panama")); }
+function copiarUserData_Para_Paraguay() { _userDataWorker(PAISES_DE_DESTINO.find(p => p.country === "Paraguay")); }
+function copiarUserData_Para_Peru() { _userDataWorker(PAISES_DE_DESTINO.find(p => p.country === "Peru")); }
+function copiarUserData_Para_Uruguay() { _userDataWorker(PAISES_DE_DESTINO.find(p => p.country === "Uruguay")); }
+
+function copiarUserData_Para_TODOS() {
+  Logger.log("INICIANDO TAREA '13 USER DATA' PARA TODOS LOS PAÍSES");
+  PAISES_DE_DESTINO.forEach(pais => _userDataWorker(pais));
+  Logger.log("TAREA '13 USER DATA' FINALIZADA");
+}

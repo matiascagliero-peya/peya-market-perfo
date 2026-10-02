@@ -1,0 +1,102 @@
+// ============================================================
+// CONFIGURACIÓN Y VERSIONADO
+// ============================================================
+const SCRIPT_VERSION = '4.0-redesign';
+const PROJECT_ID   = 'peya-food-and-groceries';
+const RINGS_TABLE  = '`peya-food-and-groceries.user_eugenio_irigoin.datamart_store_explorer_rings`';
+const CITY_TABLE   = '`peya-food-and-groceries.user_eugenio_irigoin.datamart_city_penetration`';
+const MARKET_TABLE = '`peya-food-and-groceries.user_eugenio_irigoin.datamart_market_penetration`';
+const SEAMLESS_TABLE = '`peya-food-and-groceries.user_eugenio_irigoin.datamart_market_ops_seamless`';
+
+// ============================================================
+// ENTRY POINT & ROUTING
+// ============================================================
+function doGet(e) {
+  try { warmUpBigQuery(); } catch(err) { console.error("Warm-up failed: " + err.message); }
+
+  const page = (e && e.parameter && e.parameter.page) || 'explorer'; // La nueva página por defecto
+  const fileName = page.charAt(0).toUpperCase() + page.slice(1);
+  
+  const template = HtmlService.createTemplateFromFile(fileName);
+  template.scriptUrl = ScriptApp.getService().getUrl();
+  template.activePage = page;
+  
+  const html = template.evaluate();
+  html.setTitle('Store Intelligence Platform — ' + fileName)
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+      
+  return html;
+}
+
+// ... (resto de las funciones de Code.gs sin cambios) ...
+function include(filename, data) {
+  const template = HtmlService.createTemplateFromFile(filename);
+  if (data) {
+    Object.keys(data).forEach(function(key) {
+      template[key] = data[key];
+    });
+  }
+  return template.evaluate().getContent();
+}
+function getScriptVersion() { return SCRIPT_VERSION; }
+function ping() { return "pong"; }
+function warmUpBigQuery() { try { BigQuery.Jobs.query({ query: 'SELECT 1' }, PROJECT_ID); } catch(e){} }
+function getExplorerInitialData() {
+  try {
+    const availableMonths = getAvailableMonthsMarket();
+    if (!availableMonths || availableMonths.length === 0) {
+      return { warehouses: [], countries: [] };
+    }
+    const latestMonth = availableMonths[0].month_date;
+    const whsSql = `SELECT warehouse_id, warehouse_name, country, store_lat AS lat, store_lng AS lng, penetration_pct FROM ${MARKET_TABLE} WHERE month_date = DATE '${latestMonth}' AND store_lat IS NOT NULL AND store_lng IS NOT NULL`;
+    const countrySql = `SELECT DISTINCT country FROM ${MARKET_TABLE} WHERE country IS NOT NULL ORDER BY country`;
+    const warehouses = runQuery(whsSql);
+    const countries = runQuery(countrySql).map(r => r.country);
+    return { warehouses: warehouses, countries: countries };
+  } catch (e) {
+    console.error('Error grave en getExplorerInitialData: ' + e.toString());
+    return { warehouses: [], countries: [] };
+  }
+}
+function runQuery(sql) {
+  const request = { query: sql, useLegacySql: false, timeoutMs: 60000 };
+  let response = BigQuery.Jobs.query(request, PROJECT_ID);
+  const jobId = response.jobReference.jobId;
+  let attempts = 0;
+  while (!response.jobComplete && attempts < 15) {
+    Utilities.sleep(2000);
+    response = BigQuery.Jobs.getQueryResults(PROJECT_ID, jobId);
+    attempts++;
+  }
+  if (!response.jobComplete) throw new Error('Query timeout');
+  const fields = response.schema.fields.map(f => f.name);
+  let rows = response.rows || [];
+  let pageToken = response.pageToken;
+  while (pageToken) {
+    const next = BigQuery.Jobs.getQueryResults(PROJECT_ID, jobId, { pageToken });
+    rows = rows.concat(next.rows || []);
+    pageToken = next.pageToken;
+  }
+  return rows.map(row => Object.fromEntries(fields.map((f, i) => [f, row.f[i].v])));
+}
+function getWarehouseList() {
+  const sql = `SELECT DISTINCT warehouse_id, warehouse_name, country FROM ${RINGS_TABLE} WHERE warehouse_id IS NOT NULL AND warehouse_name IS NOT NULL AND country IS NOT NULL ORDER BY country, warehouse_name`;
+  return runQuery(sql);
+}
+function getWarehousePolygon(warehouseId, monthDate) {
+  const sql = `SELECT ST_ASGEOJSON(ps.partner_shape) AS geojson_shape FROM (SELECT DISTINCT CAST(dp.partner_id AS STRING) AS partner_id FROM \`peya-bi-tools-pro.il_core.dim_partner\` dp WHERE dp.warehouse_id = '${warehouseId}' AND dp.is_darkstore = TRUE) dl JOIN \`peya-food-and-groceries.automated_tables_reports.qc_coverage_partner_shapes\` ps ON dl.partner_id = CAST(ps.partner_id AS STRING) AND ps.month_date = DATE '${monthDate}' LIMIT 1`;
+  const rows = runQuery(sql);
+  return rows.length > 0 ? rows[0] : null;
+}
+function getRingData(warehouseId, monthDate) {
+  const sql = `SELECT anillo_order, anillo, SUM(Covered_MAUs) AS covered_maus, SUM(Dmart_MAUs_Covered) AS dmart_maus_covered, SUM(Dmart_MAUs_Uncovered) AS dmart_maus_uncovered, SUM(dmart_orders) AS dmart_orders, ROUND(SAFE_DIVIDE(SUM(Dmart_MAUs_Covered), NULLIF(SUM(Covered_MAUs), 0)) * 100, 1) AS penetration_pct, ROUND(SUM(net_sales_dmart), 2) AS net_sales, ROUND(SAFE_DIVIDE(SUM(sum_delivery_time_min), NULLIF(SUM(total_orders_timings), 0)), 1)  AS avg_dt_min, ROUND(SAFE_DIVIDE(SUM(is_order_late_10), NULLIF(SUM(total_orders_timings), 0)) * 100, 1) AS pct_late FROM ${RINGS_TABLE} WHERE warehouse_id = '${warehouseId}' AND month_date = DATE '${monthDate}' GROUP BY anillo_order, anillo ORDER BY anillo_order`;
+  return runQuery(sql);
+}
+function getWarehouseBenchmark(monthDate) {
+  const sql = `SELECT m.*, s.seamless_rate_pct, s.fail_rate_pct, s.avg_assignment_time_min, s.avg_picking_time_min FROM ${MARKET_TABLE} m LEFT JOIN ${SEAMLESS_TABLE} s ON m.warehouse_id = s.warehouse_id AND m.month_date = s.month_date WHERE m.month_date = DATE '${monthDate}'`;
+  return runQuery(sql);
+}
+function getAvailableMonthsMarket() {
+  const sql = `SELECT DISTINCT FORMAT_DATE('%Y-%m-%d', month_date) AS month_date, FORMAT_DATE('%b %Y', month_date) AS month_label FROM ${MARKET_TABLE} WHERE month_date >= DATE_SUB(CURRENT_DATE(), INTERVAL 24 MONTH) ORDER BY month_date DESC`;
+  return runQuery(sql);
+}

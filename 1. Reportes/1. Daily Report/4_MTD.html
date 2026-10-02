@@ -1,0 +1,908 @@
+<!DOCTYPE html>
+<!--
+  MTD DASHBOARD — MonthToDateWeb.html
+  Proyecto: Daily Script (Code.gs) — sirve en /exec?page=mtd
+            O bien MTD Script (MTD_Code.gs) — sirve como "MTD.html"
+
+  ──────────────────────────────────────────────────────────────────
+  DIFERENCIAS ESTÉTICAS vs index.html (para unificar si se desea):
+  • Nav height: 56px aquí vs 52px en Daily
+  • Nav padding: 0 24px aquí vs 0 20px en Daily
+  • Border radius variable: --radius:8px aquí vs --r:10px en Daily
+  • Shadow variables: --shadow-sm/--shadow-md aquí vs --sh/--sh2 en Daily
+  • Badge classes: .badge-pos/.badge-neg aquí vs .vb-pos/.vb-neg en Daily
+  • Filter bar padding: 12px 24px aquí vs 9px 20px en Daily
+  • n-btn height: 32px aquí vs 30px en Daily
+  ──────────────────────────────────────────────────────────────────
+-->
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MTD by Country - PeYa Markets</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<link rel="stylesheet" href="https://npmcdn.com/flatpickr/dist/themes/airbnb.css">
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script src="https://npmcdn.com/flatpickr/dist/l10n/es.js"></script>
+<style>
+  :root {
+    --primary:#e50044; --text-main:#0f172a; --text-sub:#475569; --text-light:#94a3b8;
+    --border:#e2e8f0; --border-light:#f1f5f9; --bg-main:#f8fafc; --panel-bg:#ffffff;
+    --positive:#059669; --negative:#e11d48; --neutral:#64748b;
+    --shadow-sm:0 1px 2px 0 rgba(0,0,0,0.03);
+    --shadow-md:0 4px 6px -1px rgba(0,0,0,0.04),0 2px 4px -1px rgba(0,0,0,0.02);
+    --radius:8px;
+  }
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:'Inter',system-ui,sans-serif;background:var(--bg-main);color:var(--text-main);font-size:13px;-webkit-font-smoothing:antialiased;}
+
+  #splash{position:fixed;inset:0;background:rgba(255,255,255,0.95);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;transition:opacity .3s ease;backdrop-filter:blur(4px);}
+  #splash.out{opacity:0;pointer-events:none;}
+  .spinner{width:42px;height:42px;border:4px solid rgba(229,0,68,0.12);border-top-color:var(--primary);border-radius:50%;animation:spin 0.75s linear infinite;margin-bottom:14px;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+
+  nav{background:#fff;border-bottom:1px solid var(--border);height:52px;display:flex;align-items:center;padding:0 20px;position:sticky;top:0;z-index:300;box-shadow:0 1px 0 var(--border);}
+  .n-brand{display:flex;align-items:center;gap:7px;margin-right:18px;flex-shrink:0;}
+  .n-dot{width:7px;height:7px;border-radius:50%;background:var(--primary);}
+  .n-divider{width:1px;height:20px;background:var(--border);margin:0 10px;flex-shrink:0;}
+  .n-tabs{display:flex;gap:2px;}
+  .n-tab{display:flex;align-items:center;gap:5px;padding:5px 11px;border-radius:7px;font-size:12px;font-weight:500;color:var(--text-sub);transition:all .15s;border:none;background:transparent;cursor:pointer;text-decoration:none;white-space:nowrap;}
+  .n-tab svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
+  .n-tab.active{background:var(--bg-main);color:var(--text-main);font-weight:600;}
+  .n-tab:hover:not(.active){background:var(--border-light);color:var(--text-main);}
+  .n-right{margin-left:auto;display:flex;align-items:center;gap:8px;}
+  .n-btn{height:30px;border:1px solid var(--border);background:#fff;border-radius:7px;padding:0 11px;font-size:11px;font-weight:600;color:var(--text-sub);cursor:pointer;display:flex;align-items:center;gap:5px;transition:all .15s;}
+  .n-btn:hover{border-color:var(--text-sub);color:var(--text-main);}
+  .n-btn svg{width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;}
+
+  .target-loading .tgt-cell { opacity: 0.35; }
+  .tgt-loading-dot { display:inline-block; width:6px; height:6px; border-radius:50%; background:var(--text-light); animation:pulse 1.2s ease-in-out infinite; margin-left:4px; vertical-align:middle;}
+  @keyframes pulse{0%,100%{opacity:0.3;}50%{opacity:1;}}
+
+  .fbar{background:rgba(255,255,255,0.98);backdrop-filter:blur(8px);border-bottom:1px solid var(--border);padding:9px 20px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;position:sticky;top:52px;z-index:290;}
+  .fg{display:flex;align-items:center;gap:8px;}
+  .fl{font-size:11px;font-weight:700;color:var(--text-sub);text-transform:uppercase;letter-spacing:0.5px;}
+  .fs{border:1px solid var(--border);background:#fff;border-radius:6px;padding:8px 12px;font-size:12px;font-weight:600;color:var(--text-main);font-family:'Inter';cursor:pointer;outline:none;transition:all 0.2s;min-width:120px;text-align:center;}
+  .fs:focus{border-color:var(--primary);box-shadow:0 0 0 2px rgba(229,0,68,0.15);}
+  .btn-mtd{height:36px;padding:0 14px;border:1px solid var(--border);border-radius:6px;background:#fff;color:var(--text-sub);font-family:'Inter';font-size:11px;font-weight:700;cursor:pointer;transition:all .15s;text-transform:uppercase;letter-spacing:.4px;}
+  .btn-mtd.active,.btn-mtd:hover{background:var(--primary);border-color:var(--primary);color:#fff;}
+  .minimal-toggle{display:flex;align-items:center;background:var(--bg-main);padding:3px;border-radius:6px;gap:2px;border:1px solid var(--border);}
+  .min-btn{padding:6px 12px;border-radius:4px;font-size:11px;font-weight:600;cursor:pointer;border:none;background:transparent;color:var(--text-sub);transition:all .2s;}
+  .min-btn.active{background:#fff;color:var(--text-main);box-shadow:var(--shadow-sm);}
+
+  .page{padding:20px;max-width:1100px;margin:0 auto;display:flex;flex-direction:column;gap:14px;}
+  .section-title{display:none;}
+  .hero-grid{display:grid;grid-template-columns:1fr;gap:20px;}
+  .hero-panel,.ov-panel{position:relative;background:var(--panel-bg);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;}
+  .hero-panel{box-shadow:var(--shadow-md);border-top:4px solid var(--primary);}
+  .ov-panel{box-shadow:var(--shadow-sm);transition:transform 0.15s;}
+  .ov-panel:hover{transform:translateY(-2px);box-shadow:var(--shadow-md);}
+  .ov-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:20px;align-items:start;}
+  @media(max-width:1200px){.ov-grid{grid-template-columns:1fr;}}
+
+  .p-head{padding:10px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;background:#fff;min-height:58px;flex-wrap:nowrap;}
+  .p-bar{width:4px;height:32px;border-radius:4px;flex-shrink:0;}
+  .p-title-container{flex:1;display:flex;flex-direction:column;overflow:hidden;justify-content:center;gap:2px;}
+  .p-title{font-weight:600;text-transform:uppercase;letter-spacing:-0.2px;color:var(--text-main);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .p-subtitle{font-size:10px;font-weight:500;color:var(--text-light);text-transform:uppercase;letter-spacing:0.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .btn-actions{display:flex;gap:6px;flex-shrink:0;align-items:center;}
+  .btn-copy,.btn-copy-val{background:transparent;border:1px solid var(--border);border-radius:5px;padding:0 10px;height:26px;display:inline-flex;align-items:center;justify-content:center;gap:5px;cursor:pointer;transition:all 0.2s;font-size:11px;font-weight:600;color:var(--text-sub);white-space:nowrap;box-shadow:var(--shadow-sm);flex-shrink:0;}
+  .btn-copy:hover,.btn-copy-val:hover{background:var(--bg-main);color:var(--text-main);border-color:var(--text-sub);}
+  .btn-actions svg{width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:2.2;flex-shrink:0;}
+  .table-wrap{width:100%;overflow-x:auto;}
+  table{width:100%;border-collapse:collapse;background:#fff;}
+  th{padding:4px 8px;font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:0.3px;color:var(--text-light);text-align:right;border-bottom:1px solid var(--border);background:#fff;cursor:pointer;user-select:none;transition:all 0.2s;white-space:nowrap;}
+  th:hover{color:var(--text-main);background:var(--border-light);}
+  th:first-child{text-align:left;border-right:1px solid var(--border-light);width:16%;}
+  /* Rango de fechas del período comparado (M-1 / YoY), sutil bajo el header */
+  .th-range{font-size:7px;font-weight:500;color:var(--text-light);opacity:.75;letter-spacing:0;text-transform:none;margin-top:1px;line-height:1.1;}
+  td{padding:5px 8px;text-align:center;border-bottom:1px solid var(--border-light);white-space:nowrap;font-size:11px;transition:background 0.15s;}
+  td:first-child{text-align:left;font-weight:600;font-size:11.5px;color:var(--text-sub);border-right:1px solid var(--border-light);}
+  tbody tr:hover td{background-color:#f8fafc;}
+  tbody tr:last-child td{border-bottom:none;}
+  .sep-l{border-left:1px dashed var(--border);}
+  .number{font-size:13px;font-weight:600;color:var(--text-main);font-variant-numeric:tabular-nums;}
+  .dim{color:var(--text-sub);font-weight:500;font-size:12px;}
+  .sort-icon{display:inline-block;width:10px;text-align:center;color:var(--text-sub);font-size:11px;margin-left:2px;}
+  .badge{display:inline-flex;align-items:center;gap:3px;padding:3px 6px;border-radius:4px;font-size:11px;font-weight:700;white-space:nowrap;line-height:1.2;}
+  .badge-pos{background:transparent;color:var(--positive);border:1px solid rgba(5,150,105,0.3);}
+  .badge-neg{background:transparent;color:var(--negative);border:1px solid rgba(225,29,72,0.3);}
+  .badge-neu{background:transparent;color:var(--text-light);border:1px solid var(--border);}
+  .badge svg{width:9px;height:9px;stroke:currentColor;fill:none;stroke-width:3;stroke-linecap:round;stroke-linejoin:round;}
+  @media(max-width:800px){.page{padding:12px;gap:16px;}.hero-grid,.ov-grid{grid-template-columns:1fr;gap:16px;}.fbar{position:static;}}
+
+  /* ── LOADING BAR ── */
+  #date-loading-bar{position:fixed;top:0;left:0;width:100%;height:3px;z-index:9998;display:none;overflow:hidden;background:rgba(229,0,68,.12);}
+  #date-loading-bar::after{content:'';position:absolute;top:0;left:0;width:40%;height:100%;background:var(--primary);border-radius:2px;animation:ldbar 1.2s ease-in-out infinite;}
+  @keyframes ldbar{0%{left:-40%}100%{left:100%}}
+  #date-loading-bar.visible{display:block;}
+  /* Dimming del contenido durante la carga */
+  #main-container.date-loading{opacity:.45;pointer-events:none;transition:opacity .15s;}
+  /* Flex column con gap → separación UNIFORME entre todas las filas de paneles
+     (antes el gap estaba en .page, que tiene un solo hijo, así que no separaba nada). */
+  #main-container{transition:opacity .2s;display:flex;flex-direction:column;gap:16px;}
+</style>
+</head>
+<body>
+
+<div id="splash">
+  <div style="font-weight:700;font-size:15px;color:var(--text-sub);margin-bottom:4px;">PedidosYa Markets</div>
+  <div style="font-weight:900;font-size:22px;margin-bottom:20px;">MTD <b style="color:var(--primary)">by Country</b></div>
+  <div class="spinner"></div>
+  <div style="font-weight:600;color:var(--text-light);font-size:12px;">Cargando datos...</div>
+</div>
+
+<script>window.PAGE_ID='mtd';</script>
+<?!= include('_nav'); ?>
+
+<div class="fbar">
+  <div class="fg"><span class="fl">Periodo:</span><input type="text" class="fs" id="f-start" placeholder="Cargando..."></div>
+  <div class="fg"><span class="fl">Hasta:</span><input type="text" class="fs" id="f-end" placeholder="Cargando..."></div>
+  <button id="btn-mtd" type="button" class="btn-mtd" onclick="setMTD()" title="Mes a la fecha: del 1° del mes al último día con datos">MTD</button>
+  <div class="n-divider"></div>
+  <div class="fg">
+    <span class="fl">Ordenar:</span>
+    <div class="minimal-toggle">
+      <button class="min-btn" id="st-top" onclick="setGlobalSort('top')">TOP</button>
+      <button class="min-btn" id="st-bottom" onclick="setGlobalSort('bottom')">BOTTOM</button>
+      <button class="min-btn active" id="st-confirmed" onclick="setGlobalSort('confirmed')">≡ Confirmed Orders</button>
+    </div>
+  </div>
+  <div style="margin-left:auto;display:flex;align-items:center;gap:6px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:20px;padding:4px 10px;font-size:11px;font-weight:600;color:#1d4ed8;white-space:nowrap">
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+    <span class="be-label"></span>
+  </div>
+</div>
+
+<div id="date-loading-bar"></div>
+<div class="page"><div id="main-container"></div></div>
+
+<script>
+
+  const MTD_CACHE_KEY='peya_mtd_v4', MTD_CACHE_TTL=30*60*1000;
+  function getMtdCache(){try{const c=localStorage.getItem(MTD_CACHE_KEY);if(!c)return null;const p=JSON.parse(c);if(Date.now()>p.expiry){localStorage.removeItem(MTD_CACHE_KEY);return null;}return p.data;}catch(e){return null;}}
+  function setMtdCache(d){try{localStorage.setItem(MTD_CACHE_KEY,JSON.stringify({data:d,expiry:Date.now()+MTD_CACHE_TTL}));}catch(e){}}
+
+  let CURRENT_DATA = null;
+  let SORT_DIR = 'best', SORT_MODE = 'confirmed', LOCAL_SORTS = {};
+  let fpStart, fpEnd;
+  let TARGETS_LOADED = false;
+
+  const COUNTRY_NAMES = {'AR':'Argentina','BO':'Bolivia','CL':'Chile','CO':'Colombia','CR':'Costa Rica','EC':'Ecuador','SV':'El Salvador','GT':'Guatemala','HN':'Honduras','NI':'Nicaragua','PA':'Panamá','PY':'Paraguay','PE':'Perú','UY':'Uruguay','DO':'Rep. Dominicana','MX':'México'};
+  const METRIC_COLORS = {'Confirmed Orders':'#e50044','GMV User Dmarts':'#2563eb','Users DMart':'#0284c7','Platform Maus penetration %':'#0891b2','New Users':'#06b6d4','WIS %':'#16a34a','WIS UF %':'#10b981','Seamless Delivery %':'#84cc16','Avg. Delivery Time':'#d97706','Assignment Time':'#f59e0b','HC Sessions orders %':'#6366f1','Rejected Orders %':'#475569','Assignment Time > 6 min %':'#f43f5e','Dmart MAUs':'#0284c7','New Users - Dmart':'#06b6d4','Covered MAUs penetration %':'#0891b2','PeYa MAUs - MTD':'#0891b2','Dmart MAUs - MTD':'#0284c7','Dmart MAUs penetration %':'#0d9488','Dmart MAUs - Plus %':'#0ea5e9','Dmart MAUs - Plus - MTD':'#0ea5e9','New Users - Dmart - MTD':'#06b6d4'};
+  const GROUPS = [
+    { hero:true,  keys:['Confirmed Orders','GMV User Dmarts'] },
+    // Usuarios MTD (snapshot: valor de la última fecha del rango, no suma). Solo
+    // en la página. Se inyectan desde A. TI - Actuals OKRs con config.mtd=true.
+    { hero:false, mtd:true, keys:['PeYa MAUs - MTD','Dmart MAUs - MTD','Dmart MAUs penetration %','Dmart MAUs - Plus %','New Users - Dmart - MTD'] },
+    // Usuarios SEMANALES (Dmart MAUs / New Users - Dmart / Covered MAUs penetration %):
+    // OCULTAS por ahora (a pedido). Para volver a mostrarlas, descomentá la línea de abajo.
+    // { hero:false, weekly:true, keys:['Dmart MAUs','New Users - Dmart','Covered MAUs penetration %'] },
+    // "New Users" (diaria) sacada antes: quedaba repetida con "New Users - Dmart" (semanal).
+    { hero:false, keys:['WIS %','WIS UF %','Seamless Delivery %','Avg. Delivery Time'] },
+    { hero:false, keys:['Assignment Time','Assignment Time > 6 min %','HC Sessions orders %','Rejected Orders %'] }
+  ];
+  const HERO_METRICS = new Set(['Confirmed Orders','GMV User Dmarts']);
+  const RR_KEY_MAP = {'Confirmed Orders':'orders','GMV User Dmarts':'gmv'};
+  // Si el mes ya cerró (meta.isMonthClose del RR = corte en el último día del mes),
+  // las etiquetas de RR pasan a "Cierre de mes" (flag en Code.gs).
+  function rrIsClose(){ return !!(CURRENT_DATA && CURRENT_DATA.rrData && CURRENT_DATA.rrData.meta && CURRENT_DATA.rrData.meta.isMonthClose); }
+  function rrLbl(kind){
+    const cl=rrIsClose();
+    if(kind==='mes')  return cl?'Cierre de mes':'RR Mes';
+    if(kind==='MES')  return cl?'CIERRE DE MES':'RR MES';
+    if(kind==='vslm') return cl?'Cierre de mes vs LM':'RR vs LM';
+    if(kind==='vsly') return cl?'Cierre de mes vs LY':'RR vs LY';
+    return 'RR';
+  }
+  // Métricas ocultas temporalmente: en vez de los datos se muestra "En preparación".
+  // Para volver a mostrarlas, quitalas de este set.
+  const IN_PREPARATION = new Set([]);
+
+  function fv(v, fmt) {
+    if (v==null||isNaN(v)) return '—';
+    if (v===0) return (fmt==='pct'||fmt==='pct_pre') ? '0.0%' : '0';
+    if (fmt==='time')    return v.toFixed(1)+' min';
+    if (fmt==='pct')     return (v*100).toFixed(1)+'%';
+    if (fmt==='pct_pre') return v.toFixed(1)+'%';   // valor ya en %: 98.5 → "98.5%"
+    const a=Math.abs(v);
+    if(a>=1e6) return (v/1e6).toFixed(2)+'M';
+    if(a>=1e3) return (v/1e3).toFixed(1)+'k';
+    return v.toFixed(1);
+  }
+
+  function badge(cur, prev, fmt, tc) {
+    if (cur==null||prev==null||prev===0) return '<span class="badge badge-neu">—</span>';
+    let d, sfx;
+    if      (fmt==='pct')     { d=(cur-prev)*100;                       sfx=' pp'; }
+    else if (fmt==='pct_pre') { d=cur-prev;                             sfx=' pp'; }
+    else if (fmt==='time')    { d=cur-prev;                             sfx=' min'; }  // variación en minutos, no %
+    else                      { d=((cur-prev)/Math.abs(prev))*100;      sfx='%'; }
+    if(Math.abs(d)<0.05) return `<span class="badge badge-neu">0.0${sfx}</span>`;
+    const good=(tc===1)?(d>0):(d<0);
+    const cls=good?'badge-pos':'badge-neg';
+    const ico=good?'<svg viewBox="0 0 24 24"><polyline points="18 15 12 9 6 15"/></svg>':'<svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>';
+    return `<span class="badge ${cls}">${ico}${d>0?'+':''}${d.toFixed(1)}${sfx}</span>`;
+  }
+
+  function varText(cur,prev,fmt){
+    if(cur==null||prev==null||prev===0)return'—';
+    let d;
+    if      (fmt==='pct')     d=(cur-prev)*100;
+    else if (fmt==='pct_pre') d=cur-prev;
+    else if (fmt==='time')    d=cur-prev;
+    else                      d=((cur-prev)/Math.abs(prev))*100;
+    return d.toFixed(1)+((fmt==='pct'||fmt==='pct_pre')?' pp':fmt==='time'?' min':'%');
+  }
+
+  function badgePct(val, tc) {
+    if(val==null||isNaN(val)) return '<span class="badge badge-neu">—</span>';
+    if(Math.abs(val)<0.05) return '<span class="badge badge-neu">0.0%</span>';
+    const good=(tc===1)?(val>0):(val<0);
+    const cls=good?'badge-pos':'badge-neg';
+    const ico=good?'<svg viewBox="0 0 24 24"><polyline points="18 15 12 9 6 15"/></svg>':'<svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>';
+    return `<span class="badge ${cls}">${ico}${val>0?'+':''}${val.toFixed(1)}%</span>`;
+  }
+
+  function setGlobalSort(t) {
+    if(t==='top'){SORT_DIR='best';SORT_MODE='own';}
+    else if(t==='bottom'){SORT_DIR='worst';SORT_MODE='own';}
+    else SORT_MODE='confirmed';
+    ['top','bottom','confirmed'].forEach(function(x){ document.getElementById('st-'+x).classList.toggle('active',t===x); });
+    LOCAL_SORTS={};
+    if(CURRENT_DATA) renderPanels(CURRENT_DATA);
+  }
+
+  function localSort(metric,col){
+    if(!LOCAL_SORTS[metric]){LOCAL_SORTS[metric]={col:col,dir:'desc'};}
+    else if(LOCAL_SORTS[metric].col===col){LOCAL_SORTS[metric].dir=LOCAL_SORTS[metric].dir==='desc'?'asc':'desc';}
+    else{LOCAL_SORTS[metric]={col:col,dir:'desc'};}
+    if(CURRENT_DATA) renderPanels(CURRENT_DATA);
+  }
+
+  function sortIcon(m,col){
+    if(LOCAL_SORTS[m]&&LOCAL_SORTS[m].col===col) return `<span class="sort-icon">${LOCAL_SORTS[m].dir==='asc'?'↑':'↓'}</span>`;
+    return `<span class="sort-icon" style="opacity:0">↓</span>`;
+  }
+
+  function orderLabel(m){
+    if(LOCAL_SORTS[m]){
+      const _be=window.BE_LABEL;
+      const n={'country':'País','current':'Actual','target':_be,'tvar':'Vs '+_be,'tpct':'% Logrado','m1':'Mes Ant.','m1var':'Var MoM','y1var':'Var YoY','rr':rrLbl('mes'),'rr_be':_be+' Mes','rr_varbe':'Var '+_be+' Mes','rr_varly':rrLbl('vsly'),'rr_varlm':rrLbl('vslm')};
+      return `${n[LOCAL_SORTS[m].col]||LOCAL_SORTS[m].col} (${LOCAL_SORTS[m].dir==='asc'?'Asc':'Desc'})`;
+    }
+    if(SORT_MODE==='confirmed') return 'Confirmed Orders';
+    return SORT_DIR==='best'?'TOP':'BOTTOM';
+  }
+
+  // Badge "datos hasta DD/MM" para cada métrica. Rojo si esa métrica tiene datos
+  // por DETRÁS del día de corte (último de Confirmed Orders) → ahí su RR/Var salen vacíos.
+  function dataThroughBadge(m){
+    const dt=(CURRENT_DATA.dataThroughByMetric||{})[m];
+    if(!dt) return '';
+    const cut=CURRENT_DATA.maxDemandDate;
+    const behind = cut && dt < cut;
+    const dm = dt.slice(8,10)+'/'+dt.slice(5,7);
+    const st = behind ? 'background:#fff1f2;color:#e11d48;border:1px solid #fecdd3'
+                      : 'background:#f1f5f9;color:#64748b;border:1px solid #e2e8f0';
+    const warnIco = behind ? ' <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="vertical-align:-1px;margin-left:2px;"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>' : '';
+    return ` <span title="Último día con datos de esta métrica" style="font-size:9px;font-weight:700;padding:2px 7px;border-radius:20px;${st};vertical-align:middle;white-space:nowrap;text-transform:none;letter-spacing:0">datos hasta ${dm}${warnIco}</span>`;
+  }
+
+  function buildPanel(m, isHero, idx) {
+    if (IN_PREPARATION.has(m)) {
+      const color = METRIC_COLORS[m]||Object.values(METRIC_COLORS)[idx%12];
+      const mid   = m.replace(/[^a-zA-Z0-9]/g,'-');
+      return `<div class="ov-panel" id="panel-${mid}">
+        <div class="p-head">
+          <div class="p-bar" style="background:${color}"></div>
+          <div class="p-title-container">
+            <div class="p-title" style="font-size:16px">${m}</div>
+            <div class="p-subtitle">En preparación</div>
+          </div>
+        </div>
+        <div style="padding:28px 16px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:var(--text-sub);text-align:center">
+          <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="opacity:.6"><path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="9"/></svg>
+          <div style="font-size:13px;font-weight:600;color:var(--text-main)">En preparación</div>
+          <div style="font-size:11px">Esta métrica estará disponible próximamente.</div>
+        </div>
+      </div>`;
+    }
+    // Métricas SEMANALES (usuarios): valor fijo por semana + WoW, render aparte.
+    const _cfgW = CURRENT_DATA.config[m];
+    if (_cfgW && _cfgW.weekly) return buildWeeklyPanel(m, idx);
+    // Métricas MTD (usuarios): snapshot de la última fecha del rango, render aparte.
+    if (_cfgW && _cfgW.mtd) return buildMtdPanel(m, idx);
+
+    const cfg   = CURRENT_DATA.config[m]||{formato:'num',tipo_color:1};
+    const fmt   = cfg.formato, tc = cfg.tipo_color;
+    const rows  = CURRENT_DATA.metrics[m];
+    const color = METRIC_COLORS[m]||Object.values(METRIC_COLORS)[idx%12];
+    const rrMetricData = isHero ? (RR_KEY_MAP[m] && CURRENT_DATA.rrData ? CURRENT_DATA.rrData[RR_KEY_MAP[m]] : null) : null;
+
+    let ctries = CURRENT_DATA.countries.filter(c=>c!=='LATAM'&&c!=='LATAM ex AR'&&rows[c]&&rows[c].current!=null&&rows[c].current!==0);
+
+    if(LOCAL_SORTS[m]){
+      const s=LOCAL_SORTS[m];
+      ctries.sort((a,b)=>{
+        let va=rows[a][s.col]||0,vb=rows[b][s.col]||0;
+        if(s.col==='m1var'){va=rows[a].m1?(rows[a].current-rows[a].m1)/Math.abs(rows[a].m1):-Infinity;vb=rows[b].m1?(rows[b].current-rows[b].m1)/Math.abs(rows[b].m1):-Infinity;}
+        if(s.col==='tvar'){va=rows[a].target?(rows[a].current-rows[a].target)/Math.abs(rows[a].target):-Infinity;vb=rows[b].target?(rows[b].current-rows[b].target)/Math.abs(rows[b].target):-Infinity;}
+        if(s.col==='tpct'){va=rows[a].target?(rows[a].current/rows[a].target):-Infinity;vb=rows[b].target?(rows[b].current/rows[b].target):-Infinity;}
+        if(s.col==='y1var'){va=rows[a].y1?(rows[a].current-rows[a].y1)/Math.abs(rows[a].y1):-Infinity;vb=rows[b].y1?(rows[b].current-rows[b].y1)/Math.abs(rows[b].y1):-Infinity;}
+        if(['rr','rr_be','rr_varbe','rr_varly','rr_varlm'].includes(s.col)&&rrMetricData){const getRR=c=>{const e=rrMetricData[c];if(!e)return-Infinity;return s.col==='rr'?(e.rr??-Infinity):s.col==='rr_be'?(e.be??-Infinity):s.col==='rr_varbe'?(e.varBe??-Infinity):s.col==='rr_varly'?(e.rrVsLy??-Infinity):(e.rrVsLm??-Infinity);};va=getRR(a);vb=getRR(b);}
+        return s.dir==='asc'?va-vb:vb-va;
+      });
+    } else if(SORT_MODE==='confirmed'&&CURRENT_DATA.metrics['Confirmed Orders']){
+      const co=CURRENT_DATA.metrics['Confirmed Orders'];
+      ctries.sort((a,b)=>(co[b]?.current||0)-(co[a]?.current||0));
+    } else {
+      ctries.sort((a,b)=>{
+        const desc=(SORT_DIR==='best'&&tc===1)||(SORT_DIR==='worst'&&tc===0);
+        return desc?rows[b].current-rows[a].current:rows[a].current-rows[b].current;
+      });
+    }
+
+    const tgtPending = isHero && !TARGETS_LOADED;
+    const panelClass = isHero && tgtPending ? 'target-loading' : '';
+
+    let tbody='';
+    function pctCell(cur,tgt,pending){
+      if(pending) return `<td class="tgt-cell"><span class="badge badge-neu"><span class="tgt-loading-dot"></span></span></td>`;
+      if(!tgt||tgt===0) return `<td class="tgt-cell"><span class="badge badge-neu">—</span></td>`;
+      const p=cur/tgt*100;
+      const cls=p>=90?'badge-pos':p>=70?'badge-neu':'badge-neg';
+      return `<td class="tgt-cell"><span class="badge ${cls}">${p.toFixed(1)}%</span></td>`;
+    }
+
+    ctries.forEach(c=>{
+      const d=rows[c];
+      let tr=`<tr><td>${COUNTRY_NAMES[c]||c}</td><td><span class="number">${fv(d.current,fmt)}</span></td>`;
+      if(isHero){
+        const tgtHtml = tgtPending ? `<span class="number dim">—<span class="tgt-loading-dot"></span></span>` : `<span class="number dim tgt-cell">${fv(d.target,fmt)}</span>`;
+        const varHtml = tgtPending ? `<span class="badge badge-neu"><span class="tgt-loading-dot"></span></span>` : badge(d.current,d.target,fmt,tc);
+        tr+=`<td class="sep-l tgt-cell">${tgtHtml}</td><td class="tgt-cell">${varHtml}</td>`;
+      }
+      tr+=`<td class="sep-l"><span class="number dim">${fv(d.m1,fmt)}</span></td><td>${badge(d.current,d.m1,fmt,tc)}</td>`;
+      tr+=`<td class="sep-l">${badge(d.current,d.y1,fmt,tc)}</td>`;
+      if(isHero&&rrMetricData){const e=rrMetricData[c];tr+=`<td class="sep-l" style="background:#fdfcff"><span class="number dim">${fv(e?.rr,fmt)}</span></td><td style="background:#fdfcff"><span class="number dim">${fv(e?.be,fmt)}</span></td><td style="background:#fdfcff">${badgePct(e?.varBe,tc)}</td><td class="sep-l" style="background:#fff7ed">${badgePct(e?.rrVsLm,tc)}</td><td style="background:#fff7ed">${badgePct(e?.rrVsLy,tc)}</td>`;}
+      tr+=`</tr>`;
+      tbody+=tr;
+    });
+
+    // LATAM = suma SOLO de los países VISIBLES (ctries) — NO la fila "LATAM"/"LATAM ex
+    // AR" del origen (que hacían que los totales no coincidieran con lo mostrado).
+    // Aplica a métricas aditivas (hero: Orders/GMV): actual, BE_LABEL, MoM, YoY Y TAMBIÉN
+    // el grupo RR (RR Mes, BE_LABEL Mes, Var, RR vs LM/LY). En las de ratio, el LATAM
+    // ponderado sigue viniendo del backend.
+    let L=rows['LATAM'];
+    let latamRR = (isHero && rrMetricData) ? rrMetricData['LATAM'] : null;
+    if(isHero){
+      let sC=0,sT=0,sM=0,sY=0,hasC=false,hasT=false,hasM=false,hasY=false;
+      let rR=0,rBe=0,rLm=0,rLy=0,hRr=false,hRbe=false,hRlm=false,hRly=false;
+      ctries.forEach(c=>{
+        const e=rows[c];
+        if(e){
+          if(e.current!=null){ sC+=e.current; hasC=true; }
+          if(e.target!=null){ sT+=e.target; hasT=true; }
+          if(e.m1!=null){ sM+=e.m1; hasM=true; }
+          if(e.y1!=null){ sY+=e.y1; hasY=true; }
+        }
+        const r=rrMetricData?rrMetricData[c]:null;
+        if(r){
+          if(r.rr!=null){ rR+=r.rr; hRr=true; }
+          if(r.be!=null){ rBe+=r.be; hRbe=true; }
+          if(r.lmFull!=null){ rLm+=r.lmFull; hRlm=true; }
+          if(r.lyFull!=null){ rLy+=r.lyFull; hRly=true; }
+        }
+      });
+      if(hasC) L={ current:sC, target:hasT?sT:0, m1:hasM?sM:null, y1:hasY?sY:null };
+      if(rrMetricData) latamRR={
+        rr:hRr?rR:null, be:hRbe?rBe:null,
+        varBe:(hRr&&hRbe&&rBe!==0)?((rR-rBe)/Math.abs(rBe))*100:null,
+        rrVsLm:(hRr&&hRlm&&rLm!==0)?((rR-rLm)/Math.abs(rLm))*100:null,
+        rrVsLy:(hRr&&hRly&&rLy!==0)?((rR-rLy)/Math.abs(rLy))*100:null
+      };
+    }
+    if(L&&L.current!=null){
+      let tr=`<tr style="background:#f8fafc;font-weight:800;border-top:2px solid var(--border);"><td>LATAM</td><td><span class="number"${isHero?' style="color:var(--primary)"':''}>${fv(L.current,fmt)}</span></td>`;
+      if(isHero){
+        const tgtHtml = tgtPending ? `<span class="number dim">—<span class="tgt-loading-dot"></span></span>` : `<span class="number dim tgt-cell">${fv(L.target,fmt)}</span>`;
+        const varHtml = tgtPending ? `<span class="badge badge-neu"><span class="tgt-loading-dot"></span></span>` : badge(L.current,L.target,fmt,tc);
+        tr+=`<td class="sep-l tgt-cell">${tgtHtml}</td><td class="tgt-cell">${varHtml}</td>`;
+      }
+      tr+=`<td class="sep-l"><span class="number dim">${fv(L.m1,fmt)}</span></td><td>${badge(L.current,L.m1,fmt,tc)}</td>`;
+      tr+=`<td class="sep-l">${badge(L.current,L.y1,fmt,tc)}</td>`;
+      if(isHero&&rrMetricData){const e=latamRR;tr+=`<td class="sep-l" style="background:#fdfcff"><span class="number dim">${fv(e?.rr,fmt)}</span></td><td style="background:#fdfcff"><span class="number dim">${fv(e?.be,fmt)}</span></td><td style="background:#fdfcff">${badgePct(e?.varBe,tc)}</td><td class="sep-l" style="background:#fff7ed">${badgePct(e?.rrVsLm,tc)}</td><td style="background:#fff7ed">${badgePct(e?.rrVsLy,tc)}</td>`;}
+      tr+=`</tr>`;
+      tbody+=tr;
+    }
+
+    const mq=m.replace(/'/g,"\\'");
+    const mid=m.replace(/[^a-zA-Z0-9]/g,'-');
+    let thead=`<tr>
+      <th style="text-align:left" onclick="localSort('${mq}','country')">PAÍS ${sortIcon(m,'country')}</th>
+      <th onclick="localSort('${mq}','current')">ACTUAL ${sortIcon(m,'current')}</th>`;
+    if(isHero){
+      thead+=`<th class="sep-l" onclick="localSort('${mq}','target')">${window.BE_LABEL} ${sortIcon(m,'target')}</th>
+              <th onclick="localSort('${mq}','tvar')">VS ${window.BE_LABEL} ${sortIcon(m,'tvar')}</th>`;
+    }
+    const m1P=shiftedPeriod(CURRENT_DATA.currentStart,CURRENT_DATA.currentEnd,-1,0);
+    const lyP=shiftedPeriod(CURRENT_DATA.currentStart,CURRENT_DATA.currentEnd,0,-1);
+    thead+=`<th class="sep-l" onclick="localSort('${mq}','m1')" title="Mes anterior · ${m1P.full}">M-1 ${sortIcon(m,'m1')}<div class="th-range">${m1P.short}</div></th>
+            <th onclick="localSort('${mq}','m1var')" title="Actual vs mes anterior · mismo tramo de días (o mes completo si el mes ya cerró)">MoM % ${sortIcon(m,'m1var')}</th>
+            <th class="sep-l" onclick="localSort('${mq}','y1var')" title="Mismo período año pasado · ${lyP.full}">YoY % ${sortIcon(m,'y1var')}<div class="th-range">${lyP.short}</div></th>`;
+    if(isHero&&rrMetricData){thead+=`<th class="sep-l" onclick="localSort('${mq}','rr')" style="background:#faf5ff;color:#a78bfa">${rrLbl('MES')} ${sortIcon(m,'rr')}</th><th onclick="localSort('${mq}','rr_be')" style="background:#faf5ff;color:#a78bfa">${window.BE_LABEL} MES ${sortIcon(m,'rr_be')}</th><th onclick="localSort('${mq}','rr_varbe')" style="background:#faf5ff;color:#a78bfa">VAR ${window.BE_LABEL} MES ${sortIcon(m,'rr_varbe')}</th><th class="sep-l" onclick="localSort('${mq}','rr_varlm')" style="background:#fff7ed;color:#ea7317">${rrLbl('vslm')} ${sortIcon(m,'rr_varlm')}</th><th onclick="localSort('${mq}','rr_varly')" style="background:#fff7ed;color:#ea7317">${rrLbl('vsly')} ${sortIcon(m,'rr_varly')}</th>`;}
+    thead+=`</tr>`;
+
+    return `<div class="${isHero?'hero-panel':'ov-panel'} ${panelClass}" id="panel-${mid}">
+      <div class="p-head">
+        <div class="p-bar" style="background:${isHero?'var(--primary)':color}"></div>
+        <div class="p-title-container">
+          <div class="p-title" style="font-size:${isHero?'18':'16'}px;${isHero?'color:var(--primary)':''}">${m}${dataThroughBadge(m)}</div>
+          <div class="p-subtitle">${CURRENT_DATA.currentStart} al ${CURRENT_DATA.currentEnd} · ORDEN: ${orderLabel(m)}</div>
+        </div>
+        <div class="btn-actions">
+          <button class="btn-copy-val" onclick="copiarTSV('${mq}',this)"><svg viewBox="0 0 24 24"><path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2"/></svg> Copiar</button>
+          <button class="btn-copy" onclick="copyPNG('panel-${mid}',this)"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg> PNG</button>
+        </div>
+      </div>
+      <div class="table-wrap"><table><thead>${thead}</thead><tbody>${tbody}</tbody></table></div>
+    </div>`;
+  }
+
+  // Panel para métricas SEMANALES de usuarios: valor FIJO de la semana (no suma por
+  // día), con WoW vs la semana anterior. Columnas: País | Usuarios | Sem. ant. | Var WoW.
+  function buildWeeklyPanel(m, idx){
+    const cfg   = CURRENT_DATA.config[m]||{formato:'num',tipo_color:1};
+    const fmt   = cfg.formato, tc = cfg.tipo_color;
+    const rows  = CURRENT_DATA.metrics[m]||{};
+    const color = METRIC_COLORS[m]||Object.values(METRIC_COLORS)[idx%12];
+    const mid   = m.replace(/[^a-zA-Z0-9]/g,'-');
+    const mq    = m.replace(/'/g,"\\'");
+    const wowOf = d => (d && d.prev!=null && d.prev!==0)
+      ? ((fmt==='pct_pre'||fmt==='pct') ? d.current-d.prev : ((d.current-d.prev)/Math.abs(d.prev))*100)
+      : -Infinity;
+    let ctries = CURRENT_DATA.countries.filter(c=>c!=='LATAM'&&c!=='LATAM ex AR'&&rows[c]&&rows[c].current!=null);
+    const s = LOCAL_SORTS[m];
+    if(s){
+      ctries.sort((a,b)=>{
+        let va,vb;
+        if(s.col==='wow'){ va=wowOf(rows[a]); vb=wowOf(rows[b]); }
+        else { va=rows[a][s.col]||0; vb=rows[b][s.col]||0; }
+        return s.dir==='asc'?va-vb:vb-va;
+      });
+    } else {
+      ctries.sort((a,b)=>(rows[b].current||0)-(rows[a].current||0));
+    }
+    let tbody='';
+    const L=rows['LATAM'];
+    if(L&&L.current!=null){
+      tbody+=`<tr style="background:#f8fafc;font-weight:800;border-top:2px solid var(--border);"><td>LATAM</td><td><span class="number">${fv(L.current,fmt)}</span></td><td class="sep-l"><span class="number dim">${fv(L.prev,fmt)}</span></td><td>${badge(L.current,L.prev,fmt,tc)}</td></tr>`;
+    }
+    ctries.forEach(c=>{
+      const d=rows[c];
+      tbody+=`<tr><td>${COUNTRY_NAMES[c]||c}</td><td><span class="number">${fv(d.current,fmt)}</span></td><td class="sep-l"><span class="number dim">${fv(d.prev,fmt)}</span></td><td>${badge(d.current,d.prev,fmt,tc)}</td></tr>`;
+    });
+    const wkTxt = cfg.week
+      ? `${cfg.weekNum!=null?`Semana ${cfg.weekNum} · `:''}del ${cfg.week}${cfg.weekEnd?` al ${cfg.weekEnd}`:''} · fijo (no suma)`
+      : 'Semanal · fijo (no suma)';
+    const thead=`<tr>
+      <th style="text-align:left" onclick="localSort('${mq}','country')">PAÍS ${sortIcon(m,'country')}</th>
+      <th onclick="localSort('${mq}','current')">USUARIOS ${sortIcon(m,'current')}</th>
+      <th class="sep-l" onclick="localSort('${mq}','prev')">SEM. ANT. ${sortIcon(m,'prev')}</th>
+      <th onclick="localSort('${mq}','wow')">VAR WoW ${sortIcon(m,'wow')}</th>
+    </tr>`;
+    return `<div class="ov-panel" id="panel-${mid}">
+      <div class="p-head">
+        <div class="p-bar" style="background:${color}"></div>
+        <div class="p-title-container">
+          <div class="p-title" style="font-size:16px">${m}</div>
+          <div class="p-subtitle">${wkTxt}</div>
+        </div>
+        <div class="btn-actions">
+          <button class="btn-copy-val" onclick="copiarTSV('${mq}',this)"><svg viewBox="0 0 24 24"><path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2"/></svg> Copiar</button>
+          <button class="btn-copy" onclick="copyPNG('panel-${mid}',this)"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg> PNG</button>
+        </div>
+      </div>
+      <div class="table-wrap"><table><thead>${thead}</thead><tbody>${tbody}</tbody></table></div>
+    </div>`;
+  }
+
+  // Panel de una métrica MTD (snapshot): PAÍS | MTD. Muestra el valor de la última
+  // fecha con dato ≤ fin del rango (no suma). LATAM = suma de países (viene del back).
+  function buildMtdPanel(m, idx){
+    const cfg   = CURRENT_DATA.config[m]||{formato:'num',tipo_color:1};
+    const fmt   = cfg.formato, tc = cfg.tipo_color;
+    const rows  = CURRENT_DATA.metrics[m]||{};
+    const color = METRIC_COLORS[m]||Object.values(METRIC_COLORS)[idx%12];
+    const mid   = m.replace(/[^a-zA-Z0-9]/g,'-');
+    const mq    = m.replace(/'/g,"\\'");
+    const wowOf = d => (d && d.prev!=null && d.prev!==0)
+      ? ((fmt==='pct_pre'||fmt==='pct') ? d.current-d.prev : ((d.current-d.prev)/Math.abs(d.prev))*100)
+      : -Infinity;
+    let ctries = CURRENT_DATA.countries.filter(c=>c!=='LATAM'&&c!=='LATAM ex AR'&&rows[c]&&rows[c].current!=null);
+    const s = LOCAL_SORTS[m];
+    if(s){
+      ctries.sort((a,b)=>{ let va,vb; if(s.col==='wow'){va=wowOf(rows[a]);vb=wowOf(rows[b]);} else {va=rows[a][s.col]||0;vb=rows[b][s.col]||0;} return s.dir==='asc'?va-vb:vb-va; });
+    } else { ctries.sort((a,b)=>(rows[b].current||0)-(rows[a].current||0)); }
+    let tbody='';
+    const L=rows['LATAM'];
+    if(L&&L.current!=null){
+      tbody+=`<tr style="background:#f8fafc;font-weight:800;border-top:2px solid var(--border);"><td>LATAM</td><td><span class="number">${fv(L.current,fmt)}</span></td><td class="sep-l"><span class="number dim">${fv(L.prev,fmt)}</span></td><td>${badge(L.current,L.prev,fmt,tc)}</td></tr>`;
+    }
+    ctries.forEach(c=>{
+      const d=rows[c];
+      tbody+=`<tr><td>${COUNTRY_NAMES[c]||c}</td><td><span class="number">${fv(d.current,fmt)}</span></td><td class="sep-l"><span class="number dim">${fv(d.prev,fmt)}</span></td><td>${badge(d.current,d.prev,fmt,tc)}</td></tr>`;
+    });
+    const pl = cfg.prevLabel ? ` (${cfg.prevLabel})` : '';
+    const thead=`<tr>
+      <th style="text-align:left" onclick="localSort('${mq}','country')">PAÍS ${sortIcon(m,'country')}</th>
+      <th onclick="localSort('${mq}','current')">MTD ${sortIcon(m,'current')}</th>
+      <th class="sep-l" onclick="localSort('${mq}','prev')">MTD MES ANT.${pl} ${sortIcon(m,'prev')}</th>
+      <th onclick="localSort('${mq}','wow')">VAR ${sortIcon(m,'wow')}</th>
+    </tr>`;
+    return `<div class="ov-panel" id="panel-${mid}">
+      <div class="p-head">
+        <div class="p-bar" style="background:${color}"></div>
+        <div class="p-title-container">
+          <div class="p-title" style="font-size:16px">${m}</div>
+          <div class="p-subtitle" style="white-space:normal;overflow:visible">${dataThroughBadge(m)} vs MTD del mes pasado, mismo día${pl}</div>
+        </div>
+        <div class="btn-actions">
+          <button class="btn-copy-val" onclick="copiarTSV('${mq}',this)"><svg viewBox="0 0 24 24"><path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2"/></svg> Copiar</button>
+          <button class="btn-copy" onclick="copyPNG('panel-${mid}',this)"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg> PNG</button>
+        </div>
+      </div>
+      <div class="table-wrap"><table><thead>${thead}</thead><tbody>${tbody}</tbody></table></div>
+    </div>`;
+  }
+
+  function renderPanels(data) {
+    const container=document.getElementById('main-container');
+    if(data.error||!data.metrics){container.innerHTML='<div style="padding:24px;color:var(--text-sub)">Error: '+(data.error||'sin datos')+'</div>';return;}
+    const avail=new Set(Object.keys(data.metrics));
+    let html='';
+    GROUPS.forEach(g=>{
+      const keys=g.keys.filter(k=>avail.has(k));
+      if(!keys.length) return;
+      const isHeroGroup=!!g.hero;
+      html+=`<div class="${isHeroGroup?'hero-grid':'ov-grid'}">${keys.map((k,i)=>buildPanel(k,isHeroGroup,i)).join('')}</div>`;
+    });
+    container.innerHTML=html;
+    syncMtdActive();
+  }
+
+  // Marca el botón MTD como activo si el período cargado es justo el mes a la fecha.
+  function syncMtdActive(){
+    const btn=document.getElementById('btn-mtd'); if(!btn||!CURRENT_DATA) return;
+    const maxD=CURRENT_DATA.maxDemandDate;
+    const ed=(CURRENT_DATA.validDates||[]).filter(d=>!maxD||d<=maxD).sort();
+    const last=maxD||(ed.length?ed[ed.length-1]:null);
+    if(!last){ btn.classList.remove('active'); return; }
+    const ym=last.slice(0,7);
+    const monthStart=ed.find(d=>d.slice(0,7)===ym)||(ym+'-01');
+    btn.classList.toggle('active', CURRENT_DATA.currentStart===monthStart && CURRENT_DATA.currentEnd===last);
+  }
+
+  function injectTargets(targetsData) {
+    TARGETS_LOADED = true;
+    if(!CURRENT_DATA) return;
+    Object.keys(targetsData).forEach(function(metricKey) {
+      const tByCountry = targetsData[metricKey];
+      if(!CURRENT_DATA.metrics[metricKey]) return;
+      Object.keys(tByCountry).forEach(function(c) {
+        if(CURRENT_DATA.metrics[metricKey][c]) { CURRENT_DATA.metrics[metricKey][c].target = tByCountry[c] || 0; }
+      });
+    });
+    ['Confirmed Orders','GMV User Dmarts'].forEach(function(m) {
+      const mid = m.replace(/[^a-zA-Z0-9]/g,'-');
+      const panel = document.getElementById('panel-' + mid);
+      if(!panel) return;
+      panel.classList.remove('target-loading');
+      const newHtml = buildPanel(m, true, 0);
+      const tmp = document.createElement('div'); tmp.innerHTML = newHtml;
+      const newPanel = tmp.firstElementChild;
+      panel.parentNode.replaceChild(newPanel, panel);
+    });
+  }
+
+  function copiarTSV(m, btn) {
+    const orig=btn.innerHTML; btn.innerHTML='Copiando...';
+    const rows=CURRENT_DATA.metrics[m], fmt=CURRENT_DATA.config[m]?.formato||'num';
+    // Métricas MTD (snapshot): País + MTD + últ. día sem. pasada + variación.
+    if (CURRENT_DATA.config[m]?.mtd) {
+      const pl = CURRENT_DATA.config[m].prevLabel ? ` (${CURRENT_DATA.config[m].prevLabel})` : '';
+      let tsvM=`${m.toUpperCase()} (MTD · fecha final del rango)\nPeriodo:\t${CURRENT_DATA.currentStart} al ${CURRENT_DATA.currentEnd}\n\nPaís\tMTD\tMTD mes ant.${pl}\tVar\n`;
+      CURRENT_DATA.countries.filter(c=>rows[c]?.current!=null).concat(['LATAM']).forEach(c=>{ const d=rows[c]; if(!d)return; tsvM+=(COUNTRY_NAMES[c]||c)+'\t'+d.current+'\t'+(d.prev!=null?d.prev:'')+'\t'+varText(d.current,d.prev,fmt)+'\n'; });
+      navigator.clipboard.writeText(tsvM).then(()=>{ btn.innerHTML='Copiado'; btn.style.color='var(--positive)'; setTimeout(()=>{btn.innerHTML=orig;btn.style.color='';},2000); }).catch(()=>{btn.innerHTML='Error';setTimeout(()=>{btn.innerHTML=orig;},2000);});
+      return;
+    }
+    const isH=HERO_METRICS.has(m);
+    let tsv=`${m.toUpperCase()}\nPeriodo:\t${CURRENT_DATA.currentStart} al ${CURRENT_DATA.currentEnd}\n\n`;
+    tsv+=isH?`País\tActual\t${window.BE_LABEL}\tM-1\tYoY\n`:"País\tActual\tM-1\tYoY\n";
+    CURRENT_DATA.countries.filter(c=>rows[c]?.current).concat(['LATAM']).forEach(c=>{
+      const d=rows[c]; if(!d)return;
+      tsv+=(COUNTRY_NAMES[c]||c)+'\t'+d.current+(isH?'\t'+d.target:'')+'\t'+d.m1+'\t'+varText(d.current,d.y1,fmt)+'\n';
+    });
+    navigator.clipboard.writeText(tsv).then(()=>{
+      btn.innerHTML='Copiado'; btn.style.color='var(--positive)';
+      setTimeout(()=>{btn.innerHTML=orig;btn.style.color='';},2000);
+    }).catch(()=>{btn.innerHTML='Error';setTimeout(()=>{btn.innerHTML=orig;},2000);});
+  }
+
+  function copyPNG(id, btn) {
+    const orig=btn.innerHTML; btn.innerHTML='...';
+    setTimeout(async()=>{
+      try{
+        const panel=document.getElementById(id);
+        const canvas=await html2canvas(panel,{backgroundColor:'#ffffff',scale:1.5});
+        canvas.toBlob(blob=>{
+          navigator.clipboard.write([new ClipboardItem({'image/png':blob})]).then(()=>{
+            btn.innerHTML='Ok!'; btn.style.color='var(--positive)';
+            setTimeout(()=>{btn.innerHTML=orig;btn.style.color='';},2000);
+          });
+        });
+      }catch(e){btn.innerHTML='Error';setTimeout(()=>{btn.innerHTML=orig;},2000);}
+    },50);
+  }
+
+  window.addEventListener('load', () => {
+    console.log('[MTD] build: LATAM = suma de visibles + red de seguridad en el splash');
+    const splash = document.getElementById('splash');
+    let opened = false;
+    const open = () => { opened = true; if (splash) splash.classList.add('out'); };
+    // Red de seguridad: si la carga no terminó en 75s (carga EN FRÍO lenta, o algún
+    // error), mostramos "Reintentar" en el splash en vez de dejarlo colgado para
+    // siempre. Ojo: el botón Recargar limpia la caché → la carga siguiente es en frío.
+    const safety = setTimeout(() => {
+      if (opened || !splash) return;
+      splash.innerHTML =
+        '<div style="font-weight:700;font-size:15px;color:var(--text-sub);margin-bottom:4px;">PedidosYa Markets</div>' +
+        '<div style="font-weight:900;font-size:22px;margin-bottom:14px;">MTD <b style="color:var(--primary)">by Country</b></div>' +
+        '<div style="color:var(--negative);font-weight:700;font-size:13px;margin-bottom:6px;">La carga está tardando demasiado</div>' +
+        '<div style="color:var(--text-light);font-size:12px;margin-bottom:16px;max-width:340px;text-align:center;line-height:1.5;">La primera carga (con la caché vacía) es la más lenta. Reintentá — después queda cacheada y abre al instante.</div>' +
+        '<button onclick="doRefresh()" style="font-size:13px;font-weight:700;padding:9px 20px;border:none;border-radius:8px;background:var(--primary);color:#fff;cursor:pointer;">↻ Reintentar</button>';
+    }, 75000);
+    fetchPhase1('', '', () => { clearTimeout(safety); open(); });
+  });
+
+  // RR DESACOPLADO: se pide aparte para no bloquear la carga del MTD. Cuando
+  // llega, se inyecta en CURRENT_DATA.rrData y se re-renderiza (las columnas de
+  // RR de los hero hasta entonces muestran "—").
+  function loadRRData() {
+    if (typeof google === 'undefined' || !google.script || !google.script.run) return;
+    google.script.run
+      .withSuccessHandler(function(rr){
+        if (!rr || !CURRENT_DATA) return;
+        CURRENT_DATA.rrData = rr;
+        try { setMtdCache(CURRENT_DATA); } catch(e){}
+        renderPanels(CURRENT_DATA);
+      })
+      .withFailureHandler(function(){})
+      .fetchRRData();
+  }
+
+  function fetchPhase1(s, e, callback) {
+    TARGETS_LOADED = false;
+    const isDefault = !s && !e;
+    if(isDefault){
+      const cached=getMtdCache();
+      if(cached){
+        CURRENT_DATA=cached;
+        initDatepickers(); renderPanels(CURRENT_DATA);
+        if(callback) callback();
+        fetchPhase2(CURRENT_DATA.currentStart, CURRENT_DATA.currentEnd);
+        loadRRData();
+        return;
+      }
+    }
+    google.script.run
+      .withSuccessHandler(function(res) {
+        CURRENT_DATA = res.payload;
+        if(CURRENT_DATA && !CURRENT_DATA.error) {
+          if(isDefault) setMtdCache(CURRENT_DATA);
+          initDatepickers(); renderPanels(CURRENT_DATA);
+        }
+        if(callback) callback();
+        fetchPhase2(CURRENT_DATA.currentStart, CURRENT_DATA.currentEnd);
+        loadRRData();
+      })
+      .withFailureHandler(function(err) {
+        document.getElementById('main-container').innerHTML='<div style="padding:24px;color:var(--negative)">Error al cargar: '+err+'</div>';
+        if(callback) callback();
+      })
+      .fetchMtdActuals(s, e);
+  }
+
+  function fetchPhase2(s, e) {
+    // El target se suma SOLO hasta donde hay actuals reales. Como GMV suele
+    // llegar más tarde que Orders, cada métrica se capa a SU última fecha con
+    // datos (maxDateByMetric); maxDemandDate es el tope general de respaldo.
+    var maxD = CURRENT_DATA && CURRENT_DATA.maxDemandDate;
+    var tEnd = maxD || e;          // base = maxDemandDate (o e si no hay)
+    if (e && e < tEnd) tEnd = e;   // si el usuario eligió un fin anterior, respetarlo
+
+    // Tope por métrica (capado al fin elegido por el usuario)
+    var caps = {};
+    var mbm = CURRENT_DATA && CURRENT_DATA.maxDateByMetric;
+    if (mbm) Object.keys(mbm).forEach(function(m){
+      var cap = mbm[m];
+      if (e && e < cap) cap = e;
+      caps[m] = cap;
+    });
+
+    google.script.run
+      .withSuccessHandler(function(targetsData) { injectTargets(targetsData); })
+      .withFailureHandler(function() {
+        TARGETS_LOADED = true;
+        ['Confirmed Orders','GMV User Dmarts'].forEach(function(m){
+          const mid=m.replace(/[^a-zA-Z0-9]/g,'-');
+          const p=document.getElementById('panel-'+mid);
+          if(p) p.classList.remove('target-loading');
+        });
+      })
+      .fetchTargetsOnly(s, tEnd, caps);
+  }
+
+  function triggerDateChange() {
+    const s=document.getElementById('f-start').value, e=document.getElementById('f-end').value;
+    if(!s||!e) return;
+    // Mostrar loading
+    document.getElementById('date-loading-bar').classList.add('visible');
+    document.getElementById('main-container').classList.add('date-loading');
+    fetchPhase1(s, e, function() {
+      document.getElementById('date-loading-bar').classList.remove('visible');
+      document.getElementById('main-container').classList.remove('date-loading');
+    });
+  }
+
+  // Botón "MTD": setea el período al mes a la fecha (1° del mes del último dato
+  // → último día con datos). Atajo para volver rápido al mes en curso.
+  function setMTD() {
+    if(!CURRENT_DATA || !fpStart || !fpEnd) return;
+    const maxD = CURRENT_DATA.maxDemandDate;
+    const ed = (CURRENT_DATA.validDates || []).filter(d => !maxD || d <= maxD).sort();
+    const last = maxD || (ed.length ? ed[ed.length-1] : null);
+    if(!last) return;
+    const ym = last.slice(0,7);                              // 'YYYY-MM' del último dato
+    const monthStart = ed.find(d => d.slice(0,7) === ym) || (ym + '-01');  // 1° día disponible del mes
+    if(monthStart === CURRENT_DATA.currentStart && last === CURRENT_DATA.currentEnd) return; // ya está
+    fpEnd.set('minDate', monthStart);
+    fpEnd.set('maxDate', last);
+    fpStart.setDate(monthStart, false);
+    fpEnd.setDate(last, false);
+    const btn=document.getElementById('btn-mtd'); if(btn) btn.classList.add('active');
+    triggerDateChange();
+  }
+
+  // ── Helpers de mes (el rango debe estar dentro de un único mes) ──
+  function monthEndOf(d){ const p=d.split('-'); const last=new Date(+p[0],+p[1],0).getDate(); return d.slice(0,7)+'-'+('0'+last).slice(-2); }
+
+  // ── Rango comparado (M-1 / LY) ──
+  // Desplaza el período [start,end] dM meses / dY años, igual que el backend
+  // (_shiftMonthsBack). Corrige el fin de mes: si la fecha es el último día de su
+  // mes cae en el último día del mes destino (mes completo → mes completo: 30/jun
+  // → 31/may, no 30/may) y clampea el día para no desbordar (31/mar → 28-29/feb).
+  // Devuelve etiqueta corta (DD/MM–DD/MM) para el header y completa para el title.
+  function shiftedPeriod(startYMD, endYMD, dM, dY){
+    function sh(ymd){
+      const p=ymd.split('-'); const y=+p[0], mo=+p[1]-1, day=+p[2];
+      const lastCur=new Date(y, mo+1, 0).getDate();            // último día del mes de origen
+      const t=new Date(y+(dY||0), mo+(dM||0), 1);              // 1° del mes destino (normaliza año)
+      const tY=t.getFullYear(), tMo=t.getMonth();
+      const lastTgt=new Date(tY, tMo+1, 0).getDate();          // último día del mes destino
+      const tDay=(day>=lastCur)?lastTgt:Math.min(day,lastTgt); // fin→fin de mes; si no, clamp
+      return new Date(tY, tMo, tDay);
+    }
+    function dm(d){ return ('0'+d.getDate()).slice(-2)+'/'+('0'+(d.getMonth()+1)).slice(-2); }
+    function full(d){ return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2); }
+    const s=sh(startYMD), e=sh(endYMD);
+    return { short: dm(s)+'–'+dm(e), full: full(s)+' al '+full(e) };
+  }
+
+  function initDatepickers() {
+    if(!CURRENT_DATA) return;
+    const fStart=document.getElementById('f-start'), fEnd=document.getElementById('f-end');
+    // Capamos el fin al último día con datos reales
+    if(CURRENT_DATA.maxDemandDate && CURRENT_DATA.maxDemandDate < CURRENT_DATA.currentEnd) {
+      CURRENT_DATA.currentEnd = CURRENT_DATA.maxDemandDate;
+    }
+    // Filtramos validDates para excluir fechas futuras sin datos reales.
+    // IMPORTANTE: ordenamos ASCENDENTE.
+    const maxD = CURRENT_DATA.maxDemandDate || null;
+    const enableDates = (CURRENT_DATA.validDates || [])
+      .filter(d => !maxD || d <= maxD)
+      .sort();   // 'yyyy-MM-dd' → orden lexicográfico = cronológico
+
+    // Fin permitido: mismo mes que el inicio (capado al último día con datos)
+    function endCapFor(startStr){
+      let cap = monthEndOf(startStr);
+      if (maxD && maxD < cap) cap = maxD;
+      return cap;
+    }
+
+    const baseCfg={ locale:'es', dateFormat:'Y-m-d', disableMobile:'true' };
+    if(enableDates.length>0) baseCfg.enable=enableDates;
+    if(fpStart) fpStart.destroy();
+    if(fpEnd)   fpEnd.destroy();
+
+    // Limitar al año actual de los datos (no ir más atrás de 1-Enero de ese año)
+    const currentYear = maxD ? maxD.slice(0, 4) : new Date().getFullYear().toString();
+    const yearStartStr = currentYear + '-01-01';
+    let calcMinDate = enableDates[0] || undefined;
+    if (calcMinDate && calcMinDate < yearStartStr) {
+      calcMinDate = yearStartStr;
+    }
+
+    // El INICIO es el que manda: al cambiarlo, el FIN queda limitado al mismo mes
+    fpStart=flatpickr(fStart,{...baseCfg,
+      defaultDate:CURRENT_DATA.currentStart,
+      minDate:calcMinDate||undefined,
+      maxDate:maxD||undefined,
+      onChange:function(sel,dateStr){
+        if(!dateStr) return;
+        const cap=endCapFor(dateStr);
+        if(fpEnd){ fpEnd.set('minDate',dateStr); fpEnd.set('maxDate',cap); }
+        let ce=(fpEnd&&fpEnd.selectedDates[0])?fpEnd.selectedDates[0].toISOString().slice(0,10):null;
+        if(!ce||ce>cap){ fpEnd.setDate(cap,false); ce=cap; }
+        else if(ce<dateStr){ fpEnd.setDate(dateStr,false); ce=dateStr; }
+        if(dateStr===CURRENT_DATA.currentStart && ce===CURRENT_DATA.currentEnd) return;
+        triggerDateChange();
+      }
+    });
+    fpEnd=flatpickr(fEnd,{...baseCfg,
+      defaultDate:CURRENT_DATA.currentEnd,
+      minDate:CURRENT_DATA.currentStart||undefined,
+      maxDate:endCapFor(CURRENT_DATA.currentStart),
+      onChange:function(sel,dateStr){
+        if(!dateStr) return;
+        if(dateStr===CURRENT_DATA.currentEnd) return;
+        triggerDateChange();
+      }
+    });
+  }
+
+  // Recargar SIN recargar toda la página: antes hacía window.top.location.reload(),
+  // que dentro del iframe de GAS podía quedar trabado (y su splash no tenía red de
+  // seguridad). Ahora limpia la caché del servidor y re-trae + re-renderiza EN EL
+  // LUGAR (initDatepickers hace .destroy() antes de recrear, así que es seguro).
+  function doRefresh() {
+    const btn = document.getElementById('btn-ref');
+    if (btn) { btn.disabled = true; btn.style.opacity = '.5'; }
+    localStorage.removeItem(MTD_CACHE_KEY);
+    const splash = document.getElementById('splash');
+    if (splash) splash.classList.remove('out');   // mostrar el splash de carga
+    const s = document.getElementById('f-start').value || '';
+    const e = document.getElementById('f-end').value || '';
+    let done = false;
+    const finish = () => {
+      if (done) return; done = true;
+      clearTimeout(safety);
+      if (splash) splash.classList.add('out');
+      if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
+    };
+    // Red de seguridad propia: si en 75s no terminó, mostramos Reintentar en el splash
+    // en vez de dejarlo colgado (esta ruta NO recarga la página, re-trae en el lugar).
+    const safety = setTimeout(() => {
+      if (done || !splash) return;
+      splash.innerHTML =
+        '<div style="font-weight:700;font-size:15px;color:var(--text-sub);margin-bottom:4px;">PedidosYa Markets</div>' +
+        '<div style="font-weight:900;font-size:22px;margin-bottom:14px;">MTD <b style="color:var(--primary)">by Country</b></div>' +
+        '<div style="color:var(--negative);font-weight:700;font-size:13px;margin-bottom:6px;">La actualización está tardando demasiado</div>' +
+        '<div style="color:var(--text-light);font-size:12px;margin-bottom:16px;max-width:340px;text-align:center;line-height:1.5;">Reintentá. Si sigue, la planilla de datos está lenta en este momento.</div>' +
+        '<button onclick="doRefresh()" style="font-size:13px;font-weight:700;padding:9px 20px;border:none;border-radius:8px;background:var(--primary);color:#fff;cursor:pointer;">↻ Reintentar</button>';
+    }, 75000);
+    // Limpia la caché del servidor (datos frescos) y re-trae + re-renderiza en el lugar.
+    // Pase lo que pase (éxito, error o que forceRefresh no responda), el splash se
+    // resuelve: fetchPhase1 llama al callback en éxito y en fallo.
+    google.script.run
+      .withSuccessHandler(() => { fetchPhase1(s, e, finish); })
+      .withFailureHandler(() => { fetchPhase1(s, e, finish); })
+      .forceRefresh(s, e);
+  }
+</script>
+</body>
+</html>

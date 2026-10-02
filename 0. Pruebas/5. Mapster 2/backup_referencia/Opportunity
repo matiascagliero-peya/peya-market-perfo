@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Store Explorer - Opportunity Explorer</title>
+</head>
+<body>
+<?!= include('_nav', { activePage: 'opportunity', scriptUrl: scriptUrl }); ?>
+<main>
+  <h1 style="text-align: center; margin-top: 50px; color: var(--t2);">Página en Construcción</h1>
+  <p style="text-align: center; color: var(--t3);">Aquí estará la herramienta para analizar nuevas zonas de oportunidad.</p>
+</main>
+</body>
+</html>

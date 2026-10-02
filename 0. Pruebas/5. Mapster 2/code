@@ -1,0 +1,573 @@
+// ============================================================
+// CONFIGURACIÓN
+// ============================================================
+const PROJECT_ID   = 'peya-food-and-groceries';
+const RINGS_TABLE  = '`peya-food-and-groceries.user_eugenio_irigoin.datamart_store_explorer_rings`';
+const CITY_TABLE   = '`peya-food-and-groceries.user_eugenio_irigoin.datamart_city_penetration`';
+const MARKET_TABLE = '`peya-food-and-groceries.user_eugenio_irigoin.datamart_market_penetration`';
+const SEAMLESS_TABLE = '`peya-food-and-groceries.user_eugenio_irigoin.datamart_market_ops_seamless`';
+
+// ============================================================
+// ENTRY POINT
+// ============================================================
+function doGet() {
+  return HtmlService.createHtmlOutputFromFile('Index')
+    .setTitle('Store Explorer')
+    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+}
+
+// ============================================================
+// HELPER: runQuery con paginación
+// ============================================================
+function runQuery(sql) {
+  const request = { query: sql, useLegacySql: false, timeoutMs: 60000 };
+  let response = BigQuery.Jobs.query(request, PROJECT_ID);
+  const jobId = response.jobReference.jobId;
+
+  let attempts = 0;
+  while (!response.jobComplete && attempts < 15) {
+    Utilities.sleep(2000);
+    response = BigQuery.Jobs.getQueryResults(PROJECT_ID, jobId);
+    attempts++;
+  }
+  if (!response.jobComplete) throw new Error('Query timeout');
+
+  const fields = response.schema.fields.map(f => f.name);
+  let rows = response.rows || [];
+  let pageToken = response.pageToken;
+  while (pageToken) {
+    const next = BigQuery.Jobs.getQueryResults(PROJECT_ID, jobId, { pageToken });
+    rows = rows.concat(next.rows || []);
+    pageToken = next.pageToken;
+  }
+  return rows.map(row =>
+    Object.fromEntries(fields.map((f, i) => [f, row.f[i].v]))
+  );
+}
+
+// ============================================================
+// CONFIGURACIÓN MAESTRA DE GOOGLE SHEETS (WHS Data)
+// ============================================================
+const WHS_SPREADSHEET_ID = '1DXcZswpGQsbXcj5RXBALAogLrs32d_rtcxpRb17nROk';
+const WHS_SHEET_NAME     = '1. WHS data';
+
+function normalizeDateStr(val) {
+  if (!val) return '';
+  if (val instanceof Date) {
+    if (isNaN(val.getTime())) return '';
+    const y = val.getFullYear();
+    const m = String(val.getMonth() + 1).padStart(2, '0');
+    const d = String(val.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+  const s = String(val).trim();
+  if (/^\d{4}-\d{1,2}-\d{1,2}/.test(s)) {
+    const parts = s.split('T')[0].split('-');
+    return `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
+  }
+  if (/^\d{1,2}\/\d{1,2}\/\d{4}/.test(s)) {
+    const parts = s.split('/');
+    const p1 = parseInt(parts[0], 10);
+    const p2 = parseInt(parts[1], 10);
+    const yr = parseInt(parts[2], 10);
+    let mo = p1; let da = p2;
+    if (p1 > 12) { da = p1; mo = p2; }
+    return `${yr}-${String(mo).padStart(2, '0')}-${String(da).padStart(2, '0')}`;
+  }
+  return s;
+}
+
+function parseCoordinate(val) {
+  if (val === null || val === undefined || val === '') return null;
+  if (typeof val === 'number') return isNaN(val) ? null : val;
+  const num = parseFloat(String(val).trim().replace(',', '.'));
+  return isNaN(num) ? null : num;
+}
+
+/**
+ * Servicio de extracción de datos WHS mediante Google Sheets API
+ */
+function fetchWhsDataFromSheetsApi() {
+  let values = null;
+  try {
+    if (typeof Sheets !== 'undefined' && Sheets.Spreadsheets && Sheets.Spreadsheets.Values) {
+      const response = Sheets.Spreadsheets.Values.get(WHS_SPREADSHEET_ID, `'${WHS_SHEET_NAME}'!A:ZZ`);
+      values = response.values;
+    }
+  } catch (e) {}
+
+  if (!values || values.length === 0) {
+    try {
+      const ss = SpreadsheetApp.openById(WHS_SPREADSHEET_ID);
+      const sheet = ss.getSheetByName(WHS_SHEET_NAME);
+      if (sheet) values = sheet.getDataRange().getValues();
+    } catch (e) {}
+  }
+
+  if (!values || values.length < 2) return [];
+
+  const headers = values[0].map(h => String(h || '').trim().toLowerCase());
+  const getCol = (row, name) => {
+    const target = name.toLowerCase();
+    let idx = headers.indexOf(target);
+    if (idx < 0) {
+      idx = headers.findIndex(h => h === target || h.endsWith('.' + target) || h.replace(/[^a-z0-9_]/g, '') === target.replace(/[^a-z0-9_]/g, ''));
+    }
+    return (idx >= 0 && row[idx] !== undefined && row[idx] !== null && String(row[idx]).trim() !== '') ? row[idx] : null;
+  };
+
+  const records = [];
+  for (let i = 1; i < values.length; i++) {
+    const row = values[i];
+    const whId = getCol(row, 'warehouse_id');
+    if (!whId || String(whId).trim() === '') continue;
+
+    const isActiveVal = getCol(row, 'is_active');
+    const isActive = (isActiveVal === null || isActiveVal === undefined || isActiveVal === '')
+      ? true
+      : String(isActiveVal).trim().toUpperCase() !== 'FALSE';
+
+    records.push({
+      month_date: normalizeDateStr(getCol(row, 'month_date')),
+      warehouse_id: String(whId).trim(),
+      warehouse_name: String(getCol(row, 'warehouse_name') || whId).trim(),
+      country: String(getCol(row, 'country') || 'Desconocido').trim(),
+      country_code: String(getCol(row, 'country_code') || '').trim().toLowerCase(),
+      city: String(getCol(row, 'city') || getCol(row, 'country') || 'General').trim(),
+      neighborhood: String(getCol(row, 'neighborhood') || getCol(row, 'city') || 'Centro').trim(),
+      lat: parseCoordinate(getCol(row, 'store_lat')),
+      lng: parseCoordinate(getCol(row, 'store_lng')),
+      is_active: isActive,
+      all_partners_display: String(getCol(row, 'all_partners_display') || '').trim(),
+      total_enabled_partners: parseInt(getCol(row, 'total_enabled_partners'), 10) || 1,
+      monthly_orders: parseInt(getCol(row, 'partners_detail.monthly_orders'), 10) || parseInt(getCol(row, 'total_whs_monthly_orders'), 10) || 0,
+      coverage_area_km2: parseCoordinate(getCol(row, 'coverage_area_km2')) || 0,
+      shape_geojson: getCol(row, 'shape_geojson') || null
+    });
+  }
+
+  return records;
+}
+
+// ============================================================
+// ENDPOINT 1: Lista de warehouses desde Google Sheets API
+// ============================================================
+function getWarehouses() {
+  try {
+    const sheetRecords = fetchWhsDataFromSheetsApi();
+    const whsMap = new Map();
+    sheetRecords.forEach(w => {
+      if (w.is_active && !whsMap.has(w.warehouse_id)) {
+        whsMap.set(w.warehouse_id, {
+          warehouse_id: w.warehouse_id,
+          warehouse_name: w.warehouse_name,
+          country: w.country,
+          city: w.city,
+          lat: w.lat,
+          lng: w.lng
+        });
+      }
+    });
+    if (whsMap.size > 0) {
+      return Array.from(whsMap.values()).sort((a,b) => a.country.localeCompare(b.country) || a.warehouse_name.localeCompare(b.warehouse_name));
+    }
+  } catch (err) {
+    console.warn('Fallback BigQuery para getWarehouses:', err);
+  }
+
+  const cache = CacheService.getScriptCache();
+  const cached = cache.get('warehouses_list');
+  if (cached) return JSON.parse(cached);
+
+  const sql = `
+    SELECT DISTINCT
+      warehouse_id,
+      warehouse_name,
+      country
+    FROM ${RINGS_TABLE}
+    WHERE warehouse_id   IS NOT NULL
+      AND warehouse_name IS NOT NULL
+      AND country        IS NOT NULL
+    ORDER BY country, warehouse_name
+  `;
+  const result = runQuery(sql);
+  cache.put('warehouses_list', JSON.stringify(result), 21600);
+  return result;
+}
+
+function getWarehouseList() {
+  return getWarehouses();
+}
+
+// ============================================================
+// ENDPOINT 2: Polígono del warehouse (Google Sheets API con fallback a BigQuery)
+// ============================================================
+function getWarehousePolygon(warehouseId, monthDate) {
+  try {
+    const sheetRecords = fetchWhsDataFromSheetsApi();
+    const match = sheetRecords.find(r => r.warehouse_id === warehouseId && (!monthDate || !r.month_date || r.month_date === monthDate));
+    if (match && match.shape_geojson && match.lat && match.lng) {
+      return {
+        lat: match.lat,
+        lng: match.lng,
+        geojson_shape: typeof match.shape_geojson === 'string' ? match.shape_geojson : JSON.stringify(match.shape_geojson)
+      };
+    }
+  } catch (err) {}
+
+  const cache = CacheService.getScriptCache();
+  const cacheKey = 'polygon_' + warehouseId;
+  const cached = cache.get(cacheKey);
+  if (cached) return JSON.parse(cached);
+
+  const sql = `
+    SELECT
+      ST_X(ST_GEOGPOINT(dl.longitud, dl.latitud)) AS lng,
+      ST_Y(ST_GEOGPOINT(dl.longitud, dl.latitud)) AS lat,
+      ST_ASGEOJSON(ps.partner_shape)              AS geojson_shape
+    FROM (
+      SELECT DISTINCT
+        CAST(dp.partner_id AS STRING) AS partner_id,
+        dp.address.longitude          AS longitud,
+        dp.address.latitude           AS latitud
+      FROM \`peya-bi-tools-pro.il_core.dim_partner\` dp
+      WHERE dp.warehouse_id = '${warehouseId}'
+        AND dp.is_darkstore = TRUE
+    ) dl
+    JOIN \`peya-food-and-groceries.automated_tables_reports.qc_coverage_partner_shapes\` ps
+      ON  dl.partner_id = CAST(ps.partner_id AS STRING)
+      AND ps.month_date = DATE '${monthDate}'
+    LIMIT 1
+  `;
+  const rows = runQuery(sql);
+  const result = rows.length ? rows[0] : null;
+  if (result) cache.put(cacheKey, JSON.stringify(result), 86400);
+  return result;
+}
+
+// ============================================================
+// ENDPOINT 3: KPIs de tendencia — evolución mensual (RINGS)
+// ============================================================
+function getKpiTrendFromQuery(warehouseId) {
+  const sql = `
+    SELECT
+      FORMAT_DATE('%b %Y', month_date)                                             AS month_label,
+      SUM(Covered_MAUs)                                                            AS covered_maus,
+      SUM(Dmart_MAUs_Covered)                                                      AS dmart_maus_covered,
+      ROUND(SAFE_DIVIDE(SUM(Dmart_MAUs_Covered), SUM(Covered_MAUs)) * 100, 1)    AS penetration_pct
+    FROM ${RINGS_TABLE}
+    WHERE warehouse_id = '${warehouseId}'
+      AND anillo != 'Sin Cobertura'
+      AND month_date >= DATE_SUB(DATE_TRUNC(CURRENT_DATE(), MONTH), INTERVAL 5 MONTH)
+    GROUP BY month_date
+    ORDER BY month_date
+  `;
+  return runQuery(sql);
+}
+
+// ============================================================
+// ENDPOINT 4: Datos por anillo para un warehouse + mes
+// Incluye AOV, Frecuencia, Units per Customer, Promo Intensity
+// ============================================================
+function getRingData(warehouseId, monthDate) {
+  const sql = `
+    SELECT
+      anillo_order,
+      anillo,
+      SUM(Covered_MAUs)                                                                          AS covered_maus,
+      SUM(Dmart_MAUs_Covered)                                                                    AS dmart_maus_covered,
+      SUM(Dmart_MAUs_Uncovered)                                                                  AS dmart_maus_uncovered,
+      SUM(dmart_orders)                                                                          AS dmart_orders,
+      ROUND(SAFE_DIVIDE(SUM(Dmart_MAUs_Covered), NULLIF(SUM(Covered_MAUs), 0)) * 100, 1)       AS penetration_pct,
+      ROUND(SUM(net_sales_dmart), 2)                                                            AS net_sales,
+      ROUND(SUM(units_sold_dmart), 0)                                                           AS units_sold,
+      ROUND(SAFE_DIVIDE(SUM(net_sales_dmart), NULLIF(SUM(dmart_orders), 0)), 2)                AS aov,
+      ROUND(SAFE_DIVIDE(SUM(dmart_orders), NULLIF(SUM(Dmart_MAUs_Covered), 0)), 2)             AS frequency,
+      ROUND(SAFE_DIVIDE(SUM(units_sold_dmart), NULLIF(SUM(Dmart_MAUs_Covered), 0)), 1)         AS units_per_customer,
+      SUM(total_orders_timings)                                                                  AS orders_with_timing,
+      ROUND(SAFE_DIVIDE(SUM(sum_delivery_time_min), NULLIF(SUM(total_orders_timings), 0)), 1)  AS avg_dt_min,
+      SUM(is_order_late_10)                                                                      AS late_orders,
+      ROUND(SAFE_DIVIDE(SUM(is_order_late_10), NULLIF(SUM(total_orders_timings), 0)) * 100, 1) AS pct_late,
+      SUM(is_dt_35min)                                                                           AS orders_dt_35,
+      ROUND(SAFE_DIVIDE(SUM(is_dt_35min), NULLIF(SUM(total_orders_timings), 0)) * 100, 1)      AS pct_dt_35
+    FROM ${RINGS_TABLE}
+    WHERE warehouse_id = '${warehouseId}'
+      AND month_date   = DATE '${monthDate}'
+    GROUP BY anillo_order, anillo
+    ORDER BY anillo_order
+  `;
+  return runQuery(sql);
+}
+
+// ============================================================
+// ENDPOINT 5: Meses disponibles para un warehouse (RINGS)
+// ============================================================
+function getAvailableMonths(warehouseId) {
+  const cache = CacheService.getScriptCache();
+  const cacheKey = 'months_' + warehouseId;
+  const cached = cache.get(cacheKey);
+  if (cached) return JSON.parse(cached);
+
+  const sql = `
+    SELECT DISTINCT
+      FORMAT_DATE('%Y-%m-%d', month_date) AS month_date,
+      FORMAT_DATE('%b %Y',    month_date) AS month_label
+    FROM ${RINGS_TABLE}
+    WHERE warehouse_id = '${warehouseId}'
+    ORDER BY month_date DESC
+  `;
+  const result = runQuery(sql);
+  cache.put(cacheKey, JSON.stringify(result), 3600);
+  return result;
+}
+
+
+// ============================================================
+// CITY PENETRATION ENDPOINTS
+// ============================================================
+function getCityList() {
+  const cache = CacheService.getScriptCache();
+  const cached = cache.get('city_list');
+  if (cached) return JSON.parse(cached);
+
+  const sql = `
+    SELECT DISTINCT city_name_lz AS city_name
+    FROM ${CITY_TABLE}
+    WHERE city_name_lz IS NOT NULL
+    ORDER BY city_name_lz
+  `;
+  const result = runQuery(sql);
+  cache.put('city_list', JSON.stringify(result), 21600);
+  return result;
+}
+
+function getCityKpis(cityName, monthDate) {
+  const sql = `
+    SELECT *
+    FROM ${CITY_TABLE}
+    WHERE city_name_lz = '${cityName}'
+      AND month_date = DATE '${monthDate}'
+    LIMIT 1
+  `;
+  const rows = runQuery(sql);
+  return rows.length ? rows[0] : null;
+}
+
+function getCityTrend(cityName) {
+  const sql = `
+    SELECT
+      FORMAT_DATE('%b %Y', month_date) AS month_label,
+      users,
+      dmart_users,
+      penetration_pct,
+      customer_value
+    FROM ${CITY_TABLE}
+    WHERE city_name_lz = '${cityName}'
+      AND month_date >= DATE_SUB(DATE_TRUNC(CURRENT_DATE(), MONTH), INTERVAL 6 MONTH)
+    ORDER BY month_date
+  `;
+  return runQuery(sql);
+}
+
+function getCityHeatmapGrid(monthDate) {
+  const cache = CacheService.getScriptCache();
+  const cacheKey = 'heatmap_' + monthDate.replace(/-/g, '');
+  const cached = cache.get(cacheKey);
+  if (cached) {
+    return JSON.parse(cached);
+  }
+
+  const sql = `
+    WITH coverage AS (
+      SELECT
+        cl.customer_id,
+        ROUND(ST_Y(cl.customer_geogpoint) / 0.005) * 0.005 AS lat_bin,
+        ROUND(ST_X(cl.customer_geogpoint) / 0.005) * 0.005 AS lon_bin
+      FROM \`peya-food-and-groceries.automated_tables_reports.qc_coverage_customer_location\` cl
+      WHERE cl.month_date = DATE '${monthDate}'
+        AND cl.customer_geogpoint IS NOT NULL
+    ),
+    peya_gmv AS (
+      SELECT
+        o.user.user_id AS customer_id,
+        SUM(o.gmv.gmv_user / monthly_rate_eu) AS gmv_peya
+      FROM \`peya-datamarts-pro.dm_order_profitability.fact_order_profitability\` o
+      WHERE DATE_TRUNC(o.registered_date, MONTH) = DATE '${monthDate}'
+        AND o.order_status = 'CONFIRMED'
+      GROUP BY 1
+    ),
+    dmart_gmv AS (
+      SELECT
+        CAST(co.customer_id AS STRING) AS customer_id,
+        SUM(co.total_amount_net_with_discount_eur) AS gmv_dmart
+      FROM \`peya-datamarts-pro.dm_dmarts.customer_orders_sku_level\` co
+      WHERE DATE_TRUNC(co.order_date, MONTH) = DATE '${monthDate}'
+        AND co.state = 'CONFIRMED'
+      GROUP BY 1
+    ),
+    grid_raw AS (
+      SELECT
+        c.lat_bin,
+        c.lon_bin,
+        COUNT(DISTINCT c.customer_id) AS usuarios,
+        SUM(COALESCE(p.gmv_peya, 0))  AS gmv_peya,
+        SUM(COALESCE(d.gmv_dmart, 0)) AS gmv_dmart
+      FROM coverage c
+      LEFT JOIN peya_gmv  p ON CAST(c.customer_id AS STRING) = CAST(p.customer_id AS STRING)
+      LEFT JOIN dmart_gmv d ON CAST(c.customer_id AS STRING) = d.customer_id
+      GROUP BY 1, 2
+    ),
+    percentiles AS (
+      SELECT
+        PERCENTILE_CONT(usuarios, 0.97) OVER() AS p97_usuarios,
+        PERCENTILE_CONT(gmv_peya, 0.97) OVER() AS p97_gmv_peya,
+        PERCENTILE_CONT(gmv_dmart, 0.97) OVER() AS p97_gmv_dmart
+      FROM grid_raw LIMIT 1
+    )
+    SELECT
+      g.lat_bin,
+      g.lon_bin,
+      LEAST(g.usuarios, p.p97_usuarios) AS usuarios_capped,
+      LEAST(g.gmv_peya, p.p97_gmv_peya) AS gmv_peya_capped,
+      LEAST(g.gmv_dmart, p.p97_gmv_dmart) AS gmv_dmart_capped,
+      SAFE_DIVIDE(LEAST(g.usuarios, p.p97_usuarios), p.p97_usuarios) AS weight_usuarios,
+      SAFE_DIVIDE(LEAST(g.gmv_peya, p.p97_gmv_peya), p.p97_gmv_peya) AS weight_gmv_peya,
+      SAFE_DIVIDE(LEAST(g.gmv_dmart, p.p97_gmv_dmart), p.p97_gmv_dmart) AS weight_gmv_dmart
+    FROM grid_raw g
+    CROSS JOIN percentiles p
+  `;
+  const result = runQuery(sql);
+  
+  try {
+    const jsonStr = JSON.stringify(result);
+    if (jsonStr.length < 100000) {
+      cache.put(cacheKey, jsonStr, 21600);
+    }
+  } catch (e) {
+    // Ignore cache size errors
+  }
+  
+  return result;
+}
+
+function getAllCitiesForMap(monthDate) {
+  const sql = `
+    SELECT
+      city_name_lz,
+      lat_centro,
+      lon_centro,
+      users,
+      dmart_users,
+      penetration_pct,
+      customer_value
+    FROM ${CITY_TABLE}
+    WHERE month_date = DATE '${monthDate}'
+      AND lat_centro IS NOT NULL
+      AND lon_centro IS NOT NULL
+  `;
+  return runQuery(sql);
+}
+
+function getAvailableMonthsCity() {
+  const cache = CacheService.getScriptCache();
+  const cached = cache.get('months_city');
+  if (cached) return JSON.parse(cached);
+
+  const sql = `
+    SELECT DISTINCT
+      FORMAT_DATE('%Y-%m-%d', month_date) AS month_date,
+      FORMAT_DATE('%b %Y',    month_date) AS month_label
+    FROM ${CITY_TABLE}
+    ORDER BY month_date DESC
+  `;
+  const result = runQuery(sql);
+  cache.put('months_city', JSON.stringify(result), 3600);
+  return result;
+}
+
+// ============================================================
+// MARKET PENETRATION ENDPOINTS
+// ============================================================
+function getAllWarehousesForMap(monthDate) {
+  const sql = `
+    SELECT
+      warehouse_id,
+      warehouse_name,
+      store_lat,
+      store_lng,
+      shape_geojson,
+      users,
+      dmart_users,
+      penetration_pct,
+      dmart_orders
+    FROM ${MARKET_TABLE}
+    WHERE month_date = DATE '${monthDate}'
+      AND store_lat IS NOT NULL
+      AND store_lng IS NOT NULL
+  `;
+  return runQuery(sql);
+}
+
+function getWarehouseMonthlyEvolution(warehouseId) {
+  const sql = `
+    SELECT
+      FORMAT_DATE('%b %Y', m.month_date) AS month_label,
+      m.*,
+      s.seamless_rate_pct,
+      s.fail_rate_pct,
+      s.forced_preorder_pct,
+      s.modified_order_pct,
+      s.session_order_pct,
+      s.slow_order_pct,
+      s.late_order_seamless_pct,
+      s.avg_assignment_time_min,
+      s.avg_picking_time_min
+    FROM ${MARKET_TABLE} m
+    LEFT JOIN ${SEAMLESS_TABLE} s
+      ON m.warehouse_id = s.warehouse_id
+      AND m.month_date = s.month_date
+    WHERE m.warehouse_id = '${warehouseId}'
+    ORDER BY m.month_date ASC
+    LIMIT 12
+  `;
+  return runQuery(sql);
+}
+
+function getWarehouseBenchmark(monthDate) {
+  const sql = `
+    SELECT
+      m.*,
+      s.seamless_rate_pct,
+      s.fail_rate_pct,
+      s.forced_preorder_pct,
+      s.modified_order_pct,
+      s.session_order_pct,
+      s.slow_order_pct,
+      s.late_order_seamless_pct,
+      s.avg_assignment_time_min,
+      s.avg_picking_time_min
+    FROM ${MARKET_TABLE} m
+    LEFT JOIN ${SEAMLESS_TABLE} s
+      ON m.warehouse_id = s.warehouse_id
+      AND m.month_date = s.month_date
+    WHERE m.month_date = DATE '${monthDate}'
+  `;
+  return runQuery(sql);
+}
+
+function getAvailableMonthsMarket() {
+  const cache = CacheService.getScriptCache();
+  const cached = cache.get('months_market');
+  if (cached) return JSON.parse(cached);
+
+  const sql = `
+    SELECT DISTINCT
+      FORMAT_DATE('%Y-%m-%d', month_date) AS month_date,
+      FORMAT_DATE('%b %Y',    month_date) AS month_label
+    FROM ${MARKET_TABLE}
+    ORDER BY month_date DESC
+  `;
+  const result = runQuery(sql);
+  cache.put('months_market', JSON.stringify(result), 3600);
+  return result;
+}

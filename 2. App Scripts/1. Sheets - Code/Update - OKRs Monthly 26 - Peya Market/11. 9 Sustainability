@@ -1,0 +1,82 @@
+// ##########################################################################################
+// #  TAREA: "9 SUSTAINABILITY" (CON BLOQUEO DE CELDA DE PAÍS)                             #
+// ##########################################################################################
+
+const CONFIG_SUSTAINABILITY = {
+  nombreHoja: "9 Sustainability",
+  celdaPais: "C4"
+};
+
+function _sustainabilityWorker(targetCountry) {
+  try {
+    Logger.log(`--- [TAREA 9 SUSTAINABILITY] Iniciando para ${targetCountry.country.toUpperCase()} ---`);
+    
+    // 1. Abrir origen
+    const sourceSpreadsheet = SpreadsheetApp.openById(SOURCE_SPREADSHEET_ID);
+    const sourceSheet = sourceSpreadsheet.getSheetByName(CONFIG_SUSTAINABILITY.nombreHoja);
+    if (!sourceSheet) throw new Error(`La hoja de origen '${CONFIG_SUSTAINABILITY.nombreHoja}' no fue encontrada.`);
+    
+    // 2. Abrir destino
+    const targetSpreadsheet = SpreadsheetApp.openById(targetCountry.id);
+    const existingSheet = targetSpreadsheet.getSheetByName(CONFIG_SUSTAINABILITY.nombreHoja);
+    
+    let newSheet;
+
+    // 3. Reemplazar o Copiar hoja (MANTENIENDO EL ORDEN)
+    if (existingSheet) {
+      const originalIndex = existingSheet.getIndex(); // Guarda la posición actual
+      targetSpreadsheet.deleteSheet(existingSheet);
+      newSheet = sourceSheet.copyTo(targetSpreadsheet);
+      newSheet.setName(CONFIG_SUSTAINABILITY.nombreHoja);
+      targetSpreadsheet.setActiveSheet(newSheet);
+      targetSpreadsheet.moveActiveSheet(originalIndex); // Restaura la posición
+    } else {
+      newSheet = sourceSheet.copyTo(targetSpreadsheet);
+      newSheet.setName(CONFIG_SUSTAINABILITY.nombreHoja);
+    }
+
+    // 4. Escribir el País en la celda configurada y bloquearla
+    const celdaPais = newSheet.getRange(CONFIG_SUSTAINABILITY.celdaPais);
+    celdaPais.setValue(targetCountry.country);
+
+    // ---- INICIO DEL BLOQUEO ----
+    // Creamos la protección para la celda C4
+    const proteccion = celdaPais.protect().setDescription('Bloqueo automático de celda de país');
+    
+    // Removemos a los demás editores para que solo tú (o la cuenta que ejecuta el script) puedas editarla
+    const editores = proteccion.getEditors();
+    proteccion.removeEditors(editores);
+    
+    // Si manejas Google Workspace corporativo, bloquea el acceso de edición a nivel dominio
+    if (proteccion.canDomainEdit()) {
+      proteccion.setDomainEdit(false);
+    }
+    // ---- FIN DEL BLOQUEO ----
+
+    Logger.log(`>>> [TAREA 9 SUSTAINABILITY] Proceso completado y celda bloqueada para ${targetCountry.country.toUpperCase()}.`);
+  } catch (error) {
+    Logger.log(`ERROR en [TAREA 9 SUSTAINABILITY] para ${targetCountry.country.toUpperCase()}: ${error.toString()}`);
+  }
+}
+
+// --- Funciones Individuales ---
+function copiarSustainability_Para_Argentina() { _sustainabilityWorker(PAISES_DE_DESTINO.find(p => p.country === "Argentina")); }
+function copiarSustainability_Para_Bolivia() { _sustainabilityWorker(PAISES_DE_DESTINO.find(p => p.country === "Bolivia")); }
+function copiarSustainability_Para_Chile() { _sustainabilityWorker(PAISES_DE_DESTINO.find(p => p.country === "Chile")); }
+function copiarSustainability_Para_Costa_Rica() { _sustainabilityWorker(PAISES_DE_DESTINO.find(p => p.country === "Costa Rica")); }
+function copiarSustainability_Para_Republica_Dominicana() { _sustainabilityWorker(PAISES_DE_DESTINO.find(p => p.country === "Republica Dominicana")); }
+function copiarSustainability_Para_Ecuador() { _sustainabilityWorker(PAISES_DE_DESTINO.find(p => p.country === "Ecuador")); }
+function copiarSustainability_Para_El_Salvador() { _sustainabilityWorker(PAISES_DE_DESTINO.find(p => p.country === "El Salvador")); }
+function copiarSustainability_Para_Guatemala() { _sustainabilityWorker(PAISES_DE_DESTINO.find(p => p.country === "Guatemala")); }
+function copiarSustainability_Para_Honduras() { _sustainabilityWorker(PAISES_DE_DESTINO.find(p => p.country === "Honduras")); }
+function copiarSustainability_Para_Nicaragua() { _sustainabilityWorker(PAISES_DE_DESTINO.find(p => p.country === "Nicaragua")); }
+function copiarSustainability_Para_Panama() { _sustainabilityWorker(PAISES_DE_DESTINO.find(p => p.country === "Panama")); }
+function copiarSustainability_Para_Paraguay() { _sustainabilityWorker(PAISES_DE_DESTINO.find(p => p.country === "Paraguay")); }
+function copiarSustainability_Para_Peru() { _sustainabilityWorker(PAISES_DE_DESTINO.find(p => p.country === "Peru")); }
+function copiarSustainability_Para_Uruguay() { _sustainabilityWorker(PAISES_DE_DESTINO.find(p => p.country === "Uruguay")); }
+
+function copiarSustainability_Para_TODOS() {
+  Logger.log("INICIANDO TAREA '9 SUSTAINABILITY' PARA TODOS LOS PAÍSES");
+  PAISES_DE_DESTINO.forEach(pais => _sustainabilityWorker(pais));
+  Logger.log("TAREA '9 SUSTAINABILITY' FINALIZADA");
+}

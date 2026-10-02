@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Store Explorer — Market Penetration</title>
+</head>
+<body>
+
+<!-- Incluir el Navbar y los estilos compartidos -->
+<?!= include('_nav', { activePage: 'market', scriptUrl: scriptUrl }); ?>
+
+<!-- ======================================================= -->
+<!-- CONTENIDO: MARKET PENETRATION -->
+<!-- ======================================================= -->
+<div id="tab-market" class="tab-content active" style="display:flex; flex-direction:column; flex:1;">
+  <div class="main-full">
+    <div class="view-toggle">
+      <button class="view-btn active" id="btn-view-benchmark" onclick="switchMarketView('benchmark')">Benchmark entre tiendas</button>
+      <button class="view-btn" id="btn-view-evolution" onclick="switchMarketView('evolution')">Evolución mensual</button>
+      <div class="col-picker-wrap">
+        <button class="col-picker-btn" onclick="toggleColPicker(event)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>
+          Elegir métricas (<span id="col-picker-count">0</span>)
+        </button>
+        <div class="col-picker-panel" id="col-picker-panel" style="display:none"></div>
+      </div>
+    </div>
+    
+    <!-- Mapa secundario colapsable para benchmark -->
+    <div class="map-card" id="market-map-container" style="display:none; height:350px; margin-bottom:16px;">
+      <div class="card-header">Mapa de Tiendas (Mes actual)</div>
+      <div id="market-map" class="map-container" style="min-height:0;"></div>
+    </div>
+
+    <div class="table-card">
+      <div class="table-wrap">
+        <table id="market-table">
+          <thead id="market-table-head"></thead>
+          <tbody id="market-table-body">
+            <tr><td><div class="empty-state">Cargando...</div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// STATE & CONFIG
+// ============================================================
+let gMapMarket;
+let gMarketMarkers = [], gMarketPolygons = [];
+let marketView = 'benchmark';
+let marketSortCol = 'penetration_pct', marketSortAsc = false;
+
+// ============================================================
+// INIT & NAVIGATION
+// ============================================================
+window.onload = function() {
+  try {
+    initMaps();
+    initPage();
+  } catch(e) {
+    console.error("Error fatal en onload:", e);
+    showError(e);
+  }
+};
+
+function initPage() {
+  renderColPicker(); // Renderiza el panel del selector de columnas una vez
+  switchMarketView('benchmark', true); // Inicia en la vista de benchmark por defecto
+}
+
+function initMaps() {
+  try {
+    if (typeof google === 'undefined' || !google.maps) {
+      console.warn("Google Maps API no está disponible.");
+      return;
+    }
+    const mapOpts = { zoom: 5, center: { lat: -34.6, lng: -58.4 }, mapTypeId: 'roadmap', styles: darkMapStyle(), disableDefaultUI: false };
+    gMapMarket = new google.maps.Map(document.getElementById('market-map'), mapOpts);
+  } catch(e) {
+    console.error("Error al inicializar google.maps.Map:", e);
+  }
+}
+
+function switchMarketView(v, isInitialLoad = false) {
+  marketView = v;
+
+  // Actualizar UI de los botones de vista
+  document.getElementById('btn-view-benchmark').classList.toggle('active', v === 'benchmark');
+  document.getElementById('btn-view-evolution').classList.toggle('active', v === 'evolution');
+  document.getElementById('market-map-container').style.display = v === 'benchmark' ? 'flex' : 'none';
+
+  // Ajustar visibilidad de los selectores globales
+  const wSel = document.getElementById('global-warehouse-select');
+  const mSel = document.getElementById('global-month-select');
+  wSel.style.display = v === 'evolution' ? 'block' : 'none';
+  mSel.style.display = v === 'benchmark' ? 'block' : 'none';
+
+  loadRelevantFilters(isInitialLoad);
+}
+
+function loadRelevantFilters(isInitialLoad) {
+  showLoading("Cargando filtros...");
+  if (marketView === 'benchmark') {
+    google.script.run
+      .withSuccessHandler(months => {
+        populateSelect('global-month-select', months, 'month_date', 'month_label', null, true);
+        if (isInitialLoad) fetchAndRenderData(); // Carga datos automáticamente solo la primera vez
+        hideLoading();
+      })
+      .withFailureHandler(e => {
+        showError(e);
+        renderMarketTable(null, 'Error al cargar los meses disponibles.');
+      })
+      .getAvailableMonthsMarket();
+  } else { // 'evolution'
+    google.script.run
+      .withSuccessHandler(warehouses => {
+        populateSelect('global-warehouse-select', warehouses, 'warehouse_id', 'warehouse_name', 'Seleccioná una tienda para ver su evolución');
+        // En la vista de evolución, no cargamos datos hasta que el usuario elija una tienda.
+        renderMarketTable(null, 'Seleccioná una tienda para ver su evolución');
+        hideLoading();
+      })
+      .withFailureHandler(e => {
+        showError(e);
+        renderMarketTable(null, 'Error al cargar la lista de tiendas.');
+      })
+      .getWarehouseList();
+  }
+}
+
+function populateSelect(id, rows, valCol, textCol, placeholder, selectFirst) {
+  const sel = document.getElementById(id);
+  sel.innerHTML = `<option value="">— ${placeholder || 'Seleccionar'} —</option>`;
+  rows.forEach(r => {
+    const opt = document.createElement('option');
+    opt.value = r[valCol]; opt.textContent = r[textCol];
+    sel.appendChild(opt);
+  });
+  if (selectFirst && rows.length > 0) {
+    sel.selectedIndex = 1;
+  }
+}
+
+function onGlobalFilterChange() {
+  fetchAndRenderData();
+}
+
+function fetchAndRenderData() {
+  showLoading("Obteniendo datos de mercado...");
+  
+  if (marketView === 'benchmark') {
+    const month = document.getElementById('global-month-select').value;
+    if (!month) {
+      renderMarketTable(null, 'Seleccioná un mes para ver el benchmark.');
+      hideLoading();
+      return;
+    }
+    
+    let pending = 2;
+    const results = {};
+    const done = () => {
+      if (--pending === 0) {
+        renderMarketTable(results.benchmarkData);
+        drawMarketMap(results.mapData);
+        hideLoading();
+      }
+    };
+    
+    google.script.run.withSuccessHandler(res => { results.benchmarkData = res; done(); }).withFailureHandler(e => { showError(e); done(); }).getWarehouseBenchmark(month);
+    google.script.run.withSuccessHandler(res => { results.mapData = res; done(); }).withFailureHandler(e => { showError(e); done(); }).getAllWarehousesForMap(month);
+
+  } else { // 'evolution'
+    const wid = document.getElementById('global-warehouse-select').value;
+    if (!wid) {
+      renderMarketTable(null, 'Seleccioná una tienda para ver su evolución.');
+      hideLoading();
+      return;
+    }
+    google.script.run
+      .withSuccessHandler(res => {
+        renderMarketTable(res);
+        hideLoading();
+      })
+      .withFailureHandler(e => {
+        showError(e);
+        renderMarketTable(null, 'Error al cargar la evolución de la tienda.');
+      })
+      .getWarehouseMonthlyEvolution(wid);
+  }
+}
+
+// ============================================================
+// UI RENDERING (MARKET)
+// ============================================================
+const MARKET_COLS = [
+  { id: 'users', label: 'Covered Users', g: 1, fmt: fmt }, { id: 'dmart_users', label: 'Dmart MAUs', g: 1, fmt: fmt }, { id: 'penetration_pct', label: 'Penetración %', g: 1, fmt: fmtPct }, { id: 'core_users_pct', label: 'Core Users %', g: 1, fmt: fmtPct }, { id: 'high_users_pct', label: 'High Users %', g: 1, fmt: fmtPct }, { id: 'plus_maus_pct', label: 'Plus MAUs %', g: 1, fmt: fmtPct }, { id: 'market_users', label: 'Market Users', g: 1, fmt: fmt }, { id: 'GPO', label: 'GPO', g: 1, fmt: fmtEur }, { id: 'customer_value', label: 'Customer Value', g: 1, fmt: fmtEur }, { id: 'aov', label: 'AOV', g: 1, fmt: fmtEur }, { id: 'afv_wo_vat', label: 'AFV wo VAT', g: 1, fmt: fmtEur }, { id: 'cvr3_pct', label: 'CVR3 %', g: 1, fmt: fmtPct }, { id: 'dmart_orders_share_pct', label: 'Dmart Orders %', g: 1, fmt: fmtPct }, { id: 'dmart_freq', label: 'Dmart Freq', g: 1, fmt: v=>(parseFloat(v)||0).toFixed(2) },
+  { id: 'RIDER_COST', label: 'Rider Cost', g: 2, fmt: fmtEur }, { id: 'avg_delivery_distance_km',label: 'Avg. Delivery Distance (km)', g: 2, fmt: v=>(parseFloat(v)||0).toFixed(2) }, { id: 'avg_delivery_time_min', label: 'Avg. Delivery Time (min)', g: 2, fmt: v=>(parseFloat(v)||0).toFixed(1) }, { id: 'order_late_pct', label: 'Order Late >10 %', g: 2, fmt: fmtPct }, { id: 'vendor_late_pct', label: 'Vendor Late >10 %',g: 2, fmt: fmtPct }, { id: 'uf_users', label: 'UF Users', g: 2, fmt: fmt }, { id: 'uf_basket_penetration_pct', label: 'UF Basket Penetration %', g: 2, fmt: fmtPct }, { id: 'basket_size', label: 'Basket Size', g: 2, fmt: v=>(parseFloat(v)||0).toFixed(1) }, { id: 'food_issue_pct', label: 'Food Issue %', g: 2, fmt: fmtPct }, { id: 'wrong_missing_item_pct', label: 'Wrong/Missing Item %', g: 2, fmt: fmtPct },
+  { id: 'seamless_rate_pct', label: 'Seamless Rate %', g: 3, fmt: fmtPct }, { id: 'fail_rate_pct', label: 'Fail Rate %', g: 3, fmt: fmtPct }, { id: 'forced_preorder_pct', label: 'Forced Preorder %',g: 3, fmt: fmtPct }, { id: 'modified_order_pct', label: 'Modified Order %', g: 3, fmt: fmtPct }, { id: 'session_order_pct', label: 'Session Order %', g: 3, fmt: fmtPct }, { id: 'slow_order_pct', label: 'Slow Order %', g: 3, fmt: fmtPct }, { id: 'late_order_seamless_pct', label: 'Late Order (Seamless) %', g: 3, fmt: fmtPct }, { id: 'avg_assignment_time_min', label: 'Avg Assignment Time (min)', g: 3, fmt: v=>(parseFloat(v)||0).toFixed(1) }, { id: 'avg_picking_time_min', label: 'Avg Picking Time (min)', g: 3, fmt: v=>(parseFloat(v)||0).toFixed(1) }
+];
+const MARKET_GROUP_LABELS = { 1: 'Penetración y Comercial', 2: 'Operación', 3: 'Seamless y Asignación' };
+
+let marketVisibleCols = new Set(['users', 'dmart_users', 'penetration_pct', 'customer_value', 'aov', 'dmart_orders_share_pct', 'avg_delivery_time_min', 'order_late_pct', 'seamless_rate_pct', 'fail_rate_pct', 'avg_assignment_time_min']);
+
+function toggleColPicker(evt) {
+  evt.stopPropagation();
+  const panel = document.getElementById('col-picker-panel');
+  panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+}
+document.addEventListener('click', (e) => {
+  const panel = document.getElementById('col-picker-panel');
+  if (panel && panel.style.display !== 'none' && !e.target.closest('.col-picker-wrap')) {
+    panel.style.display = 'none';
+  }
+});
+
+function renderColPicker() {
+  const panel = document.getElementById('col-picker-panel');
+  let html = `<div class="col-picker-actions"><button onclick="marketColsSelectAll()">Seleccionar todas</button><button onclick="marketColsReset()">Restablecer default</button></div>`;
+  [1, 2, 3].forEach(g => {
+    html += `<div class="col-picker-group-title">${MARKET_GROUP_LABELS[g]}</div>`;
+    MARKET_COLS.filter(c => c.g === g).forEach(c => {
+      html += `<label class="col-picker-item"><input type="checkbox" ${marketVisibleCols.has(c.id) ? 'checked' : ''} onchange="onMarketColToggle('${c.id}')"> ${c.label}</label>`;
+    });
+  });
+  panel.innerHTML = html;
+  document.getElementById('col-picker-count').textContent = marketVisibleCols.size;
+}
+
+function onMarketColToggle(id) {
+  if (marketVisibleCols.has(id)) marketVisibleCols.delete(id); else marketVisibleCols.add(id);
+  document.getElementById('col-picker-count').textContent = marketVisibleCols.size;
+  renderMarketTable(); // Re-render table with current data
+}
+function marketColsSelectAll() { marketVisibleCols = new Set(MARKET_COLS.map(c => c.id)); renderColPicker(); renderMarketTable(); }
+function marketColsReset() { marketVisibleCols = new Set(['users', 'dmart_users', 'penetration_pct', 'customer_value', 'aov', 'dmart_orders_share_pct', 'avg_delivery_time_min', 'order_late_pct', 'seamless_rate_pct', 'fail_rate_pct', 'avg_assignment_time_min']); renderColPicker(); renderMarketTable(); }
+
+function renderMarketTable(data, emptyMessage) {
+  const thead = document.getElementById('market-table-head');
+  const tbody = document.getElementById('market-table-body');
+  
+  if (emptyMessage || !data || data.length === 0) {
+    thead.innerHTML = '';
+    tbody.innerHTML = `<tr><td><div class="empty-state">${emptyMessage || 'No hay datos para mostrar.'}</div></td></tr>`;
+    return;
+  }
+
+  const cols = MARKET_COLS.filter(c => marketVisibleCols.has(c.id));
+  const mainCol = marketView === 'evolution' ? 'month_label' : 'warehouse_name';
+
+  let hHtml = `<tr><th onclick="sortMarketTable('${mainCol}')">${marketView==='evolution'?'Mes':'Warehouse'}</th>`;
+  cols.forEach(c => hHtml += `<th class="th-group-${c.g===1?'pen':c.g===2?'ops':'sea'}" onclick="sortMarketTable('${c.id}')">${c.label}</th>`);
+  thead.innerHTML = hHtml + '</tr>';
+
+  const sortedData = [...data].sort((a,b) => {
+    let va = a[marketSortCol], vb = b[marketSortCol];
+    if(typeof va === 'string') return marketSortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
+    return marketSortAsc ? (parseFloat(va)||0) - (parseFloat(vb)||0) : (parseFloat(vb)||0) - (parseFloat(va)||0);
+  });
+
+  tbody.innerHTML = sortedData.map(r => {
+    let tr = `<tr><td>${r[mainCol]}</td>`;
+    cols.forEach(c => tr += `<td>${c.fmt(r[c.id])}</td>`);
+    return tr + '</tr>';
+  }).join('');
+}
+
+function sortMarketTable(col) {
+  if (marketSortCol === col) marketSortAsc = !marketSortAsc; else { marketSortCol = col; marketSortAsc = false; }
+  renderMarketTable(); // Re-render with current data
+}
+
+function drawMarketMap(rows) {
+  if (!gMapMarket || !rows) {
+    console.warn("gMapMarket no inicializado o sin datos. Se omite el dibujo del mapa.");
+    return;
+  }
+  gMarketMarkers.forEach(m => m.setMap(null)); gMarketMarkers = [];
+  gMarketPolygons.forEach(p => p.setMap(null)); gMarketPolygons = [];
+  rows.forEach(r => {
+    const m = new google.maps.Marker({ position: {lat: parseFloat(r.store_lat), lng: parseFloat(r.store_lng)}, map: gMapMarket, title: r.warehouse_name });
+    const iw = new google.maps.InfoWindow({ content: `<b>${r.warehouse_name}</b><br>Pen: ${fmtPct(r.penetration_pct)}` });
+    m.addListener('click', () => iw.open(gMapMarket, m));
+gMarketMarkers.push(m);
+    
+    try {
+      if (r.shape_geojson) {
+        const shape = JSON.parse(r.shape_geojson);
+        const paths = (shape.type === 'Polygon') ? shape.coordinates.map(rg=>rg.map(c=>({lat:c[1],lng:c[0]}))) : shape.coordinates.flatMap(p=>p.map(rg=>rg.map(c=>({lat:c[1],lng:c[0]}))));
+        gMarketPolygons.push(new google.maps.Polygon({ paths, strokeColor: '#B40443', strokeOpacity: 0.5, strokeWeight: 1, fillColor: '#EA044E', fillOpacity: 0.05, map: gMapMarket }));
+      }
+    } catch(e){}
+  });
+}
+
+function darkMapStyle() { return [ { featureType: 'poi', stylers: [{ visibility: 'off' }] }, { featureType: 'transit', stylers: [{ visibility: 'off' }] }, { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#f5f3f7' }] }, { featureType: 'road', elementType: 'geometry.stroke', stylers: [{ color: '#E4E2E9' }] }, { featureType: 'road.arterial', elementType: 'labels.text.fill', stylers: [{ color: '#70697A' }] }, { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#EDE9F2' }] }, { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#C8D8F0' }] }, { featureType: 'water', elementType: 'labels.text.fill', stylers: [{ color: '#4C4359' }] }, { featureType: 'landscape', elementType: 'geometry', stylers: [{ color: '#F7F5FA' }] }, { elementType: 'labels.text.fill', stylers: [{ color: '#4C4359' }] }, { elementType: 'labels.text.stroke', stylers: [{ color: '#ffffff' }] }, { featureType: 'administrative', elementType: 'geometry.stroke', stylers: [{ color: '#D0CDD8' }] } ]; }
+</script>
+</body>
+</html>

@@ -1,0 +1,82 @@
+// ##########################################################################################
+// #  TAREA: "7 ASSORTMENT, PRICING & PROMO" (CON BLOQUEO DE CELDA DE PAÍS)                  #
+// ##########################################################################################
+
+const CONFIG_ASSORTMENT = {
+  nombreHoja: "7 Assortment, Pricing & Promo",
+  celdaPais: "C4"
+};
+
+function _assortmentWorker(targetCountry) {
+  try {
+    Logger.log(`--- [TAREA 7 ASSORTMENT] Iniciando para ${targetCountry.country.toUpperCase()} ---`);
+    
+    // 1. Abrir origen (CORREGIDO: Usando la variable correcta)
+    const sourceSpreadsheet = SpreadsheetApp.openById(SOURCE_SPREADSHEET_ID); 
+    const sourceSheet = sourceSpreadsheet.getSheetByName(CONFIG_ASSORTMENT.nombreHoja);
+    if (!sourceSheet) throw new Error(`La hoja de origen '${CONFIG_ASSORTMENT.nombreHoja}' no fue encontrada.`);
+    
+    // 2. Abrir destino
+    const targetSpreadsheet = SpreadsheetApp.openById(targetCountry.id);
+    const existingSheet = targetSpreadsheet.getSheetByName(CONFIG_ASSORTMENT.nombreHoja);
+    
+    let newSheet;
+
+    // 3. Reemplazar o Copiar hoja (MANTENIENDO EL ORDEN)
+    if (existingSheet) {
+      const originalIndex = existingSheet.getIndex(); // Guarda la posición actual
+      targetSpreadsheet.deleteSheet(existingSheet);
+      newSheet = sourceSheet.copyTo(targetSpreadsheet);
+      newSheet.setName(CONFIG_ASSORTMENT.nombreHoja);
+      targetSpreadsheet.setActiveSheet(newSheet);
+      targetSpreadsheet.moveActiveSheet(originalIndex); // Restaura la posición
+    } else {
+      newSheet = sourceSheet.copyTo(targetSpreadsheet);
+      newSheet.setName(CONFIG_ASSORTMENT.nombreHoja);
+    }
+
+    // 4. Escribir el País en la celda configurada y bloquearla
+    const celdaPais = newSheet.getRange(CONFIG_ASSORTMENT.celdaPais);
+    celdaPais.setValue(targetCountry.country);
+
+    // ---- INICIO DEL BLOQUEO ----
+    // Creamos la protección para la celda C4
+    const proteccion = celdaPais.protect().setDescription('Bloqueo automático de celda de país');
+    
+    // Removemos a los demás editores para restringir el acceso
+    const editores = proteccion.getEditors();
+    proteccion.removeEditors(editores);
+    
+    // Si estás en Google Workspace, bloqueamos la edición a nivel de dominio corporativo
+    if (proteccion.canDomainEdit()) {
+      proteccion.setDomainEdit(false);
+    }
+    // ---- FIN DEL BLOQUEO ----
+
+    Logger.log(`>>> [TAREA 7 ASSORTMENT] Proceso completado y celda bloqueada para ${targetCountry.country.toUpperCase()}.`);
+  } catch (error) {
+    Logger.log(`ERROR en [TAREA 7 ASSORTMENT] para ${targetCountry.country.toUpperCase()}: ${error.toString()}`);
+  }
+}
+
+// --- Funciones Individuales ---
+function copiarAssortment_Para_Argentina() { _assortmentWorker(PAISES_DE_DESTINO.find(p => p.country === "Argentina")); }
+function copiarAssortment_Para_Bolivia() { _assortmentWorker(PAISES_DE_DESTINO.find(p => p.country === "Bolivia")); }
+function copiarAssortment_Para_Chile() { _assortmentWorker(PAISES_DE_DESTINO.find(p => p.country === "Chile")); }
+function copiarAssortment_Para_Costa_Rica() { _assortmentWorker(PAISES_DE_DESTINO.find(p => p.country === "Costa Rica")); }
+function copiarAssortment_Para_Republica_Dominicana() { _assortmentWorker(PAISES_DE_DESTINO.find(p => p.country === "Republica Dominicana")); }
+function copiarAssortment_Para_Ecuador() { _assortmentWorker(PAISES_DE_DESTINO.find(p => p.country === "Ecuador")); }
+function copiarAssortment_Para_El_Salvador() { _assortmentWorker(PAISES_DE_DESTINO.find(p => p.country === "El Salvador")); }
+function copiarAssortment_Para_Guatemala() { _assortmentWorker(PAISES_DE_DESTINO.find(p => p.country === "Guatemala")); }
+function copiarAssortment_Para_Honduras() { _assortmentWorker(PAISES_DE_DESTINO.find(p => p.country === "Honduras")); }
+function copiarAssortment_Para_Nicaragua() { _assortmentWorker(PAISES_DE_DESTINO.find(p => p.country === "Nicaragua")); }
+function copiarAssortment_Para_Panama() { _assortmentWorker(PAISES_DE_DESTINO.find(p => p.country === "Panama")); }
+function copiarAssortment_Para_Paraguay() { _assortmentWorker(PAISES_DE_DESTINO.find(p => p.country === "Paraguay")); }
+function copiarAssortment_Para_Peru() { _assortmentWorker(PAISES_DE_DESTINO.find(p => p.country === "Peru")); }
+function copiarAssortment_Para_Uruguay() { _assortmentWorker(PAISES_DE_DESTINO.find(p => p.country === "Uruguay")); }
+
+function copiarAssortment_Para_TODOS() {
+  Logger.log("INICIANDO TAREA '7 ASSORTMENT' PARA TODOS LOS PAÍSES");
+  PAISES_DE_DESTINO.forEach(pais => _assortmentWorker(pais));
+  Logger.log("TAREA '7 ASSORTMENT' FINALIZADA");
+}

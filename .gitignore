@@ -1,0 +1,15 @@
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Credentials & secrets
+*.pem
+*.key
+*.env
+*.env.*
+*client_secret*.json
+
+# Logs & temp
+*.log
+npm-debug.log*

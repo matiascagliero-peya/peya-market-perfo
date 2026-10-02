@@ -1,0 +1,1390 @@
+<!-- 1_ByCountry.html — Vista a nivel país desglosada por sucursales y métricas -->
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Alertas por País - PeYa Markets</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --primary: #e50044; --text-main: #0f172a; --text-sub: #475569; --text-light: #94a3b8;
+    --border: #e2e8f0; --border-light: #f1f5f9; --bg-main: #f1f5f9; --panel-bg: #ffffff;
+    --positive: #059669; --negative: #e11d48; --neutral: #64748b;
+    --shadow-sm: 0 2px 4px 0 rgba(15,23,42,0.08);
+    --shadow-md: 0 6px 12px -2px rgba(15,23,42,0.12), 0 3px 6px -3px rgba(15,23,42,0.08);
+    --radius: 11px;
+  }
+  
+  body.dark {
+    --bg-main: #0b0f19;
+    --panel-bg: #111827;
+    --text-main: #f8fafc;
+    --text-sub: #94a3b8;
+    --text-light: #64748b;
+    --border: #1f2937;
+    --border-light: #1e293b;
+    --shadow-sm: 0 1px 2px 0 rgba(0,0,0,0.3);
+  }
+  
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:var(--bg-main);color:var(--text-main);font-size:12px;-webkit-font-smoothing:antialiased;}
+
+  /* Splash de Carga */
+  #splash{position:fixed;inset:0;background:var(--bg-main);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;transition:opacity .3s ease;backdrop-filter:blur(4px);}
+  #splash.out{opacity:0;pointer-events:none;}
+  .spinner{width:36px;height:36px;border:3px solid rgba(229,0,68,0.12);border-top-color:var(--primary);border-radius:50%;animation:spin 0.75s linear infinite;margin-bottom:12px;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+
+  .page{padding:10px 20px 24px;max-width:100%;margin:0 auto;display:flex;flex-direction:column;gap:12px;}
+
+  /* Tarjeta de Filtros — overflow visible para permitir desplegar combos flotantes */
+  .card{background:var(--panel-bg);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-md);position:relative;z-index:20;margin-bottom:16px;}
+  .card-head{padding:10px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:6px;}
+  .card-head .bar{width:3px;height:14px;border-radius:4px;background:var(--primary);flex-shrink:0;}
+  .card-head h2{font-size:12px;font-weight:800;color:var(--text-main);letter-spacing:-.2px;}
+  .card-body{padding:12px 14px;}
+
+  /* Filtros e Inputs */
+  .filters-row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
+  .filter-group{display:flex;flex-direction:column;gap:4px;min-width:150px;flex:1;}
+  .filter-group label{font-size:9px;font-weight:700;color:var(--text-sub);text-transform:uppercase;letter-spacing:.3px;}
+  .filter-group input, .filter-group select{height:32px;border:1px solid var(--border);border-radius:6px;padding:0 8px;font-family:inherit;font-size:11.5px;color:var(--text-main);outline:none;background-color:var(--panel-bg);width:100%;}
+  .filter-group input:focus, .filter-group select:focus{border-color:var(--primary);box-shadow:0 0 0 2px rgba(229,0,68,0.12);}
+
+  /* Matriz de Datos */
+  .matrix-card{background:var(--panel-bg);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-md);overflow:hidden;margin-top:16px;margin-bottom:20px;padding-bottom:12px;}
+  
+  /* Scrollbars Estilizadas y Doble Scroll Sincronizado */
+  .top-scrollbar {
+    overflow-x: auto;
+    overflow-y: hidden;
+    width: calc(100% - 32px);
+    margin: 8px 16px 4px 16px;
+    height: 12px;
+  }
+  .tbl-container {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    width: calc(100% - 32px);
+    margin: 0 16px;
+    cursor: grab;
+  }
+  .tbl-container:active {
+    cursor: grabbing;
+  }
+  .tbl-container::-webkit-scrollbar, .top-scrollbar::-webkit-scrollbar {
+    height: 10px;
+  }
+  .tbl-container::-webkit-scrollbar-track, .top-scrollbar::-webkit-scrollbar-track {
+    background: #f1f5f9;
+    border-radius: 6px;
+  }
+  .tbl-container::-webkit-scrollbar-thumb, .top-scrollbar::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 6px;
+    border: 2px solid #f1f5f9;
+  }
+  .tbl-container::-webkit-scrollbar-thumb:hover, .top-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+  }
+  body.dark .tbl-container::-webkit-scrollbar-track, body.dark .top-scrollbar::-webkit-scrollbar-track {
+    background: #1e293b;
+  }
+  body.dark .tbl-container::-webkit-scrollbar-thumb, body.dark .top-scrollbar::-webkit-scrollbar-thumb {
+    background: #475569;
+    border: 2px solid #1e293b;
+  }
+  body.dark .tbl-container::-webkit-scrollbar-thumb:hover, body.dark .top-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #64748b;
+  }
+
+  /* Botones de navegación horizontal */
+  .scroll-nav-btn {
+    height: 28px;
+    padding: 0 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--panel-bg);
+    color: var(--text-main);
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    transition: all 0.15s ease;
+    user-select: none;
+  }
+  .scroll-nav-btn:hover {
+    border-color: var(--primary);
+    color: var(--primary);
+    background: rgba(229,0,68,0.05);
+  }
+  .scroll-nav-btn:active {
+    transform: scale(0.96);
+  }
+
+  .tbl{width:max-content;border-collapse:collapse;font-size:9px;text-align:left;}
+  .tbl th{font-size:7.5px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--text-sub);padding:8px 4px;border-bottom:2px solid var(--border);background:var(--border-light);text-align:center;white-space:nowrap;position:sticky;top:0;z-index:15;}
+  .tbl th.th-main{text-align:left;font-size:10.5px;color:#0f172a;padding:8px 16px !important;width:180px;min-width:180px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;position:sticky;left:0;z-index:35 !important;background:var(--border-light) !important;border-right:2px solid var(--border) !important;}
+  .tbl td{padding:8px 6px;border-bottom:1px solid var(--border-light);color:var(--text-sub);vertical-align:middle;text-align:center;}
+  .tbl td.td-whs{font-weight:700;color:#0f172a;text-align:left;font-size:10px;position:sticky;left:0;background:var(--panel-bg);border-right:2px solid var(--border);width:180px;min-width:180px;max-width:180px;z-index:20 !important;padding:8px 16px !important;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;box-shadow:3px 0 6px rgba(15,23,42,0.06);}
+  
+  /* Cebra Striping para filas pares */
+  .tbl tbody tr:nth-child(even) td { background-color: #f8fafc; }
+  .tbl tbody tr:nth-child(even) td.td-whs { background-color: #f8fafc; }
+  
+  /* Efecto Hover Premium */
+  .tbl tr:hover td { background-color: #f1f5f9 !important; }
+  .tbl tr:hover td.td-whs { background-color: #f1f5f9 !important; }
+
+  /* Estilos de Celdas */
+  .td-ok{font-weight:700;color:#10b981 !important;}
+  .td-ok-content{font-size:10px;font-weight:700;}
+  .td-alert{background-color:#fee2e2;position:relative;}
+  .td-alert.warning{background-color:#fee2e2;}
+  
+  .badge-country {
+    font-size: 8px;
+    font-weight: 700;
+    padding: 1px 3px;
+    border-radius: 8px;
+    display: inline-block;
+    white-space: nowrap;
+    margin-top: 2px;
+  }
+  .badge-baja {
+    background-color: #fee2e2;
+    color: #800020;
+    border: 1px solid #fca5a5;
+  }
+  .badge-debajo {
+    background-color: #000000;
+    color: #ffffff;
+    border: 1px solid #000000;
+  }
+
+  .no-data-box{text-align:center;padding:32px 10px;color:var(--text-light);font-size:12.5px;font-style:italic;}
+
+  /* Estilos para columna de métrica no disponible */
+  .col-header-unavailable {
+    background-color: #1e293b !important;
+    border-top: 3px solid #f59e0b !important;
+    color: #f1f5f9 !important;
+    cursor: not-allowed !important;
+  }
+  .metric-unavail-badge {
+    display: inline-flex;
+    align-items: center;
+    margin-top: 3px;
+    padding: 2px 7px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 12px;
+    color: #f8fafc;
+    font-size: 7.5px;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  .td-unavailable {
+    background-color: #0f172a !important;
+    border-color: #1e293b !important;
+    color: #64748b !important;
+    cursor: not-allowed !important;
+  }
+  
+  /* Tooltip simple en hover de desvío */
+  .cell-tooltip {
+    cursor: help;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1px;
+  }
+
+  /* Transición rápida y fluida de columnas (snappy / efecto de movimiento) */
+  th.m-col, td.m-col {
+    transition: opacity 0.15s ease-in-out,
+                max-width 0.15s ease-in-out,
+                min-width 0.15s ease-in-out,
+                width 0.15s ease-in-out,
+                padding 0.15s ease-in-out;
+    opacity: 1;
+    overflow: hidden;
+    white-space: nowrap;
+    width: 110px;
+    min-width: 110px;
+    max-width: 110px;
+  }
+
+  th.m-col.collapsed, td.m-col.collapsed {
+    max-width: 0px !important;
+    min-width: 0px !important;
+    width: 0px !important;
+    padding-left: 0px !important;
+    padding-right: 0px !important;
+    border-left: 0px solid transparent !important;
+    border-right: 0px solid transparent !important;
+    opacity: 0 !important;
+    pointer-events: none;
+  }
+
+  /* Estilos para Drag and Drop del Dropdown */
+  .dropdown-item {
+    cursor: grab;
+  }
+  .dropdown-item.dragging {
+    opacity: 0.4;
+    background: var(--border-light);
+    cursor: grabbing;
+  }
+  .dropdown-item.over {
+    border-top: 2px dashed var(--primary);
+  }
+
+  /* Dropdown flotante de selección de columnas */
+  .metrics-dropdown {
+    position: absolute;
+    top: 52px;
+    left: 0;
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05);
+    z-index: 350;
+    min-width: 220px;
+    display: none;
+    flex-direction: column;
+    overflow: hidden;
+    animation: dropdownFade 0.2s ease-out;
+  }
+  .metrics-dropdown.show {
+    display: flex;
+  }
+  @keyframes dropdownFade {
+    from { opacity: 0; transform: translateY(-5px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .dropdown-header {
+    background: var(--border-light);
+    padding: 8px 12px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: var(--text-sub);
+    letter-spacing: 0.5px;
+    border-bottom: 1px solid var(--border);
+  }
+  .dropdown-list {
+    padding: 6px;
+    max-height: 280px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background 0.15s;
+    user-select: none;
+    font-weight: 500;
+    color: var(--text-main);
+    text-align: left;
+  }
+  .dropdown-item:hover {
+    background: var(--border-light);
+  }
+  .dropdown-item input[type="checkbox"] {
+    cursor: pointer;
+    accent-color: var(--primary);
+    width: 14px;
+    height: 14px;
+  }
+  
+  .restore-btn {
+    background: transparent;
+    border: none;
+    color: var(--primary);
+    font-size: 10px;
+    font-weight: 700;
+    cursor: pointer;
+    text-transform: uppercase;
+    padding: 2px 6px;
+    border-radius: 4px;
+    transition: background 0.15s;
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+  .restore-btn:hover {
+    background: rgba(229,0,68,0.1);
+  }
+  
+  /* Botón Columns/Columnas */
+  .n-btn {
+    height: 32px;
+    border: 1px solid var(--border);
+    background: var(--panel-bg);
+    border-radius: 6px;
+    padding: 0 12px;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-sub);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    outline: none;
+    transition: all .15s ease;
+  }
+  .n-btn:hover {
+    border-color: var(--primary);
+    color: var(--primary);
+    box-shadow: 0 0 0 2px rgba(229,0,68,0.12);
+  }
+  .n-btn svg {
+    width: 12px;
+    height: 12px;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 2.2;
+  }
+</style>
+</head>
+<body>
+
+<div id="splash">
+  <div class="spinner"></div>
+  <div style="font-weight:600;color:var(--text-light);font-size:12.5px;">Cargando matriz por país...</div>
+</div>
+
+<script>window.PAGE_ID = 'bycountry';</script>
+<?!= include('_nav', {userEmail: userEmail, isAdmin: isAdmin, scriptUrl: scriptUrl}); ?>
+
+<div class="page">
+  <div style="margin-bottom:4px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+    <div>
+      <h1 style="font-size:18px;font-weight:900;letter-spacing:-.5px;color:var(--text-main);display:flex;align-items:center;gap:8px;">
+        <svg viewBox="0 0 24 24" style="width:18px;height:18px;stroke:var(--primary);fill:none;stroke-width:2.2;"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+        Performance de Warehouse
+      </h1>
+      <p style="font-size:11.5px;color:var(--text-sub);font-weight:500;">Matriz de control con desglose de métricas por sucursal (WHS).</p>
+    </div>
+    <div style="display: flex; align-items: center; gap: 8px;">
+      <img id="country-flag-icon" src="" style="width:28px; height:20px; border-radius:3px; box-shadow: 0 1px 3px rgba(0,0,0,0.15); display: none;" alt="Country Flag">
+      <span id="country-name-badge" style="font-size: 15px; font-weight: 800; color: var(--text-main);"></span>
+    </div>
+  </div>
+
+  <!-- Tarjeta de Filtros -->
+  <div class="card">
+    <div class="card-head">
+      <div class="bar"></div>
+      <h2>Selección de Filtros y País</h2>
+    </div>
+    <div class="card-body">
+      <div class="filters-row">
+        <div class="filter-group" style="min-width: 180px;">
+          <label for="filter-country" style="display:flex;align-items:center;gap:4px;">
+            <svg viewBox="0 0 24 24" style="width:11px;height:11px;stroke:currentColor;fill:none;stroke-width:2;"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/></svg>
+            1. País de Control
+          </label>
+          <select id="filter-country" onchange="onCountryChange()">
+            <!-- Se llena dinámicamente -->
+          </select>
+        </div>
+        <div class="filter-group" style="min-width: 180px;">
+          <label for="filter-date" style="display:flex;align-items:center;gap:4px;">
+            <svg viewBox="0 0 24 24" style="width:11px;height:11px;stroke:currentColor;fill:none;stroke-width:2;"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            2. Fecha de Alerta
+          </label>
+          <select id="filter-date" onchange="onDateFilterChanged()">
+            <!-- Se llena dinámicamente -->
+          </select>
+        </div>
+        <div class="filter-group" style="min-width: 180px;">
+          <label for="search-whs" style="display:flex;align-items:center;gap:4px;">
+            <svg viewBox="0 0 24 24" style="width:11px;height:11px;stroke:currentColor;fill:none;stroke-width:2;"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            3. Filtrar por WHS
+          </label>
+          <input type="text" id="search-whs" placeholder="Ej: AR_3_Belgrano o AR_506_Microcentro_II..." oninput="renderTable()">
+        </div>
+        <div class="filter-group" style="min-width: 180px;">
+          <label for="filter-consecutivo" style="display:flex;align-items:center;gap:4px;">
+            <svg viewBox="0 0 24 24" style="width:11px;height:11px;stroke:currentColor;fill:none;stroke-width:2;"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+            4. Repetición
+          </label>
+          <select id="filter-consecutivo" onchange="renderTable()">
+            <option value="ALL">Todas las alertas</option>
+            <option value="REPETIDAS">Solo repetidas (2+ días)</option>
+            <option value="CRONICAS">Solo crónicas (3+ días)</option>
+            <option value="CRITICAS">Solo persistentes (5+ días)</option>
+          </select>
+        </div>
+        <div class="filter-group dropdown-container" style="position: relative; min-width: 180px;">
+          <label for="btn-metrics-toggle" style="display:flex;align-items:center;gap:4px;">
+            <svg viewBox="0 0 24 24" style="width:11px;height:11px;stroke:currentColor;fill:none;stroke-width:2;"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
+            5. Mostrar Columnas
+          </label>
+          <button class="n-btn" id="btn-metrics-toggle" onclick="toggleMetricsDropdown(event)" style="width: 100%;">
+            <svg viewBox="0 0 24 24" style="margin-right: 4px;"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
+            Seleccionar Columnas
+          </button>
+          <div class="metrics-dropdown" id="metrics-dropdown" style="min-width: 250px;">
+            <div class="dropdown-header" style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+              <span>Mostrar Columnas</span>
+              <button class="restore-btn" onclick="restoreOriginalMetrics(event)" title="Restaurar visibilidad">Restaurar</button>
+            </div>
+            <div class="dropdown-list" id="metrics-checkboxes-list"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tarjeta de Matriz de Desvíos -->
+  <div class="matrix-card">
+    <div style="padding: 10px 16px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; background: var(--panel-bg);">
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <div style="font-size: 11px; font-weight: 800; color: var(--text-main); text-transform: uppercase; letter-spacing: 0.5px;">Desglose por Sucursal</div>
+        <span id="whs-count-badge" style="font-size: 10px; font-weight: 700; color: var(--primary); background: rgba(229,0,68,0.08); padding: 2px 8px; border-radius: 12px;"></span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 6px;">
+        <span style="font-size: 10px; color: var(--text-sub); font-weight: 600; margin-right: 2px;">Desplazar columnas:</span>
+        <button type="button" class="scroll-nav-btn" onclick="scrollTable(-350)" title="Desplazar métricas a la izquierda">
+          <svg viewBox="0 0 24 24" style="width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:2.5;"><polyline points="15 18 9 12 15 6"/></svg>
+          Izquierda
+        </button>
+        <button type="button" class="scroll-nav-btn" onclick="scrollTable(350)" title="Desplazar métricas a la derecha">
+          Derecha
+          <svg viewBox="0 0 24 24" style="width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:2.5;"><polyline points="9 18 15 12 9 6"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Barra de Scroll Superior Sincronizada -->
+    <div class="top-scrollbar" id="top-scrollbar">
+      <div id="top-scrollbar-content" style="height: 1px;"></div>
+    </div>
+
+    <div class="tbl-container">
+      <table class="tbl" id="matrix-table">
+        <!-- Se llena dinámicamente -->
+      </table>
+    </div>
+    <div id="no-data-msg" class="no-data-box" style="display: none;">
+      No hay datos para mostrar en base a los filtros seleccionados.
+    </div>
+  </div>
+</div>
+
+<script>
+  var ALL_ALERTS = [];
+  var USER_SUB = { paises: [], metricas: [], activo: false };
+  var METRICS_LIST = [];
+  var METRICS_AVAILABILITY = {};
+  var MASTER_WHS = [];
+  var visibleMetrics = new Set();
+  var WHS_WEATHER = {};
+  var WHS_WEATHER_BY_DATE = {};
+  
+  var FULL_PAIS_NAMES = {
+    'AR': 'Argentina', 'BO': 'Bolivia', 'CL': 'Chile', 'CH': 'Chile', 
+    'CO': 'Colombia', 'CR': 'Costa Rica', 'EC': 'Ecuador', 'SV': 'El Salvador', 'GT': 'Guatemala', 
+    'HN': 'Honduras', 'NI': 'Nicaragua', 'PA': 'Panamá', 'PY': 'Paraguay', 
+    'PE': 'Perú', 'UY': 'Uruguay', 'DO': 'Rep. Dominicana', 'RD': 'Rep. Dominicana'
+  };
+
+  function buildRainBadgeHtml(mm) {
+    if (mm === null || mm === undefined || isNaN(mm)) {
+      return '<span style="color:#64748b; font-size:9.5px; font-weight:600; display:inline-block; margin-top:1px;">Lluvias: No</span>';
+    }
+    var val = parseFloat(mm);
+    if (val < 0.1) {
+      return '<span style="color:#64748b; font-size:9.5px; font-weight:600; display:inline-block; margin-top:1px;">Lluvias: No</span>';
+    }
+    var formatted = (val >= 1.0) ? (Math.round(val * 10) / 10) + 'mm' : val.toFixed(1) + 'mm';
+    return '<span style="color:#0284c7; font-size:9.5px; font-weight:700; display:inline-block; margin-top:1px;">🌧️ Lluvias: ' + formatted + '</span>';
+  }
+
+  var DEFERRED_WEATHER_IN_FLIGHT_BYCOUNTRY = false;
+
+  function triggerDeferredWeatherLoad() {
+    var selDateEl = document.getElementById('filter-date');
+    var selDate = selDateEl ? selDateEl.value : '';
+    if (!selDate) return;
+
+    var slots = document.querySelectorAll('.whs-rain-slot');
+    if (slots.length === 0) return;
+
+    var pendingWhs = [];
+    var pendingSet = {};
+
+    slots.forEach(function(el) {
+      var wh = el.getAttribute('data-wh');
+      if (!wh) return;
+
+      var cachedMm = (WHS_WEATHER_BY_DATE[selDate] && WHS_WEATHER_BY_DATE[selDate][wh] !== undefined)
+        ? WHS_WEATHER_BY_DATE[selDate][wh]
+        : (WHS_WEATHER[wh] !== undefined ? WHS_WEATHER[wh] : null);
+
+      if (cachedMm !== null && !isNaN(cachedMm)) {
+        el.innerHTML = buildRainBadgeHtml(cachedMm);
+      } else {
+        if (!pendingSet[wh]) {
+          pendingSet[wh] = true;
+          pendingWhs.push(wh);
+        }
+      }
+    });
+
+    if (pendingWhs.length === 0 || DEFERRED_WEATHER_IN_FLIGHT_BYCOUNTRY) return;
+    if (typeof google === 'undefined' || !google.script || !google.script.run) return;
+
+    DEFERRED_WEATHER_IN_FLIGHT_BYCOUNTRY = true;
+
+    google.script.run
+      .withSuccessHandler(function(wMap) {
+        DEFERRED_WEATHER_IN_FLIGHT_BYCOUNTRY = false;
+        if (wMap && typeof wMap === 'object') {
+          if (!WHS_WEATHER_BY_DATE[selDate]) WHS_WEATHER_BY_DATE[selDate] = {};
+          Object.assign(WHS_WEATHER_BY_DATE[selDate], wMap);
+          Object.assign(WHS_WEATHER, wMap);
+
+          document.querySelectorAll('.whs-rain-slot').forEach(function(el) {
+            var wh = el.getAttribute('data-wh');
+            if (wh && wMap[wh] !== undefined) {
+              el.innerHTML = buildRainBadgeHtml(wMap[wh]);
+            }
+          });
+        }
+      })
+      .withFailureHandler(function(err) {
+        DEFERRED_WEATHER_IN_FLIGHT_BYCOUNTRY = false;
+        console.warn('Carga diferida aviso:', err);
+      })
+      .fetchDeferredWeatherForDate(selDate, pendingWhs);
+  }
+
+  function matchesCountry(whOrPais, countryCode) {
+    if (!whOrPais || !countryCode) return false;
+    var prefix = String(whOrPais).split('_')[0].toUpperCase();
+    var target = String(countryCode).toUpperCase();
+    if (prefix === target) return true;
+    if ((target === 'CL' || target === 'CH') && (prefix === 'CL' || prefix === 'CH')) return true;
+    if ((target === 'DO' || target === 'RD') && (prefix === 'DO' || prefix === 'RD')) return true;
+    return false;
+  }
+
+  var ALLOWED_METRICS_LIST = [
+    'Confirmed Orders', 'GMV (EUR)', 'New Users', 'WIS %', 'WIS UF %', 
+    'Seamless Delivery %', 'Avg. Delivery Time', 'Assignment Time > 6 min %',
+    'Weighted Open time %',
+    'Assignment Time', 'Rejected Orders %',
+    'HC Sessions orders %', 'Late Orders %', 'Slow Orders %', 
+    'Forced Preorders %', 'Modified Orders %'
+  ];
+  var ORIGINAL_ALLOWED_METRICS_LIST = [...ALLOWED_METRICS_LIST];
+
+  function getFlagUrl(cc) {
+    var code = String(cc).toLowerCase();
+    var map = { 'ch': 'cl', 'rd': 'do' };
+    var iso = map[code] || code;
+    return 'https://flagcdn.com/w40/' + iso + '.png';
+  }
+
+  function getMetricColor(key) {
+    var map = {
+      'orders': '#e50044', 'gmv': '#2563eb', 'new_users': '#ea580c',
+      'wis': '#0284c7', 'wis_uf': '#0891b2', 'seamless': '#16a34a',
+      'delivery_time': '#d97706', 'assignment_time': '#9333ea',
+      'assignment_time_over_6m': '#8b5cf6', 'rejected_orders': '#dc2626',
+      'session_orders': '#6366f1', 'late_orders': '#f59e0b',
+      'slow_orders': '#f97316', 'forced_preorders': '#ec4899',
+      'modified_orders': '#14b8a6', 'open_time': '#0ea5e9'
+    };
+    return map[key] || '#64748b';
+  }
+
+  // Helper para mapear etiqueta de métrica a su clave
+  function getMetricaKeyByLabelLocal(mLabel) {
+    var clean = String(mLabel || '').trim().toLowerCase();
+    if (clean.indexOf('wis %') !== -1 || clean === 'wis') return 'wis';
+    if (clean.indexOf('wis uf %') !== -1 || clean === 'wis_uf') return 'wis_uf';
+    if (clean.indexOf('seamless') !== -1) return 'seamless';
+    if (clean.indexOf('confirmed orders') !== -1 || clean === 'orders') return 'orders';
+    if (clean.indexOf('gmv') !== -1) return 'gmv';
+    if (clean.indexOf('new users') !== -1 || clean === 'new_users') return 'new_users';
+    if (clean.indexOf('delivery time') !== -1) return 'delivery_time';
+    if (clean.indexOf('6 min') !== -1 || clean.indexOf('saturation') !== -1) return 'assignment_time_over_6m';
+    if (clean.indexOf('assignment time') !== -1) return 'assignment_time';
+    if (clean.indexOf('rejected') !== -1) return 'rejected_orders';
+    if (clean.indexOf('session') !== -1) return 'session_orders';
+    if (clean.indexOf('late') !== -1) return 'late_orders';
+    if (clean.indexOf('slow') !== -1) return 'slow_orders';
+    if (clean.indexOf('forced') !== -1) return 'forced_preorders';
+    if (clean.indexOf('modified') !== -1) return 'modified_orders';
+    if (clean.indexOf('open time') !== -1 || clean.indexOf('open_time') !== -1 || clean.indexOf('wot') !== -1) return 'open_time';
+    return '';
+  }
+
+  // Helper para obtener la descripción de la regla de la métrica
+  function getMetricRuleDescriptionLocal(mLabel) {
+    var mKey = getMetricaKeyByLabelLocal(mLabel);
+    switch (mKey) {
+      case 'orders': return 'Caída > 20.0% vs L3W';
+      case 'gmv': return 'Caída > 20.0% vs L3W';
+      case 'new_users': return 'Caída > 25.0% vs L3W';
+      case 'wis': return 'Absoluto < 75.0% o Caída > 5.0 pp vs L3W';
+      case 'wis_uf': return 'Absoluto < 75.0% o Caída > 5.0 pp vs L3W';
+      case 'seamless': return 'Absoluto < 75.0% o Caída > 5.0 pp vs 7D';
+      case 'delivery_time': return 'Absoluto > 40.0 min o Aumento > 5.0 min vs L3W';
+      case 'assignment_time': return 'Absoluto > 7.0 min o Aumento > 5.0 min vs L3W';
+      case 'rejected_orders': return 'Absoluto > 3.0%';
+      case 'assignment_time_over_6m': return 'Absoluto > 30.0%';
+      case 'forced_preorders': return 'Absoluto > 2.5%';
+      case 'modified_orders': return 'Aumento > 3.0 pp vs 7D';
+      case 'late_orders': return 'Aumento > 5.0 pp vs 7D';
+      case 'slow_orders': return 'Aumento > 5.0 pp vs 7D';
+      case 'session_orders': return 'Aumento > 3.0 pp vs 7D';
+      case 'open_time': return 'Absoluto < 90.0%';
+      default: return 'Desvío fuera de límites pactados';
+    }
+  }
+
+  // Inicializar visibleMetrics con todas las métricas por defecto
+  ALLOWED_METRICS_LIST.forEach(function(m) {
+    visibleMetrics.add(getMetricaKeyByLabelLocal(m));
+  });
+
+  function formatVal(v, label) {
+    if (v == null || isNaN(v)) return '—';
+    if (label.indexOf('%') !== -1) return (v * 100).toFixed(1) + '%';
+    if (label.indexOf('Time') !== -1) return v.toFixed(1) + ' min';
+    if (label.indexOf('GMV') !== -1) {
+      if (v >= 1000000) return (v / 1000000).toFixed(2) + 'M €';
+      if (v >= 1000) return (v / 1000).toFixed(1) + 'k €';
+      return v.toFixed(2) + ' €';
+    }
+    return Math.round(v).toLocaleString('es-AR');
+  }
+
+  function getAlertSeverityLocal(a) {
+    if (!a) return 0;
+    var mKey = a.metricaKey || getMetricaKeyByLabelLocal(a.metricaLabel);
+    if (mKey === 'orders' && a.valorReal === 0) return 999999;
+
+    var real = Number(a.valorReal) || 0;
+    var exp = Number(a.valorEsperado) || 0;
+    var clean = String(a.metricaLabel || '').toLowerCase();
+
+    if (clean.indexOf('%') !== -1) {
+      return Math.abs((real - exp) * 100);
+    } else if (clean.indexOf('time') !== -1) {
+      return Math.abs(real - exp);
+    } else {
+      return exp > 0 ? Math.abs(((real - exp) / exp) * 100) : Math.abs(real - exp);
+    }
+  }
+
+  window.addEventListener('load', function() {
+    doRefresh(false);
+  });
+
+  function doRefresh(forceRecalc) {
+    var isForce = (forceRecalc === true);
+    document.getElementById('splash').classList.remove('out');
+    google.script.run
+      .withSuccessHandler(onDataLoaded)
+      .withFailureHandler(function(err) {
+        alert('Error de conexión: ' + err);
+        document.getElementById('splash').classList.add('out');
+      })
+      .getDashboardData(isForce);
+  }
+
+  function onDataLoaded(res) {
+    try {
+      ALL_ALERTS = res.alerts || [];
+      USER_SUB = res.userSub || { paises: [], metricas: [], activo: false };
+      METRICS_LIST = res.metricsList || [];
+      MASTER_WHS = res.masterWhs || [];
+      METRICS_AVAILABILITY = res.metricsAvailability || {};
+
+      // Sincronizar orden oficial de métricas para que sea 100% idéntico a la tabla de inicio
+      if (METRICS_LIST && METRICS_LIST.length > 0) {
+        ALLOWED_METRICS_LIST = METRICS_LIST.map(function(m) { return m.label; });
+        ORIGINAL_ALLOWED_METRICS_LIST = [...ALLOWED_METRICS_LIST];
+        visibleMetrics.clear();
+        ALLOWED_METRICS_LIST.forEach(function(m) {
+          visibleMetrics.add(getMetricaKeyByLabelLocal(m));
+        });
+      }
+
+      // 1. Extraer ÚNICA y EXCLUSIVAMENTE los países que existen en los datos reales (MASTER_WHS y ALL_ALERTS)
+      var paisesMap = {};
+
+      // Países reales a partir de los locales maestros (MASTER_WHS)
+      MASTER_WHS.forEach(function(wh) {
+        var code = String(wh).split('_')[0].toUpperCase();
+        if (code) {
+          if (code === 'CH') code = 'CL';
+          if (code === 'RD') code = 'DO';
+          if (FULL_PAIS_NAMES[code]) {
+            paisesMap[code] = true;
+          }
+        }
+      });
+
+      // Países reales a partir de las alertas cargadas (ALL_ALERTS)
+      ALL_ALERTS.forEach(function(a) {
+        if (a && a.pais) {
+          var code = String(a.pais).split('_')[0].toUpperCase();
+          if (code) {
+            if (code === 'CH') code = 'CL';
+            if (code === 'RD') code = 'DO';
+            if (FULL_PAIS_NAMES[code]) {
+              paisesMap[code] = true;
+            }
+          }
+        }
+      });
+
+      var countriesList = Object.keys(paisesMap).sort();
+
+      // Poblar selector de países con los países reales de los datos
+      var cSelect = document.getElementById('filter-country');
+      var prevSelected = cSelect.value;
+      cSelect.innerHTML = '';
+      countriesList.forEach(function(cc) {
+        var opt = document.createElement('option');
+        opt.value = cc;
+        opt.textContent = (FULL_PAIS_NAMES[cc] || cc) + ' (' + cc + ')';
+        cSelect.appendChild(opt);
+      });
+
+      // Extraer y poblar selector de fechas
+      var datesSet = {};
+      ALL_ALERTS.forEach(function(a) {
+        if (a.fecha) datesSet[a.fecha] = true;
+      });
+      if (METRICS_AVAILABILITY) {
+        Object.keys(METRICS_AVAILABILITY).forEach(function(d) {
+          datesSet[d] = true;
+        });
+      }
+      var uniqueDates = Object.keys(datesSet).sort(function(a, b) {
+        return b.localeCompare(a); // De más reciente a más antigua
+      });
+
+      var dSelect = document.getElementById('filter-date');
+      dSelect.innerHTML = '';
+      uniqueDates.forEach(function(date) {
+        var opt = document.createElement('option');
+        opt.value = date;
+        opt.textContent = date;
+        dSelect.appendChild(opt);
+      });
+
+      // Determinar país a seleccionar por defecto: Argentina ('AR') por defecto siempre
+      var defaultCountry = paisesMap['AR'] ? 'AR' : (countriesList.length > 0 ? countriesList[0] : '');
+
+      if (prevSelected && paisesMap[prevSelected]) {
+        cSelect.value = prevSelected;
+      } else {
+        cSelect.value = defaultCountry;
+      }
+
+      // Actualizar fecha de cierre en nav
+      if (uniqueDates.length > 0) {
+        var navDate = document.getElementById('kpi-ultima-fecha-nav');
+        if (navDate) navDate.textContent = uniqueDates[0];
+        var closingBox = document.getElementById('n-closing-date');
+        if (closingBox) closingBox.style.display = 'flex';
+      }
+
+      // Guardar mapa de clima en mm
+      WHS_WEATHER = res.whsWeather || {};
+      if (uniqueDates.length > 0 && uniqueDates[0] && res.whsWeather) {
+        WHS_WEATHER_BY_DATE[uniqueDates[0]] = res.whsWeather;
+      }
+
+      onCountryChange();
+
+    } catch (e) {
+      console.error(e);
+    } finally {
+      document.getElementById('splash').classList.add('out');
+    }
+  }
+
+  function onDateFilterChanged() {
+    renderTable();
+  }
+
+  function onCountryChange() {
+    var cc = document.getElementById('filter-country').value;
+    var name = FULL_PAIS_NAMES[cc] || cc;
+    
+    // Actualizar Header del País
+    var flag = document.getElementById('country-flag-icon');
+    if (flag) {
+      flag.src = getFlagUrl(cc);
+      flag.style.display = 'inline-block';
+    }
+    
+    var badge = document.getElementById('country-name-badge');
+    if (badge) {
+      badge.textContent = name;
+    }
+
+    // Limpiar búsqueda específica de warehouse para no bloquear la lista del nuevo país
+    var searchInput = document.getElementById('search-whs');
+    if (searchInput) searchInput.value = '';
+    
+    renderTable();
+  }
+
+  var currentTableMetrics = [];
+  var tableSortKey = 'whs'; // default sort by Warehouse name
+  var tableSortDir = 1; // 1 = asc, -1 = desc
+
+  function setTableSort(key) {
+    if (tableSortKey === key) {
+      tableSortDir *= -1;
+    } else {
+      tableSortKey = key;
+      tableSortDir = -1; // default desc for metrics
+    }
+    renderTable();
+  }
+
+  function renderTable() {
+    var cc = document.getElementById('filter-country').value;
+    if (!cc) return;
+
+    var selectedDate = document.getElementById('filter-date').value || "";
+    var searchVal = document.getElementById('search-whs').value.trim().toLowerCase();
+    var consecutivoVal = document.getElementById('filter-consecutivo').value || "ALL";
+
+    // 1. Obtener todos los locales maestros del país seleccionado
+    var whsOfCountry = MASTER_WHS.filter(function(wh) {
+      return matchesCountry(wh, cc);
+    });
+
+    // Respaldo: si MASTER_WHS no tuviera locales para este país, buscar en ALL_ALERTS
+    if (whsOfCountry.length === 0) {
+      var whSet = {};
+      ALL_ALERTS.forEach(function(a) {
+        if (matchesCountry(a.pais, cc)) {
+          whSet[a.pais] = true;
+        }
+      });
+      whsOfCountry = Object.keys(whSet);
+    }
+
+    // 2. Filtrar locales por búsqueda de texto
+    if (searchVal) {
+      whsOfCountry = whsOfCountry.filter(function(wh) {
+        return String(wh).toLowerCase().indexOf(searchVal) !== -1;
+      });
+    }
+
+    // 3. Filtrar alertas correspondientes a locales de este país Y de la fecha seleccionada
+    var alertsOfCountry = ALL_ALERTS.filter(function(a) {
+      var matches = matchesCountry(a.pais, cc);
+      var matchesDate = (a.fecha === selectedDate);
+      return matches && matchesDate;
+    });
+
+    // 4. Filtrar locales (WHS) que tengan repetición según el filtro 4
+    if (consecutivoVal !== 'ALL') {
+      whsOfCountry = whsOfCountry.filter(function(wh) {
+        var rowAlerts = alertsOfCountry.filter(function(a) { return a.pais === wh; });
+        var threshold = 1;
+        if (consecutivoVal === 'REPETIDAS') threshold = 2;
+        else if (consecutivoVal === 'CRONICAS') threshold = 3;
+        else if (consecutivoVal === 'CRITICAS') threshold = 5;
+        
+        return rowAlerts.some(function(a) {
+          return a.consecutiveDays && a.consecutiveDays >= threshold;
+        });
+      });
+    }
+
+    // Ordenar locales (WHS): 1º Cantidad de alertas, 2º Días consecutivos, 3º Número de variación
+    whsOfCountry.sort(function(a, b) {
+      if (tableSortKey === 'whs') {
+        var rowAlertsA = alertsOfCountry.filter(function(al) { return al.pais === a; });
+        var rowAlertsB = alertsOfCountry.filter(function(al) { return al.pais === b; });
+
+        // 1. Cantidad de alertas (mayor a menor)
+        var countDiff = rowAlertsB.length - rowAlertsA.length;
+        if (countDiff !== 0) return tableSortDir * countDiff;
+
+        // 2. Días consecutivos (mayor racha a menor)
+        var maxConsecA = 1; rowAlertsA.forEach(function(x){ if (x.consecutiveDays > maxConsecA) maxConsecA = x.consecutiveDays; });
+        var maxConsecB = 1; rowAlertsB.forEach(function(x){ if (x.consecutiveDays > maxConsecB) maxConsecB = x.consecutiveDays; });
+        if (maxConsecB !== maxConsecA) return tableSortDir * (maxConsecB - maxConsecA);
+
+        // 3. Magnitud de variación (mayor a menor)
+        var sevA = 0; rowAlertsA.forEach(function(x){ var s = getAlertSeverityLocal(x); if (s > sevA) sevA = s; });
+        var sevB = 0; rowAlertsB.forEach(function(x){ var s = getAlertSeverityLocal(x); if (s > sevB) sevB = s; });
+        if (sevB !== sevA) return tableSortDir * (sevB - sevA);
+
+        return a.localeCompare(b);
+      } else {
+        // Ordenar por valor real de la métrica (usando getMetricaKeyByLabelLocal para resolver metricaKey)
+        var alertA = alertsOfCountry.filter(function(al) { return al.pais === a && getMetricaKeyByLabelLocal(al.metricaLabel) === tableSortKey; })[0];
+        var alertB = alertsOfCountry.filter(function(al) { return al.pais === b && getMetricaKeyByLabelLocal(al.metricaLabel) === tableSortKey; })[0];
+        
+        var valA = alertA ? alertA.valorReal : -Infinity;
+        var valB = alertB ? alertB.valorReal : -Infinity;
+        
+        // Colocar locales sin alertas al final en orden descendente
+        if (valA === -Infinity && valB === -Infinity) return a.localeCompare(b);
+        if (valA === -Infinity) return 1;
+        if (valB === -Infinity) return -1;
+        
+        return tableSortDir * (valA - valB);
+      }
+    });
+
+    currentTableMetrics = ALLOWED_METRICS_LIST;
+
+    // 5. Renderizar la tabla de matriz de control
+    var table = document.getElementById('matrix-table');
+    var msgBox = document.getElementById('no-data-msg');
+
+    if (whsOfCountry.length === 0 || currentTableMetrics.length === 0) {
+      table.innerHTML = '';
+      table.style.display = 'none';
+      msgBox.style.display = 'block';
+      return;
+    }
+
+    msgBox.style.display = 'none';
+    table.style.display = 'table';
+
+    var isSortedMain = (tableSortKey === 'whs');
+    var mainArrow = isSortedMain ? (tableSortDir === 1 ? ' ↑' : ' ↓') : ' ⇅';
+    var thead = '<thead><tr><th class="th-main" onclick="setTableSort(\'whs\')" style="cursor: pointer; user-select: none;">Warehouse / Local' + mainArrow + '</th>';
+    currentTableMetrics.forEach(function(m) {
+      var mKey = getMetricaKeyByLabelLocal(m);
+      var isVisible = visibleMetrics.has(mKey);
+      var colClass = 'm-col m-col-' + mKey + (isVisible ? '' : ' collapsed');
+      
+      // Comprobar si la métrica no está disponible para este país y fecha
+      var isMetricUnavailable = false;
+      if (selectedDate) {
+        if (typeof METRICS_AVAILABILITY !== 'undefined' && METRICS_AVAILABILITY && METRICS_AVAILABILITY[selectedDate]) {
+          var dayAvail = METRICS_AVAILABILITY[selectedDate];
+          if (dayAvail.hasAnyData === false) {
+            isMetricUnavailable = true;
+          } else if (dayAvail.unavailableGlobal && (dayAvail.unavailableGlobal.indexOf(mKey) !== -1 || dayAvail.unavailableGlobal.indexOf(m) !== -1)) {
+            isMetricUnavailable = true;
+          } else if (dayAvail.unavailableByCountry) {
+            var unavailList = dayAvail.unavailableByCountry[cc] ||
+                              (cc === 'CL' ? dayAvail.unavailableByCountry['CH'] : null) ||
+                              (cc === 'CH' ? dayAvail.unavailableByCountry['CL'] : null) ||
+                              (cc === 'DO' ? dayAvail.unavailableByCountry['RD'] : null) ||
+                              (cc === 'RD' ? dayAvail.unavailableByCountry['DO'] : null);
+            if (unavailList && (unavailList.indexOf(mKey) !== -1 || unavailList.indexOf(m) !== -1)) {
+              isMetricUnavailable = true;
+            }
+          }
+        }
+      }
+
+      if (isMetricUnavailable) {
+        thead += '<th class="' + colClass + ' col-header-unavailable" style="background:#1e293b !important; border-top:3px solid #f59e0b; border-bottom:2px solid #334155; padding:6px 4px; vertical-align:middle; text-align:center; cursor:not-allowed;">' + 
+          '<div style="font-size: 8.5px; font-weight: 800; color:#f1f5f9;">' + m + '</div>' +
+          '<div class="metric-unavail-badge"><span style="width:5px; height:5px; border-radius:50%; background:#f59e0b; display:inline-block; margin-right:3px;"></span>No disponible</div>' +
+        '</th>';
+      } else {
+        var isSorted = (tableSortKey === mKey);
+        var arrow = isSorted ? (tableSortDir === 1 ? ' ↑' : ' ↓') : ' ⇅';
+        thead += '<th class="' + colClass + (isSorted ? ' sorted' : '') + '" onclick="setTableSort(\'' + mKey + '\')" style="cursor: pointer; user-select: none; padding: 6px 4px; vertical-align: middle; white-space: normal;">' + 
+          '<div style="font-size: 8.5px; font-weight: 800;">' + m + arrow + '</div>' +
+          '<div style="font-size: 8px; color: #64748b; font-weight: 500; text-transform: none; margin-top: 3px; white-space: normal; line-height: 1.1; font-style: italic;">' + getMetricRuleDescriptionLocal(m) + '</div>' +
+        '</th>';
+      }
+    });
+    thead += '</tr></thead>';
+
+    // Generar Filas
+    var tbody = '<tbody>';
+
+    whsOfCountry.forEach(function(wh) {
+      var rowAlerts = alertsOfCountry.filter(function(a) { return a.pais === wh; });
+
+      var whRain = null;
+      for (var k = 0; k < rowAlerts.length; k++) {
+        if (rowAlerts[k].lluvia_mm !== undefined && rowAlerts[k].lluvia_mm !== null) {
+          whRain = rowAlerts[k].lluvia_mm;
+          break;
+        }
+      }
+      if (whRain === null && typeof WHS_WEATHER !== 'undefined' && WHS_WEATHER && WHS_WEATHER[wh] !== undefined) {
+        whRain = WHS_WEATHER[wh];
+      }
+
+      var rHtml = '<tr><td class="td-base td-whs">' +
+        '<div style="display:flex; flex-direction:column; gap:2px;">' +
+          '<span style="font-weight:700;">' + wh + '</span>' +
+          '<div class="whs-rain-slot" data-wh="' + wh + '" style="line-height:1.2; margin-top:1px;">' +
+            buildRainBadgeHtml(whRain) +
+          '</div>' +
+        '</div>' +
+      '</td>';
+      currentTableMetrics.forEach(function(m) {
+        var mKey = getMetricaKeyByLabelLocal(m);
+        var isVisible = visibleMetrics.has(mKey);
+        var colClass = 'm-col m-col-' + mKey + (isVisible ? '' : ' collapsed');
+        var alertObj = rowAlerts.filter(function(a) { return a.metricaLabel === m; })[0];
+        
+        // Comprobar si la métrica no está disponible para este país y fecha
+        var isMetricUnavailable = false;
+        if (selectedDate && typeof METRICS_AVAILABILITY !== 'undefined' && METRICS_AVAILABILITY[selectedDate]) {
+          var dayAvail = METRICS_AVAILABILITY[selectedDate];
+          if (!dayAvail.hasAnyData) {
+            isMetricUnavailable = true;
+          } else if (dayAvail.unavailableGlobal && dayAvail.unavailableGlobal.indexOf(mKey) !== -1) {
+            isMetricUnavailable = true;
+          } else if (dayAvail.unavailableByCountry) {
+            var unavailList = dayAvail.unavailableByCountry[cc] ||
+                              (cc === 'CL' ? dayAvail.unavailableByCountry['CH'] : null) ||
+                              (cc === 'CH' ? dayAvail.unavailableByCountry['CL'] : null) ||
+                              (cc === 'DO' ? dayAvail.unavailableByCountry['RD'] : null) ||
+                              (cc === 'RD' ? dayAvail.unavailableByCountry['DO'] : null);
+            if (unavailList && unavailList.indexOf(mKey) !== -1) {
+              isMetricUnavailable = true;
+            }
+          }
+        }
+
+        if (isMetricUnavailable) {
+          rHtml += '<td class="td-base td-unavailable ' + colClass + '" style="background:#0f172a !important; border-color:#1e293b; text-align:center; vertical-align:middle; cursor:not-allowed;" title="Métrica no disponible para esta fecha">' +
+            '<div style="color:#64748b; font-size:11px; font-weight:800;">—</div>' +
+          '</td>';
+        } else if (alertObj) {
+          var mKey = alertObj.metricaKey || getMetricaKeyByLabelLocal(alertObj.metricaLabel);
+          var isClosed = (mKey === 'orders' && alertObj.valorReal === 0);
+          var isBaja = isClosed || String(alertObj.detalles).toLowerCase().search(/ca[íi]da|desv[íi]o|aumento/) !== -1;
+          var badgeClass = isBaja ? 'badge-baja' : 'badge-debajo';
+          
+          var devText = "";
+          var cleanLabel = alertObj.metricaLabel.toLowerCase();
+
+          if (cleanLabel.indexOf('%') !== -1) {
+            var diff = (alertObj.valorReal - alertObj.valorEsperado) * 100;
+            devText = (diff > 0 ? '+' : '') + diff.toFixed(1) + ' pp';
+          } else if (cleanLabel.indexOf('time') !== -1) {
+            var diff = alertObj.valorReal - alertObj.valorEsperado;
+            devText = (diff > 0 ? '+' : '') + diff.toFixed(1) + ' min';
+          } else {
+            var diff = alertObj.valorEsperado > 0 ? ((alertObj.valorReal - alertObj.valorEsperado) / alertObj.valorEsperado) * 100 : 0;
+            devText = (diff > 0 ? '+' : '') + diff.toFixed(1) + '%';
+          }
+
+          if (isClosed) devText = '[CERRADA]';
+
+          var consecutiveHtml = '';
+          if (alertObj.consecutiveDays && alertObj.consecutiveDays > 1) {
+            var rachaLabel = alertObj.consecutiveDays + 'º día';
+            if (alertObj.consecutiveDays === 2) rachaLabel = '2do día';
+            else if (alertObj.consecutiveDays === 3) rachaLabel = '3er día';
+            else if (alertObj.consecutiveDays === 4) rachaLabel = '4to día';
+            else if (alertObj.consecutiveDays === 5) rachaLabel = '5to día';
+            else if (alertObj.consecutiveDays === 6) rachaLabel = '6to día';
+            else if (alertObj.consecutiveDays === 7) rachaLabel = '7mo día';
+            else rachaLabel = alertObj.consecutiveDays + ' días';
+            consecutiveHtml = '<div style="margin-top: 2px;"><span style="background-color:#fffbeb; color:#b45309; border:1px solid #fde68a; font-size:8px; font-weight:800; padding:0.5px 4px; border-radius:4px; display:inline-block;">' + rachaLabel + '</span></div>';
+          }
+
+          var cellContent = 
+            '<div class="cell-tooltip" title="' + alertObj.detalles + '">' +
+              '<div style="font-size:10px; color:#334155; font-weight:bold; white-space:nowrap;">' + 
+                formatVal(alertObj.valorReal, alertObj.metricaLabel) + 
+                ' <span style="font-size:8px; color:#64748b; font-weight:500;">vs ' + formatVal(alertObj.valorEsperado, alertObj.metricaLabel) + '</span>' +
+              '</div>' +
+              '<span class="badge-country ' + badgeClass + '">' + devText + '</span>' +
+              consecutiveHtml +
+            '</div>';
+
+          rHtml += '<td class="td-base td-alert ' + colClass + ' ' + (isBaja ? '' : 'warning') + '">' + cellContent + '</td>';
+        } else if (selectedDate && typeof METRICS_AVAILABILITY !== 'undefined' && METRICS_AVAILABILITY[selectedDate] && METRICS_AVAILABILITY[selectedDate].missingByWarehouse && METRICS_AVAILABILITY[selectedDate].missingByWarehouse[wh] && METRICS_AVAILABILITY[selectedDate].missingByWarehouse[wh].indexOf(mKey) !== -1) {
+          // DATO FALTANTE INDIVIDUAL (la celda vino vacía, ni 0 ni dato):
+          rHtml += '<td class="td-base ' + colClass + '" style="background-color:#f8fafc; color:#94a3b8; font-size:11px; font-weight:700; text-align:center; vertical-align:middle; cursor:not-allowed;" title="Sin datos reportados para este local">' +
+            '<div style="color:#94a3b8;">—</div>' +
+          '</td>';
+        } else {
+          rHtml += '<td class="td-base td-ok ' + colClass + '"><div class="td-ok-content">✓</div></td>';
+        }
+      });
+      rHtml += '</tr>';
+      tbody += rHtml;
+    });
+    tbody += '</tbody>';
+
+    table.innerHTML = thead + tbody;
+    initMetricsDropdown();
+    
+    // Actualizar badge de locales
+    var countBadge = document.getElementById('whs-count-badge');
+    if (countBadge) countBadge.textContent = whsOfCountry.length + ' locales';
+    
+    setTimeout(function() {
+      syncScrollbars();
+      setupDragToScroll();
+      triggerDeferredWeatherLoad();
+    }, 50);
+  }
+
+  // Manejadores para Drag & Drop
+  var dragSrcEl = null;
+
+  function handleDragStart(e) {
+    dragSrcEl = this;
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', this.getAttribute('data-key'));
+    this.classList.add('dragging');
+  }
+
+  function handleDragOver(e) {
+    if (e.preventDefault) {
+      e.preventDefault();
+    }
+    e.dataTransfer.dropEffect = 'move';
+    return false;
+  }
+
+  function handleDragEnter(e) {
+    this.classList.add('over');
+  }
+
+  function handleDragLeave(e) {
+    this.classList.remove('over');
+  }
+
+  function handleDrop(e) {
+    if (e.stopPropagation) {
+      e.stopPropagation();
+    }
+    var srcKey = e.dataTransfer.getData('text/plain') || (dragSrcEl && dragSrcEl.getAttribute('data-key'));
+    var targetKey = this.getAttribute('data-key');
+    
+    if (srcKey && targetKey && srcKey !== targetKey) {
+      var srcIdx = ALLOWED_METRICS_LIST.findIndex(function(m) { return getMetricaKeyByLabelLocal(m) === srcKey; });
+      var targetIdx = ALLOWED_METRICS_LIST.findIndex(function(m) { return getMetricaKeyByLabelLocal(m) === targetKey; });
+      
+      if (srcIdx >= 0 && targetIdx >= 0) {
+        var moved = ALLOWED_METRICS_LIST.splice(srcIdx, 1)[0];
+        ALLOWED_METRICS_LIST.splice(targetIdx, 0, moved);
+        
+        renderTable();
+      }
+    }
+    return false;
+  }
+
+  function handleDragEnd(e) {
+    this.classList.remove('dragging');
+    document.querySelectorAll('.dropdown-item').forEach(function(item) {
+      item.classList.remove('over');
+    });
+  }
+
+  // Lógica del Dropdown de Selección de Columnas
+  function initMetricsDropdown() {
+    const container = document.getElementById('metrics-checkboxes-list');
+    if(!container) return;
+    container.innerHTML = '';
+    
+    currentTableMetrics.forEach(function(m) {
+      const mKey = getMetricaKeyByLabelLocal(m);
+      const isChecked = visibleMetrics.has(mKey);
+      const item = document.createElement('div');
+      item.className = 'dropdown-item';
+      item.setAttribute('draggable', 'true');
+      item.setAttribute('data-key', mKey);
+      
+      // Asignar manejadores de eventos Drag & Drop
+      item.addEventListener('dragstart', handleDragStart, false);
+      item.addEventListener('dragenter', handleDragEnter, false);
+      item.addEventListener('dragover', handleDragOver, false);
+      item.addEventListener('dragleave', handleDragLeave, false);
+      item.addEventListener('drop', handleDrop, false);
+      item.addEventListener('dragend', handleDragEnd, false);
+      
+      item.innerHTML = `
+        <input type="checkbox" data-key="${mKey}" ${isChecked ? 'checked' : ''} onchange="onMetricCheckboxChange(this)" style="cursor: pointer; margin-right: 4px;">
+        <span style="border-left: 3px solid ${getMetricColor(mKey)}; padding-left: 6px; font-size: 11px; font-weight:600; flex: 1; pointer-events: none;">${m}</span>
+        <svg viewBox="0 0 24 24" style="width:12px;height:12px;stroke:var(--text-light);fill:none;stroke-width:2.5;stroke-linecap:round;margin-left:auto;pointer-events:none;"><line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="20" y2="15"/></svg>
+      `;
+      container.appendChild(item);
+    });
+  }
+
+  function onMetricCheckboxChange(checkbox) {
+    const key = checkbox.getAttribute('data-key');
+    const isChecked = checkbox.checked;
+    
+    if (isChecked) {
+      visibleMetrics.add(key);
+    } else {
+      if (visibleMetrics.size <= 1) {
+        checkbox.checked = true;
+        alert('Debes mantener al menos una columna de métrica visible.');
+        return;
+      }
+      visibleMetrics.delete(key);
+    }
+    
+    toggleMetricColumn(key, isChecked);
+  }
+
+  function toggleMetricColumn(key, isVisible) {
+    const cells = document.querySelectorAll(`.m-col-${key}`);
+    cells.forEach(function(c) {
+      c.classList.toggle('collapsed', !isVisible);
+    });
+  }
+
+  function restoreOriginalMetrics(e) {
+    if (e) e.stopPropagation();
+    
+    // Restaurar orden original
+    ALLOWED_METRICS_LIST = [...ORIGINAL_ALLOWED_METRICS_LIST];
+    
+    // Restaurar todas las columnas como visibles
+    visibleMetrics.clear();
+    ALLOWED_METRICS_LIST.forEach(function(m) {
+      visibleMetrics.add(getMetricaKeyByLabelLocal(m));
+    });
+    
+    // Re-renderizar para reflejar el estado restaurado
+    renderTable();
+  }
+
+  function toggleMetricsDropdown(e) {
+    if (e) e.stopPropagation();
+    const dropdown = document.getElementById('metrics-dropdown');
+    if (dropdown) dropdown.classList.toggle('show');
+  }
+
+  window.addEventListener('click', function(e) {
+    const dropdown = document.getElementById('metrics-dropdown');
+    const toggleBtn = document.getElementById('btn-metrics-toggle');
+    if (dropdown && dropdown.classList.contains('show') && !dropdown.contains(e.target) && e.target !== toggleBtn && !toggleBtn.contains(e.target)) {
+      dropdown.classList.remove('show');
+    }
+  });
+
+  // Funciones de control de scroll horizontal fluido y doble barra sincronizada
+  function syncScrollbars() {
+    var topScroll = document.getElementById('top-scrollbar');
+    var tblContainer = document.querySelector('.tbl-container');
+    var matrixTable = document.getElementById('matrix-table');
+    var topContent = document.getElementById('top-scrollbar-content');
+    
+    if (!topScroll || !tblContainer || !matrixTable || !topContent) return;
+    
+    // Igualar ancho fantasma superior con el ancho real de la tabla de datos
+    var scrollWidth = matrixTable.offsetWidth;
+    topContent.style.width = scrollWidth + 'px';
+    
+    // Si la tabla no desborda la pantalla, ocultar la barra superior
+    if (scrollWidth <= tblContainer.clientWidth) {
+      topScroll.style.display = 'none';
+      return;
+    } else {
+      topScroll.style.display = 'block';
+    }
+    
+    var isSyncingTop = false;
+    var isSyncingBottom = false;
+    
+    topScroll.onscroll = function() {
+      if (!isSyncingTop) {
+        isSyncingBottom = true;
+        tblContainer.scrollLeft = topScroll.scrollLeft;
+      }
+      isSyncingTop = false;
+    };
+    
+    tblContainer.onscroll = function() {
+      if (!isSyncingBottom) {
+        isSyncingTop = true;
+        topScroll.scrollLeft = tblContainer.scrollLeft;
+      }
+      isSyncingBottom = false;
+    };
+  }
+
+  function scrollTable(amount) {
+    var tblContainer = document.querySelector('.tbl-container');
+    if (tblContainer) {
+      tblContainer.scrollBy({ left: amount, behavior: 'smooth' });
+    }
+  }
+
+  function setupDragToScroll() {
+    var slider = document.querySelector('.tbl-container');
+    if (!slider || slider._hasDragListener) return;
+    slider._hasDragListener = true;
+    
+    var isDown = false;
+    var startX;
+    var scrollLeft;
+    
+    slider.addEventListener('mousedown', function(e) {
+      if (e.target.closest('button, a, input, select')) return;
+      isDown = true;
+      slider.style.cursor = 'grabbing';
+      startX = e.pageX - slider.offsetLeft;
+      scrollLeft = slider.scrollLeft;
+    });
+    
+    window.addEventListener('mouseup', function() {
+      isDown = false;
+      if (slider) slider.style.cursor = 'grab';
+    });
+    
+    slider.addEventListener('mousemove', function(e) {
+      if (!isDown) return;
+      e.preventDefault();
+      var x = e.pageX - slider.offsetLeft;
+      var walk = (x - startX) * 1.5;
+      slider.scrollLeft = scrollLeft - walk;
+    });
+
+    // Soporte para scroll horizontal con rueda del mouse
+    slider.addEventListener('wheel', function(e) {
+      if (Math.abs(e.deltaX) > 0) return; // Ya es horizontal nativo
+      if (e.shiftKey) return; // El navegador ya lo maneja
+      // Desplazar horizontalmente si se mueve la rueda en la zona de la tabla
+      if (Math.abs(e.deltaY) > 0 && slider.scrollWidth > slider.clientWidth) {
+        // Solo interceptar si el usuario no llegó al extremo
+        var atStart = (slider.scrollLeft === 0 && e.deltaY < 0);
+        var atEnd = (slider.scrollLeft + slider.clientWidth >= slider.scrollWidth && e.deltaY > 0);
+        if (!atStart && !atEnd) {
+          e.preventDefault();
+          slider.scrollLeft += e.deltaY;
+        }
+      }
+    }, { passive: false });
+  }
+
+  window.addEventListener('resize', function() {
+    syncScrollbars();
+  });
+</script>
+</body>
+</html>

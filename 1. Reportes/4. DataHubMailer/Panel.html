@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html>
+<head>
+<base target="_top">
+<meta charset="utf-8">
+<style>
+  * { box-sizing: border-box; margin: 0; }
+  body { font-family: -apple-system, "Segoe UI", Arial, Helvetica, sans-serif; background: #ffffff; color: #26272B; padding-bottom: 84px; -webkit-font-smoothing: antialiased; }
+
+  header { padding: 18px 24px 14px; display: flex; align-items: center; justify-content: space-between; }
+  header .logo { color: #26272B; font-size: 15px; font-weight: 600; letter-spacing: -0.2px; display: flex; align-items: center; gap: 8px; }
+  header .logo img { display: block; height: 22px; border-radius: 4px; }
+  header .tag-wrap { display: flex; align-items: center; gap: 10px; }
+  header .tag { color: #B4B6BD; font-size: 10.5px; font-weight: 600; letter-spacing: 1px; }
+  header .autosave { color: #A7ABB3; opacity: 0; font-size: 11.5px; transition: opacity .3s; white-space: nowrap; }
+  header .autosave.show { opacity: 1; }
+
+  nav { display: flex; gap: 22px; padding: 0 24px; border-bottom: 1px solid #F0F0F2; }
+  nav button { border: 0; background: none; padding: 0 0 12px; font-size: 13px; font-weight: 500; color: #A7ABB3; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; transition: color .15s; }
+  nav button.on { color: #26272B; border-bottom-color: #FA0050; }
+
+  main { max-width: 640px; margin: 0 auto; padding: 8px 24px 24px; }
+
+  .card { padding: 22px 0; border-bottom: 1px solid #F3F3F5; }
+  .card:last-child { border-bottom: 0; }
+  .card h3 { font-size: 13px; font-weight: 600; color: #26272B; margin-bottom: 3px; }
+  .card .hint:first-of-type { margin-top: 0; margin-bottom: 14px; }
+
+  label { display: block; font-size: 12px; color: #9A9DA5; margin: 14px 0 6px; font-weight: 500; }
+  input, textarea, select {
+    width: 100%; padding: 8px 0; border: 0; border-bottom: 1px solid #E7E7EA; border-radius: 0;
+    font-size: 13.5px; font-family: inherit; background: transparent; color: #26272B;
+  }
+  input:focus, textarea:focus { outline: none; border-bottom-color: #FA0050; }
+  textarea { resize: vertical; min-height: 60px; }
+  ::placeholder { color: #C7C9CE; }
+
+  .row { display: flex; gap: 20px; }
+  .row > div { flex: 1; }
+  .row .peq { flex: 0 0 110px; }
+  .hint { font-size: 11.5px; color: #B4B6BD; margin-top: 5px; line-height: 1.5; }
+
+  .item-row { display: flex; gap: 10px; margin-bottom: 2px; align-items: center; }
+  .item-row .n { flex: 0 0 16px; font-size: 12px; font-weight: 600; color: #C7C9CE; text-align: center; }
+  .item-row input { border-bottom: 1px solid #E7E7EA; }
+
+  .btn { border: 0; border-radius: 999px; padding: 10px 20px; font-size: 13px; font-weight: 600; cursor: pointer; transition: opacity .15s, background .15s; }
+  .btn-red { background: #FA0050; color: #fff; }
+  .btn-red:hover { opacity: .9; }
+  .btn-line { background: none; color: #26272B; border: 1px solid #E7E7EA; }
+  .btn-line:hover { border-color: #C7C9CE; }
+  .btn-sm { padding: 6px 13px; font-size: 12px; }
+  .btn-x { flex: 0 0 24px; height: 24px; border-radius: 6px; border: 0; background: none; color: #C7C9CE; cursor: pointer; font-weight: 600; font-size: 13px; }
+  .btn-x:hover { color: #9A9DA5; }
+
+  footer.actions { position: fixed; bottom: 0; left: 0; right: 0; background: rgba(255,255,255,.92); backdrop-filter: blur(6px); border-top: 1px solid #F0F0F2; padding: 12px 16px; display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+  #toast { position: fixed; top: 14px; left: 50%; transform: translateX(-50%); background: #26272B; color: #fff; padding: 9px 18px; border-radius: 999px; font-size: 12.5px; display: none; z-index: 50; }
+
+  .tab { display: none; } .tab.on { display: block; }
+
+  .stats { display: flex; gap: 32px; margin: 8px 0 8px; padding-bottom: 20px; border-bottom: 1px solid #F3F3F5; }
+  .stat { text-align: left; }
+  .stat b { display: block; font-size: 26px; font-weight: 600; color: #26272B; }
+  .stat span { font-size: 12px; color: #9A9DA5; }
+
+  .diabar { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; font-size: 12.5px; }
+  .diabar .f { flex: 0 0 60px; color: #9A9DA5; }
+  .diabar .track { flex: 1; background: #F3F3F5; border-radius: 4px; height: 8px; overflow: hidden; }
+  .diabar .fill { background: #FA0050; height: 8px; border-radius: 4px; min-width: 3px; }
+  .diabar .v { flex: 0 0 84px; color: #26272B; font-weight: 500; text-align: right; }
+
+  table.log { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  table.log td, table.log th { padding: 8px 4px; border-bottom: 1px solid #F3F3F5; text-align: left; }
+  table.log th { color: #C7C9CE; font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .5px; }
+
+  .extra { border-bottom: 1px solid #F3F3F5; padding: 16px 0; margin-bottom: 4px; }
+  .extra:last-child { border-bottom: 0; }
+</style>
+</head>
+<body>
+
+<header>
+  <span class="logo">
+    <img src="https://upload.wikimedia.org/wikipedia/commons/c/c5/Isologotipo_PedidosYa.jpg" alt="PedidosYa" height="22">
+    <span style="opacity:.9;">· Data Hub</span>
+  </span>
+  <span class="tag-wrap">
+    <span class="autosave" id="autosave-status">Guardado ✓</span>
+    <span class="tag">RANKING MENSUAL</span>
+  </span>
+</header>
+
+<nav>
+  <button id="tb-datos" class="on" onclick="tab('datos')">📝 Datos del mail</button>
+  <button id="tb-extras" onclick="tab('extras')">➕ Otros datos</button>
+  <button id="tb-ana" onclick="tab('ana')">📊 Analíticas</button>
+</nav>
+
+<div id="toast"></div>
+
+<main>
+
+  <!-- ============ TAB DATOS ============ -->
+  <section id="tab-datos" class="tab on">
+
+    <div class="card">
+      <h3>✉️ Envío</h3>
+      <label>Destinatarios (separados por coma o salto de línea)</label>
+      <textarea id="destinatarios" placeholder="felipe.salaverria@pedidosya.com, tobias.fay@pedidosya.com"></textarea>
+      <div class="row">
+        <div><label>Asunto</label><input id="asunto"></div>
+        <div class="peq" style="flex-basis:180px;"><label>Período</label><input id="periodo"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>💬 Mensaje de arriba</h3>
+      <div class="row">
+        <div><label>Saludo</label><input id="saludo"></div>
+        <div class="peq" style="flex-basis:160px;"><label>Firma</label><input id="firma"></div>
+      </div>
+      <label>Mensaje</label>
+      <textarea id="mensaje"></textarea>
+    </div>
+
+    <div class="card">
+      <h3>🔢 Números grandes</h3>
+      <div class="row">
+        <div><label>Usuarios este mes</label><input id="t_usuarios" type="number"></div>
+        <div><label>Sesiones totales</label><input id="t_sesiones" type="number"></div>
+      </div>
+      <div class="row">
+        <div><label>Links en el Data Hub</label><input id="t_links" type="number"></div>
+        <div><label>Métricas en el glosario</label><input id="t_metricas" type="number" placeholder="completar"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>👥 Podio — top 3 usuarios</h3>
+      <div class="hint" style="margin-bottom:10px;">Cargá los 3 primeros (sin contarte a vos 😉). Email + eventos.</div>
+      <div class="item-row"><span class="n">1</span><input id="u1e" placeholder="email"><input id="u1v" type="number" style="flex:0 0 100px;" placeholder="eventos"></div>
+      <div class="item-row"><span class="n">2</span><input id="u2e" placeholder="email"><input id="u2v" type="number" style="flex:0 0 100px;" placeholder="eventos"></div>
+      <div class="item-row"><span class="n">3</span><input id="u3e" placeholder="email"><input id="u3v" type="number" style="flex:0 0 100px;" placeholder="eventos"></div>
+    </div>
+
+    <div class="card">
+      <h3>📈 Métricas más vistas (glosario)</h3>
+      <div class="item-row"><span class="n">1</span><input id="m1" placeholder="La más consultada (tarjeta destacada)"></div>
+      <div class="item-row"><span class="n">2</span><input id="m2"></div>
+      <div class="item-row"><span class="n">3</span><input id="m3"></div>
+    </div>
+
+    <div class="card">
+      <h3>📂 Reportes más abiertos</h3>
+      <div class="item-row"><span class="n">1</span><input id="r1"></div>
+      <div class="item-row"><span class="n">2</span><input id="r2"></div>
+      <div class="item-row"><span class="n">3</span><input id="r3" placeholder="(opcional)"></div>
+    </div>
+
+    <div class="card">
+      <h3>📱 Plataformas más utilizadas</h3>
+      <div class="hint" style="margin-bottom:10px;">En orden de uso. Plataforma + total de usuarios (no %).</div>
+      <div class="item-row"><span class="n">1</span><input id="p1n" placeholder="plataforma"><input id="p1v" type="number" style="flex:0 0 100px;" placeholder="usuarios"></div>
+      <div class="item-row"><span class="n">2</span><input id="p2n" placeholder="plataforma"><input id="p2v" type="number" style="flex:0 0 100px;" placeholder="usuarios"></div>
+      <div class="item-row"><span class="n">3</span><input id="p3n" placeholder="plataforma"><input id="p3v" type="number" style="flex:0 0 100px;" placeholder="usuarios"></div>
+    </div>
+
+    <div class="card">
+      <h3>🎨 Branding (opcional)</h3>
+      <div class="row">
+        <div><label>URL del logo (PNG)</label><input id="logoUrl" placeholder="https://…/logo.png"></div>
+        <div><label>URL del GIF de fondo del header</label><input id="headerGifUrl" placeholder="https://…/peya-gradient.gif"></div>
+      </div>
+      <div class="hint">Vacíos = wordmark "PedidosYa" y degradado CSS (animado en Apple Mail, fijo en Gmail). Con el GIF, el degradado se mueve en Gmail también.</div>
+    </div>
+
+  </section>
+
+  <!-- ============ TAB EXTRAS ============ -->
+  <section id="tab-extras" class="tab">
+    <div class="card">
+      <h3>➕ Secciones extra del mail</h3>
+      <div class="hint" style="margin-bottom:12px;">Agregá cualquier otro ranking o lista (hasta 5 ítems por sección). Aparecen después de "Plataformas más utilizadas".</div>
+      <div id="extras-box"></div>
+      <button class="btn btn-line btn-sm" onclick="addExtra()">+ Agregar sección</button>
+    </div>
+  </section>
+
+  <!-- ============ TAB ANALÍTICAS ============ -->
+  <section id="tab-ana" class="tab">
+    <div class="stats">
+      <div class="stat"><b id="a-clicks">–</b><span>clicks totales</span></div>
+      <div class="stat"><b id="a-unicos">–</b><span>personas distintas</span></div>
+    </div>
+    <div class="card">
+      <h3>📅 Entradas por día</h3>
+      <div id="a-dias"><div class="hint">Cargando…</div></div>
+    </div>
+    <div class="card">
+      <h3>🕐 Últimos clicks</h3>
+      <table class="log"><thead><tr><th>Cuándo</th><th>Quién</th></tr></thead><tbody id="a-log"></tbody></table>
+      <div class="hint" style="margin-top:10px;"><a id="a-sheet" href="#" target="_blank">Ver hoja de cálculo completa →</a></div>
+    </div>
+    <button class="btn btn-line btn-sm" onclick="loadAna()">↻ Actualizar</button>
+  </section>
+
+</main>
+
+<footer class="actions">
+  <button class="btn btn-line" onclick="save()">💾 Guardar</button>
+  <button class="btn btn-line" onclick="preview()">👁 Vista previa</button>
+  <button class="btn btn-line" onclick="test()">📤 Enviarme prueba</button>
+  <button class="btn btn-red" onclick="sendAll()">🚀 Enviar a todos</button>
+</footer>
+
+<script>
+  // ===== Mock local: permite previsualizar el panel fuera de Apps Script =====
+  // (en GAS real este bloque no hace nada porque `google` existe)
+  if (typeof google === 'undefined') {
+    var MOCK_DATOS = {
+      destinatarios: 'felipe.salaverria@pedidosya.com, tobias.fay@pedidosya.com',
+      asunto: 'Ranking de uso — Data Hub · junio 2026',
+      periodo: 'junio 2026',
+      saludo: 'Hola equipo 👋',
+      mensaje: 'Cerramos junio con más equipos usando el Data Hub en su día a día. ¿Falta alguna métrica o reporte? Escribime y lo agregamos.',
+      firma: '— Matías',
+      logoUrl: '', headerGifUrl: '',
+      totales: { usuarios: 16, sesiones: 472, links: 403, metricas: '' },
+      usuarios: [
+        { nombre: 'felipe.salaverria@pedidosya.com', valor: 59 },
+        { nombre: 'tobias.fay@pedidosya.com', valor: 23 },
+        { nombre: 'seba.aquije@pedidosya.com', valor: 13 },
+      ],
+      metricas: ['Net Sales o Retail Sales', '% CPO / AFV', 'CVR3 (Conversion Rate 3)'],
+      reportes: ['Análisis de ajustes', '1. Diccionario de Métricas - PeYa Market'],
+      plataformas: [
+        { nombre: 'datahub', usuarios: 11 },
+        { nombre: 'navlink', usuarios: 3 },
+        { nombre: 'glosario', usuarios: 2 },
+      ],
+      extras: [{ emoji: '🌎', titulo: 'Países más activos', items: ['Argentina', 'Perú', 'Chile'] }],
+    };
+    var MOCK_ANA = {
+      totalClicks: 34, totalUnicos: 12, sheetUrl: '#',
+      dias: [
+        { fecha: '2026-07-01', total: 14, unicos: 8, quienes: ['felipe.salaverria@pedidosya.com', 'tobias.fay@pedidosya.com'] },
+        { fecha: '2026-07-02', total: 11, unicos: 6, quienes: ['seba.aquije@pedidosya.com'] },
+        { fecha: '2026-07-03', total: 9, unicos: 5, quienes: ['sophia.reynoso@pedidosya.com'] },
+      ],
+      ultimos: [
+        { ts: '03/07 10:42', quien: 'felipe.salaverria@pedidosya.com' },
+        { ts: '03/07 09:15', quien: 'sophia.reynoso@pedidosya.com' },
+        { ts: '02/07 17:03', quien: 'tobias.fay@pedidosya.com' },
+      ],
+    };
+    window.google = { script: { run: (function chain(ok, ko) {
+      return {
+        withSuccessHandler: function (f) { return chain(f, ko); },
+        withFailureHandler: function (f) { return chain(ok, f); },
+        obtenerDatos: function () { if (ok) ok(MOCK_DATOS); },
+        guardarDatos: function () { if (ok) ok('Guardado (mock — deployá en GAS para guardar de verdad)'); },
+        enviarPrueba: function () { if (ok) ok('Prueba enviada (mock)'); },
+        enviarEmail: function () { if (ok) ok('Enviado (mock)'); },
+        vistaPrevia: function () { if (ok) ok('<body style="font-family:Arial;padding:40px;">La vista previa real se genera dentro de Apps Script.</body>'); },
+        obtenerAnaliticas: function () { if (ok) ok(MOCK_ANA); },
+      };
+    })(null, null) } };
+  }
+
+  var v = function (id) { return document.getElementById(id).value.trim(); };
+  var num = function (id) { var x = Number(v(id)); return isNaN(x) ? '' : x; };
+  var set = function (id, val) { document.getElementById(id).value = (val === undefined || val === null) ? '' : val; };
+
+  function toast(msg, err) {
+    var t = document.getElementById('toast');
+    t.textContent = msg;
+    t.style.background = err ? '#C8003F' : '#1F2024';
+    t.style.display = 'block';
+    setTimeout(function () { t.style.display = 'none'; }, 3500);
+  }
+
+  function tab(name) {
+    ['datos', 'extras', 'ana'].forEach(function (n) {
+      document.getElementById('tab-' + (n === 'ana' ? 'ana' : n)).classList.toggle('on', n === name);
+      document.getElementById('tb-' + n).classList.toggle('on', n === name);
+    });
+    if (name === 'ana') loadAna();
+  }
+
+  // ---------- memoria: autoguardado con debounce ----------
+  // Guarda solo despues de una pausa al tipear (no en cada tecla), para no
+  // saturar de llamadas al servidor. Asi el panel siempre recuerda "lo ultimo
+  // que escribiste" aunque cierres la pestaña sin tocar "Guardar".
+  var autosaveTimer = null;
+  var autosaveHideTimer = null;
+  var cargaInicialCompleta = false;
+
+  function scheduleAutosave() {
+    if (!cargaInicialCompleta) return; // no guardar mientras estamos poblando el formulario
+    clearTimeout(autosaveTimer);
+    autosaveTimer = setTimeout(function () {
+      var st = document.getElementById('autosave-status');
+      st.textContent = 'Guardando…';
+      st.classList.add('show');
+      google.script.run
+        .withSuccessHandler(function () { marcarGuardado_(); })
+        .withFailureHandler(function () { marcarGuardado_('No se pudo autoguardar'); })
+        .guardarDatos(collect());
+    }, 1200);
+  }
+  function marcarGuardado_(msg) {
+    var st = document.getElementById('autosave-status');
+    st.textContent = msg || 'Guardado ✓';
+    clearTimeout(autosaveHideTimer);
+    autosaveHideTimer = setTimeout(function () { st.classList.remove('show'); }, 2200);
+  }
+
+  // Delegación: cualquier tecleo dentro del formulario (incluidos los campos
+  // de "Otros datos" agregados dinámicamente) dispara el autoguardado.
+  document.querySelector('main').addEventListener('input', scheduleAutosave);
+
+  // ---------- carga inicial ----------
+  google.script.run.withSuccessHandler(function (d) {
+    render(d);
+    cargaInicialCompleta = true;
+  }).obtenerDatos();
+
+  function render(d) {
+    set('destinatarios', d.destinatarios); set('asunto', d.asunto); set('periodo', d.periodo);
+    set('saludo', d.saludo); set('mensaje', d.mensaje); set('firma', d.firma);
+    set('logoUrl', d.logoUrl); set('headerGifUrl', d.headerGifUrl);
+    var t = d.totales || {};
+    set('t_usuarios', t.usuarios); set('t_sesiones', t.sesiones); set('t_links', t.links); set('t_metricas', t.metricas);
+    (d.usuarios || []).slice(0, 3).forEach(function (u, i) { set('u' + (i + 1) + 'e', u.nombre); set('u' + (i + 1) + 'v', u.valor); });
+    (d.metricas || []).slice(0, 3).forEach(function (m, i) { set('m' + (i + 1), m); });
+    (d.reportes || []).slice(0, 3).forEach(function (r, i) { set('r' + (i + 1), r); });
+    (d.plataformas || []).slice(0, 3).forEach(function (p, i) { set('p' + (i + 1) + 'n', p.nombre); set('p' + (i + 1) + 'v', p.usuarios); });
+    document.getElementById('extras-box').innerHTML = '';
+    (d.extras || []).forEach(function (ex) { addExtra(ex); });
+  }
+
+  // ---------- extras ----------
+  function addExtra(ex) {
+    ex = ex || { emoji: '✨', titulo: '', items: [''] };
+    var box = document.getElementById('extras-box');
+    var div = document.createElement('div');
+    div.className = 'extra';
+    div.innerHTML =
+      '<div class="row">'
+      + '<div class="peq" style="flex-basis:70px;"><label>Emoji</label><input class="ex-emoji" maxlength="4"></div>'
+      + '<div><label>Título de la sección</label><input class="ex-titulo" placeholder="Ej: Países más activos"></div>'
+      + '<div class="peq" style="flex-basis:46px;display:flex;align-items:flex-end;"><button class="btn-x" onclick="removeExtra(this)">✕</button></div>'
+      + '</div>'
+      + '<label>Ítems (en orden de ranking)</label>'
+      + '<div class="ex-items"></div>'
+      + '<button class="btn btn-line btn-sm" onclick="addItem(this)">+ ítem</button>';
+    box.appendChild(div);
+    div.querySelector('.ex-emoji').value = ex.emoji || '✨';
+    div.querySelector('.ex-titulo').value = ex.titulo || '';
+    (ex.items && ex.items.length ? ex.items : ['']).forEach(function (it) { addItemTo(div, it); });
+  }
+  function addItemTo(div, val) {
+    var wrap = div.querySelector('.ex-items');
+    if (wrap.children.length >= 5) return;
+    var row = document.createElement('div');
+    row.className = 'item-row';
+    row.innerHTML = '<span class="n">' + (wrap.children.length + 1) + '</span><input class="ex-item">'
+      + '<button class="btn-x" onclick="removeItemRow(this)">✕</button>';
+    wrap.appendChild(row);
+    row.querySelector('input').value = val || '';
+  }
+  function addItem(btn) { addItemTo(btn.closest('.extra')); scheduleAutosave(); }
+  function removeExtra(btn) { btn.closest('.extra').remove(); scheduleAutosave(); }
+  function removeItemRow(btn) { btn.parentElement.remove(); scheduleAutosave(); }
+
+  function collectExtras() {
+    return Array.prototype.map.call(document.querySelectorAll('.extra'), function (div) {
+      return {
+        emoji: div.querySelector('.ex-emoji').value.trim() || '✨',
+        titulo: div.querySelector('.ex-titulo').value.trim(),
+        items: Array.prototype.map.call(div.querySelectorAll('.ex-item'), function (i) { return i.value.trim(); }).filter(Boolean),
+      };
+    }).filter(function (s) { return s.titulo && s.items.length; });
+  }
+
+  // ---------- collect / acciones ----------
+  function collect() {
+    return {
+      destinatarios: v('destinatarios'), asunto: v('asunto'), periodo: v('periodo'),
+      saludo: v('saludo'), mensaje: v('mensaje'), firma: v('firma'),
+      logoUrl: v('logoUrl'), headerGifUrl: v('headerGifUrl'),
+      totales: { usuarios: num('t_usuarios'), sesiones: num('t_sesiones'), links: num('t_links'), metricas: num('t_metricas') },
+      usuarios: [1, 2, 3].map(function (i) { return { nombre: v('u' + i + 'e'), valor: num('u' + i + 'v') }; }).filter(function (u) { return u.nombre; }),
+      metricas: [1, 2, 3].map(function (i) { return v('m' + i); }).filter(Boolean),
+      reportes: [1, 2, 3].map(function (i) { return v('r' + i); }).filter(Boolean),
+      plataformas: [1, 2, 3].map(function (i) { return { nombre: v('p' + i + 'n'), usuarios: num('p' + i + 'v') }; }).filter(function (p) { return p.nombre; }),
+      extras: collectExtras(),
+    };
+  }
+
+  function busy(msg) { toast(msg); }
+  function fail(e) { toast('Error: ' + (e && e.message ? e.message : e), true); }
+
+  function save() {
+    busy('Guardando…');
+    google.script.run.withSuccessHandler(toast).withFailureHandler(fail).guardarDatos(collect());
+  }
+  function test() {
+    busy('Enviando prueba…');
+    google.script.run.withSuccessHandler(toast).withFailureHandler(fail).enviarPrueba(collect());
+  }
+  function sendAll() {
+    var d = collect();
+    var n = d.destinatarios.split(/[,;\n\s]+/).filter(Boolean).length;
+    if (!n) return toast('Cargá destinatarios primero', true);
+    if (!confirm('¿Enviar el ranking a ' + n + ' destinatario(s)?')) return;
+    busy('Enviando…');
+    google.script.run.withSuccessHandler(toast).withFailureHandler(fail).enviarEmail(d);
+  }
+  function preview() {
+    busy('Generando vista previa…');
+    google.script.run.withSuccessHandler(function (html) {
+      var w = window.open('', '_blank');
+      w.document.write(html); w.document.close();
+    }).withFailureHandler(fail).vistaPrevia(collect());
+  }
+
+  // ---------- analíticas ----------
+  function loadAna() {
+    google.script.run.withSuccessHandler(function (a) {
+      document.getElementById('a-clicks').textContent = a.totalClicks;
+      document.getElementById('a-unicos').textContent = a.totalUnicos;
+      document.getElementById('a-sheet').href = a.sheetUrl;
+      var max = Math.max.apply(null, a.dias.map(function (x) { return x.total; }).concat([1]));
+      document.getElementById('a-dias').innerHTML = a.dias.length
+        ? a.dias.map(function (x) {
+            return '<div class="diabar" title="' + x.quienes.join(', ') + '">'
+              + '<span class="f">' + x.fecha.slice(5) + '</span>'
+              + '<span class="track"><span class="fill" style="width:' + Math.round(x.total / max * 100) + '%;display:block;"></span></span>'
+              + '<span class="v">' + x.total + ' · ' + x.unicos + ' pers.</span></div>';
+          }).join('')
+        : '<div class="hint">Todavía no hay clicks. Cuando alguien toque el mail, aparece acá.</div>';
+      document.getElementById('a-log').innerHTML = a.ultimos.map(function (u) {
+        return '<tr><td>' + u.ts + '</td><td>' + u.quien + '</td></tr>';
+      }).join('') || '<tr><td colspan="2" class="hint">Sin registros aún.</td></tr>';
+    }).withFailureHandler(fail).obtenerAnaliticas();
+  }
+</script>
+</body>
+</html>

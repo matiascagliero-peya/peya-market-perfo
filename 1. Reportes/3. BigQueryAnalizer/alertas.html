@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>BigQuery Analyzer — Alertas</title>
+  <?!= include('styles'); ?>
+</head>
+<body>
+
+<!-- Panel de Control de Alertas -->
+<div id="header-panel">
+  <div id="header-top">
+    <h1>🔔 Alertas de Gasto y Repetición <span class="by">by Matías Cagliero</span></h1>
+    <div id="header-actions">
+      <button id="theme-btn" onclick="toggleTheme()" title="Modo noche/día">🌙</button>
+    </div>
+  </div>
+</div>
+
+<div id="tabs">
+  <a class="tab" id="tab-ov" href="<?= appUrl ?>?page=index">📈 Overview / Queries</a>
+  <a class="tab" id="tab-sched" href="<?= appUrl ?>?page=programadas">⏰ Programadas</a>
+  <a class="tab on" id="tab-alerts" href="<?= appUrl ?>?page=alertas">🔔 Alertas</a>
+  <? if (isAdmin()) { ?>
+    <a class="tab" id="tab-analytics" href="<?= appUrl ?>?page=analytics">📊 Analytics</a>
+  <? } ?>
+</div>
+
+<div id="alerts">
+  <div class="warn-success">✅ Las alertas usan solo metadata (Jobs.list) — <b>NO consumen datos facturados</b>. Te avisan por mail cuando se cruza un umbral.</div>
+  
+  <div style="display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap">
+    <span class="dot" id="al-dot"></span>
+    <span id="al-status">Chequeo inactivo</span>
+    <button class="btn-p" id="al-toggle" onclick="toggleAlerts()">Activar chequeo</button>
+    <span style="font-size:11px;color:var(--muted)">revisa cada 60 min y avisa por mail</span>
+  </div>
+
+  <div class="cardgrid">
+    <div class="card c1"><div class="k">Alertas</div><div class="v" id="al-count">0</div><div class="s" id="al-enabled">0 activas</div></div>
+    <div class="card c3"><div class="k">Disparadas</div><div class="v" id="al-fired">0</div></div>
+  </div>
+
+  <h2 id="al-form-title">➕ Nueva alerta</h2>
+  <div class="formbox">
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+      <span class="lbl">Condición</span>
+      <select id="af-type" onchange="onAlertTypeChange()">
+        <option value="daily_tb">Gasto diario supera N TB</option>
+        <option value="daily_cost">Costo diario supera $N</option>
+        <option value="monthly_tb">Gasto mensual supera N TB</option>
+        <option value="loop">Una query se repite más de N veces/día</option>
+      </select>
+      <span class="lbl">Umbral</span>
+      <input type="number" id="af-threshold" value="4" min="0" step="0.1" style="width:90px"/>
+      <span id="af-unit" class="lbl">TB</span>
+    </div>
+    <input id="af-name" placeholder="Nombre de la alerta (opcional)" style="width:100%;max-width:400px;"/>
+    <input id="af-email" placeholder="Email para avisar (ej: matias.cagliero@pedidosya.com)" style="width:100%;max-width:400px;"/>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <button class="ibtn" onclick="testAlertForm()">🔍 Probar ahora (ver valor actual)</button>
+      <button class="btn-p" onclick="saveAlertForm()">Guardar alerta</button>
+      <button class="ibtn" id="af-cancel" onclick="resetAlertForm()" style="display:none">Cancelar</button>
+      <span id="af-msg" style="font-size:12px;color:var(--muted)"></span>
+    </div>
+  </div>
+
+  <h2>📋 Mis alertas <span class="cnt" id="alerts-cnt">0</span></h2>
+  <div class="tablebox"><table id="t-alerts"></table></div>
+  <div id="alerts-history" style="margin-top:14px"></div>
+</div>
+
+<?!= include('js_shared'); ?>
+
+<script>
+var gAlerts=[], gAlertsActive=false, editingAlertId=null;
+var sortAl={col:'name',dir:1};
+
+function onAlertTypeChange(){
+  var t=g('af-type').value;
+  var u=g('af-unit');
+  if(t==='daily_tb'||t==='monthly_tb'){u.textContent='TB';g('af-threshold').step='0.1';if(g('af-threshold').value==='0')g('af-threshold').value='4';}
+  else if(t==='daily_cost'){u.textContent='USD';g('af-threshold').step='1';if(g('af-threshold').value==='0'||g('af-threshold').value==='4')g('af-threshold').value='25';}
+  else {u.textContent='veces';g('af-threshold').step='1';if(g('af-threshold').value==='0')g('af-threshold').value='10';}
+}
+
+function renderAlertsStatus(){
+  g('al-dot').classList.toggle('on',gAlertsActive);
+  set('al-status',gAlertsActive?'Chequeo ACTIVO (corre cada 1 hora)':'Chequeo inactivo');
+  set('al-toggle',gAlertsActive?'Desactivar chequeo':'Activar chequeo');
+}
+
+function toggleAlerts(){
+  var fn=gAlertsActive?'removeAlertsTrigger':'setupAlertsTrigger';
+  set('af-msg','Cambiando alertas…');
+  google.script.run.withSuccessHandler(function(res){
+    gAlertsActive=res.active;
+    renderAlertsStatus();
+    set('af-msg',gAlertsActive?'✅ Chequeo activado':'⏸ Chequeo desactivado');
+  })
+  .withFailureHandler(function(e){
+    set('af-msg','❌ '+((e&&e.message)||e));
+  })[fn]();
+}
+
+var COLS_AL=[
+  {k:'name',label:'Alerta',render:function(a){return td(a.name||a.type);}},
+  {k:'type',label:'Condición',render:function(a){
+    var label=a.type;
+    if(a.type==='daily_tb') label='Gasto diario > N TB';
+    if(a.type==='daily_cost') label='Costo diario > $N';
+    if(a.type==='monthly_tb') label='Gasto mensual > N TB';
+    if(a.type==='loop') label='Query repetida > N veces';
+    return td(label);
+  }},
+  {k:'threshold',label:'Umbral',align:'r',render:function(a){
+    var unit = (a.type==='daily_tb'||a.type==='monthly_tb')?' TB':(a.type==='daily_cost'?' USD':' veces');
+    return td(a.threshold + unit, null, 'r');
+  }},
+  {k:'email',label:'Destinatario',render:function(a){return td(a.email);}},
+  {k:'enabled',label:'Estado',render:function(a){
+    var c=document.createElement('td');
+    var sp=document.createElement('span');
+    sp.className='badge '+(a.enabled?'b-gsheet':'b-none');
+    sp.textContent=a.enabled?'activa':'pausada';
+    c.appendChild(sp);return c;
+  }},
+  {k:'_a',label:'Acciones',render:function(a){return alertActions(a);}}
+];
+
+function alertActions(a){
+  var c=document.createElement('td');
+  c.style.display='flex';c.style.gap='4px';c.style.borderBottom='none';
+  function b(txt,cls,fn){var x=document.createElement('button');x.className='sbtn '+(cls||'');x.textContent=txt;x.onclick=fn;return x;}
+  c.appendChild(b('✏ Editar','s-edit',function(){editAlert(a);}));
+  c.appendChild(b(a.enabled?'Pausar':'Activar','s-toggle',function(){toggleAlert(a);}));
+  c.appendChild(b('🔍 Test','s-run',function(){testAlertRow(a.id);}));
+  c.appendChild(b('🗑 Borrar','s-del',function(){delAlert(a);}));
+  return c;
+}
+
+function renderAlertsTable(){
+  buildTable('t-alerts',COLS_AL,gAlerts,sortAl,renderAlertsTable);
+}
+
+function loadAlerts(){
+  google.script.run.withSuccessHandler(function(st){
+    if(!st)return;
+    gAlertsActive=st.active;renderAlertsStatus();
+    set('al-count',st.count);set('al-enabled',(st.enabled||0)+' activas');set('al-fired',st.totalFired);
+  }).withFailureHandler(function(){}).getAlertsStatus();
+  
+  google.script.run.withSuccessHandler(function(list){
+    gAlerts=list||[];set('alerts-cnt',gAlerts.length);renderAlertsTable();
+  }).withFailureHandler(function(){}).getAlerts();
+}
+
+function testAlertForm(){
+  var t=g('af-type').value,thr=g('af-threshold').value;
+  set('af-msg','Calculando valor actual…');
+  google.script.run.withSuccessHandler(function(r){
+    if(r&&r.ok!==false){
+      set('af-msg',(r.breached?'🚨 SE DISPARARÍA':'✅ Por ahora OK')+' — actual: '+num(r.value)+' '+(r.unit||'')+(r.detail?(' · '+r.detail):''));
+    }
+    else set('af-msg','❌ '+((r&&r.error)||'error'));
+  }).withFailureHandler(function(e){set('af-msg','❌ '+((e&&e.message)||e));}).previewAlert(t,thr);
+}
+
+function saveAlertForm(){
+  var al={id:editingAlertId,name:(g('af-name').value||'').trim(),type:g('af-type').value,threshold:parseFloat(g('af-threshold').value)||0,email:(g('af-email').value||'').trim(),enabled:true};
+  set('af-msg','Guardando…');
+  google.script.run.withSuccessHandler(function(r){
+    if(r&&r.ok){resetAlertForm();set('af-msg','✅ Alerta guardada');loadAlerts();}
+    else set('af-msg','❌ '+((r&&r.error)||'error'));
+  })
+  .withFailureHandler(function(e){set('af-msg','❌ '+((e&&e.message)||e));}).saveAlert(al);
+}
+
+function resetAlertForm(){
+  editingAlertId=null;g('af-name').value='';g('af-email').value=currentUser||'';g('af-type').value='daily_tb';
+  onAlertTypeChange();set('al-form-title','➕ Nueva alerta');g('af-cancel').style.display='none';
+  set('af-msg','');
+}
+
+function editAlert(a){
+  editingAlertId=a.id;g('af-type').value=a.type;onAlertTypeChange();
+  g('af-threshold').value=a.threshold;g('af-name').value=a.name||'';g('af-email').value=a.email||'';
+  set('al-form-title','✏️ Editando: '+(a.name||a.type));g('af-cancel').style.display='';
+  set('af-msg','');window.scrollTo(0,0);
+}
+
+function testAlertRow(id){
+  set('af-msg','Probando…');
+  google.script.run.withSuccessHandler(function(r){
+    if(r&&r.ok){
+      set('af-msg',(r.breached?'🚨 SE DISPARARÍA':'✅ OK')+' — actual: '+num(r.value)+' '+(r.unit||'')+(r.detail?(' · '+r.detail):''));
+      loadAlerts();
+    }else set('af-msg','❌ '+((r&&r.error)||'error'));
+  }).withFailureHandler(function(e){set('af-msg','❌ '+((e&&e.message)||e));}).testAlert(id);
+}
+
+function toggleAlert(a){
+  google.script.run.withSuccessHandler(function(){loadAlerts();})
+    .saveAlert({id:a.id,name:a.name,type:a.type,threshold:a.threshold,email:a.email,enabled:!a.enabled});
+}
+
+function delAlert(a){
+  if(confirm('¿Seguro de borrar esta alerta?')) {
+    google.script.run.withSuccessHandler(function(){set('af-msg','🗑 "'+(a.name||a.type)+'" borrada');loadAlerts();}).deleteAlert(a.id);
+  }
+}
+
+// ── Init ──
+document.addEventListener('DOMContentLoaded',function(){
+  try{if(localStorage.getItem('bq-theme')==='light')toggleTheme();}catch(e){}
+  var themeBtn=g('theme-btn');if(themeBtn)themeBtn.textContent=document.documentElement.classList.contains('light')?'☀️':'🌙';
+  
+  google.script.run.withSuccessHandler(function(cfg){
+    if(cfg){
+      currentUser=cfg.currentUser||'';
+      g('af-email').value=currentUser;
+    }
+    loadAlerts();
+  }).withFailureHandler(function(){ loadAlerts(); }).getConfig();
+});
+</script>
+</body>
+</html>

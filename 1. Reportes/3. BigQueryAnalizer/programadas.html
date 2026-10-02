@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>BigQuery Analyzer — Consultas Programadas</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <?!= include('styles'); ?>
+</head>
+<body>
+
+<!-- Panel de Control del Scheduler -->
+<div id="header-panel">
+  <div id="header-top">
+    <h1>⏰ Consultas Programadas <span class="by">by Matías Cagliero</span></h1>
+    <div id="header-actions">
+      <span id="sch-diag" style="font-size:11px;color:var(--muted)"></span>
+      <button id="theme-btn" onclick="toggleTheme()" title="Modo noche/día">🌙</button>
+    </div>
+  </div>
+</div>
+
+<div id="tabs">
+  <a class="tab" id="tab-ov" href="<?= appUrl ?>?page=index">📈 Overview / Queries</a>
+  <a class="tab on" id="tab-sched" href="<?= appUrl ?>?page=programadas">⏰ Programadas</a>
+  <a class="tab" id="tab-alerts" href="<?= appUrl ?>?page=alertas">🔔 Alertas</a>
+  <? if (isAdmin()) { ?>
+    <a class="tab" id="tab-analytics" href="<?= appUrl ?>?page=analytics">📊 Analytics</a>
+  <? } ?>
+</div>
+
+<div id="sched">
+  <div class="warn">⚠️ Las consultas en modo <b>Ejecutar</b> consumen datos facturados cada vez que corren. Usá <b>Estimar (dry-run)</b> para medir bytes/costo sin pagar.</div>
+  
+  <div style="display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap">
+    <span class="dot" id="sch-dot"></span>
+    <span id="sch-status">Cargando estado del scheduler…</span>
+    <button class="btn-p" id="sch-toggle" onclick="toggleScheduler()">Activar scheduler</button>
+    <span style="font-size:11px;color:var(--muted)">corre cada 1 min y evalúa las tareas activas</span>
+  </div>
+
+  <div class="cardgrid">
+    <div class="card c1"><div class="k">Programadas</div><div class="v" id="sc-count">0</div><div class="s" id="sc-enabled">0 activas</div></div>
+    <div class="card c2"><div class="k">Ejecuciones</div><div class="v" id="sc-runs">0</div></div>
+    <div class="card c3"><div class="k">Costo acumulado</div><div class="v" id="sc-cost">$0.00</div></div>
+    <div class="card c4"><div class="k">Falladas</div><div class="v" id="sc-fails">0</div></div>
+  </div>
+
+  <h2 id="sf-form-title">➕ Nueva consulta programada</h2>
+  <div class="formbox">
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+      <span class="lbl">Nombre</span>
+      <input id="sf-name" placeholder="Ej: Reporte Diario Ventas" style="width:240px"/>
+      
+      <span class="lbl">Modo</span>
+      <select id="sf-mode" disabled title="Fijado en Estimar (sin costo)">
+        <option value="dry">Estimar (dry-run, sin costo) [GRATIS]</option>
+      </select>
+
+      <span class="lbl">Frecuencia</span>
+      <select id="sf-freq" onchange="onFreqChange()">
+        <option value="min">Minutos</option>
+        <option value="hour">Horas</option>
+        <option value="daily">Diario</option>
+        <option value="weekdays">Días hábiles (L-V)</option>
+        <option value="weekly">Semanal</option>
+        <option value="monthly">Mensual</option>
+        <option value="custom_days">Días específicos</option>
+      </select>
+
+      <select id="sf-every" class="hidden" style="width:80px">
+        <option value="1">Cada 1</option>
+        <option value="5">Cada 5</option>
+        <option value="15">Cada 15</option>
+        <option value="30">Cada 15</option>
+        <option value="60">Cada 60</option>
+      </select>
+
+      <select id="sf-dow" class="hidden">
+        <option value="1">Lunes</option>
+        <option value="2">Martes</option>
+        <option value="3">Miércoles</option>
+        <option value="4">Jueves</option>
+        <option value="5">Viernes</option>
+        <option value="6">Sábado</option>
+        <option value="7">Domingo</option>
+      </select>
+
+      <select id="sf-dom" class="hidden">
+        <option value="1">Día 1</option>
+        <option value="5">Día 5</option>
+        <option value="10">Día 10</option>
+        <option value="15">Día 15</option>
+        <option value="20">Día 20</option>
+        <option value="25">Día 20</option>
+        <option value="28">Día 28</option>
+      </select>
+
+      <div id="sf-custom-days-box" class="hidden" style="display:inline-flex;gap:6px;background:var(--card2);padding:4px 10px;border-radius:6px;border:1px solid var(--border)">
+        <label style="display:flex;align-items:center;gap:3px;font-size:11px;font-weight:600;"><input type="checkbox" name="sf-day-chk" value="1"/>L</label>
+        <label style="display:flex;align-items:center;gap:3px;font-size:11px;font-weight:600;"><input type="checkbox" name="sf-day-chk" value="2"/>M</label>
+        <label style="display:flex;align-items:center;gap:3px;font-size:11px;font-weight:600;"><input type="checkbox" name="sf-day-chk" value="3"/>M</label>
+        <label style="display:flex;align-items:center;gap:3px;font-size:11px;font-weight:600;"><input type="checkbox" name="sf-day-chk" value="4"/>J</label>
+        <label style="display:flex;align-items:center;gap:3px;font-size:11px;font-weight:600;"><input type="checkbox" name="sf-day-chk" value="5"/>V</label>
+        <label style="display:flex;align-items:center;gap:3px;font-size:11px;font-weight:600;"><input type="checkbox" name="sf-day-chk" value="6"/>S</label>
+        <label style="display:flex;align-items:center;gap:3px;font-size:11px;font-weight:600;"><input type="checkbox" name="sf-day-chk" value="7"/>D</label>
+      </div>
+      <input type="time" id="sf-daily" class="hidden" oninput="updateArgTimeHint()"/>
+      <span id="sf-daily-hint" class="hidden" style="font-size:11px;color:var(--orange);font-weight:600;margin-left:4px"></span>
+    </div>
+    <textarea id="sf-sql" placeholder="SELECT * FROM `peya-food-and-groceries.region-us.INFORMATION_SCHEMA.JOBS_BY_PROJECT` LIMIT 10" style="width:100%;height:100px;font-family:monospace;"></textarea>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <button class="ibtn" onclick="validateSched()">🔍 Validar (estima bytes/costo)</button>
+      <button class="btn-p" onclick="saveSched()">Guardar</button>
+      <button class="ibtn" id="sf-cancel" onclick="resetSchedForm()" style="display:none">Cancelar edición</button>
+      <span id="sf-msg" style="font-size:12px;color:var(--muted)"></span>
+    </div>
+  </div>
+
+  <h2>📋 Mis consultas programadas <span class="cnt" id="sched-cnt">0</span></h2>
+  <div class="tablebox"><table id="t-sched"></table></div>
+
+  <div class="charts" style="grid-template-columns: 1fr; margin-bottom:14px; margin-top:20px;">
+    <div class="chartbox">
+      <h3>📈 Historial de ejecuciones (Apps Script) <button class="copybtn" onclick="copyChart('recentRuns',this)" title="Copiar gráfico como imagen">⧉ copiar</button></h3>
+      <div class="cwrap" style="height: 180px;"><canvas id="ch-recent-runs"></canvas></div>
+    </div>
+  </div>
+
+  <h2>🕒 Últimas ejecuciones <span class="cnt" id="recent-cnt">0</span><button class="copybtn" onclick="copyTable('t-recent',this)" title="Copiar tabla (pegá en Sheets)">⧉ copiar tabla</button></h2>
+  <div style="font-size:11px;color:var(--muted);margin:-4px 0 8px">Cada vez que una programada corre queda registrada acá con lo que consumió.</div>
+  <div class="tablebox"><table id="t-recent"></table></div>
+
+  <div id="sched-history" style="margin-top:14px"></div>
+</div>
+
+<?!= include('js_shared'); ?>
+
+<script>
+var gSchedules=[], gSchedulerActive=false, editingId=null, sortSch2={col:'name',dir:1}, gIsAdmin=false, gIsViewer=false;
+var gRecent=[];
+var chRecentRuns=null;
+
+function updateArgTimeHint(){
+  var f=g('sf-freq').value;
+  var showHint=(f==='daily'||f==='weekdays'||f==='weekly'||f==='custom_days'||f==='monthly');
+  var val=g('sf-daily').value;
+  if(showHint&&val){
+    set('sf-daily-hint','🕒 '+val+' (UTC-3)');
+    g('sf-daily-hint').classList.remove('hidden');
+  }else{
+    set('sf-daily-hint','');
+    g('sf-daily-hint').classList.add('hidden');
+  }
+}
+
+function onFreqChange(){
+  var f=g('sf-freq').value;
+  var showEvery=(f==='min'||f==='hour');
+  var showTime=(f==='daily'||f==='weekdays'||f==='weekly'||f==='custom_days'||f==='monthly');
+  g('sf-every').classList.toggle('hidden',!showEvery);
+  g('sf-daily').classList.toggle('hidden',!showTime);
+  g('sf-dow').classList.toggle('hidden',f!=='weekly');
+  g('sf-dom').classList.toggle('hidden',f!=='monthly');
+  g('sf-custom-days-box').classList.toggle('hidden',f!=='custom_days');
+  g('sf-every').title=(f==='hour')?'cada cuántas horas':'cada cuántos minutos';
+  updateArgTimeHint();
+}
+
+function renderSchedulerStatus(){
+  g('sch-dot').classList.toggle('on',gSchedulerActive);
+  set('sch-status',gSchedulerActive?'Scheduler ACTIVO (corre cada 1 min)':'Scheduler inactivo');
+  set('sch-toggle',gSchedulerActive?'Desactivar scheduler':'Activar scheduler');
+}
+
+function toggleScheduler(){
+  var fn=gSchedulerActive?'removeSchedulerTrigger':'setupSchedulerTrigger';
+  set('sf-msg','Cambiando scheduler…');
+  google.script.run.withSuccessHandler(function(res){
+    gSchedulerActive=res.active;
+    renderSchedulerStatus();
+    set('sf-msg',gSchedulerActive?'✅ Scheduler activado':'⏸ Scheduler desactivado');
+  })
+  .withFailureHandler(function(e){
+    set('sf-msg','❌ '+((e&&e.message)||e));
+  })[fn]();
+}
+
+function runStatusCellSched(st, lastError){
+  var c=document.createElement('td');var sp=document.createElement('span');
+  sp.className='badge '+(st==='ok'?'b-gsheet':(st==='estimado'?'b-bq':'b-none'));
+  if(st==='error'){
+    sp.style.background='rgba(239,68,68,.14)';sp.style.color='var(--red)';
+    sp.textContent='error';
+    if(lastError) {
+      sp.title=lastError;
+      var errText = document.createElement('span');
+      errText.style.cssText='font-size:10px;color:var(--red);margin-left:6px;max-width:140px;display:inline-block;overflow:hidden;text-overflow:ellipsis;vertical-align:middle;';
+      errText.textContent=lastError;
+      c.appendChild(sp);
+      c.appendChild(errText);
+      return c;
+    }
+  } else {
+    sp.textContent=st||'—';
+  }
+  c.appendChild(sp);return c;
+}
+
+var COLS_SCHED=[
+  {k:'name',label:'Nombre',render:function(s){
+    var el=td(s.name);
+    el.style.maxWidth='180px';el.style.overflow='hidden';el.style.textOverflow='ellipsis';el.title=s.name||'';
+    return el;
+  }},
+  {k:'freqLabel',label:'Frecuencia',render:function(s){
+    var el=td(s.freqLabel||'');
+    el.style.maxWidth='180px';el.style.overflow='hidden';el.style.textOverflow='ellipsis';el.title=s.freqLabel||'';
+    return el;
+  }},
+  {k:'mode',label:'Modo',render:function(s){return td(s.mode==='dry'?'Estimar':'Ejecutar');}},
+  {k:'enabled',label:'Estado',render:function(s){var c=document.createElement('td');var sp=document.createElement('span');sp.className='badge '+(s.enabled?'b-gsheet':'b-none');sp.textContent=s.enabled?'activa':'pausada';c.appendChild(sp);return c;}},
+  {k:'lastRun',label:'Última',render:function(s){return td(s.lastRun||'—','mono');}},
+  {k:'lastStatus',label:'Resultado',render:function(s){return runStatusCellSched(s.lastStatus, s.lastError);}},
+  {k:'lastCost',label:'Últ. costo',align:'r',render:function(s){return td(fmtUSD(s.lastCost),null,'r');}},
+  {k:'totalCost',label:'Acumulado',align:'r',render:function(s){return td(fmtUSD(s.totalCost),null,'r');}},
+  {k:'_a',label:'Acciones',render:function(s){return schedActions(s);}}
+];
+
+function schedActions(s){
+  var c=document.createElement('td');
+  c.style.display='flex';c.style.flexWrap='wrap';c.style.gap='4px';c.style.minWidth='280px';c.style.borderBottom='none';
+  function b(txt,cls,fn){var x=document.createElement('button');x.className='sbtn '+(cls||'');x.textContent=txt;x.onclick=fn;return x;}
+  c.appendChild(b('▶ Correr','s-run',function(){runSchedNow(s.id);}));
+  c.appendChild(b('✏ Editar','s-edit',function(){editSched(s);}));
+  c.appendChild(b(s.enabled?'Pausar':'Activar','s-toggle',function(){toggleSched(s);}));
+  c.appendChild(b('🗑 Borrar','s-del',function(){delSched(s);}));
+  return c;
+}
+
+function sumSchedules(sorted) {
+  var sumLastCost = 0, sumTotalCost = 0;
+  sorted.forEach(function(s) {
+    sumLastCost += parseFloat(s.lastCost) || 0;
+    sumTotalCost += parseFloat(s.totalCost) || 0;
+  });
+  return [
+    'Σ TOTAL (' + sorted.length + ')',
+    '',
+    '',
+    '',
+    '',
+    '',
+    { text: fmtUSD(sumLastCost), align: 'r' },
+    { text: fmtUSD(sumTotalCost), align: 'r' },
+    ''
+  ];
+}
+
+function renderSchedTable(){buildTable('t-sched',COLS_SCHED,gSchedules,sortSch2,renderSchedTable,sumSchedules);}
+
+function loadSchedules(){
+  google.script.run.withSuccessHandler(function(st){
+    if(!st)return;
+    gSchedulerActive=st.active;renderSchedulerStatus();
+    set('sc-count',st.count);set('sc-enabled',(st.enabled||0)+' activas');
+    set('sc-runs',st.totalRuns);set('sc-cost',fmtUSD(st.totalCost));set('sc-fails',st.totalFails);
+  }).withFailureHandler(function(){}).getSchedulerStatus();
+
+  google.script.run.withSuccessHandler(function(list){
+    gSchedules=list||[];set('sched-cnt',gSchedules.length);renderSchedTable();
+  }).withFailureHandler(function(){}).getSchedules();
+
+  google.script.run.withSuccessHandler(function(dg){
+    if(!dg){set('sch-diag','');return;}
+    var t='👤 '+(dg.me||'(no detectado)')+(dg.isAdmin?' · admin':'')+' — '+dg.schedulesInStore+' programadas guardadas';
+    set('sch-diag',t);
+  }).withFailureHandler(function(){}).getStorageDiag();
+
+  loadRecent();
+}
+
+function validateSched(){
+  var sql=(g('sf-sql').value||'').trim();
+  if(!sql){set('sf-msg','Escribí una query primero.');return;}
+  set('sf-msg','Validando (dry-run, sin costo)…');
+  google.script.run.withSuccessHandler(function(r){
+    if(r&&r.ok)set('sf-msg','✅ Estima '+fmtGB((r.billedBytes||0)/1e9)+' · ~'+fmtUSD(r.cost)+' por corrida');
+    else set('sf-msg','❌ '+((r&&r.error)||'error en la query'));
+  }).withFailureHandler(function(e){set('sf-msg','❌ '+((e&&e.message)||e));}).validateQuery(sql);
+}
+
+function saveSched(){
+  var name=(g('sf-name').value||'').trim(),sql=(g('sf-sql').value||'').trim();
+  if(!name||!sql){set('sf-msg','Faltan nombre o SQL.');return;}
+  var freq=g('sf-freq').value, needTime=(freq==='daily'||freq==='weekdays'||freq==='weekly'||freq==='custom_days'||freq==='monthly');
+
+  var daysSelected = [];
+  if (freq === 'custom_days') {
+    var chks = document.getElementsByName('sf-day-chk');
+    for (var i = 0; i < chks.length; i++) {
+      if (chks[i].checked) daysSelected.push(chks[i].value);
+    }
+    if (!daysSelected.length) { set('sf-msg', '❌ Elegí al menos un día específico.'); return; }
+  }
+
+  var sched={id:editingId,name:name,sql:sql,mode:g('sf-mode').value,freq:freq,
+    every:(freq==='min'||freq==='hour')?(parseInt(g('sf-every').value)||1):0,
+    dailyAt:needTime?g('sf-daily').value:'',
+    dow:parseInt(g('sf-dow').value)||1,
+    dom:parseInt(g('sf-dom').value)||1,
+    daysSelected:daysSelected.join(','),
+    enabled:true};
+  if(needTime&&!sched.dailyAt){set('sf-msg','Elegí la hora.');return;}
+  set('sf-msg','Guardando…');
+  google.script.run.withSuccessHandler(function(r){
+    if(r&&r.ok){resetSchedForm();set('sf-msg','✅ Guardada');loadSchedules();}
+    else set('sf-msg','❌ '+((r&&r.error)||'error'));
+  }).withFailureHandler(function(e){set('sf-msg','❌ '+((e&&e.message)||e));}).saveSchedule(sched);
+}
+
+function resetSchedForm(){
+  editingId=null;g('sf-name').value='';g('sf-sql').value='';g('sf-mode').value='dry';
+  g('sf-every').value='1';g('sf-daily').value='';g('sf-dow').value='1';g('sf-dom').value='1';
+  g('sf-freq').value='daily';onFreqChange();
+  set('sf-form-title','➕ Nueva consulta programada');
+  g('sf-cancel').style.display='none';
+  set('sf-msg','');
+  var chks=document.getElementsByName('sf-day-chk');
+  for (var i = 0; i < chks.length; i++) chks[i].checked = false;
+}
+
+function editSched(s){
+  editingId=s.id;
+  g('sf-name').value=s.name;g('sf-sql').value=s.sql;g('sf-mode').value=s.mode||'dry';
+  g('sf-freq').value=s.freq;
+  onFreqChange();
+  if(s.freq==='min'||s.freq==='hour')g('sf-every').value=String(s.every||60);
+  if(s.dailyAt)g('sf-daily').value=s.dailyAt;
+  g('sf-dow').value=String(s.dow||1);
+  g('sf-dom').value=String(s.dom||1);
+  updateArgTimeHint();
+
+  var chks=document.getElementsByName('sf-day-chk');
+  for (var i = 0; i < chks.length; i++) chks[i].checked = false;
+  if(s.freq==='custom_days'&&s.daysSelected){
+    var days=(s.daysSelected||'').split(',');
+    for (var i = 0; i < chks.length; i++) {
+      if (days.indexOf(chks[i].value) !== -1) chks[i].checked = true;
+    }
+  }
+  set('sf-form-title','✏️ Editando: '+s.name);
+  g('sf-cancel').style.display='';
+  set('sf-msg','');
+  window.scrollTo(0,0);
+}
+
+function toggleSched(s){
+  google.script.run.withSuccessHandler(function(){loadSchedules();})
+    .saveSchedule({id:s.id,name:s.name,sql:s.sql,mode:s.mode,freq:s.freq,every:s.every,dailyAt:s.dailyAt,dow:s.dow,dom:s.dom,daysSelected:s.daysSelected,enabled:!s.enabled});
+}
+function delSched(s){
+  if(confirm('¿Seguro de borrar "'+s.name+'"?')) {
+    google.script.run.withSuccessHandler(function(){set('sf-msg','🗑 "'+s.name+'" borrada');loadSchedules();}).deleteSchedule(s.id);
+  }
+}
+
+function runSchedNow(id){
+  set('sf-msg','Corriendo ahora en el servidor…');
+  google.script.run.withSuccessHandler(function(r){
+    if(r&&r.ok){set('sf-msg','✅ Ejecutada con éxito');loadSchedules();}
+    else set('sf-msg','❌ '+((r&&r.error)||'error'));
+  }).withFailureHandler(function(e){set('sf-msg','❌ '+((e&&e.message)||e));}).runSchedNow(id);
+}
+
+var COLS_RECENT=[
+  {k:'date',label:'Fecha de corrida',render:function(r){return td(r.date,'mono');}},
+  {k:'name',label:'Consulta',render:function(r){return td(r.name);}},
+  {k:'jobId',label:'Job ID / Resultado',render:function(r){
+    var el=td(r.jobId,'mono');
+    if(r.status==='error') el.style.color='var(--red)';
+    return el;
+  }},
+  {k:'tb',label:'Datos',align:'r',render:function(r){return td(fmtGB(r.tb * 1000),null,'r');}},
+  {k:'cost',label:'Costo',align:'r',render:function(r){return td(fmtUSD(r.cost),null,'r');}}
+];
+
+function sumRecent(sorted){
+  var tb=0,tc=0;
+  sorted.forEach(function(r){tb+=parseFloat(r.tb)||0;tc+=parseFloat(r.cost)||0;});
+  return ['Σ TOTAL ('+sorted.length+')','','',fmtGB(tb*1000),fmtUSD(tc)];
+}
+
+function renderRecent(){
+  buildTable('t-recent',COLS_RECENT,gRecent, {col:'date',dir:-1}, renderRecent, sumRecent);
+}
+
+function loadRecent(){
+  google.script.run.withSuccessHandler(function(list){
+    gRecent=list||[];
+    set('recent-cnt',gRecent.length);
+    renderRecent();
+    drawRecentRunsChart();
+  }).getRecentRuns();
+}
+
+function drawRecentRunsChart(){
+  if(typeof Chart==='undefined')return;
+  var grid=chartGrid(),tick=chartTick();
+  var sorted=gRecent.slice().reverse();
+  if(chRecentRuns)chRecentRuns.destroy();
+  chRecentRuns=new Chart(g('ch-recent-runs'),{
+    type:'line',
+    data:{labels:sorted.map(function(r){return r.date.slice(11,16);}),
+      datasets:[{label:'Costo corrida',data:sorted.map(function(r){return r.cost;}),
+        borderColor:'var(--accent)',backgroundColor:'rgba(59,130,246,0.1)',fill:true,tension:0.1,borderWidth:2}]},
+    options:{responsive:true,maintainAspectRatio:false,
+      scales:{x:{grid:{color:grid},ticks:{color:tick,font:{size:9}}},
+              y:{grid:{color:grid},ticks:{color:tick,font:{size:9}}}},
+      plugins:{legend:{display:false},
+        tooltip:{callbacks:{label:function(c){var r=sorted[c.dataIndex];return ' '+r.name+': '+fmtUSD(c.parsed.y);}}}}}
+  });
+}
+
+// ── Init ──
+document.addEventListener('DOMContentLoaded',function(){
+  try{if(localStorage.getItem('bq-theme')==='light')toggleTheme();}catch(e){}
+  var themeBtn=g('theme-btn');if(themeBtn)themeBtn.textContent=document.documentElement.classList.contains('light')?'☀️':'🌙';
+  _ready=true;
+  loadSchedules();
+});
+</script>
+</body>
+</html>

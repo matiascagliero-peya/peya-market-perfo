@@ -1,0 +1,82 @@
+// ##########################################################################################
+// #  TAREA: "8 OPERATIONAL EXCELLENCE" (CON BLOQUEO DE CELDA DE PAÍS)                      #
+// ##########################################################################################
+
+const CONFIG_OPERATIONAL = {
+  nombreHoja: "8 Operational Excellence",
+  celdaPais: "C4"
+};
+
+function _operationalWorker(targetCountry) {
+  try {
+    Logger.log(`--- [TAREA 8 OPERATIONAL] Iniciando para ${targetCountry.country.toUpperCase()} ---`);
+    
+    // 1. Abrir origen
+    const sourceSpreadsheet = SpreadsheetApp.openById(SOURCE_SPREADSHEET_ID);
+    const sourceSheet = sourceSpreadsheet.getSheetByName(CONFIG_OPERATIONAL.nombreHoja);
+    if (!sourceSheet) throw new Error(`La hoja de origen '${CONFIG_OPERATIONAL.nombreHoja}' no fue encontrada.`);
+    
+    // 2. Abrir destino
+    const targetSpreadsheet = SpreadsheetApp.openById(targetCountry.id);
+    const existingSheet = targetSpreadsheet.getSheetByName(CONFIG_OPERATIONAL.nombreHoja);
+    
+    let newSheet;
+
+    // 3. Reemplazar o Copiar hoja (MANTENIENDO EL ORDEN)
+    if (existingSheet) {
+      const originalIndex = existingSheet.getIndex(); // Guarda la posición actual
+      targetSpreadsheet.deleteSheet(existingSheet);
+      newSheet = sourceSheet.copyTo(targetSpreadsheet);
+      newSheet.setName(CONFIG_OPERATIONAL.nombreHoja);
+      targetSpreadsheet.setActiveSheet(newSheet);
+      targetSpreadsheet.moveActiveSheet(originalIndex); // Restaura la posición
+    } else {
+      newSheet = sourceSheet.copyTo(targetSpreadsheet);
+      newSheet.setName(CONFIG_OPERATIONAL.nombreHoja);
+    }
+
+    // 4. Escribir el País en la celda configurada y bloquearla
+    const celdaPais = newSheet.getRange(CONFIG_OPERATIONAL.celdaPais);
+    celdaPais.setValue(targetCountry.country);
+
+    // ---- INICIO DEL BLOQUEO ----
+    // Creamos la protección para la celda C4
+    const proteccion = celdaPais.protect().setDescription('Bloqueo automático de celda de país');
+    
+    // Removemos a los demás editores para restringir el acceso
+    const editores = proteccion.getEditors();
+    proteccion.removeEditors(editores);
+    
+    // Si estás en Google Workspace, bloqueamos la edición a nivel de dominio corporativo
+    if (proteccion.canDomainEdit()) {
+      proteccion.setDomainEdit(false);
+    }
+    // ---- FIN DEL BLOQUEO ----
+
+    Logger.log(`>>> [TAREA 8 OPERATIONAL] Proceso completado y celda bloqueada para ${targetCountry.country.toUpperCase()}.`);
+  } catch (error) {
+    Logger.log(`ERROR en [TAREA 8 OPERATIONAL] para ${targetCountry.country.toUpperCase()}: ${error.toString()}`);
+  }
+}
+
+// --- Funciones Individuales ---
+function copiarOperational_Para_Argentina() { _operationalWorker(PAISES_DE_DESTINO.find(p => p.country === "Argentina")); }
+function copiarOperational_Para_Bolivia() { _operationalWorker(PAISES_DE_DESTINO.find(p => p.country === "Bolivia")); }
+function copiarOperational_Para_Chile() { _operationalWorker(PAISES_DE_DESTINO.find(p => p.country === "Chile")); }
+function copiarOperational_Para_Costa_Rica() { _operationalWorker(PAISES_DE_DESTINO.find(p => p.country === "Costa Rica")); }
+function copiarOperational_Para_Republica_Dominicana() { _operationalWorker(PAISES_DE_DESTINO.find(p => p.country === "Republica Dominicana")); }
+function copiarOperational_Para_Ecuador() { _operationalWorker(PAISES_DE_DESTINO.find(p => p.country === "Ecuador")); }
+function copiarOperational_Para_El_Salvador() { _operationalWorker(PAISES_DE_DESTINO.find(p => p.country === "El Salvador")); }
+function copiarOperational_Para_Guatemala() { _operationalWorker(PAISES_DE_DESTINO.find(p => p.country === "Guatemala")); }
+function copiarOperational_Para_Honduras() { _operationalWorker(PAISES_DE_DESTINO.find(p => p.country === "Honduras")); }
+function copiarOperational_Para_Nicaragua() { _operationalWorker(PAISES_DE_DESTINO.find(p => p.country === "Nicaragua")); }
+function copiarOperational_Para_Panama() { _operationalWorker(PAISES_DE_DESTINO.find(p => p.country === "Panama")); }
+function copiarOperational_Para_Paraguay() { _operationalWorker(PAISES_DE_DESTINO.find(p => p.country === "Paraguay")); }
+function copiarOperational_Para_Peru() { _operationalWorker(PAISES_DE_DESTINO.find(p => p.country === "Peru")); }
+function copiarOperational_Para_Uruguay() { _operationalWorker(PAISES_DE_DESTINO.find(p => p.country === "Uruguay")); }
+
+function copiarOperational_Para_TODOS() {
+  Logger.log("INICIANDO TAREA '8 OPERATIONAL' PARA TODOS LOS PAÍSES");
+  PAISES_DE_DESTINO.forEach(pais => _operationalWorker(pais));
+  Logger.log("TAREA '8 OPERATIONAL' FINALIZADA");
+}

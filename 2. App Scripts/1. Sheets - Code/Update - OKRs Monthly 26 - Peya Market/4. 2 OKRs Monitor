@@ -1,0 +1,76 @@
+// ##########################################################################################
+// #  TAREA: "3 OKRS MONITOR"                                                               
+
+const CONFIG_OKRS_MONITOR = {
+  nombreHoja: "2 OKRs Monitor",
+  rangoPais: "F4",
+  ocultarFila: null
+};
+
+function _okrsMonitorWorker(targetCountry) {
+  try {
+    Logger.log(`--- [TAREA 2 OKRs Monitor] Iniciando para ${targetCountry.country.toUpperCase()} ---`);
+    const sourceSpreadsheet = SpreadsheetApp.openById(SOURCE_SPREADSHEET_ID);
+    const sourceSheet = sourceSpreadsheet.getSheetByName(CONFIG_OKRS_MONITOR.nombreHoja);
+    if (!sourceSheet) throw new Error(`La hoja de origen '${CONFIG_OKRS_MONITOR.nombreHoja}' no fue encontrada.`);
+    const targetSpreadsheet = SpreadsheetApp.openById(targetCountry.id);
+    const existingSheet = targetSpreadsheet.getSheetByName(CONFIG_OKRS_MONITOR.nombreHoja);
+    let newSheet;
+    if (existingSheet) {
+      const originalIndex = existingSheet.getIndex();
+      targetSpreadsheet.deleteSheet(existingSheet);
+      newSheet = sourceSheet.copyTo(targetSpreadsheet);
+      newSheet.setName(CONFIG_OKRS_MONITOR.nombreHoja);
+      targetSpreadsheet.setActiveSheet(newSheet);
+      targetSpreadsheet.moveActiveSheet(originalIndex);
+    } else {
+      newSheet = sourceSheet.copyTo(targetSpreadsheet);
+      newSheet.setName(CONFIG_OKRS_MONITOR.nombreHoja);
+    }
+    const rangeToModify = newSheet.getRange(CONFIG_OKRS_MONITOR.rangoPais);
+    rangeToModify.setValue(targetCountry.country);
+    if (CONFIG_OKRS_MONITOR.ocultarFila) { newSheet.hideRows(CONFIG_OKRS_MONITOR.ocultarFila); }
+    const protection = rangeToModify.protect().setDescription('Celda de País - Bloqueada por Script');
+    const me = Session.getEffectiveUser();
+    protection.removeEditors(protection.getEditors());
+    protection.addEditor(me);
+    Logger.log(`>>> [TAREA 3 OKRs Monitor] Proceso completado para ${targetCountry.country.toUpperCase()}.`);
+  } catch (error) {
+    Logger.log(`ERROR en [TAREA 3 OKRs Monitor] para ${targetCountry.country.toUpperCase()}: ${error.toString()}`);
+  }
+}
+
+function copiarOKRsMonitor_Para_Argentina() { _okrsMonitorWorker(PAISES_DE_DESTINO.find(p => p.country === "Argentina")); }
+function copiarOKRsMonitor_Para_Bolivia() { _okrsMonitorWorker(PAISES_DE_DESTINO.find(p => p.country === "Bolivia")); }
+function copiarOKRsMonitor_Para_Chile() { _okrsMonitorWorker(PAISES_DE_DESTINO.find(p => p.country === "Chile")); }
+function copiarOKRsMonitor_Para_Costa_Rica() { _okrsMonitorWorker(PAISES_DE_DESTINO.find(p => p.country === "Costa Rica")); }
+function copiarOKRsMonitor_Para_Republica_Dominicana() { _okrsMonitorWorker(PAISES_DE_DESTINO.find(p => p.country === "Republica Dominicana")); }
+function copiarOKRsMonitor_Para_Ecuador() { _okrsMonitorWorker(PAISES_DE_DESTINO.find(p => p.country === "Ecuador")); }
+function copiarOKRsMonitor_Para_El_Salvador() { _okrsMonitorWorker(PAISES_DE_DESTINO.find(p => p.country === "El Salvador")); }
+function copiarOKRsMonitor_Para_Guatemala() { _okrsMonitorWorker(PAISES_DE_DESTINO.find(p => p.country === "Guatemala")); }
+function copiarOKRsMonitor_Para_Honduras() { _okrsMonitorWorker(PAISES_DE_DESTINO.find(p => p.country === "Honduras")); }
+function copiarOKRsMonitor_Para_Nicaragua() { _okrsMonitorWorker(PAISES_DE_DESTINO.find(p => p.country === "Nicaragua")); }
+function copiarOKRsMonitor_Para_Panama() { _okrsMonitorWorker(PAISES_DE_DESTINO.find(p => p.country === "Panama")); }
+function copiarOKRsMonitor_Para_Paraguay() { _okrsMonitorWorker(PAISES_DE_DESTINO.find(p => p.country === "Paraguay")); }
+function copiarOKRsMonitor_Para_Peru() { _okrsMonitorWorker(PAISES_DE_DESTINO.find(p => p.country === "Peru")); }
+function copiarOKRsMonitor_Para_Uruguay() { _okrsMonitorWorker(PAISES_DE_DESTINO.find(p => p.country === "Uruguay")); }
+function copiarOKRsMonitor_Para_TODOS() {
+  Logger.log("INICIANDO TAREA '3 OKRS MONITOR' PARA TODOS LOS PAÍSES");
+  PAISES_DE_DESTINO.forEach(pais => _okrsMonitorWorker(pais));
+  Logger.log("TAREA '3 OKRS MONITOR' FINALIZADA");
+}
+
+function copiarOKRsMonitor_PRUEBAS() {
+  Logger.log("🧪 [PRUEBA] Copiando '2 OKRs Monitor' al sheet de prueba...");
+
+  // Tomamos el país base de la config (como las otras funciones)...
+  const paisBase = PAISES_DE_DESTINO.find(p => p.country === "Chile");
+
+  // ...pero forzamos el destino al sheet de prueba
+  _okrsMonitorWorker({
+    id: "1dGAwLGz9cRuKmxPylgcPcGDINf2uNFOGMIOcVIuhs3g", // sheet de prueba
+    country: paisBase.country
+  });
+
+  Logger.log("🧪 [PRUEBA] FIN.");
+}

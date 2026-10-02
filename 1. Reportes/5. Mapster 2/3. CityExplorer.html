@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Página 3: City Explorer — Mapster 2</title>
+  <style>
+    html, body {
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background: var(--bg-page);
+      color: var(--text-primary);
+      font-family: 'Outfit', system-ui, -apple-system, sans-serif;
+    }
+
+    #city-container {
+      display: grid;
+      grid-template-columns: 1fr 440px;
+      height: calc(100vh - 54px);
+      width: 100%;
+      position: relative;
+    }
+
+    @media (max-width: 900px) {
+      #city-container {
+        grid-template-columns: 1fr;
+        grid-template-rows: 1fr 380px;
+      }
+    }
+
+    #city-map {
+      width: 100%;
+      height: 100%;
+      background: #0b0f19;
+      position: relative;
+    }
+
+    /* ── Sidebar de Expansión y Ciudades ── */
+    .city-sidebar {
+      background: #ffffff;
+      border-left: 1px solid var(--border-color);
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+      padding: 20px;
+      gap: 18px;
+      box-shadow: -4px 0 15px rgba(0, 0, 0, 0.03);
+    }
+
+    .city-header-box {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .city-title {
+      font-size: 18px;
+      font-weight: 800;
+      color: var(--navy-900);
+      letter-spacing: -0.4px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .city-subtitle {
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
+    /* ── Simulador de Expansión ── */
+    .sim-card {
+      background: #fafbfc;
+      border: 1.5px solid var(--border-color);
+      border-radius: var(--radius-md);
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .sim-card.active-mode {
+      border-color: var(--brand-red);
+      background: var(--brand-red-light);
+    }
+
+    .sim-title-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 12.5px;
+      font-weight: 700;
+      color: var(--navy-900);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .sim-desc {
+      font-size: 12px;
+      color: var(--text-secondary);
+      line-height: 1.4;
+    }
+
+    .sim-btn {
+      background: var(--navy-900);
+      color: #ffffff;
+      border: none;
+      padding: 9px 16px;
+      border-radius: var(--radius-sm);
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: var(--transition);
+    }
+
+    .sim-btn:hover {
+      background: var(--brand-red);
+    }
+
+    .sim-btn.active {
+      background: var(--brand-red);
+      box-shadow: 0 4px 14px var(--brand-red-glow);
+    }
+
+    /* ── Resultados de la Simulación ── */
+    .sim-kpis-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-top: 4px;
+    }
+
+    .sim-kpi-item {
+      background: #ffffff;
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-sm);
+      padding: 8px 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .sim-kpi-label {
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--text-muted);
+      text-transform: uppercase;
+    }
+
+    .sim-kpi-val {
+      font-size: 16px;
+      font-weight: 800;
+      color: var(--navy-900);
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* ── Ranking de Ciudades ── */
+    .city-table-card {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      flex: 1;
+    }
+
+    .city-table-wrap {
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      overflow: auto;
+      max-height: 380px;
+      box-shadow: var(--shadow-sm);
+    }
+
+    table.city-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+      text-align: right;
+    }
+
+    table.city-table th {
+      background: #f8fafc;
+      color: var(--text-secondary);
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      padding: 9px 12px;
+      border-bottom: 1px solid var(--border-color);
+      position: sticky;
+      top: 0;
+      z-index: 2;
+    }
+
+    table.city-table th:first-child,
+    table.city-table td:first-child {
+      text-align: left;
+    }
+
+    table.city-table tr {
+      border-bottom: 1px solid var(--border-subtle);
+      cursor: pointer;
+      transition: background 0.12s;
+    }
+
+    table.city-table tr:hover {
+      background: #f8fafc;
+    }
+
+    table.city-table td {
+      padding: 9px 12px;
+      color: var(--text-primary);
+      font-weight: 500;
+    }
+
+    /* ── Adaptación Tema Oscuro / Modo Noche ── */
+    [data-theme="dark"] .city-sidebar {
+      background: #131b2e;
+      border-left-color: #27354f;
+    }
+    [data-theme="dark"] .sim-card {
+      background: #1e293b;
+      border-color: #27354f;
+    }
+    [data-theme="dark"] .sim-kpi-item {
+      background: #0f172a;
+      border-color: #27354f;
+    }
+    [data-theme="dark"] .city-table-card {
+      background: #1e293b;
+      border-color: #27354f;
+    }
+    [data-theme="dark"] table.city-table th {
+      background: #0f172a;
+      border-bottom-color: #27354f;
+    }
+    [data-theme="dark"] table.city-table tr {
+      border-bottom-color: #27354f;
+    }
+    [data-theme="dark"] table.city-table tr:hover {
+      background: #27354f;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Navegación Compartida -->
+  <?!= include('_nav', { activePage: 'city', scriptUrl: scriptUrl, isAdmin: (typeof isAdmin !== 'undefined' ? isAdmin : false) }); ?>
+
+  <div id="city-container">
+    <!-- Mapa Macro de Ciudades -->
+    <div id="city-map"></div>
+
+    <!-- Barra Lateral: Simulador & Ciudades -->
+    <div class="city-sidebar">
+      <div class="city-header-box">
+        <div class="city-title">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--brand-red)" stroke-width="2.2"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
+          City Explorer
+        </div>
+        <div class="city-subtitle">Evaluación macro de footprint y simulación de aperturas</div>
+      </div>
+
+      <!-- Herramienta de Simulación -->
+      <div class="sim-card" id="sim-panel">
+        <div class="sim-title-row">
+          <span>Simulador de Expansión</span>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="3"></circle></svg>
+        </div>
+        <div class="sim-desc">
+          Activá el simulador y hacé click en cualquier zona del mapa para proyectar una nueva tienda y estimar cobertura de usuarios y rentabilidad.
+        </div>
+        <button class="sim-btn" id="sim-btn-toggle" onclick="toggleSimulationMode()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+          <span id="sim-btn-label">Activar Modo Simulación</span>
+        </button>
+
+        <!-- Resultados de la simulación activa -->
+        <div id="sim-results-box" style="display:none; flex-direction:column; gap:8px; margin-top:8px;">
+          <div style="font-size:11px; font-weight:700; color:var(--text-secondary); text-transform:uppercase;">Estimación de Viabilidad:</div>
+          <div class="sim-kpis-grid">
+            <div class="sim-kpi-item">
+              <span class="sim-kpi-label">PeYa Users</span>
+              <span class="sim-kpi-val" id="sim-res-users">—</span>
+            </div>
+            <div class="sim-kpi-item">
+              <span class="sim-kpi-label">DMart MAUs</span>
+              <span class="sim-kpi-val" id="sim-res-dmart">—</span>
+            </div>
+            <div class="sim-kpi-item">
+              <span class="sim-kpi-label">Penetración</span>
+              <span class="sim-kpi-val" id="sim-res-pen" style="color:var(--brand-red);">—</span>
+            </div>
+            <div class="sim-kpi-item">
+              <span class="sim-kpi-label">Órdenes / Mes</span>
+              <span class="sim-kpi-val" id="sim-res-orders">—</span>
+            </div>
+            <div class="sim-kpi-item">
+              <span class="sim-kpi-label">GMV Potencial</span>
+              <span class="sim-kpi-val" id="sim-res-gmv">—</span>
+            </div>
+            <div class="sim-kpi-item">
+              <span class="sim-kpi-label">Ticket (AOV)</span>
+              <span class="sim-kpi-val" id="sim-res-aov">—</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tabla de Ciudades -->
+      <div class="city-table-card">
+        <div class="sim-title-row">
+          <span>Ranking de Ciudades</span>
+          <span style="font-size:11px; color:var(--text-muted);" id="city-count-badge">5 ciudades</span>
+        </div>
+        <div class="city-table-wrap">
+          <table class="city-table">
+            <thead>
+              <tr>
+                <th>Ciudad</th>
+                <th>Users</th>
+                <th>DMart Users</th>
+                <th>Penetración</th>
+                <th>Órdenes</th>
+              </tr>
+            </thead>
+            <tbody id="city-table-body">
+              <!-- Inyectado dinámicamente -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let cityMap;
+    let cityMarkers = [];
+    let isSimModeActive = false;
+    let simClickListener = null;
+    let simMarker = null;
+    let simCircle = null;
+
+    const DARK_MAP_STYLE = [
+      { "elementType": "geometry", "stylers": [{ "color": "#1e293b" }] },
+      { "elementType": "labels.text.stroke", "stylers": [{ "color": "#0f172a" }] },
+      { "elementType": "labels.text.fill", "stylers": [{ "color": "#94a3b8" }] },
+      { "featureType": "road", "elementType": "geometry", "stylers": [{ "color": "#334155" }] },
+      { "featureType": "road", "elementType": "geometry.stroke", "stylers": [{ "color": "#1e293b" }] },
+      { "featureType": "road.highway", "elementType": "geometry", "stylers": [{ "color": "#475569" }] },
+      { "featureType": "water", "elementType": "geometry", "stylers": [{ "color": "#0b0f19" }] }
+    ];
+
+    const LIGHT_MAP_STYLE = [
+      { "elementType": "geometry", "stylers": [{ "color": "#f8fafc" }] },
+      { "elementType": "labels.text.stroke", "stylers": [{ "color": "#ffffff" }] },
+      { "elementType": "labels.text.fill", "stylers": [{ "color": "#334155" }] },
+      { "featureType": "road", "elementType": "geometry", "stylers": [{ "color": "#ffffff" }] },
+      { "featureType": "road", "elementType": "geometry.stroke", "stylers": [{ "color": "#e2e8f0" }] },
+      { "featureType": "road.highway", "elementType": "geometry", "stylers": [{ "color": "#fee2e2" }] },
+      { "featureType": "water", "elementType": "geometry", "stylers": [{ "color": "#dbeafe" }] }
+    ];
+
+    function onThemeChangeCallback(theme) {
+      if (cityMap) {
+        cityMap.setOptions({
+          styles: theme === 'dark' ? DARK_MAP_STYLE : LIGHT_MAP_STYLE
+        });
+      }
+    }
+
+    window.addEventListener('mapsterThemeChanged', function(e) {
+      const theme = e.detail ? e.detail.theme : (localStorage.getItem('mapster_theme') || 'dark');
+      onThemeChangeCallback(theme);
+    });
+
+    window.onload = function() {
+      initCityMap();
+      loadCityData();
+    };
+
+    function initCityMap() {
+      try {
+        if (typeof google === 'undefined' || !google.maps) {
+          console.warn('Google Maps API en carga diferida.');
+          setTimeout(initCityMap, 500);
+          return;
+        }
+
+        const activeTheme = localStorage.getItem('mapster_theme') || 'dark';
+        cityMap = new google.maps.Map(document.getElementById('city-map'), {
+          center: { lat: -34.6037, lng: -58.3816 },
+          zoom: 5,
+          styles: activeTheme === 'dark' ? DARK_MAP_STYLE : LIGHT_MAP_STYLE,
+          disableDefaultUI: true,
+          zoomControl: true,
+          scrollwheel: true,
+          gestureHandling: 'greedy'
+        });
+      } catch(e) {
+        console.error('Error al inicializar mapa en City Explorer:', e);
+      }
+    }
+
+    function loadCityData() {
+      showLoading('Cargando ciudades...');
+      
+      const defaultCities = [
+        { city_name: 'Buenos Aires', country: 'Argentina', lat: -34.6037, lng: -58.3816, users: 1450000, dmart_users: 245000, penetration_pct: 16.9, dmart_orders: 540000, dmart_net_sales: 8100000, aov: 15.00 },
+        { city_name: 'Santiago', country: 'Chile', lat: -33.4489, lng: -70.6693, users: 980000, dmart_users: 178000, penetration_pct: 18.2, dmart_orders: 410000, dmart_net_sales: 6560000, aov: 16.00 },
+        { city_name: 'Montevideo', country: 'Uruguay', lat: -34.9011, lng: -56.1645, users: 420000, dmart_users: 68000, penetration_pct: 16.2, dmart_orders: 165000, dmart_net_sales: 2475000, aov: 15.00 },
+        { city_name: 'Rosario', country: 'Argentina', lat: -32.9587, lng: -60.6930, users: 310000, dmart_users: 38000, penetration_pct: 12.3, dmart_orders: 82000, dmart_net_sales: 1148000, aov: 14.00 },
+        { city_name: 'Córdoba', country: 'Argentina', lat: -31.4201, lng: -64.1888, users: 480000, dmart_users: 58000, penetration_pct: 12.1, dmart_orders: 120000, dmart_net_sales: 1680000, aov: 14.00 }
+      ];
+
+      try {
+        if (typeof google !== 'undefined' && google.script && google.script.run) {
+          google.script.run
+            .withSuccessHandler(res => {
+              hideLoading();
+              const list = (res && res.cities && res.cities.length > 0) ? res.cities : defaultCities;
+              renderCityData(list);
+            })
+            .withFailureHandler(err => {
+              hideLoading();
+              renderCityData(defaultCities);
+            })
+            .getCityExplorerData('2026-05-01');
+        } else {
+          hideLoading();
+          renderCityData(defaultCities);
+        }
+      } catch(e) {
+        hideLoading();
+        renderCityData(defaultCities);
+      }
+    }
+
+    function renderCityData(cities) {
+      document.getElementById('city-count-badge').textContent = `${cities.length} ciudades`;
+      const tbody = document.getElementById('city-table-body');
+      tbody.innerHTML = '';
+
+      // Limpiar marcadores anteriores
+      cityMarkers.forEach(m => m.setMap(null));
+      cityMarkers = [];
+
+      cities.forEach(c => {
+        // Marcador en el mapa
+        if (cityMap && c.lat && c.lng) {
+          const marker = new google.maps.Marker({
+            position: { lat: Number(c.lat), lng: Number(c.lng) },
+            map: cityMap,
+            title: c.city_name,
+            icon: {
+              path: google.maps.SymbolPath.CIRCLE,
+              scale: 8,
+              fillColor: '#ea044e',
+              fillOpacity: 0.95,
+              strokeColor: '#ffffff',
+              strokeWeight: 2
+            }
+          });
+          marker.addListener('click', () => zoomToCity(c));
+          cityMarkers.push(marker);
+        }
+
+        // Fila en la tabla
+        const tr = document.createElement('tr');
+        tr.onclick = () => zoomToCity(c);
+        tr.innerHTML = `
+          <td style="font-weight:700;">${c.city_name} <span style="font-size:10px; color:var(--text-muted);">(${c.country})</span></td>
+          <td>${formatNumber(c.users)}</td>
+          <td>${formatNumber(c.dmart_users)}</td>
+          <td style="font-weight:700; color:var(--brand-red);">${c.penetration_pct}%</td>
+          <td>${formatNumber(c.dmart_orders)}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function zoomToCity(city) {
+      if (!cityMap || !city.lat || !city.lng) return;
+      cityMap.panTo({ lat: Number(city.lat), lng: Number(city.lng) });
+      cityMap.setZoom(12);
+      showToast(`Visualizando ${city.city_name} (${city.penetration_pct}% penetración)`, 'info');
+    }
+
+    // ============================================================
+    // MODO SIMULACIÓN DE EXPANSIÓN
+    // ============================================================
+    function toggleSimulationMode() {
+      isSimModeActive = !isSimModeActive;
+      const btn = document.getElementById('sim-btn-toggle');
+      const label = document.getElementById('sim-btn-label');
+      const panel = document.getElementById('sim-panel');
+
+      if (isSimModeActive) {
+        btn.classList.add('active');
+        panel.classList.add('active-mode');
+        label.textContent = 'Modo Simulación Activo (Click en Mapa)';
+        showToast('Hacé click en cualquier punto del mapa para simular la nueva tienda.', 'info');
+
+        if (cityMap) {
+          cityMap.setOptions({ draggableCursor: 'crosshair' });
+          simClickListener = cityMap.addListener('click', e => {
+            placeSimulatedStore(e.latLng);
+          });
+        }
+      } else {
+        btn.classList.remove('active');
+        panel.classList.remove('active-mode');
+        label.textContent = 'Activar Modo Simulación';
+        if (cityMap) {
+          cityMap.setOptions({ draggableCursor: null });
+          if (simClickListener) google.maps.event.removeListener(simClickListener);
+        }
+      }
+    }
+
+    function placeSimulatedStore(latLng) {
+      if (simMarker) simMarker.setMap(null);
+      if (simCircle) simCircle.setMap(null);
+
+      const radiusMeters = 2500;
+
+      // Marcador de tienda simulada
+      simMarker = new google.maps.Marker({
+        position: latLng,
+        map: cityMap,
+        title: 'Tienda Simulada (Propuesta)',
+        icon: {
+          path: google.maps.SymbolPath.CIRCLE,
+          scale: 10,
+          fillColor: '#22c55e',
+          fillOpacity: 1,
+          strokeColor: '#ffffff',
+          strokeWeight: 3
+        }
+      });
+
+      // Radio de cobertura simulado
+      simCircle = new google.maps.Circle({
+        map: cityMap,
+        center: latLng,
+        radius: radiusMeters,
+        fillColor: '#22c55e',
+        fillOpacity: 0.18,
+        strokeColor: '#22c55e',
+        strokeOpacity: 0.8,
+        strokeWeight: 2
+      });
+
+      // Cálculo de viabilidad con backend o fallback
+      if (typeof google !== 'undefined' && google.script && google.script.run) {
+        google.script.run
+          .withSuccessHandler(res => updateSimResults(res))
+          .getCitySimulationZone(latLng.lat(), latLng.lng(), radiusMeters);
+      } else {
+        const estUsers = 38000;
+        const estPen = 14.5;
+        const estDmart = Math.round(estUsers * (estPen / 100));
+        updateSimResults({
+          estimated_users: estUsers,
+          estimated_dmart_maus: estDmart,
+          estimated_penetration_pct: estPen,
+          estimated_orders: estDmart * 2,
+          estimated_gmv: estDmart * 2 * 15,
+          estimated_aov: 15.00
+        });
+      }
+
+      showToast('Área de cobertura simulada trazada en el mapa.', 'success');
+    }
+
+    function updateSimResults(res) {
+      if (!res) return;
+      document.getElementById('sim-results-box').style.display = 'flex';
+      document.getElementById('sim-res-users').textContent = formatNumber(res.estimated_users);
+      document.getElementById('sim-res-dmart').textContent = formatNumber(res.estimated_dmart_maus);
+      document.getElementById('sim-res-pen').textContent = formatPercent(res.estimated_penetration_pct);
+      document.getElementById('sim-res-orders').textContent = formatNumber(res.estimated_orders);
+      document.getElementById('sim-res-gmv').textContent = formatCurrency(res.estimated_gmv);
+      document.getElementById('sim-res-aov').textContent = formatCurrency(res.estimated_aov);
+    }
+  </script>
+</body>
+</html>

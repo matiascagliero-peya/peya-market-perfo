@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Debug y Diagnósticos - PeYa Markets</title>
+  <style>
+    :root {
+      --primary: #e50044;
+      --primary-hover: #cf003d;
+      --bg: #f1f5f9; /* Cambiado a un tono ligeramente más oscuro para dar mejor contraste con las tarjetas blancas */
+      --card: #ffffff;
+      --text: #0f172a;
+      --text-sub: #475569;
+      --text-light: #64748b;
+      --border: #e2e8f0;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --negative: #ef4444;
+    }
+    
+    /* Premium Dark Mode variables and overrides */
+    body.dark {
+      --bg: #0b0f19;
+      --card: #111827;
+      --text: #f8fafc;
+      --text-sub: #94a3b8;
+      --text-light: #64748b;
+      --border: #1f2937;
+    }
+    
+    body {
+      margin: 0;
+      padding: 0;
+      background: var(--bg);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      color: var(--text);
+    }
+    .page {
+      padding: 24px;
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+    h1 {
+      font-size: 24px;
+      font-weight: 900;
+      margin-top: 0;
+      margin-bottom: 8px;
+    }
+    .subtitle {
+      color: var(--text-sub);
+      font-size: 14px;
+      margin-bottom: 24px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      margin-bottom: 24px;
+    }
+    @media (max-width: 768px) {
+      .grid {
+        grid-template-columns: 1fr;
+      }
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+    body.dark pre {
+      background: #1e293b !important;
+      border: 1px solid var(--border) !important;
+    }
+    body.dark .tag {
+      background: var(--border-light, #1e293b) !important;
+      color: var(--text) !important;
+    }
+    .card-title {
+      font-size: 16px;
+      font-weight: 700;
+      margin-top: 0;
+      margin-bottom: 16px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .badge {
+      font-size: 11px;
+      font-weight: 700;
+      padding: 4px 8px;
+      border-radius: 20px;
+    }
+    .badge-ok { background: rgba(16,185,129,0.1); color: var(--success); }
+    .badge-error { background: rgba(239,68,68,0.1); color: var(--negative); }
+    .status-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 12px;
+      font-size: 13.5px;
+    }
+    .status-lbl {
+      color: var(--text-sub);
+      font-weight: 500;
+    }
+    .status-val {
+      font-family: "Consolas", monospace;
+      font-weight: 600;
+    }
+    .btn {
+      background: var(--primary);
+      color: #fff;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-weight: 700;
+      font-size: 14px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      transition: background 0.15s;
+    }
+    .btn:hover {
+      background: var(--primary-hover);
+    }
+    .btn-secondary {
+      background: #f1f5f9;
+      color: var(--text-sub);
+      border: 1px solid var(--border);
+    }
+    .btn-secondary:hover {
+      background: #e2e8f0;
+    }
+    pre {
+      background: #1e293b;
+      color: #f8fafc;
+      padding: 12px;
+      border-radius: 8px;
+      font-size: 12.5px;
+      overflow-x: auto;
+      margin: 0;
+    }
+    .tag-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 6px;
+    }
+    .tag {
+      background: #f1f5f9;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 2px 8px;
+      font-size: 11.5px;
+      font-family: "Consolas", monospace;
+    }
+    #loader {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 40px;
+      font-weight: 600;
+      color: var(--text-light);
+    }
+    .spinner {
+      border: 3px solid rgba(229,0,68,0.1);
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      border-left-color: var(--primary);
+      animation: spin 0.8s linear infinite;
+      margin-right: 12px;
+    }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+
+<script>window.PAGE_ID = 'debug';</script>
+<?!= include('_nav', {userEmail: userEmail, isAdmin: isAdmin, scriptUrl: scriptUrl}); ?>
+
+<div class="page">
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+    <div>
+      <h1 style="display:flex;align-items:center;gap:8px;">
+        <svg viewBox="0 0 24 24" style="width:20px;height:20px;stroke:var(--primary);fill:none;stroke-width:2.2;"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+        Diagnóstico y Debug del Sistema
+      </h1>
+      <div class="subtitle">Inspecciona conexiones de planillas, datos de OKRs y emula el cálculo de anomalías.</div>
+    </div>
+    <div style="display:flex; gap:10px; align-items:center;">
+      <input type="date" id="debug-date" style="font-family:inherit; padding: 8px; border-radius: 8px; border: 1px solid var(--border); background: var(--card); color: var(--text);">
+      <button class="btn" onclick="runDiagnostics()">
+        <svg style="width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;" viewBox="0 0 24 24"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+        Volver a Diagnosticar
+      </button>
+    </div>
+  </div>
+
+  <div id="loader" class="card">
+    <div class="spinner"></div>
+    Corriendo diagnósticos de conexión y parseo de datos...
+  </div>
+
+  <div id="content" style="display:none;">
+    <div class="grid">
+      
+      <!-- Card Conexión Planillas -->
+      <div class="card">
+        <div class="card-title" style="display:flex;align-items:center;gap:6px;">
+          <svg viewBox="0 0 24 24" style="width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:2;"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+          Conexión de Spreadsheets
+        </div>
+        <div class="status-row">
+          <span class="status-lbl">Actuals OKRs SS:</span>
+          <span class="status-val" id="ss-actuals-status">Cargando...</span>
+        </div>
+        <div class="status-row">
+          <span class="status-lbl">Database SS:</span>
+          <span class="status-val" id="ss-database-status">Cargando...</span>
+        </div>
+      </div>
+
+      <!-- Card Estructura Pestañas -->
+      <div class="card">
+        <div class="card-title" style="display:flex;align-items:center;gap:6px;">
+          <svg viewBox="0 0 24 24" style="width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:2;"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+          Estructura de Hojas (Tabs)
+        </div>
+        <div class="status-row">
+          <span class="status-lbl">Tab Actuals ('A. TI - Actuals OKRs'):</span>
+          <span class="status-val" id="sheet-actuals-status">Cargando...</span>
+        </div>
+        <div class="status-row">
+          <span class="status-lbl">Tab 'Suscripciones':</span>
+          <span class="status-val" id="sheet-sub-status">Cargando...</span>
+        </div>
+        <div class="status-row">
+          <span class="status-lbl">Tab 'Alertas_Historial':</span>
+          <span class="status-val" id="sheet-history-status">Cargando...</span>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="grid">
+      
+      <!-- Card Resumen de Datos -->
+      <div class="card">
+        <div class="card-title" style="display:flex;align-items:center;gap:6px;">
+          <svg viewBox="0 0 24 24" style="width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:2;"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+          Datos Disponibles en Actuals OKRs
+        </div>
+        <div class="status-row">
+          <span class="status-lbl">Filas Totales:</span>
+          <span class="status-val" id="data-actuals-rows">—</span>
+        </div>
+        <div class="status-row">
+          <span class="status-lbl">Última Fecha con Datos:</span>
+          <span class="status-val" id="data-actuals-maxdate" style="color:var(--primary); font-weight:bold;">—</span>
+        </div>
+        <div class="status-row">
+          <span class="status-lbl">Primera Fecha en Ventana:</span>
+          <span class="status-val" id="data-actuals-mindate">—</span>
+        </div>
+        <div style="margin-top:14px;">
+          <span class="status-lbl" style="font-size:13px; display:block; margin-bottom:4px;">Países Detectados:</span>
+          <div class="tag-container" id="data-countries-tags"></div>
+        </div>
+        <div style="margin-top:14px;">
+          <span class="status-lbl" style="font-size:13px; display:block; margin-bottom:4px;">Métricas en Planilla:</span>
+          <div class="tag-container" id="data-metrics-tags"></div>
+        </div>
+      </div>
+
+      <!-- Card Ejecución Test de Alertas -->
+      <div class="card" style="display:flex; flex-direction:column;">
+        <div class="card-title" style="display:flex;align-items:center;gap:6px;">
+          <svg viewBox="0 0 24 24" style="width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:2;"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+          Simulación de Anomalías (Ayer)
+        </div>
+        <div class="status-row">
+          <span class="status-lbl">Día Analizado:</span>
+          <span class="status-val" id="test-run-day" style="font-weight:bold;">—</span>
+        </div>
+        <div class="status-row">
+          <span class="status-lbl">Alertas Encontradas:</span>
+          <span class="status-val" id="test-run-count">—</span>
+        </div>
+        <div style="flex:1; margin-top:10px;">
+          <span class="status-lbl" style="font-size:13px; display:block; margin-bottom:6px;">Alertas Muestra (Primeras 5):</span>
+          <pre id="test-run-json" style="max-height:160px;"></pre>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+  window.addEventListener('load', function() {
+    runDiagnostics();
+  });
+
+  function runDiagnostics() {
+    document.getElementById('loader').style.display = 'flex';
+    document.getElementById('content').style.display = 'none';
+
+    var date = document.getElementById('debug-date').value;
+
+    google.script.run
+      .withSuccessHandler(onDiagnosticsSuccess)
+      .withFailureHandler(onDiagnosticsError)
+      .getDebugDiagnostics(date);
+  }
+
+  function onDiagnosticsSuccess(diag) {
+    document.getElementById('loader').style.display = 'none';
+    document.getElementById('content').style.display = 'block';
+
+    // 1. Spreadsheets Status
+    setSSStatus('ss-actuals-status', diag.spreadsheets.actuals);
+    setSSStatus('ss-database-status', diag.spreadsheets.database);
+
+    // 2. Sheets Status
+    setSheetStatus('sheet-actuals-status', diag.sheets.actuals);
+    setSheetRows('sheet-sub-status', diag.sheets.Suscripciones, 'Suscripciones');
+    setSheetRows('sheet-history-status', diag.sheets.Alertas_Historial, 'Alertas_Historial');
+
+    // 3. Data Summary
+    if (diag.dataSummary) {
+      document.getElementById('data-actuals-rows').textContent = diag.dataSummary.actualsRows || 0;
+      document.getElementById('data-actuals-mindate').textContent = diag.dataSummary.actualsMinDate || '—';
+      document.getElementById('data-actuals-maxdate').textContent = diag.dataSummary.actualsMaxDate || '—';
+
+      // Países
+      var countriesDiv = document.getElementById('data-countries-tags');
+      countriesDiv.innerHTML = '';
+      if (diag.dataSummary.actualsCountries && diag.dataSummary.actualsCountries.length > 0) {
+        diag.dataSummary.actualsCountries.forEach(function(c) {
+          countriesDiv.innerHTML += '<span class="tag">' + c + '</span>';
+        });
+      } else {
+        countriesDiv.innerHTML = '<span class="tag" style="color:var(--negative)">Ninguno</span>';
+      }
+
+      // Métricas
+      var metricsDiv = document.getElementById('data-metrics-tags');
+      metricsDiv.innerHTML = '';
+      if (diag.dataSummary.actualsMetrics && diag.dataSummary.actualsMetrics.length > 0) {
+        diag.dataSummary.actualsMetrics.forEach(function(m) {
+          metricsDiv.innerHTML += '<span class="tag">' + m + '</span>';
+        });
+      } else {
+        metricsDiv.innerHTML = '<span class="tag" style="color:var(--negative)">Ninguna</span>';
+      }
+    }
+
+    // 4. Test Run
+    if (diag.testRun) {
+      if (diag.testRun.ok) {
+        document.getElementById('test-run-day').textContent = diag.testRun.yesterdayYMD || '—';
+        document.getElementById('test-run-count').textContent = diag.testRun.alertsFound + ' alertas';
+        document.getElementById('test-run-count').style.color = diag.testRun.alertsFound > 0 ? 'var(--warning)' : 'var(--success)';
+        
+        document.getElementById('test-run-json').textContent = diag.testRun.alertsFound > 0 
+          ? JSON.stringify(diag.testRun.sampleAlerts, null, 2)
+          : 'No se encontraron desvíos críticos en los datos analizados.';
+      } else {
+        document.getElementById('test-run-day').textContent = 'Error';
+        document.getElementById('test-run-count').textContent = 'Falla';
+        document.getElementById('test-run-count').style.color = 'var(--negative)';
+        document.getElementById('test-run-json').textContent = 'Error al simular run: ' + diag.testRun.error;
+      }
+    }
+  }
+
+  function onDiagnosticsError(err) {
+    document.getElementById('loader').innerHTML = '<div style="color:var(--negative);font-weight:700;">[ERROR] Falló la llamada de diagnóstico: ' + (err.message || err) + '</div>';
+  }
+
+  function setSSStatus(id, ssDiag) {
+    var el = document.getElementById(id);
+    if (!ssDiag) {
+      el.innerHTML = '<span class="badge badge-error">Desconectado</span>';
+    } else if (ssDiag.ok) {
+      el.innerHTML = '<span class="badge badge-ok">OK</span> <span style="font-size:12px;color:var(--text-light)">(' + ssDiag.name.slice(0, 20) + '...)</span>';
+    } else {
+      el.innerHTML = '<span class="badge badge-error" title="' + ssDiag.error + '">ERROR</span> <span style="font-size:11px;color:var(--negative);word-break:break-all;">' + ssDiag.error.slice(0, 30) + '...</span>';
+    }
+  }
+
+  function setSheetStatus(id, shDiag) {
+    var el = document.getElementById(id);
+    if (!shDiag) {
+      el.innerHTML = '<span class="badge badge-error">No encontrada</span>';
+    } else if (shDiag.ok) {
+      el.innerHTML = '<span class="badge badge-ok">OK</span> <span style="font-size:12px;color:var(--text-light)">(' + shDiag.name + ')</span>';
+    } else {
+      el.innerHTML = '<span class="badge badge-error">FALTA</span>';
+    }
+  }
+
+  function setSheetRows(id, shDiag, defaultName) {
+    var el = document.getElementById(id);
+    if (!shDiag) {
+      el.innerHTML = '<span class="badge badge-error">No encontrada</span>';
+    } else if (shDiag.ok) {
+      el.innerHTML = '<span class="badge badge-ok">OK</span> <span style="font-size:12px;color:var(--text-light)">(' + shDiag.rows + ' filas)</span>';
+    } else {
+      el.innerHTML = '<span class="badge badge-error">ERROR</span>';
+    }
+  }
+</script>
+
+</body>
+</html>
