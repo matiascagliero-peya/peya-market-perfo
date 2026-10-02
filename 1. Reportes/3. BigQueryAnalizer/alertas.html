@@ -10,24 +10,24 @@
 <!-- Panel de Control de Alertas -->
 <div id="header-panel">
   <div id="header-top">
-    <h1>🔔 Alertas de Gasto y Repetición <span class="by">by Matías Cagliero</span></h1>
+    <h1><svg class="ico ico-h2" viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>Alertas de Slots y Consumo <span class="by">by Matías Cagliero</span></h1>
     <div id="header-actions">
-      <button id="theme-btn" onclick="toggleTheme()" title="Modo noche/día">🌙</button>
+      <button id="theme-btn" onclick="toggleTheme()" title="Modo noche/día"><svg class="ico" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></button>
     </div>
   </div>
 </div>
 
 <div id="tabs">
-  <a class="tab" id="tab-ov" href="<?= appUrl ?>?page=index">📈 Overview / Queries</a>
-  <a class="tab" id="tab-sched" href="<?= appUrl ?>?page=programadas">⏰ Programadas</a>
-  <a class="tab on" id="tab-alerts" href="<?= appUrl ?>?page=alertas">🔔 Alertas</a>
+  <a class="tab" id="tab-ov" href="<?= appUrl ?>?page=index"><svg class="ico ico-tab" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/></svg>Overview / Queries</a>
+  <a class="tab" id="tab-sched" href="<?= appUrl ?>?page=programadas"><svg class="ico ico-tab" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>Programadas</a>
+  <a class="tab on" id="tab-alerts" href="<?= appUrl ?>?page=alertas"><svg class="ico ico-tab" viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>Alertas</a>
   <? if (isAdmin()) { ?>
-    <a class="tab" id="tab-analytics" href="<?= appUrl ?>?page=analytics">📊 Analytics</a>
+    <a class="tab" id="tab-analytics" href="<?= appUrl ?>?page=analytics"><svg class="ico ico-tab" viewBox="0 0 24 24"><rect x="3" y="12" width="4" height="9" rx="1"/><rect x="10" y="7" width="4" height="14" rx="1"/><rect x="17" y="3" width="4" height="18" rx="1"/></svg>Analytics</a>
   <? } ?>
 </div>
 
 <div id="alerts">
-  <div class="warn-success">✅ Las alertas usan solo metadata (Jobs.list) — <b>NO consumen datos facturados</b>. Te avisan por mail cuando se cruza un umbral.</div>
+  <div class="warn-success">Las alertas usan solo metadata (Jobs.list) — <b>NO consumen datos facturados</b>. Te avisan por mail cuando se cruza un umbral.</div>
   
   <div style="display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap">
     <span class="dot" id="al-dot"></span>
@@ -41,31 +41,31 @@
     <div class="card c3"><div class="k">Disparadas</div><div class="v" id="al-fired">0</div></div>
   </div>
 
-  <h2 id="al-form-title">➕ Nueva alerta</h2>
+  <h2 id="al-form-title">Nueva alerta</h2>
   <div class="formbox">
     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
       <span class="lbl">Condición</span>
       <select id="af-type" onchange="onAlertTypeChange()">
-        <option value="daily_tb">Gasto diario supera N TB</option>
-        <option value="daily_cost">Costo diario supera $N</option>
-        <option value="monthly_tb">Gasto mensual supera N TB</option>
+        <option value="daily_slot_hours" selected>Horas slots diarias superan N h (límite 600h PedidosYa)</option>
+        <option value="daily_tb">Datos procesados diarios superan N TB</option>
+        <option value="monthly_tb">Datos procesados mensuales superan N TB</option>
         <option value="loop">Una query se repite más de N veces/día</option>
       </select>
       <span class="lbl">Umbral</span>
-      <input type="number" id="af-threshold" value="4" min="0" step="0.1" style="width:90px"/>
-      <span id="af-unit" class="lbl">TB</span>
+      <input type="number" id="af-threshold" value="300" min="0" step="10" style="width:90px"/>
+      <span id="af-unit" class="lbl">horas</span>
     </div>
-    <input id="af-name" placeholder="Nombre de la alerta (opcional)" style="width:100%;max-width:400px;"/>
+    <input id="af-name" placeholder="Nombre de la alerta (ej: Alerta 300h Slots Diarios)" style="width:100%;max-width:400px;"/>
     <input id="af-email" placeholder="Email para avisar (ej: matias.cagliero@pedidosya.com)" style="width:100%;max-width:400px;"/>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-      <button class="ibtn" onclick="testAlertForm()">🔍 Probar ahora (ver valor actual)</button>
+      <button class="ibtn" onclick="testAlertForm()">Probar ahora (ver valor actual)</button>
       <button class="btn-p" onclick="saveAlertForm()">Guardar alerta</button>
       <button class="ibtn" id="af-cancel" onclick="resetAlertForm()" style="display:none">Cancelar</button>
       <span id="af-msg" style="font-size:12px;color:var(--muted)"></span>
     </div>
   </div>
 
-  <h2>📋 Mis alertas <span class="cnt" id="alerts-cnt">0</span></h2>
+  <h2>Mis alertas <span class="cnt" id="alerts-cnt">0</span></h2>
   <div class="tablebox"><table id="t-alerts"></table></div>
   <div id="alerts-history" style="margin-top:14px"></div>
 </div>
@@ -79,9 +79,13 @@ var sortAl={col:'name',dir:1};
 function onAlertTypeChange(){
   var t=g('af-type').value;
   var u=g('af-unit');
-  if(t==='daily_tb'||t==='monthly_tb'){u.textContent='TB';g('af-threshold').step='0.1';if(g('af-threshold').value==='0')g('af-threshold').value='4';}
-  else if(t==='daily_cost'){u.textContent='USD';g('af-threshold').step='1';if(g('af-threshold').value==='0'||g('af-threshold').value==='4')g('af-threshold').value='25';}
-  else {u.textContent='veces';g('af-threshold').step='1';if(g('af-threshold').value==='0')g('af-threshold').value='10';}
+  if(t==='daily_slot_hours'){
+    u.textContent='horas';
+    g('af-threshold').step='10';
+    if(g('af-threshold').value==='0'||g('af-threshold').value==='4') g('af-threshold').value='300';
+  }
+  else if(t==='daily_tb'||t==='monthly_tb'){u.textContent='TB';g('af-threshold').step='0.1';if(g('af-threshold').value==='0'||g('af-threshold').value==='300')g('af-threshold').value='4';}
+  else {u.textContent='veces';g('af-threshold').step='1';if(g('af-threshold').value==='0'||g('af-threshold').value==='300')g('af-threshold').value='10';}
 }
 
 function renderAlertsStatus(){
@@ -96,10 +100,10 @@ function toggleAlerts(){
   google.script.run.withSuccessHandler(function(res){
     gAlertsActive=res.active;
     renderAlertsStatus();
-    set('af-msg',gAlertsActive?'✅ Chequeo activado':'⏸ Chequeo desactivado');
+    set('af-msg',gAlertsActive?'Chequeo activado':'Chequeo desactivado');
   })
   .withFailureHandler(function(e){
-    set('af-msg','❌ '+((e&&e.message)||e));
+    set('af-msg','Error: '+((e&&e.message)||e));
   })[fn]();
 }
 
@@ -107,14 +111,14 @@ var COLS_AL=[
   {k:'name',label:'Alerta',render:function(a){return td(a.name||a.type);}},
   {k:'type',label:'Condición',render:function(a){
     var label=a.type;
-    if(a.type==='daily_tb') label='Gasto diario > N TB';
-    if(a.type==='daily_cost') label='Costo diario > $N';
-    if(a.type==='monthly_tb') label='Gasto mensual > N TB';
+    if(a.type==='daily_slot_hours') label='Horas slots diarias > N h';
+    if(a.type==='daily_tb') label='Datos diarios > N TB';
+    if(a.type==='monthly_tb') label='Datos mensuales > N TB';
     if(a.type==='loop') label='Query repetida > N veces';
     return td(label);
   }},
   {k:'threshold',label:'Umbral',align:'r',render:function(a){
-    var unit = (a.type==='daily_tb'||a.type==='monthly_tb')?' TB':(a.type==='daily_cost'?' USD':' veces');
+    var unit = a.type==='daily_slot_hours' ? ' h' : ((a.type==='daily_tb'||a.type==='monthly_tb')?' TB':' veces');
     return td(a.threshold + unit, null, 'r');
   }},
   {k:'email',label:'Destinatario',render:function(a){return td(a.email);}},
@@ -132,10 +136,10 @@ function alertActions(a){
   var c=document.createElement('td');
   c.style.display='flex';c.style.gap='4px';c.style.borderBottom='none';
   function b(txt,cls,fn){var x=document.createElement('button');x.className='sbtn '+(cls||'');x.textContent=txt;x.onclick=fn;return x;}
-  c.appendChild(b('✏ Editar','s-edit',function(){editAlert(a);}));
+  c.appendChild(b('Editar','s-edit',function(){editAlert(a);}));
   c.appendChild(b(a.enabled?'Pausar':'Activar','s-toggle',function(){toggleAlert(a);}));
-  c.appendChild(b('🔍 Test','s-run',function(){testAlertRow(a.id);}));
-  c.appendChild(b('🗑 Borrar','s-del',function(){delAlert(a);}));
+  c.appendChild(b('Test','s-run',function(){testAlertRow(a.id);}));
+  c.appendChild(b('Borrar','s-del',function(){delAlert(a);}));
   return c;
 }
 
@@ -160,32 +164,32 @@ function testAlertForm(){
   set('af-msg','Calculando valor actual…');
   google.script.run.withSuccessHandler(function(r){
     if(r&&r.ok!==false){
-      set('af-msg',(r.breached?'🚨 SE DISPARARÍA':'✅ Por ahora OK')+' — actual: '+num(r.value)+' '+(r.unit||'')+(r.detail?(' · '+r.detail):''));
+      set('af-msg',(r.breached?'[UMBRAL SUPERADO]':'[OK]')+' — actual: '+num(r.value)+' '+(r.unit||'')+(r.detail?(' · '+r.detail):''));
     }
-    else set('af-msg','❌ '+((r&&r.error)||'error'));
-  }).withFailureHandler(function(e){set('af-msg','❌ '+((e&&e.message)||e));}).previewAlert(t,thr);
+    else set('af-msg','Error: '+((r&&r.error)||'error'));
+  }).withFailureHandler(function(e){set('af-msg','Error: '+((e&&e.message)||e));}).previewAlert(t,thr);
 }
 
 function saveAlertForm(){
   var al={id:editingAlertId,name:(g('af-name').value||'').trim(),type:g('af-type').value,threshold:parseFloat(g('af-threshold').value)||0,email:(g('af-email').value||'').trim(),enabled:true};
   set('af-msg','Guardando…');
   google.script.run.withSuccessHandler(function(r){
-    if(r&&r.ok){resetAlertForm();set('af-msg','✅ Alerta guardada');loadAlerts();}
-    else set('af-msg','❌ '+((r&&r.error)||'error'));
+    if(r&&r.ok){resetAlertForm();set('af-msg','Alerta guardada');loadAlerts();}
+    else set('af-msg','Error: '+((r&&r.error)||'error'));
   })
-  .withFailureHandler(function(e){set('af-msg','❌ '+((e&&e.message)||e));}).saveAlert(al);
+  .withFailureHandler(function(e){set('af-msg','Error: '+((e&&e.message)||e));}).saveAlert(al);
 }
 
 function resetAlertForm(){
   editingAlertId=null;g('af-name').value='';g('af-email').value=currentUser||'';g('af-type').value='daily_tb';
-  onAlertTypeChange();set('al-form-title','➕ Nueva alerta');g('af-cancel').style.display='none';
+  onAlertTypeChange();set('al-form-title','Nueva alerta');g('af-cancel').style.display='none';
   set('af-msg','');
 }
 
 function editAlert(a){
   editingAlertId=a.id;g('af-type').value=a.type;onAlertTypeChange();
   g('af-threshold').value=a.threshold;g('af-name').value=a.name||'';g('af-email').value=a.email||'';
-  set('al-form-title','✏️ Editando: '+(a.name||a.type));g('af-cancel').style.display='';
+  set('al-form-title','Editando: '+(a.name||a.type));g('af-cancel').style.display='';
   set('af-msg','');window.scrollTo(0,0);
 }
 
@@ -193,10 +197,10 @@ function testAlertRow(id){
   set('af-msg','Probando…');
   google.script.run.withSuccessHandler(function(r){
     if(r&&r.ok){
-      set('af-msg',(r.breached?'🚨 SE DISPARARÍA':'✅ OK')+' — actual: '+num(r.value)+' '+(r.unit||'')+(r.detail?(' · '+r.detail):''));
+      set('af-msg',(r.breached?'[UMBRAL SUPERADO]':'[OK]')+' — actual: '+num(r.value)+' '+(r.unit||'')+(r.detail?(' · '+r.detail):''));
       loadAlerts();
-    }else set('af-msg','❌ '+((r&&r.error)||'error'));
-  }).withFailureHandler(function(e){set('af-msg','❌ '+((e&&e.message)||e));}).testAlert(id);
+    }else set('af-msg','Error: '+((r&&r.error)||'error'));
+  }).withFailureHandler(function(e){set('af-msg','Error: '+((e&&e.message)||e));}).testAlert(id);
 }
 
 function toggleAlert(a){
@@ -206,14 +210,14 @@ function toggleAlert(a){
 
 function delAlert(a){
   if(confirm('¿Seguro de borrar esta alerta?')) {
-    google.script.run.withSuccessHandler(function(){set('af-msg','🗑 "'+(a.name||a.type)+'" borrada');loadAlerts();}).deleteAlert(a.id);
+    google.script.run.withSuccessHandler(function(){set('af-msg','"'+(a.name||a.type)+'" borrada');loadAlerts();}).deleteAlert(a.id);
   }
 }
 
 // ── Init ──
 document.addEventListener('DOMContentLoaded',function(){
   try{if(localStorage.getItem('bq-theme')==='light')toggleTheme();}catch(e){}
-  var themeBtn=g('theme-btn');if(themeBtn)themeBtn.textContent=document.documentElement.classList.contains('light')?'☀️':'🌙';
+  var themeBtn=g('theme-btn');if(themeBtn)themeBtn.innerHTML=document.documentElement.classList.contains('light')?ICONS.sun:ICONS.moon;
   
   google.script.run.withSuccessHandler(function(cfg){
     if(cfg){

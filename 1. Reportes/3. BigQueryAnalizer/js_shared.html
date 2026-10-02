@@ -1,9 +1,36 @@
 <script>
-var preset='month', currentUser='', allQueries=[], gPrice=6.25, gProject='peya-food-and-groceries', gRegion='us', gData=null, _ready=false;
-var gUserAutoFilled=false;   // true si el filtro 👤 se autollenó con el que entra; si ese user no tiene queries, se limpia solo (1 vez)
+var preset='month', currentUser='', allQueries=[], gPrice=0, gProject='peya-food-and-groceries', gRegion='us', gData=null, _ready=false;
+var gUserAutoFilled=false;   // true si el filtro de usuario se autollenó con el que entra; si ese user no tiene queries, se limpia solo (1 vez)
 var CACHE_TTL=30*60*1000; // 30 min
 
-var sortSrc={col:'slot_hours',dir:-1}, sortSh={col:'cost',dir:-1}, sortQ={col:'slot_hours',dir:-1}, sortPr={col:'slot_hours',dir:-1};
+var sortSrc={col:'slot_hours',dir:-1}, sortSh={col:'bytes',dir:-1}, sortQ={col:'slot_hours',dir:-1}, sortPr={col:'slot_hours',dir:-1}, sortUsr={col:'slot_hours',dir:-1};
+
+var ICONS = {
+  chart: '<svg class="ico ico-tab" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/></svg>',
+  clock: '<svg class="ico ico-tab" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>',
+  bell: '<svg class="ico ico-tab" viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>',
+  analytics: '<svg class="ico ico-tab" viewBox="0 0 24 24"><rect x="3" y="12" width="4" height="9" rx="1"/><rect x="10" y="7" width="4" height="14" rx="1"/><rect x="17" y="3" width="4" height="18" rx="1"/></svg>',
+  sun: '<svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>',
+  moon: '<svg class="ico" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>',
+  zap: '<svg class="ico ico-card" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>',
+  target: '<svg class="ico ico-card" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>',
+  database: '<svg class="ico ico-card" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>',
+  terminal: '<svg class="ico ico-card" viewBox="0 0 24 24"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>',
+  activity: '<svg class="ico ico-card" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>',
+  folder: '<svg class="ico ico-h2" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>',
+  users: '<svg class="ico ico-h2" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
+  share: '<svg class="ico ico-h2" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>',
+  layers: '<svg class="ico ico-h2" viewBox="0 0 24 24"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>',
+  grid: '<svg class="ico ico-h2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>',
+  repeat: '<svg class="ico ico-h2" viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>',
+  sliders: '<svg class="ico" viewBox="0 0 24 24"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>',
+  search: '<svg class="ico" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>',
+  user: '<svg class="ico" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>',
+  calendar: '<svg class="ico" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>',
+  globe: '<svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>',
+  copy: '<svg class="ico ico-btn" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>',
+  refresh: '<svg class="ico" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>'
+};
 
 function g(id){return document.getElementById(id);}
 function set(id,v){var e=g(id);if(e)e.textContent=v;}
@@ -14,6 +41,14 @@ function num(n){return (parseFloat(n)||0).toFixed(1);}
 function fmtTB(bytes){var tb=(parseFloat(bytes)||0)/1e12;return tb>=1?tb.toFixed(1)+' TB':(tb*1000).toFixed(1)+' GB';}
 function fmtGB(gb){var v=parseFloat(gb)||0;return v>=1000?(v/1000).toFixed(2)+' TB':v.toFixed(1)+' GB';}
 function fmtDur(sec){var s=parseInt(sec)||0;return s>=60?Math.floor(s/60)+'m '+(s%60)+'s':s+'s';}
+function fmtSlotTime(sh, ms){
+  var h = parseFloat(sh) || 0;
+  if(h >= 1) return h.toFixed(2) + ' h';
+  var totalMs = parseInt(ms) || Math.round(h * 3600000);
+  if(totalMs >= 60000) return (totalMs / 60000).toFixed(1) + ' min';
+  if(totalMs > 0) return (totalMs / 1000).toFixed(1) + ' s';
+  return '0 s';
+}
 function fmtDateTime(ms){
   if(!ms) return '—';
   var d=new Date(ms);
@@ -165,7 +200,7 @@ function copyTable(tableId,btn){
     if(vals.join('').length)lines.push(vals.join('\t'));
   }
   if(!lines.length){flashBtn(btn,'Sin datos');return;}
-  copyToClipboard(lines.join('\n'),function(){flashBtn(btn,'✓ Copiada');},function(){flashBtn(btn,'No se pudo');});
+  copyToClipboard(lines.join('\n'),function(){flashBtn(btn,'Copiada');},function(){flashBtn(btn,'No se pudo');});
 }
 function downloadBlob(blob,name){
   var url=URL.createObjectURL(blob),a=document.createElement('a');
@@ -184,10 +219,10 @@ function copyChart(which,btn){
     if(!blob){flashBtn(btn,'No se pudo');return;}
     if(navigator.clipboard&&window.ClipboardItem){
       navigator.clipboard.write([new ClipboardItem({'image/png':blob})]).then(
-        function(){flashBtn(btn,'✓ Copiado');},
-        function(){downloadBlob(blob,fname);flashBtn(btn,'✓ Descargado');}
+        function(){flashBtn(btn,'Copiado');},
+        function(){downloadBlob(blob,fname);flashBtn(btn,'Descargado');}
       );
-    }else{downloadBlob(blob,fname);flashBtn(btn,'✓ Descargado');}
+    }else{downloadBlob(blob,fname);flashBtn(btn,'Descargado');}
   });
 }
 
@@ -197,7 +232,8 @@ function chartTick(){return '#8b93a7';}
 function toggleTheme(){
   var light=!document.documentElement.classList.contains('light');
   document.documentElement.classList.toggle('light',light);
-  g('theme-btn').textContent=light?'☀️':'🌙';
+  var btn=g('theme-btn');
+  if(btn) btn.innerHTML = light ? ICONS.sun : ICONS.moon;
   try{localStorage.setItem('bq-theme',light?'light':'dark');}catch(e){}
   if(gData&&typeof drawCharts==='function')drawCharts(gData);
 }
@@ -268,7 +304,7 @@ function loadCache(k){
 function showCache(age){
   var el=g('cache-lbl');if(!el)return;el.textContent='';
   if(age===null)return;
-  el.appendChild(document.createTextNode('📦 caché '+age+'min · '));
+  el.appendChild(document.createTextNode('Caché '+age+' min · '));
   var a=document.createElement('a');a.className='link';a.href='#';a.textContent='actualizar';
   a.onclick=function(e){e.preventDefault();if(typeof loadDashboard==='function')loadDashboard(true);};
   el.appendChild(a);

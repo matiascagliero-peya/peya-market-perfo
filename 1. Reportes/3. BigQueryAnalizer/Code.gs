@@ -6,6 +6,8 @@ const REPORT_SHEET_ID    = '1964pAhGd8EWcWGbzN3NvGQCNGbePDCwo9i1GS4TeKCo';
 const BACKUP_SHEET_ID    = '1964pAhGd8EWcWGbzN3NvGQCNGbePDCwo9i1GS4TeKCo';
 const LOOP_THRESHOLD     = 5;
 const ALERT_THRESHOLD_TB = 3.0; // TB por día
+const DAILY_SLOT_LIMIT   = 600; // Límite diario oficial en PedidosYa antes de bloqueo de BigQuery
+const DAILY_SLOT_WARN    = 300; // Umbral oficial de advertencia al 50% de la cuota diaria
 const MAX_PAGES          = 200;  // máx 100,000 jobs por consulta
 const ADMIN_EMAIL        = 'matias.cagliero@pedidosya.com'; // único que ve TODO
 const VIEWER_EMAILS      = ['nicki.krawiecki@pedidosya.com','eugenio.irigoin@pedidosya.com'];
@@ -86,22 +88,26 @@ function getConfig() {
   const p  = PropertiesService.getUserProperties();
   const me = _me();
   return {
-    projectId:   p.getProperty('projectId')  || 'peya-food-and-groceries',
-    region:      p.getProperty('region')     || 'us',
-    pricePerTB:  parseFloat(p.getProperty('pricePerTB') || '6.25'),
-    alertEmail:  p.getProperty('alertEmail') || me,
-    currentUser: me,
-    isAdmin:     me === ADMIN_EMAIL,
-    isViewer:    isViewer(),
+    projectId:      p.getProperty('projectId')  || 'peya-food-and-groceries',
+    region:         p.getProperty('region')     || 'us',
+    pricePerTB:     parseFloat(p.getProperty('pricePerTB') || '6.25'),
+    alertEmail:     p.getProperty('alertEmail') || me,
+    dailySlotLimit: parseFloat(p.getProperty('dailySlotLimit') || String(DAILY_SLOT_LIMIT)),
+    dailySlotWarn:  parseFloat(p.getProperty('dailySlotWarn') || String(DAILY_SLOT_WARN)),
+    currentUser:    me,
+    isAdmin:        me === ADMIN_EMAIL,
+    isViewer:       isViewer(),
   };
 }
 
 function saveConfig(cfg) {
   PropertiesService.getUserProperties().setProperties({
-    projectId:  cfg.projectId  || '',
-    region:     cfg.region     || 'us',
-    pricePerTB: String(cfg.pricePerTB || 6.25),
-    alertEmail: cfg.alertEmail || '',
+    projectId:      cfg.projectId  || '',
+    region:         cfg.region     || 'us',
+    pricePerTB:     String(cfg.pricePerTB || 6.25),
+    alertEmail:     cfg.alertEmail || '',
+    dailySlotLimit: String(cfg.dailySlotLimit || DAILY_SLOT_LIMIT),
+    dailySlotWarn:  String(cfg.dailySlotWarn || DAILY_SLOT_WARN),
   });
   return { ok: true };
 }
@@ -451,17 +457,26 @@ function aggregateJobs(jobs, pricePerTB, filterUser) {
   const otrosIdx = seriesUsers.indexOf('Otros');
 
   const trendDays = Object.keys(byDay).sort().map(day => {
-    const b = seriesUsers.map(() => 0), c = seriesUsers.map(() => 0);
+    const b = seriesUsers.map(() => 0), c = seriesUsers.map(() => 0), s = seriesUsers.map(() => 0);
     for (const u of usersByTotal) {
       const cell = userDayMap[u]?.[day];
       if (!cell) continue;
       const idx = idxOf[u] ?? otrosIdx;
-      if (idx > -1) { b[idx] += cell.bytes; c[idx] += cell.cost; }
+      if (idx > -1) {
+        b[idx] += cell.bytes;
+        c[idx] += cell.cost;
+        s[idx] += cell.slot_hours;
+      }
     }
-    return { day, b: b.map(x => round4(x / 1e12)), c: c.map(x => round4(x)) };
+    return {
+      day,
+      b: b.map(x => round4(x / 1e12)),
+      c: c.map(x => round4(x)),
+      s: s.map(x => round2(x))
+    };
   });
 
-  const topJobs = filtered.map(job => {
+  const allFormattedJobs = filtered.map(job => {
     const bytes = billedBytes(job);
     const cost = bytes / 1e12 * pricePerTB;
     const slotMs = parseInt(job.statistics?.totalSlotMs || 0);
@@ -475,7 +490,8 @@ function aggregateJobs(jobs, pricePerTB, filterUser) {
       creationTime: parseInt(job.statistics?.creationTime || 0),
       totalBytesBilled: bytes,
       totalSlotMs: slotMs,
-      cost_usd: cost,
+      slot_hours: round4(slotMs / 3600000),
+      cost_usd: round4(cost),
       query: queryStr,
       query_name: _extractQueryName(queryStr),
       statementType: job.statistics?.query?.statementType || '',
@@ -483,7 +499,15 @@ function aggregateJobs(jobs, pricePerTB, filterUser) {
       source: getSource(job),
       sheetId: extractSheetId(job)
     };
-  }).sort((a, b) => b.totalBytesBilled - a.totalBytesBilled).slice(0, 100);
+  });
+
+  // Tomar los top por Bytes Y los top por Slots para garantizar visibilidad de queries que consumen muchos slots
+  const topByBytes = allFormattedJobs.slice().sort((a, b) => b.totalBytesBilled - a.totalBytesBilled).slice(0, 100);
+  const topBySlots = allFormattedJobs.slice().sort((a, b) => b.totalSlotMs - a.totalSlotMs).slice(0, 100);
+  const topJobsMap = {};
+  topByBytes.forEach(j => { if (j.jobId) topJobsMap[j.jobId] = j; });
+  topBySlots.forEach(j => { if (j.jobId) topJobsMap[j.jobId] = j; });
+  const topJobs = Object.values(topJobsMap).sort((a, b) => (b.totalSlotMs || 0) - (a.totalSlotMs || 0));
 
   // Peak rates (429 semaphore)
   let peakQpm = 0;
@@ -530,6 +554,29 @@ function aggregateJobs(jobs, pricePerTB, filterUser) {
     }
   });
 
+  // Monitoreo y cuota de slots diarios (Tope PedidosYa: 600h, Alerta: 300h)
+  const todayData = byDay[todayStr] || { slot_hours: 0, jobs: 0, cost_usd: 0, gb_processed: 0 };
+  const meUser = _me();
+  const targetUser = (filterUser || meUser || '').toLowerCase();
+  let userSlotsToday = 0;
+  if (targetUser && userDayMap[targetUser]?.[todayStr]) {
+    userSlotsToday = userDayMap[targetUser][todayStr].slot_hours || 0;
+  } else if (filterUser) {
+    userSlotsToday = todayData.slot_hours || 0;
+  } else if (meUser && userDayMap[meUser]?.[todayStr]) {
+    userSlotsToday = userDayMap[meUser][todayStr].slot_hours || 0;
+  }
+
+  const slotQuota = {
+    dailyLimit: DAILY_SLOT_LIMIT,
+    warnThreshold: DAILY_SLOT_WARN,
+    todaySlotHours: round2(userSlotsToday),
+    totalSlotHoursToday: round2(todayData.slot_hours),
+    todaySlotPercent: round2((userSlotsToday / DAILY_SLOT_LIMIT) * 100),
+    remainingHours: round2(Math.max(0, DAILY_SLOT_LIMIT - userSlotsToday)),
+    status: userSlotsToday >= DAILY_SLOT_LIMIT ? 'BLOCKED' : (userSlotsToday >= DAILY_SLOT_WARN ? 'WARN' : 'OK')
+  };
+
   const userDailyBreakdown = [];
   Object.entries(userDayMap).forEach(([user, days]) => {
     Object.entries(days).forEach(([day, d]) => {
@@ -548,6 +595,7 @@ function aggregateJobs(jobs, pricePerTB, filterUser) {
 
   return {
     summary,
+    slotQuota,
     userTrend: { users: seriesUsers, days: trendDays },
     userDailyBreakdown,
     byUser: Object.entries(userTotMap).map(([u, b]) => {
@@ -560,8 +608,14 @@ function aggregateJobs(jobs, pricePerTB, filterUser) {
           totalSlotHours += daysOfUser[day].slot_hours;
         }
       }
-      return { user: u, total_bytes: b, cost_usd: totalCost, total_jobs: totalJobs, slot_hours: totalSlotHours };
-    }).sort((a,b) => b.total_bytes - a.total_bytes),
+      return {
+        user: u,
+        total_bytes: b,
+        cost_usd: round4(totalCost),
+        total_jobs: totalJobs,
+        slot_hours: round2(totalSlotHours)
+      };
+    }).sort((a,b) => (b.slot_hours || 0) - (a.slot_hours || 0)),
     dailyTrend: Object.entries(byDay).map(([day, v]) => ({ day, ...v })).sort((a, b) => a.day.localeCompare(b.day)),
     users: [...usersSet].sort(),
     bySource: Object.values(bySourceMap),
@@ -585,7 +639,9 @@ function aggregateJobs(jobs, pricePerTB, filterUser) {
       peakMin,
       peakSheetsMin,
       peakAppsScriptMin,
-      appsScriptJobsTodayCount
+      appsScriptJobsTodayCount,
+      userSlotHoursToday: round2(userSlotsToday),
+      totalSlotHoursToday: round2(todayData.slot_hours)
     },
     regionsPresent: Object.keys(byDay).length ? [{ region: cfg.region || 'us', jobs: filtered.length }] : []
   };
@@ -1010,7 +1066,7 @@ function debugFull() {
     jobs = fetchJobs(cfg.projectId, from30, today, true);
     rec('PASO 1 · fetchJobs(allUsers)', Date.now() - t0);
     const allUsersOk = _lastFetchAllUsers;
-    log('✅ Jobs encontrados : ' + jobs.length + '   ⏱ ' + lastMs() + ' ms');
+    log('Jobs encontrados : ' + jobs.length + '   ' + lastMs() + ' ms');
     log('   allUsers funcionó: ' + (allUsersOk ? 'SÍ — pidió TODOS los usuarios' : 'NO — cayó a SOLO-tus-jobs (falta permiso bigquery.jobs.listAll)'));
 
     const dist = {};
@@ -1027,17 +1083,17 @@ function debugFull() {
     log('   Jobs de otros     : ' + otherJobs);
 
     if (!allUsersOk) {
-      log('   ⚠️ VEREDICTO: allUsers NO funcionó → falta el permiso bigquery.jobs.listAll en la identidad que ejecuta. Por eso solo ves lo tuyo.');
+      log('   [WARN] VEREDICTO: allUsers NO funcionó → falta el permiso bigquery.jobs.listAll en la identidad que ejecuta. Por eso solo ves lo tuyo.');
     } else if (!me) {
-      log('   ⚠️ VEREDICTO: el server NO te reconoce (identidad vacía). Revisá el deploy "Ejecutar como: Yo".');
+      log('   [WARN] VEREDICTO: el server NO te reconoce (identidad vacía). Revisá el deploy "Ejecutar como: Yo".');
     } else if (others.length === 0) {
-      log('   ⚠️ VEREDICTO: allUsers SÍ funcionó pero NO hay jobs de otros en el rango → nadie más corrió, o estás en el proyecto equivocado.');
+      log('   [WARN] VEREDICTO: allUsers SÍ funcionó pero NO hay jobs de otros en el rango → nadie más corrió, o estás en el proyecto equivocado.');
     } else {
-      log('   ✅ VEREDICTO: trae a OTROS usuarios correctamente (' + others.length + ' personas además de vos). El backend está OK.');
+      log('   [OK] VEREDICTO: trae a OTROS usuarios correctamente (' + others.length + ' personas además de vos). El backend está OK.');
     }
   } catch(e) {
     rec('PASO 1 · fetchJobs(allUsers) [ERROR]', Date.now() - t0);
-    log('❌ Error en fetchJobs: ' + e.message + '   ⏱ ' + lastMs() + ' ms');
+    log('[ERROR] Error en fetchJobs: ' + e.message + '   ' + lastMs() + ' ms');
   }
 
   log('');
@@ -1481,14 +1537,37 @@ function removeAlertsTrigger() {
   return { active: false };
 }
 
-function previewAlert(type, threshold) {
+function previewAlert(type, threshold, alertUser) {
   try {
     const cfg = getConfig();
     const projectId = cfg.projectId;
     const pricePerTB = cfg.pricePerTB || 6.25;
     const todayStr = Utilities.formatDate(new Date(), DEFAULT_TZ, 'yyyy-MM-dd');
     
-    if (type === 'daily_tb' || type === 'daily_cost') {
+    if (type === 'daily_slot_hours') {
+      const targetUser = (alertUser && alertUser.indexOf('@') !== -1) ? alertUser.toLowerCase().trim() : (cfg.currentUser || null);
+      const dash = getDashboard(projectId, 'all', todayStr, todayStr, pricePerTB, targetUser, 'all');
+      if (dash && dash.ok) {
+        let slotH = 0;
+        if (targetUser && dash.byUser && dash.byUser.length) {
+          const uEntry = dash.byUser.find(u => (u.user || '').toLowerCase() === targetUser);
+          slotH = uEntry ? (uEntry.slot_hours || 0) : (dash.summary?.total_slot_hours || 0);
+        } else {
+          slotH = dash.summary?.total_slot_hours || 0;
+        }
+        slotH = round2(slotH);
+        const breached = slotH > threshold;
+        const pct = Math.round((slotH / DAILY_SLOT_LIMIT) * 100);
+        const remaining = Math.max(0, round2(DAILY_SLOT_LIMIT - slotH));
+        return {
+          ok: true,
+          breached: breached,
+          value: slotH,
+          unit: 'h slots',
+          detail: 'Hoy: ' + slotH + ' de ' + DAILY_SLOT_LIMIT + ' h (' + pct + '% del límite diario). Te quedan ' + remaining + ' h antes del bloqueo.'
+        };
+      }
+    } else if (type === 'daily_tb' || type === 'daily_cost') {
       const dash = getDashboard(projectId, 'all', todayStr, todayStr, pricePerTB, null, 'all');
       if (dash && dash.ok) {
         const tb = dash.summary?.total_tb || 0;
@@ -1524,7 +1603,7 @@ function testAlert(id) {
     const alerts = _getAlertsFromStore();
     const a = alerts.find(x => x.id === id);
     if (!a) throw new Error('Alerta no encontrada');
-    const r = previewAlert(a.type, a.threshold);
+    const r = previewAlert(a.type, a.threshold, a.email);
     if (r.ok && r.breached) {
       _incrementAlertFiredCount();
     }
@@ -1547,16 +1626,32 @@ function cronAlerts() {
   
   alerts.forEach(a => {
     if (!a.enabled) return;
-    const r = previewAlert(a.type, a.threshold);
+    const r = previewAlert(a.type, a.threshold, a.email);
     if (r && r.ok && r.breached) {
-      const subject = '🚨 ALERTA BigQuery: ' + a.name;
-      const body = 'Se ha superado el umbral configurado para la alerta:\n\n' +
-                   'Alerta: ' + a.name + '\n' +
-                   'Condición: ' + a.type + '\n' +
-                   'Umbral: ' + a.threshold + '\n' +
-                   'Valor actual: ' + r.value + ' ' + (r.unit || '') + '\n' +
-                   'Detalle: ' + (r.detail || '') + '\n\n' +
-                   'Este es un correo automático de BigQuery Cost Analyzer.';
+      let subject, body;
+      if (a.type === 'daily_slot_hours') {
+        const remaining = Math.max(0, round2(DAILY_SLOT_LIMIT - r.value));
+        const pct = Math.round((r.value / DAILY_SLOT_LIMIT) * 100);
+        subject = '[ALERTA] BigQuery: Horas Slots Diarias (' + r.value + ' de ' + DAILY_SLOT_LIMIT + ' h consumidas)';
+        body = 'Estimado/a usuario/a ' + (a.email || cfg.alertEmail) + ':\n\n' +
+               'Se ha superado el umbral configurado de horas slots en BigQuery:\n\n' +
+               '• Alerta: ' + (a.name || 'Límite Horas Slots') + '\n' +
+               '• Consumo actual hoy: ' + r.value + ' horas slots de ' + DAILY_SLOT_LIMIT + ' h límite (' + pct + '%)\n' +
+               '• Margen restante hoy: ' + remaining + ' horas antes del bloqueo de consultas\n' +
+               '• Umbral de alerta: ' + a.threshold + ' h\n\n' +
+               'IMPORTANTE: Si llegás al límite de ' + DAILY_SLOT_LIMIT + ' horas slots diarias, GCP desactivará automáticamente la posibilidad de seguir ejecutando consultas hasta el día de mañana.\n\n' +
+               'Revisá en BigQuery Analyzer las queries con mayor consumo de slots para pausar refrescos o reescribir consultas pesadas.\n\n' +
+               '— BigQuery Analyzer (' + (a.name || 'Alerta automática') + ')';
+      } else {
+        subject = '[ALERTA] BigQuery: ' + a.name;
+        body = 'Se ha superado el umbral configurado para la alerta:\n\n' +
+               'Alerta: ' + a.name + '\n' +
+               'Condición: ' + a.type + '\n' +
+               'Umbral: ' + a.threshold + '\n' +
+               'Valor actual: ' + r.value + ' ' + (r.unit || '') + '\n' +
+               'Detalle: ' + (r.detail || '') + '\n\n' +
+               'Este es un correo automático de BigQuery Cost Analyzer.';
+      }
       try {
         MailApp.sendEmail(a.email || cfg.alertEmail, subject, body);
         _incrementAlertFiredCount();
@@ -1644,7 +1739,7 @@ function _appendRowRetry(row) {
 function setupAnalytics() {
   var sh = _analyticsSheet();
   var url = sh.getParent().getUrl();
-  Logger.log('✅ Analytics listo. Hoja "Vistas" en: ' + url);
+  Logger.log('Analytics listo. Hoja "Vistas" en: ' + url);
   return url;
 }
 

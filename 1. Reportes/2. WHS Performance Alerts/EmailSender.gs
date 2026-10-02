@@ -171,12 +171,34 @@ function enviarNewsletterDeAlertas(destinatario, fechaCierre, alertas, sub) {
       var allWarehouses = (_getMasterCountriesAndWarehouses().warehousesList || []);
       sc.forEach(function(cc) {
         var normalizedCc = getISO(cc);
+        if (normalizedCc === 'CH') normalizedCc = 'CL';
+        if (normalizedCc === 'RD') normalizedCc = 'DO';
         allWarehouses.forEach(function(wh) {
           var prefix = getISO(String(wh).split('_')[0]);
+          if (prefix === 'CH') prefix = 'CL';
+          if (prefix === 'RD') prefix = 'DO';
           if (prefix === normalizedCc) {
             subWhsSorted.push(wh);
           }
         });
+      });
+
+      // Incluir también cualquier warehouse de alertas que pertenezca al país suscrito
+      alertas.forEach(function(a) {
+        var aWh = String(a.pais || '').trim();
+        if (aWh && subWhsSorted.indexOf(aWh) === -1) {
+          var aPrefix = getISO(aWh.split('_')[0]);
+          if (aPrefix === 'CH') aPrefix = 'CL';
+          if (aPrefix === 'RD') aPrefix = 'DO';
+          if (sc.some(function(cc) {
+            var nCc = getISO(cc);
+            if (nCc === 'CH') nCc = 'CL';
+            if (nCc === 'RD') nCc = 'DO';
+            return nCc === aPrefix;
+          })) {
+            subWhsSorted.push(aWh);
+          }
+        }
       });
       subWhsSorted.sort();
     }
@@ -194,9 +216,18 @@ function enviarNewsletterDeAlertas(destinatario, fechaCierre, alertas, sub) {
         })[0];
         
         var whCountry = getISO(String(wh).split('_')[0]);
+        if (whCountry === 'CH') whCountry = 'CL';
+        if (whCountry === 'RD') whCountry = 'DO';
+
+        var unavailCountryList = dayAvail && dayAvail.unavailableByCountry ? (
+          dayAvail.unavailableByCountry[whCountry] ||
+          (whCountry === 'CL' ? dayAvail.unavailableByCountry['CH'] : null) ||
+          (whCountry === 'DO' ? dayAvail.unavailableByCountry['RD'] : null)
+        ) : null;
+
         var isMetricUnavail = dayAvail && (
           !dayAvail.hasAnyData ||
-          (dayAvail.unavailableByCountry && dayAvail.unavailableByCountry[whCountry] && dayAvail.unavailableByCountry[whCountry].indexOf(mKey) !== -1) ||
+          (unavailCountryList && unavailCountryList.indexOf(mKey) !== -1) ||
           (dayAvail.unavailableGlobal && dayAvail.unavailableGlobal.indexOf(mKey) !== -1)
         );
 
@@ -997,8 +1028,15 @@ function enviarAlertasDiariasASlackPrivado() {
     
     // 1. Filtrar las alertas según la suscripción del usuario
     var subAlertas = alertasHoy.filter(function(a) {
-      var subCountryCode = String(a.pais).split('_')[0].toUpperCase();
-      var paisCoincide = sub.paises.indexOf('TODOS') !== -1 || sub.paises.indexOf('LATAM') !== -1 || sub.paises.indexOf(subCountryCode) !== -1 || sub.paises.indexOf(a.pais) !== -1;
+      var rawCc = String(a.pais || '').split('_')[0].toUpperCase();
+      var subCountryCode = getISO(rawCc);
+      if (subCountryCode === 'CH') subCountryCode = 'CL';
+      if (subCountryCode === 'RD') subCountryCode = 'DO';
+      var paisCoincide = sub.paises.indexOf('TODOS') !== -1 || 
+                         sub.paises.indexOf('LATAM') !== -1 || 
+                         sub.paises.indexOf(subCountryCode) !== -1 || 
+                         sub.paises.indexOf(rawCc) !== -1 ||
+                         sub.paises.indexOf(a.pais) !== -1;
       var metricaCoincide = sub.metricas.indexOf('TODAS') !== -1 || sub.metricas.indexOf(a.metricaKey) !== -1;
       return paisCoincide && metricaCoincide;
     });

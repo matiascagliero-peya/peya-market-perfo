@@ -1,153 +1,59 @@
+DECLARE query_name STRING DEFAULT '2. Frank - User Type (Level 1 & 2 + Tenure)';
+
 -- ==============================================================================
--- Frank - User Type (Consulta Directa para BigQuery / Connected Sheets)
+-- Frank - User Type (Motor de Ciclo de Vida L1 y L2)
 --
--- Granularidad: Mes (DATE_TRUNC primer día de mes), customer_id, country
+-- Origen: peya-food-and-groceries.automated_tables_reports.frank_user_monthly_activity
+-- Destino: peya-food-and-groceries.automated_tables_reports.frank_user_type_monthly
+--
+-- Granularidad: Mes (DATE_TRUNC), customer_id, country (con línea temporal continua y fantasmas)
 --
 -- Cobertura:
 --   1. PLATFORM: Ciclo de vida y tenures en toda la plataforma PeYa.
---   2. AAA: Ciclo de vida y tenures en Supermercados de Terceros (partners AAA no darkstores).
+--   2. AAA: Ciclo de vida y tenures en Supermercados de Terceros (partners AAA).
 --   3. MARKET: Ciclo de vida y tenures en Peya Market (Darkstores).
 --   4. FLAGS: DY_order (Double Ya) y UF_order (Ultra Fresh).
 --   5. L2_Actual_Type: Sub-tipo de ciclo de vida de Market y comportamiento cross-negocio.
 -- ==============================================================================
 
+DROP TABLE IF EXISTS `peya-food-and-groceries.automated_tables_reports.frank_user_type_monthly`;
+
+CREATE OR REPLACE TABLE `peya-food-and-groceries.automated_tables_reports.frank_user_type_monthly`
+PARTITION BY Mes
+CLUSTER BY country, customer_id AS
+
 WITH
 
--- ==============================================================================
--- 1. IDENTIFICACIÓN DE NEGOCIOS Y CATEGORÍAS
--- ==============================================================================
-
--- 1.1 Darkstores (Peya Market)
-darkstores AS (
-    SELECT DISTINCT partner_id
-    FROM `peya-datamarts-pro.dm_dmarts.dim_partner_darkstore`
-),
-
--- 1.2 Supermercados de Terceros (Partners AAA)
-partners_aaa AS (
-    SELECT DISTINCT
-        COALESCE(cp.partner_id, t.partner_id) AS partner_id
-    FROM `peya-data-origins-pro.cl_qcommerce.partners_aaa` cp
-    FULL JOIN `peya-food-and-groceries.automated_tables_reports.partners_aaa_temporary` t
-        ON t.partner_ID = cp.partner_id
-),
-
--- 1.3 Órdenes con productos Ultra Fresh
-uf_orders AS (
-    SELECT DISTINCT CAST(order_id AS STRING) AS order_id
-    FROM `peya-datamarts-pro.dm_dmarts.customer_orders_sku_level`
-    WHERE state = 'CONFIRMED'
-      AND order_date >= '2020-01-01'
-      AND master_category_parent_english IN ('Produce', 'Meat / Seafood', 'Ready To Consume')
-),
-
--- 1.4 Órdenes Double Ya
-dy_orders AS (
-    SELECT DISTINCT dy.order_details.id.secondary AS order_id
-    FROM `peya-bi-tools-pro.il_qcommerce.fact_orders_double_ya` dy
-    WHERE dy.order_type = 'DOUBLE_YA'
-),
-
--- 1.5 Canal de Adquisición de la primera orden histórica en PeYa
-customer_first_orders AS (
+-- 1. Base consolidada desde la tabla de actividad previa (Zero joins pesados)
+base_activity AS (
     SELECT
-        fo.customer_id,
-        MIN(fo.registered_date) AS first_order_timestamp
-    FROM `peya-bi-tools-pro.il_core.fact_orders` fo
-    WHERE fo.registered_date >= '2020-01-01'
-      AND fo.order_status = 'CONFIRMED'
-    GROUP BY 1
-),
-
-customer_acquisition AS (
-    SELECT
-        fo.customer_id,
-        CASE
-            WHEN LOGICAL_OR(dy.order_id IS NOT NULL) THEN 'Acquired by Food + DY'
-            WHEN LOGICAL_OR(ds.partner_id IS NOT NULL) THEN 'Acquired by Dmart'
-            WHEN LOGICAL_OR(aaa.partner_id IS NOT NULL AND ds.partner_id IS NULL) THEN 'Acquired by AAA'
-            WHEN LOGICAL_OR(fo.business_type.business_type_name = 'Restaurant') THEN 'Acquired by Food'
-            ELSE 'Acquired by Other'
-        END AS first_order_acquisition_channel
-    FROM `peya-bi-tools-pro.il_core.fact_orders` fo
-    INNER JOIN customer_first_orders cfo
-        ON fo.customer_id = cfo.customer_id
-       AND fo.registered_date = cfo.first_order_timestamp
-    LEFT JOIN darkstores ds ON fo.restaurant.id = ds.partner_id
-    LEFT JOIN partners_aaa aaa ON fo.restaurant.id = aaa.partner_id
-    LEFT JOIN dy_orders dy ON fo.order_id = dy.order_id
-    WHERE fo.order_status = 'CONFIRMED'
-    GROUP BY 1
-),
-
--- ==============================================================================
--- 2. ACTIVIDAD MENSUAL CONSOLIDADA POR USUARIO Y PAÍS
--- ==============================================================================
-
-monthly_orders AS (
-    SELECT
-        fo.customer_id,
-        fo.country.country_name AS country,
-        DATE_TRUNC(fo.registered_date, MONTH) AS month,
-
-        -- Actividad mensual por negocio
-        TRUE AS is_active_platform,
-        LOGICAL_OR(ds.partner_id IS NOT NULL) AS is_active_market,
-        LOGICAL_OR(aaa.partner_id IS NOT NULL AND ds.partner_id IS NULL) AS is_active_aaa,
-        LOGICAL_OR(fo.business_type.business_type_name = 'Restaurant' AND ds.partner_id IS NULL AND aaa.partner_id IS NULL) AS is_active_food,
-
-        -- Composición de órdenes en Market
-        LOGICAL_OR(ds.partner_id IS NOT NULL AND dy.order_id IS NOT NULL) AS has_dy_order,
-        LOGICAL_OR(ds.partner_id IS NOT NULL AND dy.order_id IS NULL)     AS has_non_dy_order,
-        LOGICAL_OR(ds.partner_id IS NOT NULL AND uf.order_id IS NOT NULL) AS has_uf_order,
-        LOGICAL_OR(ds.partner_id IS NOT NULL AND uf.order_id IS NULL)     AS has_non_uf_order
-
-    FROM `peya-bi-tools-pro.il_core.fact_orders` fo
-    LEFT JOIN darkstores ds
-        ON fo.restaurant.id = ds.partner_id
-    LEFT JOIN partners_aaa aaa
-        ON fo.restaurant.id = aaa.partner_id
-    LEFT JOIN dy_orders dy
-        ON fo.order_id = dy.order_id
-    LEFT JOIN uf_orders uf
-        ON CAST(fo.order_id AS STRING) = uf.order_id
-    WHERE fo.registered_date >= '2020-01-01'
-      AND fo.order_status = 'CONFIRMED'
-    GROUP BY 1, 2, 3
-),
-
--- ==============================================================================
--- 3. ADOPCIÓN (COHORTS) GLOBAL Y POR NEGOCIO
--- ==============================================================================
-
-customer_adoptions AS (
-    SELECT
+        month,
         customer_id,
         country,
-        month,
         is_active_platform,
         is_active_market,
         is_active_aaa,
         is_active_food,
-        has_dy_order,
-        has_non_dy_order,
-        has_uf_order,
-        has_non_uf_order,
+        DY_order,
+        UF_order,
+        first_order_acquisition_channel
+    FROM `peya-food-and-groceries.automated_tables_reports.frank_user_monthly_activity`
+    WHERE country IS NOT NULL
+),
 
-        -- Adopciones globales e históricas
+-- 2. Detección de Cohorts / Adopciones globales y por negocio
+customer_adoptions AS (
+    SELECT
+        *,
         MIN(month) OVER (PARTITION BY customer_id) AS platform_adoption_date_global,
         MIN(month) OVER (PARTITION BY customer_id, country) AS platform_adoption_date_country,
         MIN(IF(is_active_aaa, month, NULL)) OVER (PARTITION BY customer_id) AS aaa_adoption_date,
         MIN(IF(is_active_market, month, NULL)) OVER (PARTITION BY customer_id) AS market_adoption_date,
-
         LEAD(month) OVER (PARTITION BY customer_id, country ORDER BY month) AS next_month
-    FROM monthly_orders
+    FROM base_activity
 ),
 
--- ==============================================================================
--- 4. TIMELINE CONTINUO MENSUAL POR USUARIO (Meses Activos + Fantasmas)
--- ==============================================================================
-
+-- 3. Timeline Continuo (Meses Activos + Generador de Fantasmas)
 user_timeline AS (
     -- Meses reales con compra
     SELECT
@@ -162,10 +68,9 @@ user_timeline AS (
         is_active_aaa,
         is_active_market,
         is_active_food,
-        has_dy_order,
-        has_non_dy_order,
-        has_uf_order,
-        has_non_uf_order
+        DY_order,
+        UF_order,
+        first_order_acquisition_channel
     FROM customer_adoptions
 
     UNION ALL
@@ -183,20 +88,16 @@ user_timeline AS (
         FALSE AS is_active_aaa,
         FALSE AS is_active_market,
         FALSE AS is_active_food,
-        FALSE AS has_dy_order,
-        FALSE AS has_non_dy_order,
-        FALSE AS has_uf_order,
-        FALSE AS has_non_uf_order
+        'Sin compras' AS DY_order,
+        'Sin compras' AS UF_order,
+        first_order_acquisition_channel
     FROM customer_adoptions,
          UNNEST(GENERATE_ARRAY(1, 60)) AS gap
     WHERE (next_month IS NULL OR DATE_DIFF(next_month, month, MONTH) > gap)
       AND DATE_ADD(month, INTERVAL gap MONTH) <= DATE_TRUNC(CURRENT_DATE(), MONTH)
 ),
 
--- ==============================================================================
--- 5. CÁLCULO DE RACHAS CONSECUTIVAS (COMPRA E INACTIVIDAD)
--- ==============================================================================
-
+-- 4. Cálculo de Rachas Consecutivas (Islands & Gaps)
 streaks_calc AS (
     SELECT
         *,
@@ -204,11 +105,9 @@ streaks_calc AS (
         SUM(IF(NOT is_active_platform, 1, 0)) OVER (
             PARTITION BY customer_id, country ORDER BY month ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
         ) AS grp_active_peya,
-
         SUM(IF(NOT is_active_aaa, 1, 0)) OVER (
             PARTITION BY customer_id, country ORDER BY month ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
         ) AS grp_active_aaa,
-
         SUM(IF(NOT is_active_market, 1, 0)) OVER (
             PARTITION BY customer_id, country ORDER BY month ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
         ) AS grp_active_market,
@@ -217,11 +116,9 @@ streaks_calc AS (
         SUM(IF(is_active_platform, 1, 0)) OVER (
             PARTITION BY customer_id, country ORDER BY month ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
         ) AS grp_inactive_peya,
-
         SUM(IF(is_active_aaa, 1, 0)) OVER (
             PARTITION BY customer_id, country ORDER BY month ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
         ) AS grp_inactive_aaa,
-
         SUM(IF(is_active_market, 1, 0)) OVER (
             PARTITION BY customer_id, country ORDER BY month ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
         ) AS grp_inactive_market
@@ -243,10 +140,7 @@ streaks_counted AS (
     FROM streaks_calc
 ),
 
--- ==============================================================================
--- 6. ASIGNACIÓN DE TIPOS Y TENURES L1 + FLAGS
--- ==============================================================================
-
+-- 5. Asignación de Estados L1 y Tenures
 types_assigned AS (
     SELECT
         month,
@@ -255,23 +149,9 @@ types_assigned AS (
         is_active_food,
         is_active_aaa,
         is_active_market,
-
-        -- Flags de Market
-        CASE
-            WHEN NOT is_active_market THEN 'Sin compras'
-            WHEN has_dy_order AND has_non_dy_order THEN 'DY y No DY'
-            WHEN has_dy_order THEN 'Solo DY'
-            WHEN has_non_dy_order THEN 'No DY'
-            ELSE 'Sin compras'
-        END AS DY_order,
-
-        CASE
-            WHEN NOT is_active_market THEN 'Sin compras'
-            WHEN has_uf_order AND has_non_uf_order THEN 'UF y No UF'
-            WHEN has_uf_order THEN 'Solo UF'
-            WHEN has_non_uf_order THEN 'No UF'
-            ELSE 'Sin compras'
-        END AS UF_order,
+        DY_order,
+        UF_order,
+        first_order_acquisition_channel,
 
         -- Platform
         platform_adoption_date_global AS Platform_adoption_date,
@@ -337,20 +217,14 @@ types_assigned AS (
     FROM streaks_counted
 ),
 
--- ==============================================================================
--- 7. CLASIFICACIÓN DETALLADA L2_Actual_Type (MARKET Y CROSS-NEGOCIO)
--- ==============================================================================
-
+-- 6. Contexto y Clasificación L2_Actual_Type (22 Subtipos)
 l2_context AS (
     SELECT
         t.*,
         LAG(t.Market_Actual_type_ternure) OVER (PARTITION BY t.customer_id, t.country ORDER BY t.month) AS prev_market_tenure,
         LAG(t.Market_Actual_type_ternure, 2) OVER (PARTITION BY t.customer_id, t.country ORDER BY t.month) AS prev_prev_market_tenure,
-        LAG(t.DY_order) OVER (PARTITION BY t.customer_id, t.country ORDER BY t.month) AS prev_dy_order,
-        acq.first_order_acquisition_channel
+        LAG(t.DY_order) OVER (PARTITION BY t.customer_id, t.country ORDER BY t.month) AS prev_dy_order
     FROM types_assigned t
-    LEFT JOIN customer_acquisition acq
-        ON t.customer_id = acq.customer_id
 ),
 
 l2_assigned AS (
@@ -416,10 +290,7 @@ l2_assigned AS (
     FROM l2_context
 )
 
--- ==============================================================================
--- 8. OUTPUT FINAL
--- ==============================================================================
-
+-- 7. Output Final
 SELECT
     month AS Fecha,
     month AS Mes,
@@ -452,8 +323,7 @@ SELECT
     DY_order,
     UF_order,
 
-    -- L2 (Apertura y comportamiento en Market)
+    -- L2
     L2_Actual_Type
 
-FROM l2_assigned
-ORDER BY customer_id, Mes;
+FROM l2_assigned;

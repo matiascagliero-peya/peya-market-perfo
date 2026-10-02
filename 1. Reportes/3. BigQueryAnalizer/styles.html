@@ -380,4 +380,42 @@ tfoot td{font-weight:800;background:var(--card2);border-top:2px solid var(--bord
     box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
   }
 }
+
+/* Slot Progress Bar & Gauge */
+.slot-bar-wrap {
+  width: 100%;
+  height: 6px;
+  background: var(--card2);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-top: 8px;
+  border: 1px solid var(--border);
+}
+.slot-bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.4s ease, background-color 0.4s ease;
+}
+.slot-bar-fill.normal { background: var(--green); }
+.slot-bar-fill.warn { background: var(--orange); }
+.slot-bar-fill.crit { background: var(--red); }
+
+/* SVG Icon Utility */
+.ico {
+  width: 14px;
+  height: 14px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vertical-align: -2px;
+  display: inline-block;
+}
+.ico-sm { width: 12px; height: 12px; vertical-align: -1px; }
+.ico-lg { width: 16px; height: 16px; vertical-align: -3px; }
+.ico-tab { width: 14px; height: 14px; vertical-align: -2px; margin-right: 5px; }
+.ico-card { width: 14px; height: 14px; vertical-align: -2px; margin-right: 4px; }
+.ico-h2 { width: 16px; height: 16px; vertical-align: -2.5px; margin-right: 6px; stroke-width: 2.2; }
+.ico-btn { width: 13px; height: 13px; vertical-align: -2px; margin-right: 4px; }
 </style>

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Frank User Type — Taxonomía Level 1 & 2 + Simulador de Tenure</title>
+  <title>Frank User Type — Taxonomía Level 1 & 2 + Pipeline y Simulador</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -25,8 +25,8 @@
       --peya-red-glow: rgba(234, 4, 78, 0.3);
       --peya-red-bg: rgba(234, 4, 78, 0.12);
       
-      --color-adoption: #818cf8;
-      --color-adoption-bg: rgba(129, 140, 248, 0.14);
+      --color-newuser: #818cf8;
+      --color-newuser-bg: rgba(129, 140, 248, 0.14);
       --color-m1: #38bdf8;
       --color-m1-bg: rgba(56, 189, 248, 0.14);
       --color-reactivation: #34d399;
@@ -169,16 +169,13 @@
       to { opacity: 1; transform: translateY(0); }
     }
 
-    /* ========================================================================= */
-    /* SIMULATOR STYLING (L1 + L2 + TENURE)                                      */
-    /* ========================================================================= */
+    /* SIMULATOR STYLING */
     .sim-panel {
       display: flex;
       flex-direction: column;
       gap: 22px;
     }
 
-    /* Toolbar & Config */
     .sim-toolbar {
       background: var(--bg-surface);
       border: 1px solid var(--border-color);
@@ -213,7 +210,6 @@
       margin-top: 2px;
     }
 
-    /* Channel / Origin Picker */
     .channel-config-row {
       display: flex;
       align-items: center;
@@ -282,7 +278,6 @@
       border: 1px solid #3b82f6;
     }
 
-    /* Scenario Presets */
     .presets-container {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
@@ -329,7 +324,6 @@
       line-height: 1.35;
     }
 
-    /* Timeline Cards */
     .timeline-card {
       background: var(--bg-surface);
       border: 1px solid var(--border-color);
@@ -364,7 +358,6 @@
       padding-bottom: 8px;
     }
 
-    /* Month Card */
     .month-card {
       background: var(--bg-body);
       border: 2px solid var(--border-color);
@@ -438,7 +431,6 @@
       border-color: #2b3648;
     }
 
-    /* Double Ya Mini Toggle */
     .dy-subtoggle {
       display: flex;
       align-items: center;
@@ -459,7 +451,6 @@
       font-weight: 700;
     }
 
-    /* Node Status Pills */
     .node-l1-badge {
       font-size: 11px;
       font-weight: 800;
@@ -507,12 +498,6 @@
       font-size: 10px;
     }
 
-    .metric-row.rr-highlight {
-      color: #ff3366;
-      font-weight: 800;
-    }
-
-    /* Diagnostics & Inspector */
     .inspector-card {
       background: var(--bg-surface);
       border: 1px solid var(--border-color);
@@ -571,7 +556,6 @@
       border-left: 3px solid var(--peya-red);
     }
 
-    /* Taxonomy Dual Card */
     .taxonomy-dual-card {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -609,7 +593,6 @@
       line-height: 1.4;
     }
 
-    /* 4 Major KPI Cards */
     .kpi-grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
@@ -674,7 +657,6 @@
       line-height: 1.35;
     }
 
-    /* SQL callout */
     .sql-formula-callout {
       background: #080c13;
       border: 1px solid var(--border-subtle);
@@ -690,9 +672,7 @@
       gap: 10px;
     }
 
-    /* ========================================================================= */
-    /* TAXONOMY VIEW                                                             */
-    /* ========================================================================= */
+    /* TAXONOMY VIEW */
     .search-filter-card {
       background: var(--bg-surface);
       border: 1px solid var(--border-color);
@@ -840,7 +820,7 @@
       white-space: nowrap;
     }
 
-    .cat-Adoption { color: var(--color-adoption); background: var(--color-adoption-bg); border: 1px solid rgba(129, 140, 248, 0.35); }
+    .cat-New-User { color: var(--color-newuser); background: var(--color-newuser-bg); border: 1px solid rgba(129, 140, 248, 0.35); }
     .cat-M1-Return { color: var(--color-m1); background: var(--color-m1-bg); border: 1px solid rgba(56, 189, 248, 0.35); }
     .cat-Reactivation { color: var(--color-reactivation); background: var(--color-reactivation-bg); border: 1px solid rgba(52, 211, 153, 0.35); }
     .cat-Re-Order { color: var(--color-reorder); background: var(--color-reorder-bg); border: 1px solid rgba(45, 212, 191, 0.35); }
@@ -848,7 +828,76 @@
     .cat-Churned { color: var(--color-churn); background: var(--color-churn-bg); border: 1px solid rgba(251, 191, 36, 0.35); }
     .cat-Never-Active { color: var(--color-never); background: var(--color-never-bg); border: 1px solid rgba(148, 163, 184, 0.35); }
 
-    /* Footer */
+    /* ARCHITECTURE VIEW */
+    .arch-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+      gap: 20px;
+      margin-bottom: 24px;
+    }
+
+    .arch-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-lg);
+      padding: 24px;
+      box-shadow: var(--shadow-sm);
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .arch-card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border-subtle);
+      padding-bottom: 12px;
+    }
+
+    .arch-step {
+      font-size: 11px;
+      font-weight: 800;
+      color: var(--peya-red);
+      background: var(--peya-red-bg);
+      padding: 3px 10px;
+      border-radius: 12px;
+      text-transform: uppercase;
+    }
+
+    .arch-title {
+      font-size: 16px;
+      font-weight: 800;
+      color: var(--text-main);
+    }
+
+    .arch-table-name {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      color: #38bdf8;
+      background: #080c13;
+      padding: 6px 10px;
+      border-radius: 6px;
+      border: 1px solid #1e293b;
+    }
+
+    .arch-desc {
+      font-size: 13px;
+      color: var(--text-muted);
+      line-height: 1.45;
+    }
+
+    .arch-meta {
+      font-size: 12px;
+      color: #94a3b8;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      background: rgba(255,255,255,0.02);
+      padding: 10px 14px;
+      border-radius: 6px;
+    }
+
     footer {
       border-top: 1px solid var(--border-color);
       padding: 24px;
@@ -876,8 +925,8 @@
     <div class="brand-group">
       <div class="brand-icon">P</div>
       <div class="brand-text">
-        <h1>Frank User Type <span style="font-size: 11px; background: rgba(234,4,78,0.2); color: #ff5277; padding: 2px 8px; border-radius: 12px;">Level 1 & 2 + Tenure</span></h1>
-        <p>Ciclo de Vida de Clientes • Dmarts & Plataforma</p>
+        <h1>Frank User Type <span style="font-size: 11px; background: rgba(234,4,78,0.2); color: #ff5277; padding: 2px 8px; border-radius: 12px;">v3.0 Production</span></h1>
+        <p>Ciclo de Vida de Clientes • Peya Market & Plataforma</p>
       </div>
     </div>
     <div class="nav-tabs">
@@ -889,13 +938,17 @@
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
         Simulador L1 & L2
       </button>
+      <button class="nav-btn" onclick="openTab('tab-architecture')">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+        Arquitectura (3 Tablas)
+      </button>
     </div>
   </header>
 
   <div class="container">
 
     <!-- ========================================================================= -->
-    <!-- VIEW 1: SIMULATOR (WITH LEVEL 2 SUPPORT)                                   -->
+    <!-- VIEW 1: SIMULATOR (WITH NEW L1 & L2 RULES)                                -->
     <!-- ========================================================================= -->
     <section id="tab-simulator" class="view-panel active">
       
@@ -908,9 +961,9 @@
             <div class="sim-title-group">
               <h2>
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#ea044e" stroke-width="2.5"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-                Simulador de Ciclo de Vida: Level 1, Level 2 y Tenures
+                Simulador de Ciclo de Vida: New User, L1, L2 y Tenures
               </h2>
-              <p>Simula compras, orígenes de adquisición y canastas para ver cómo se determinan los 22 subtipos de Level 2.</p>
+              <p>Simula compras, orígenes de adquisición en la app y pedidos Double Ya para ver los 22 subtipos de Level 2.</p>
             </div>
             
             <div class="month-counter-group">
@@ -926,16 +979,17 @@
           <div class="channel-config-row">
             <span class="channel-label">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-              Canal de Adquisición Inicial (Adoption):
+              Canal de Adquisición Inicial en PeYa (New User):
             </span>
-            <select id="adoptionChannelSelect" class="channel-select" onchange="updateAdoptionChannel(this.value)">
-              <option value="App Adoption">📱 App Adoption (Usuario nuevo absoluto en toda la app)</option>
-              <option value="Dmart Adoption">🛒 Dmart Adoption (Usuario existente en Restaurantes/PeYa)</option>
-              <option value="AAA Adoption">🏬 AAA Adoption (Tenía compras previas en Supermercados AAA)</option>
-              <option value="Double Ya Adoption">⚡ Double Ya Adoption (Primera orden ingresó por Double Ya)</option>
+            <select id="acquisitionChannelSelect" class="channel-select" onchange="updateAcquisitionChannel(this.value)">
+              <option value="Acquired by Food">🍔 Acquired by Food (Entró a la app pidiendo comida en Restaurantes)</option>
+              <option value="Acquired by Food + DY">⚡ Acquired by Food + DY (Entró pidiendo comida y sumó Market vía Double Ya)</option>
+              <option value="Acquired by Dmart">🛒 Acquired by Dmart (Entró a la app comprando directo en Peya Market)</option>
+              <option value="Acquired by AAA">🏬 Acquired by AAA (Entró a la app comprando en Supermercados retail terceros)</option>
+              <option value="Acquired by Other">📦 Acquired by Other (Entró por Farmacias, Tiendas o Envíos)</option>
             </select>
             <span style="font-size: 11px; color: var(--text-muted);">
-              Define la variante Level 2 de <strong>Adoption</strong> y de <strong>M1 Return</strong>.
+              Define el subtipo L2 del <strong>New User</strong> en su mes de adopción de Market.
             </span>
           </div>
 
@@ -947,15 +1001,15 @@
             </div>
             <div class="preset-card" id="preset-dy" onclick="applyPreset('dy_conversion', this)">
               <div class="preset-title">⚡ Double Ya ➔ Conversión Full</div>
-              <div class="preset-desc">Entra por Double Ya y en M1 convierte a canasta Full Dmart.</div>
+              <div class="preset-desc">Entra por Food + DY y en M1 convierte a canasta Full Dmart.</div>
             </div>
             <div class="preset-card" id="preset-churn" onclick="applyPreset('churn_tiers', this)">
               <div class="preset-title">⏳ Tiers de Churn (Recent ➔ 6M+)</div>
               <div class="preset-desc">Visualiza Recently Churn (1-2m), Churn > 3M y Churn > 6M.</div>
             </div>
             <div class="preset-card" id="preset-winback" onclick="applyPreset('winback_stages', this)">
-              <div class="preset-title">🔄 Win-Back (Warm & True Reactivation)</div>
-              <div class="preset-desc">Rescate tras 4 y 7 meses, activando Re-Order Warm/True.</div>
+              <div class="preset-title">🔄 Win-Back (DY & Organic Reactivation)</div>
+              <div class="preset-desc">Reactivación por Double Ya ➜ Re-Order DY Converted a canasta llena.</div>
             </div>
           </div>
 
@@ -981,7 +1035,7 @@
               <div class="flow-state-box">
                 <span class="flow-state-title" id="prevMonthLabel">Mes Anterior (M2)</span>
                 <span class="pill-l1" id="prevMonthPill">M1 Return</span>
-                <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #94a3b8;" id="prevMonthL2">M1 App Adoption</span>
+                <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #94a3b8;" id="prevMonthL2">M1 Dmart Full</span>
               </div>
               <div class="flow-arrow">➔</div>
               <div class="flow-state-box">
@@ -998,7 +1052,7 @@
           <!-- Taxonomy Dual Box (Level 1 & Level 2 Detail) -->
           <div class="taxonomy-dual-card">
             <div class="tax-box">
-              <div class="tax-box-title">Nivel 1 (Macro Estado de Ciclo de Vida)</div>
+              <div class="tax-box-title">Nivel 1 (Macro Estado de Market)</div>
               <div class="tax-box-val">
                 <span class="pill-l1" id="inspectorL1Badge">Recurring Return</span>
               </div>
@@ -1008,12 +1062,12 @@
             </div>
 
             <div class="tax-box" style="border-color: #38bdf8;">
-              <div class="tax-box-title" style="color: #38bdf8;">Nivel 2 (Subtipo Específico de Comportamiento)</div>
+              <div class="tax-box-title" style="color: #38bdf8;">Nivel 2 (Subtipo Específico L2)</div>
               <div class="tax-box-val">
                 <span class="pill-l2" style="font-size: 14px; border-color: #38bdf8; color: #7dd3fc;" id="inspectorL2Badge">Recent Recurring Return</span>
               </div>
               <div class="tax-box-desc" id="inspectorL2Desc">
-                Compró en Dmarts de forma ininterrumpida durante los últimos 3 meses (M0, M-1, M-2).
+                Lleva 3 meses seguidos comprando sin parar (hábito recién consolidado).
               </div>
             </div>
           </div>
@@ -1022,27 +1076,27 @@
           <div class="kpi-grid">
             
             <div class="kpi-card">
-              <div class="kpi-header">📍 Tenure por País</div>
-              <div class="kpi-val" id="kpiCountryTenure">3 meses</div>
-              <div class="kpi-desc">Meses de vida acumulados en el país (<code>cohort_country</code>).</div>
+              <div class="kpi-header">📅 Antigüedad en Market (Adopción)</div>
+              <div class="kpi-val" id="kpiAdoptionTenure">3 meses</div>
+              <div class="kpi-desc">Meses desde la primera compra en Market (<code>Market_user_adoption_tenure</code>).</div>
             </div>
 
             <div class="kpi-card kpi-global">
-              <div class="kpi-header">🌍 Tenure del Usuario (Global)</div>
-              <div class="kpi-val" id="kpiUserTenure">3 meses</div>
-              <div class="kpi-desc">Antigüedad histórica total en la plataforma (<code>cohort_user</code>).</div>
+              <div class="kpi-header">🔥 Racha Comprando (Actual Tenure)</div>
+              <div class="kpi-val" id="kpiActualTenure">3 meses</div>
+              <div class="kpi-desc">Meses seguidos que viene comprando sin parar (<code>Market_Actual_type_ternure</code>).</div>
             </div>
 
             <div class="kpi-card kpi-type">
-              <div class="kpi-header">🔄 Tenure en Tipo Actual (L1)</div>
-              <div class="kpi-val" id="kpiTypeTenure">1 mes</div>
-              <div class="kpi-desc" id="kpiTypeTenureDesc">Meses continuos en esta categoría desde el último cambio.</div>
+              <div class="kpi-header">🔄 Estado Mes Anterior (LAG 1)</div>
+              <div class="kpi-val" id="kpiPrevType" style="font-size: 18px;">M1 Return</div>
+              <div class="kpi-desc" id="kpiPrevTenureDesc">Tenure anterior: 2 meses (<code>Market_previous_type_ternure</code>).</div>
             </div>
 
             <div class="kpi-card kpi-rr">
-              <div class="kpi-header">🔥 Racha Recurring Return</div>
-              <div class="kpi-val" id="kpiRRTenure" style="color: #ff3366;">1 mes</div>
-              <div class="kpi-desc" id="kpiRRTenureDesc">Meses continuos como RR (<code>consecutive_active - 2</code>).</div>
+              <div class="kpi-header">⚡ Comportamiento Double Ya</div>
+              <div class="kpi-val" id="kpiDYOrder" style="font-size: 18px; color: #fbbf24;">No DY</div>
+              <div class="kpi-desc">Composición del mes: <code>Solo DY</code>, <code>No DY</code> o <code>DY y No DY</code>.</div>
             </div>
 
           </div>
@@ -1051,10 +1105,10 @@
           <div class="sql-formula-callout">
             <div>
               <span>Regla SQL evaluada:</span>
-              <strong id="sqlFormulaText">WHEN consecutive_active_months = 3 THEN 'Recent Recurring Return'</strong>
+              <strong id="sqlFormulaText">WHEN Market_Actual_type_ternure = 3 THEN 'Recent Recurring Return'</strong>
             </div>
             <div style="color: var(--text-muted); font-size: 11px;">
-              Basado en <code>3. Frank - User Type (Level 1 & 2 + Tenure).sql</code>
+              Basado en <code>2. Frank - User Type (Level 1 & 2 + Tenure).sql</code>
             </div>
           </div>
 
@@ -1065,18 +1119,18 @@
     </section>
 
     <!-- ========================================================================= -->
-    <!-- VIEW 2: TAXONOMY TABLE                                                    -->
+    <!-- VIEW 2: TAXONOMY TABLE (22 SUBTYPES)                                      -->
     <!-- ========================================================================= -->
     <section id="tab-taxonomy" class="view-panel">
       
       <div class="search-filter-card">
         <div class="search-wrap">
           <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-          <input type="text" id="taxonomySearch" class="search-input" placeholder="Buscar por Level 1, Level 2 o condición..." oninput="filterTaxonomy()">
+          <input type="text" id="taxonomySearch" class="search-input" placeholder="Buscar por Level 1, Level 2 o regla..." oninput="filterTaxonomy()">
         </div>
         <div class="chips-group" id="taxonomyChips">
-          <button class="filter-chip active" onclick="setChipFilter('ALL')">Todos <span class="chip-count">22</span></button>
-          <button class="filter-chip" onclick="setChipFilter('Adoption')">Adoption <span class="chip-count">4</span></button>
+          <button class="filter-chip active" onclick="setChipFilter('ALL')">Todos <span class="chip-count">23</span></button>
+          <button class="filter-chip" onclick="setChipFilter('New User')">New User <span class="chip-count">5</span></button>
           <button class="filter-chip" onclick="setChipFilter('M1 Return')">M1 Return <span class="chip-count">5</span></button>
           <button class="filter-chip" onclick="setChipFilter('Reactivation')">Reactivation <span class="chip-count">4</span></button>
           <button class="filter-chip" onclick="setChipFilter('Re-Order')">Re-Order <span class="chip-count">5</span></button>
@@ -1090,10 +1144,10 @@
         <table class="taxonomy-table">
           <thead>
             <tr>
-              <th style="width: 170px;">Level 1</th>
+              <th style="width: 170px;">Level 1 (Market)</th>
               <th style="width: 250px;">Descripción Level 1</th>
-              <th style="width: 230px;">Level 2</th>
-              <th>Regla de Clasificación (M0 = Mes Actual)</th>
+              <th style="width: 240px;">Level 2 (L2_Actual_Type)</th>
+              <th>Regla de Negocio / Clasificación Oficial</th>
             </tr>
           </thead>
           <tbody id="taxonomyTbody">
@@ -1104,56 +1158,116 @@
 
     </section>
 
+    <!-- ========================================================================= -->
+    <!-- VIEW 3: DATA ARCHITECTURE (3 TABLES PIPELINE)                             -->
+    <!-- ========================================================================= -->
+    <section id="tab-architecture" class="view-panel">
+      
+      <div class="arch-grid">
+        
+        <div class="arch-card">
+          <div class="arch-card-header">
+            <span class="arch-title">1. Staging de Actividad</span>
+            <span class="arch-step">Paso 1 (Auto-Incremental)</span>
+          </div>
+          <div class="arch-table-name">frank_user_monthly_activity</div>
+          <p class="arch-desc">
+            Escanea <code>fact_orders</code> y <code>customer_orders_sku_level</code> con partición obligatoria. Resuelve el <code>customer_id</code> unificado de Delivery Hero mediante <code>dim_user</code> y consolida órdenes, venta neta, unidades y canal de adquisición histórico en PeYa.
+          </p>
+          <div class="arch-meta">
+            <div><strong>Grano:</strong> 1 fila por (month, customer_id, country) con compra real.</div>
+            <div><strong>Partición / Cluster:</strong> <code>month</code> / <code>country, customer_id</code>.</div>
+            <div><strong>Frecuencia:</strong> Auto-incremental (recarga últimos 2 meses en ~5 segundos).</div>
+          </div>
+        </div>
+
+        <div class="arch-card">
+          <div class="arch-card-header">
+            <span class="arch-title">2. Motor de Ciclo de Vida</span>
+            <span class="arch-step">Paso 2 (Motor L1 & L2)</span>
+          </div>
+          <div class="arch-table-name">frank_user_type_monthly</div>
+          <p class="arch-desc">
+            Lee únicamente de la Tabla 1 en pocos segundos. Genera la línea de tiempo continua con fantasmas, calcula rachas con <em>Islands & Gaps</em>, asigna Platform, AAA y Market (L1), clasifica los 22 subtipos de <code>L2_Actual_Type</code> y calcula estados y tenures previos.
+          </p>
+          <div class="arch-meta">
+            <div><strong>Grano:</strong> 1 fila por (Mes, customer_id, country) continua.</div>
+            <div><strong>Columnas:</strong> 25 columnas oficiales de ciclo de vida y tenures.</div>
+            <div><strong>Tiempo de ejecución:</strong> ~15 segundos en paralelo.</div>
+          </div>
+        </div>
+
+        <div class="arch-card">
+          <div class="arch-card-header">
+            <span class="arch-title">3. Resumen Gerencial</span>
+            <span class="arch-step">Paso 3 (Connected Sheets)</span>
+          </div>
+          <div class="arch-table-name">frank_user_metrics_summary</div>
+          <p class="arch-desc">
+            Cruza la Tabla 2 y la Tabla 1 para calcular automáticamente las 12 métricas clave de negocio (Usuarios, Share %, Órdenes, Órdenes UF, Net Sales EUR, Basket Size, AFV, Frecuencia, Unidades por Cliente y Tenures) agrupadas por Mes, País, L1 y L2.
+          </p>
+          <div class="arch-meta">
+            <div><strong>Grano:</strong> 1 fila por (Mes, country, Market_Actual_Type, L2_Actual_Type).</div>
+            <div><strong>Peso:</strong> Menos de 1 MB (ideal para Connected Sheets / Looker).</div>
+            <div><strong>Frecuencia:</strong> Auto-incremental en ~2 segundos.</div>
+          </div>
+        </div>
+
+      </div>
+
+    </section>
+
   </div>
 
   <footer>
-    Peya Market Growth Analytics • Frank User Type Taxonomy Engine v2.1 &copy; 2026
+    Peya Market Growth Analytics • Frank User Type Engine v3.0 &copy; 2026
   </footer>
 
   <!-- SCRIPT -->
   <script>
     // =========================================================================
-    // TAXONOMY DICTIONARY (22 L2 SUBTYPES)
+    // TAXONOMY DICTIONARY (22 L2 SUBTYPES + NEVER ACTIVE)
     // =========================================================================
     const TAXONOMY_DATA = [
-      // Adoption
-      { l1: "Adoption", l1Desc: "Nuevos usuarios que realizan su primera compra histórica en Dmarts en M0.", l2: "App Adoption", rule: "Su compra en Dmarts en M0 es la primera orden de toda su historia en la app completa (adquisición pura)." },
-      { l1: "Adoption", l1Desc: "Nuevos usuarios que realizan su primera compra histórica en Dmarts en M0.", l2: "Double Ya Adoption", rule: "Su primera orden en Dmarts ocurre en M0 a través de la funcionalidad Double Ya (flag en orden)." },
-      { l1: "Adoption", l1Desc: "Nuevos usuarios que realizan su primera compra histórica en Dmarts en M0.", l2: "AAA Adoption", rule: "Su primera orden en Dmarts es en M0, pero SÍ tenía órdenes previas en supermercados de terceros (AAA)." },
-      { l1: "Adoption", l1Desc: "Nuevos usuarios que realizan su primera compra histórica en Dmarts en M0.", l2: "Dmart Adoption", rule: "Su primera orden en Dmarts es en M0, pero SÍ tenía órdenes previas en la app no AAA (Restaurantes, etc.)." },
+      // New User
+      { l1: "New User", l1Desc: "Nuevos usuarios que realizan su primera compra histórica en Dmarts en M0.", l2: "Acquired by Food", rule: "Entró a la app de PeYa pidiendo comida en Restaurantes (sin Double Ya)." },
+      { l1: "New User", l1Desc: "Nuevos usuarios que realizan su primera compra histórica en Dmarts en M0.", l2: "Acquired by Food + DY", rule: "Entró a la app pidiendo comida y sumó Market vía Double Ya en la misma compra." },
+      { l1: "New User", l1Desc: "Nuevos usuarios que realizan su primera compra histórica en Dmarts en M0.", l2: "Acquired by Dmart", rule: "Su primera orden de toda su historia en la app fue directamente en Peya Market." },
+      { l1: "New User", l1Desc: "Nuevos usuarios que realizan su primera compra histórica en Dmarts en M0.", l2: "Acquired by AAA", rule: "Su primera orden histórica en la app fue en un Supermercado tercero (Coto, Carrefour, etc.)." },
+      { l1: "New User", l1Desc: "Nuevos usuarios que realizan su primera compra histórica en Dmarts en M0.", l2: "Acquired by Other", rule: "Su primera orden fue en Farmacias, Tiendas o Envíos." },
       
       // M1 Return
-      { l1: "M1 Return", l1Desc: "Mide principalmente la retención en el segundo mes de vida.", l2: "M1 App Adoption", rule: "Adquirido como App Adoption en M-1 y volvió a comprar en M0." },
-      { l1: "M1 Return", l1Desc: "Mide principalmente la retención en el segundo mes de vida.", l2: "M1 Double Ya Adoption", rule: "Volvió en M0 comprando exclusivamente con Double Ya." },
-      { l1: "M1 Return", l1Desc: "Mide principalmente la retención en el segundo mes de vida.", l2: "M1 Double Ya Converted", rule: "Adquirido por DY en M-1 que en M0 volvió con una compra de Peya Markets Full (regular)." },
-      { l1: "M1 Return", l1Desc: "Mide principalmente la retención en el segundo mes de vida.", l2: "M1 AAA Adoption", rule: "Adquirido como AAA Adoption en M-1 y volvió a comprar en M0." },
-      { l1: "M1 Return", l1Desc: "Mide principalmente la retención en el segundo mes de vida.", l2: "M1 Dmart Adoption", rule: "Adquirido como Dmart Adoption en M-1 y volvió a comprar en M0." },
+      { l1: "M1 Return", l1Desc: "Retención en el segundo mes consecutivo de vida en Market.", l2: "M1 Food Only", rule: "Volvió a comprar solo comida en Restaurantes (sin súper)." },
+      { l1: "M1 Return", l1Desc: "Retención en el segundo mes consecutivo de vida en Market.", l2: "M1 Dmart Full", rule: "Volvió comprando canasta completa en Peya Market (hábito genuino de darkstore)." },
+      { l1: "M1 Return", l1Desc: "Retención en el segundo mes consecutivo de vida en Market.", l2: "M1 Dmart DY", rule: "Volvió a Market únicamente mediante Double Ya (usuario de snack/impulso)." },
+      { l1: "M1 Return", l1Desc: "Retención en el segundo mes consecutivo de vida en Market.", l2: "M1 AAA", rule: "Volvió comprando en Supermercados terceros (Carrefour, Coto, etc.)." },
+      { l1: "M1 Return", l1Desc: "Retención en el segundo mes consecutivo de vida en Market.", l2: "M1 Multi-Vertical", rule: "Volvió comprando en 2 o más negocios en el mismo mes (Food + Súper)." },
 
       // Reactivation
-      { l1: "Reactivation", l1Desc: "Usuarios rescatados de la inactividad (≥ 1 mes sin comprar en Dmarts).", l2: "Occasional Reactivation", rule: "Compró en M0. No compró en M-1. SÍ compró en M-2 (compró en 2 de los últimos 3 meses)." },
-      { l1: "Reactivation", l1Desc: "Usuarios rescatados de la inactividad (≥ 1 mes sin comprar en Dmarts).", l2: "Warm Reactivation", rule: "Compró en M0. Su última compra previa fue hace 3 a 5 meses (M-3 a M-5)." },
-      { l1: "Reactivation", l1Desc: "Usuarios rescatados de la inactividad (≥ 1 mes sin comprar en Dmarts).", l2: "True Reactivation", rule: "Compró en M0. Su última compra previa fue hace 6 meses o más (≥ M-6)." },
-      { l1: "Reactivation", l1Desc: "Usuarios rescatados de la inactividad (≥ 1 mes sin comprar en Dmarts).", l2: "DY Reactivation", rule: "Usuarios reactivados en M0 exclusivamente a través de Double Ya." },
+      { l1: "Reactivation", l1Desc: "Usuarios rescatados tras estar inactivos (≥ 1 mes sin comprar en Dmarts).", l2: "DY Reactivation", rule: "Reactivado en Market únicamente con compras Double Ya (prioridad de canal)." },
+      { l1: "Reactivation", l1Desc: "Usuarios rescatados tras estar inactivos (≥ 1 mes sin comprar en Dmarts).", l2: "Occasional Reactivation", rule: "Compró este mes, estuvo inactivo solo el mes pasado (compró hace 2 meses)." },
+      { l1: "Reactivation", l1Desc: "Usuarios rescatados tras estar inactivos (≥ 1 mes sin comprar en Dmarts).", l2: "Warm Reactivation", rule: "Estuvo inactivo de 2 a 4 meses (su última compra previa fue hace 3 a 5 meses)." },
+      { l1: "Reactivation", l1Desc: "Usuarios rescatados tras estar inactivos (≥ 1 mes sin comprar en Dmarts).", l2: "True Reactivation", rule: "Estuvo inactivo 5 meses o más (su última compra previa fue hace 6 meses o más)." },
 
       // Re-Order
-      { l1: "Re-Order", l1Desc: "Retención post-rescate. Valida si el win-back genera retorno genuino.", l2: "Re-Order Occasional Reactivation", rule: "Compró en M0 y en M-1, pero venía inactivo en M-2 (retención de reactivado ocasional)." },
-      { l1: "Re-Order", l1Desc: "Retención post-rescate. Valida si el win-back genera retorno genuino.", l2: "Re-Order Warm Reactivation", rule: "Compró en M0 y en M-1, pero venía inactivo hace 3 a 5 meses (retención de reactivado cálido)." },
-      { l1: "Re-Order", l1Desc: "Retención post-rescate. Valida si el win-back genera retorno genuino.", l2: "Re-Order True Reactivation", rule: "Compró en M0 y en M-1, pero venía inactivo hace 6+ meses (retención de reactivado puro)." },
-      { l1: "Re-Order", l1Desc: "Retención post-rescate. Valida si el win-back genera retorno genuino.", l2: "Re-Order DY Reactivation", rule: "Reactivado por DY en M-1 que en M0 volvió a comprar únicamente con Double Ya." },
-      { l1: "Re-Order", l1Desc: "Retención post-rescate. Valida si el win-back genera retorno genuino.", l2: "Re-Order DY Full Dmarts", rule: "Reactivado por DY en M-1 que en M0 compró canasta completa de Full Dmarts." },
+      { l1: "Re-Order", l1Desc: "Mes 2 consecutivo post-reactivación. Valida retorno genuino vs fuga.", l2: "Re-Order DY", rule: "Se reactivó por Double Ya y en su segundo mes volvió a comprar solo con Double Ya." },
+      { l1: "Re-Order", l1Desc: "Mes 2 consecutivo post-reactivación. Valida retorno genuino vs fuga.", l2: "Re-Order DY Converted", rule: "Se reactivó por Double Ya y en su segundo mes compró canasta completa (sin Double Ya)." },
+      { l1: "Re-Order", l1Desc: "Mes 2 consecutivo post-reactivación. Valida retorno genuino vs fuga.", l2: "Re-Order Occasional", rule: "Reactivado ocasional que volvió a comprar (lleva 2 meses seguidos comprando)." },
+      { l1: "Re-Order", l1Desc: "Mes 2 consecutivo post-reactivación. Valida retorno genuino vs fuga.", l2: "Re-Order Warm", rule: "Reactivado tibio (2 a 4 meses inactivo) que volvió a comprar en su segundo mes." },
+      { l1: "Re-Order", l1Desc: "Mes 2 consecutivo post-reactivación. Valida retorno genuino vs fuga.", l2: "Re-Order True", rule: "Reactivado profundo (5+ meses inactivo) que volvió a comprar en su segundo mes." },
 
       // Recurring Return
-      { l1: "Recurring Return", l1Desc: "Usuarios leales con hábito sólido (≥ 3 meses seguidos comprando).", l2: "Recent Recurring Return", rule: "Compró en Dmarts de forma ininterrumpida durante los últimos 3 meses (M0, M-1, M-2)." },
-      { l1: "Recurring Return", l1Desc: "Usuarios leales con hábito sólido (≥ 3 meses seguidos comprando).", l2: "Old Recurring Return", rule: "Compró en Dmarts de forma ininterrumpida durante 4 a 12 meses consecutivos." },
-      { l1: "Recurring Return", l1Desc: "Usuarios leales con hábito sólido (≥ 3 meses seguidos comprando).", l2: "Royal Recurring Return", rule: "Compró en Dmarts de forma ininterrumpida durante 12 meses o más (≥ 13 meses)." },
+      { l1: "Recurring Return", l1Desc: "Usuarios leales con hábito sólido ininterrumpido (≥ 3 meses seguidos comprando).", l2: "Recent Recurring Return", rule: "Lleva 3 meses seguidos comprando sin parar (hábito recién consolidado)." },
+      { l1: "Recurring Return", l1Desc: "Usuarios leales con hábito sólido ininterrumpido (≥ 3 meses seguidos comprando).", l2: "Old Recurring Return", rule: "Lleva de 4 a 12 meses seguidos comprando sin parar (hábito sólido)." },
+      { l1: "Recurring Return", l1Desc: "Usuarios leales con hábito sólido ininterrumpido (≥ 3 meses seguidos comprando).", l2: "Royal Recurring Return", rule: "Lleva 13 meses o más seguidos comprando sin parar (cliente VIP / Heavy User)." },
 
       // Churned
-      { l1: "Churned", l1Desc: "Base inactiva con historial de compras previas en el negocio. No compró en M0.", l2: "Recently Churn", rule: "No compró en M0. Su última compra en Dmarts fue hace 1 o 2 meses (M-1 o M-2)." },
-      { l1: "Churned", l1Desc: "Base inactiva con historial de compras previas en el negocio. No compró en M0.", l2: "Churn > 3 Months", rule: "No compró en M0. Su última compra en Dmarts fue hace 3 a 5 meses (M-3 a M-5)." },
-      { l1: "Churned", l1Desc: "Base inactiva con historial de compras previas en el negocio. No compró en M0.", l2: "Churn > 6 Months", rule: "No compró en M0. Su última compra en Dmarts fue hace 6 meses o más (≥ M-6)." },
+      { l1: "Churned", l1Desc: "Base inactiva con historial de compras previas en el negocio. No compró en M0.", l2: "Recently Churn", rule: "Lleva 1 o 2 meses sin comprar (riesgo temprano / rescate CRM)." },
+      { l1: "Churned", l1Desc: "Base inactiva con historial de compras previas en el negocio. No compró en M0.", l2: "Churn > 3 Months", rule: "Lleva 3 a 5 meses sin comprar (riesgo medio / enfriado)." },
+      { l1: "Churned", l1Desc: "Base inactiva con historial de compras previas en el negocio. No compró en M0.", l2: "Churn > 6 Months", rule: "Lleva 6 meses o más sin comprar (usuario dormido / dormant)." },
 
       // Never Active
-      { l1: "Never Active", l1Desc: "Base registrada en la app que jamás ha transaccionado en el negocio.", l2: "Never Active", rule: "Usuario registrado / activo en PeYa que jamás ha completado una transacción en Dmarts." }
+      { l1: "Never Active", l1Desc: "Base registrada / activa en PeYa que jamás ha transaccionado en el negocio.", l2: "Never Active", rule: "Usuario registrado en la app que jamás realizó una compra en el negocio." }
     ];
 
     let currentChipFilter = 'ALL';
@@ -1220,9 +1334,8 @@
     // SIMULATOR ENGINE (LEVEL 1 + LEVEL 2 + TENURES)
     // =========================================================================
     let simLength = 12;
-    let adoptionChannel = "App Adoption"; // App Adoption, Dmart Adoption, AAA Adoption, Double Ya Adoption
+    let acquisitionChannel = "Acquired by Food";
 
-    // Order state per month: { hasOrder: boolean, isDoubleYa: boolean }
     let simMonths = [
       { hasOrder: true, isDoubleYa: false },
       { hasOrder: true, isDoubleYa: false },
@@ -1240,8 +1353,8 @@
 
     let selectedMonthIndex = 2; // Mes 3
 
-    function updateAdoptionChannel(val) {
-      adoptionChannel = val;
+    function updateAcquisitionChannel(val) {
+      acquisitionChannel = val;
       renderSimulator();
     }
 
@@ -1271,25 +1384,25 @@
       if (type === 'loyal_royal') {
         simLength = 18;
         setSimLength(18);
-        adoptionChannel = "App Adoption";
-        document.getElementById('adoptionChannelSelect').value = "App Adoption";
+        acquisitionChannel = "Acquired by Food";
+        document.getElementById('acquisitionChannelSelect').value = "Acquired by Food";
         simMonths = new Array(18).fill(null).map(() => ({ hasOrder: true, isDoubleYa: false }));
         selectedMonthIndex = 13; // Mes 14 (Royal Recurring Return)
       } else if (type === 'dy_conversion') {
         simLength = 12;
         setSimLength(12);
-        adoptionChannel = "Double Ya Adoption";
-        document.getElementById('adoptionChannelSelect').value = "Double Ya Adoption";
+        acquisitionChannel = "Acquired by Food + DY";
+        document.getElementById('acquisitionChannelSelect').value = "Acquired by Food + DY";
         simMonths = new Array(12).fill(null).map((_, i) => ({
           hasOrder: i < 6,
           isDoubleYa: i === 0 // M1 is DY, M2..M6 is Full Dmart
         }));
-        selectedMonthIndex = 1; // Mes 2 (M1 Double Ya Converted)
+        selectedMonthIndex = 1; // Mes 2 (M1 Dmart Full)
       } else if (type === 'churn_tiers') {
         simLength = 12;
         setSimLength(12);
-        adoptionChannel = "Dmart Adoption";
-        document.getElementById('adoptionChannelSelect').value = "Dmart Adoption";
+        acquisitionChannel = "Acquired by Dmart";
+        document.getElementById('acquisitionChannelSelect').value = "Acquired by Dmart";
         simMonths = new Array(12).fill(null).map((_, i) => ({
           hasOrder: i === 0, // Only bought in M1
           isDoubleYa: false
@@ -1298,12 +1411,15 @@
       } else if (type === 'winback_stages') {
         simLength = 12;
         setSimLength(12);
-        adoptionChannel = "App Adoption";
-        document.getElementById('adoptionChannelSelect').value = "App Adoption";
+        acquisitionChannel = "Acquired by Food";
+        document.getElementById('acquisitionChannelSelect').value = "Acquired by Food";
         simMonths = new Array(12).fill(null).map(() => ({ hasOrder: false, isDoubleYa: false }));
-        // M1 buy, M2..M5 churn, M6 buy (Warm Reactivation), M7 buy (Re-Order Warm), M8 Churn, M9..M11 Churn, M12 buy (True Reactivation)
-        [0, 5, 6, 11].forEach(i => { simMonths[i] = { hasOrder: true, isDoubleYa: false }; });
-        selectedMonthIndex = 6; // Mes 7 (Re-Order Warm Reactivation)
+        // M1 buy, M2..M5 churn, M6 buy (DY Reactivation), M7 buy (Re-Order DY Converted), M8..M11 churn, M12 buy (True Reactivation)
+        simMonths[0] = { hasOrder: true, isDoubleYa: false };
+        simMonths[5] = { hasOrder: true, isDoubleYa: true };  // M6 DY Reactivation
+        simMonths[6] = { hasOrder: true, isDoubleYa: false }; // M7 Re-Order DY Converted
+        simMonths[11] = { hasOrder: true, isDoubleYa: false }; // M12 True Reactivation
+        selectedMonthIndex = 6;
       }
 
       renderSimulator();
@@ -1327,22 +1443,18 @@
       renderSimulator();
     }
 
-    // Comprehensive Engine: Computes Level 1, Level 2 and All Tenures
     function computeTimeline(months) {
       let timeline = [];
       let firstOrderIdx = months.findIndex(m => m.hasOrder === true);
 
       let consecutiveActive = 0;
       let lastOrderIdx = -1;
-      let prevL1 = null;
-      let currentL1Tenure = 0;
-      let lastRRMonth = null;
-      let lastReactivationType = null; // To classify Re-Order subtypes
+      let lastReactivationType = null;
+      let lastReactivationWasDY = false;
 
       for (let m = 0; m < months.length; m++) {
         const item = months[m];
 
-        // Before first purchase
         if (firstOrderIdx === -1 || m < firstOrderIdx) {
           timeline.push({
             month: m + 1,
@@ -1350,169 +1462,137 @@
             isDoubleYa: false,
             l1: "Never Active",
             l2: "Never Active",
-            countryTenure: 0,
-            userTenure: 0,
-            consecutiveActive: 0,
-            l1Tenure: 0,
-            rrStreak: 0,
-            lastRRMonth: null,
-            monthsSinceRR: null,
+            adoptionTenure: null,
+            actualTenure: m + 1,
+            prevType: null,
+            prevTenure: null,
+            dyOrder: "Sin compras",
             l1Desc: "Base registrada en la app que jamás ha transaccionado en el negocio.",
-            l2Desc: "Usuario registrado / activo en PeYa que jamás ha completado una transacción en Dmarts.",
-            sqlRule: "WHEN cohort IS NULL THEN 'Never Active'"
+            l2Desc: "Usuario registrado en la app que jamás realizó una compra en el negocio.",
+            sqlRule: "WHEN Market_Actual_Type = 'Never Active' THEN 'Never Active'"
           });
           continue;
         }
 
-        const countryTenure = m - firstOrderIdx + 1;
-        const userTenure = countryTenure;
+        const adoptionTenure = m - firstOrderIdx + 1;
         let l1 = "";
         let l2 = "";
         let l1Desc = "";
         let l2Desc = "";
         let sqlRule = "";
+        let actualTenure = 0;
+        let dyOrder = "Sin compras";
 
         if (item.hasOrder) {
           consecutiveActive++;
+          actualTenure = consecutiveActive;
+          dyOrder = item.isDoubleYa ? "Solo DY" : "No DY";
           const gap = lastOrderIdx === -1 ? 0 : (m - lastOrderIdx);
 
-          // ------------------------------------------------------------------
-          // 1. ADOPTION
-          // ------------------------------------------------------------------
-          if (countryTenure === 1) {
-            l1 = "Adoption";
+          // 1. NEW USER
+          if (adoptionTenure === 1) {
+            l1 = "New User";
             l1Desc = "Nuevos usuarios que realizan su primera compra histórica en Dmarts en M0.";
-
-            if (item.isDoubleYa || adoptionChannel === "Double Ya Adoption") {
-              l2 = "Double Ya Adoption";
-              l2Desc = "Su primera orden en Dmarts ocurre a través de la funcionalidad Double Ya.";
-              sqlRule = "WHEN COALESCE(first_dmart_is_dy, 0) = 1 THEN 'Double Ya Adoption'";
-            } else if (adoptionChannel === "App Adoption") {
-              l2 = "App Adoption";
-              l2Desc = "Su compra en Dmarts es la primera orden de toda su historia en la app completa (adquisición pura).";
-              sqlRule = "WHEN first_peya_order_date >= first_dmart_order_date THEN 'App Adoption'";
-            } else if (adoptionChannel === "AAA Adoption") {
-              l2 = "AAA Adoption";
-              l2Desc = "Tenía órdenes previas en supermercados de terceros (AAA).";
-              sqlRule = "WHEN first_aaa_order_date < first_dmart_order_date THEN 'AAA Adoption'";
-            } else {
-              l2 = "Dmart Adoption";
-              l2Desc = "Tenía órdenes previas en la app no AAA (Restaurantes, etc.).";
-              sqlRule = "ELSE 'Dmart Adoption'";
-            }
+            l2 = item.isDoubleYa ? "Acquired by Food + DY" : acquisitionChannel;
+            l2Desc = `Origen en PeYa: ${l2}.`;
+            sqlRule = "WHEN Market_Actual_Type = 'New User' THEN COALESCE(first_order_acquisition_channel, 'Acquired by Food')";
           }
 
-          // ------------------------------------------------------------------
           // 2. RECURRING RETURN (Racha ininterrumpida >= 3)
-          // ------------------------------------------------------------------
           else if (consecutiveActive >= 3) {
             l1 = "Recurring Return";
             l1Desc = "Usuarios leales con hábito sólido (≥ 3 meses seguidos comprando).";
 
             if (consecutiveActive === 3) {
               l2 = "Recent Recurring Return";
-              l2Desc = "Compró en Dmarts de forma ininterrumpida durante los últimos 3 meses (M0, M-1, M-2).";
-              sqlRule = "WHEN consecutive_active_months = 3 THEN 'Recent Recurring Return'";
+              l2Desc = "Lleva 3 meses seguidos comprando sin parar (hábito recién consolidado).";
+              sqlRule = "WHEN Market_Actual_type_ternure = 3 THEN 'Recent Recurring Return'";
             } else if (consecutiveActive >= 4 && consecutiveActive <= 12) {
               l2 = "Old Recurring Return";
-              l2Desc = `Compró en Dmarts de forma ininterrumpida durante ${consecutiveActive} meses consecutivos (4 a 12m).`;
-              sqlRule = "WHEN consecutive_active_months BETWEEN 4 AND 12 THEN 'Old Recurring Return'";
+              l2Desc = `Lleva ${consecutiveActive} meses seguidos comprando sin parar (hábito sólido de 4 a 12m).`;
+              sqlRule = "WHEN Market_Actual_type_ternure BETWEEN 4 AND 12 THEN 'Old Recurring Return'";
             } else {
               l2 = "Royal Recurring Return";
-              l2Desc = `Compró de forma ininterrumpida durante ${consecutiveActive} meses consecutivos (≥ 13 meses). Lealtad máxima.`;
-              sqlRule = "WHEN consecutive_active_months >= 13 THEN 'Royal Recurring Return'";
+              l2Desc = `Lleva ${consecutiveActive} meses seguidos comprando ininterrumpidamente (≥ 13 meses). Cliente VIP.`;
+              sqlRule = "WHEN Market_Actual_type_ternure >= 13 THEN 'Royal Recurring Return'";
             }
           }
 
-          // ------------------------------------------------------------------
           // 3. M1 RETURN (Mes 2 con compra previa en Mes 1)
-          // ------------------------------------------------------------------
-          else if (countryTenure === 2 && gap === 1) {
+          else if (adoptionTenure === 2 && gap === 1) {
             l1 = "M1 Return";
-            l1Desc = "Mide principalmente la retención en el segundo mes de vida.";
+            l1Desc = "Retención en el segundo mes consecutivo de vida en Market.";
 
-            if (adoptionChannel === "Double Ya Adoption") {
-              if (item.isDoubleYa) {
-                l2 = "M1 Double Ya Adoption";
-                l2Desc = "Volvió en M0 comprando exclusivamente con Double Ya.";
-                sqlRule = "WHEN adoption_l2 = 'Double Ya Adoption' AND is_dy_only THEN 'M1 Double Ya Adoption'";
-              } else {
-                l2 = "M1 Double Ya Converted";
-                l2Desc = "Adquirido por DY en M-1 que en M0 volvió con una compra de Peya Markets Full (regular).";
-                sqlRule = "WHEN adoption_l2 = 'Double Ya Adoption' AND has_regular_dmart THEN 'M1 Double Ya Converted'";
-              }
-            } else if (item.isDoubleYa) {
-              l2 = "M1 Double Ya Adoption";
-              l2Desc = "Volvió en M0 comprando exclusivamente con Double Ya.";
-              sqlRule = "WHEN is_dy_only THEN 'M1 Double Ya Adoption'";
-            } else if (adoptionChannel === "App Adoption") {
-              l2 = "M1 App Adoption";
-              l2Desc = "Adquirido como App Adoption en M-1 y volvió a comprar en M0.";
-              sqlRule = "WHEN adoption_l2 = 'App Adoption' THEN 'M1 App Adoption'";
-            } else if (adoptionChannel === "AAA Adoption") {
-              l2 = "M1 AAA Adoption";
-              l2Desc = "Adquirido como AAA Adoption en M-1 y volvió a comprar en M0.";
-              sqlRule = "WHEN adoption_l2 = 'AAA Adoption' THEN 'M1 AAA Adoption'";
+            if (item.isDoubleYa) {
+              l2 = "M1 Dmart DY";
+              l2Desc = "Volvió a Market únicamente mediante Double Ya (usuario de impulso).";
+              sqlRule = "WHEN DY_order = 'Solo DY' THEN 'M1 Dmart DY'";
+            } else if (acquisitionChannel === "Acquired by Food + DY") {
+              l2 = "M1 Dmart Full";
+              l2Desc = "Entró por DY en M-1 y en M0 convirtió a compra completa en Market.";
+              sqlRule = "WHEN DY_order IN ('No DY', 'DY y No DY') THEN 'M1 Dmart Full'";
             } else {
-              l2 = "M1 Dmart Adoption";
-              l2Desc = "Adquirido como Dmart Adoption en M-1 y volvió a comprar en M0.";
-              sqlRule = "WHEN adoption_l2 = 'Dmart Adoption' THEN 'M1 Dmart Adoption'";
+              l2 = "M1 Dmart Full";
+              l2Desc = "Volvió comprando canasta completa en Peya Market.";
+              sqlRule = "ELSE 'M1 Dmart Full'";
             }
           }
 
-          // ------------------------------------------------------------------
-          // 4. RE-ORDER (Retención post-rescate: compró en M0 y M-1, inactivo en M-2)
-          // ------------------------------------------------------------------
+          // 4. RE-ORDER (Mes 2 de compra post-reactivación)
           else if (gap === 1 && consecutiveActive === 2) {
             l1 = "Re-Order";
             l1Desc = "Retención post-rescate. Valida si el win-back genera retorno genuino.";
 
-            if (item.isDoubleYa) {
-              l2 = "Re-Order DY Reactivation";
-              l2Desc = "Reactivado que en M0 volvió a comprar únicamente con Double Ya.";
-              sqlRule = "WHEN is_dy_only THEN 'Re-Order DY Reactivation'";
-            } else if (lastReactivationType === "DY Reactivation") {
-              l2 = "Re-Order DY Full Dmarts";
-              l2Desc = "Reactivado por DY en M-1 que en M0 compró canasta completa de Full Dmarts.";
-              sqlRule = "WHEN prev_is_dy_only = TRUE AND has_regular_dmart THEN 'Re-Order DY Full Dmarts'";
+            if (lastReactivationWasDY) {
+              if (item.isDoubleYa) {
+                l2 = "Re-Order DY";
+                l2Desc = "Se reactivó por Double Ya y en su segundo mes volvió a comprar solo con Double Ya.";
+                sqlRule = "WHEN prev_dy_order = 'Solo DY' AND DY_order = 'Solo DY' THEN 'Re-Order DY'";
+              } else {
+                l2 = "Re-Order DY Converted";
+                l2Desc = "Se reactivó por Double Ya y en su segundo mes compró canasta completa de Market.";
+                sqlRule = "WHEN prev_dy_order = 'Solo DY' THEN 'Re-Order DY Converted'";
+              }
+            } else if (lastReactivationType === "Occasional Reactivation") {
+              l2 = "Re-Order Occasional";
+              l2Desc = "Reactivado ocasional que volvió a comprar (lleva 2 meses seguidos comprando).";
+              sqlRule = "WHEN prev_prev_market_tenure = 1 THEN 'Re-Order Occasional'";
             } else if (lastReactivationType === "Warm Reactivation") {
-              l2 = "Re-Order Warm Reactivation";
-              l2Desc = "Compró en M0 y M-1, habiendo venido de inactividad de 3 a 5 meses.";
-              sqlRule = "WHEN DATE_DIFF(prev_m, prev_m_2, MONTH) BETWEEN 3 AND 5 THEN 'Re-Order Warm Reactivation'";
-            } else if (lastReactivationType === "True Reactivation") {
-              l2 = "Re-Order True Reactivation";
-              l2Desc = "Compró en M0 y M-1, habiendo venido de inactividad de 6+ meses.";
-              sqlRule = "WHEN DATE_DIFF(prev_m, prev_m_2, MONTH) >= 6 THEN 'Re-Order True Reactivation'";
+              l2 = "Re-Order Warm";
+              l2Desc = "Reactivado tibio que volvió a comprar en su segundo mes consecutivo.";
+              sqlRule = "WHEN prev_prev_market_tenure BETWEEN 2 AND 4 THEN 'Re-Order Warm'";
             } else {
-              l2 = "Re-Order Occasional Reactivation";
-              l2Desc = "Compró en M0 y M-1, habiendo estado inactivo solo en M-2.";
-              sqlRule = "WHEN DATE_DIFF(prev_m, prev_m_2, MONTH) = 2 THEN 'Re-Order Occasional Reactivation'";
+              l2 = "Re-Order True";
+              l2Desc = "Reactivado profundo que volvió a comprar en su segundo mes consecutivo.";
+              sqlRule = "WHEN prev_prev_market_tenure >= 5 THEN 'Re-Order True'";
             }
           }
 
-          // ------------------------------------------------------------------
           // 5. REACTIVATION (Regresa tras inactividad previa >= 1 mes)
-          // ------------------------------------------------------------------
           else {
             l1 = "Reactivation";
             l1Desc = "Usuarios rescatados de la inactividad (≥ 1 mes sin comprar en Dmarts).";
 
             if (item.isDoubleYa) {
               l2 = "DY Reactivation";
-              l2Desc = "Usuario reactivado en M0 exclusivamente a través de Double Ya.";
-              sqlRule = "WHEN is_dy_only THEN 'DY Reactivation'";
-            } else if (gap === 2) {
-              l2 = "Occasional Reactivation";
-              l2Desc = "No compró en M-1. SÍ compró en M-2 (compró en 2 de los últimos 3 meses).";
-              sqlRule = "WHEN DATE_DIFF(month, prev_m, MONTH) = 2 THEN 'Occasional Reactivation'";
-            } else if (gap >= 3 && gap <= 5) {
-              l2 = "Warm Reactivation";
-              l2Desc = `Su última compra previa fue hace ${gap} meses (M-3 a M-5). Reactivado cálido.`;
-              sqlRule = "WHEN DATE_DIFF(month, prev_m, MONTH) BETWEEN 3 AND 5 THEN 'Warm Reactivation'";
+              l2Desc = "Reactivado en Market únicamente con compras Double Ya.";
+              sqlRule = "WHEN DY_order = 'Solo DY' THEN 'DY Reactivation'";
+              lastReactivationWasDY = true;
             } else {
-              l2 = "True Reactivation";
-              l2Desc = `Su última compra previa fue hace ${gap} meses (≥ M-6). Reactivación pura.`;
-              sqlRule = "WHEN DATE_DIFF(month, prev_m, MONTH) >= 6 THEN 'True Reactivation'";
+              lastReactivationWasDY = false;
+              if (gap === 2) {
+                l2 = "Occasional Reactivation";
+                l2Desc = "Compró este mes, estuvo inactivo solo el mes pasado (compró hace 2 meses).";
+                sqlRule = "WHEN prev_market_tenure = 1 THEN 'Occasional Reactivation'";
+              } else if (gap >= 3 && gap <= 5) {
+                l2 = "Warm Reactivation";
+                l2Desc = `Estuvo inactivo ${gap - 1} meses (su última compra previa fue hace ${gap} meses).`;
+                sqlRule = "WHEN prev_market_tenure BETWEEN 2 AND 4 THEN 'Warm Reactivation'";
+              } else {
+                l2 = "True Reactivation";
+                l2Desc = `Estuvo inactivo ${gap - 1} meses o más (su última compra previa fue hace ${gap} meses).`;
+                sqlRule = "WHEN prev_market_tenure >= 5 THEN 'True Reactivation'";
+              }
             }
             lastReactivationType = l2;
           }
@@ -1520,49 +1600,31 @@
           lastOrderIdx = m;
         }
 
-        // --------------------------------------------------------------------
-        // 6. CHURNED (Meses Inactivos / Gaps)
-        // --------------------------------------------------------------------
+        // 6. CHURNED
         else {
           consecutiveActive = 0;
           const inactivityGap = m - lastOrderIdx;
+          actualTenure = inactivityGap;
+          dyOrder = "Sin compras";
           l1 = "Churned";
           l1Desc = "Base inactiva con historial de compras previas en el negocio. No compró en M0.";
 
           if (inactivityGap <= 2) {
             l2 = "Recently Churn";
-            l2Desc = `Última compra fue hace ${inactivityGap} mes(es). Inactivo reciente.`;
-            sqlRule = "WHEN gap IN (1, 2) THEN 'Recently Churn'";
+            l2Desc = `Lleva ${inactivityGap} mes(es) sin comprar (riesgo temprano / rescate CRM).`;
+            sqlRule = "WHEN Market_Actual_type_ternure IN (1, 2) THEN 'Recently Churn'";
           } else if (inactivityGap >= 3 && inactivityGap <= 5) {
             l2 = "Churn > 3 Months";
-            l2Desc = `Última compra fue hace ${inactivityGap} meses (M-3 a M-5). Churn medio.`;
-            sqlRule = "WHEN gap BETWEEN 3 AND 5 THEN 'Churn > 3 Months'";
+            l2Desc = `Lleva ${inactivityGap} meses sin comprar (riesgo medio / enfriado).`;
+            sqlRule = "WHEN Market_Actual_type_ternure BETWEEN 3 AND 5 THEN 'Churn > 3 Months'";
           } else {
             l2 = "Churn > 6 Months";
-            l2Desc = `Última compra fue hace ${inactivityGap} meses (≥ M-6). Churn severo / dormido.`;
-            sqlRule = "WHEN gap >= 6 THEN 'Churn > 6 Months'";
+            l2Desc = `Lleva ${inactivityGap} meses sin comprar (usuario dormido / dormant).`;
+            sqlRule = "WHEN Market_Actual_type_ternure >= 6 THEN 'Churn > 6 Months'";
           }
         }
 
-        // Tenure in current L1 state (Islands & Gaps)
-        if (l1 === prevL1) {
-          currentL1Tenure++;
-        } else {
-          currentL1Tenure = 1;
-          prevL1 = l1;
-        }
-
-        // RR Streak calculation
-        let rrStreak = 0;
-        if (l1 === "Recurring Return") {
-          rrStreak = consecutiveActive - 2;
-          lastRRMonth = m + 1;
-        }
-
-        let monthsSinceRR = null;
-        if (lastRRMonth !== null) {
-          monthsSinceRR = (m + 1) - lastRRMonth;
-        }
+        const prevNode = timeline.length > 0 ? timeline[timeline.length - 1] : null;
 
         timeline.push({
           month: m + 1,
@@ -1570,13 +1632,11 @@
           isDoubleYa: item.isDoubleYa,
           l1: l1,
           l2: l2,
-          countryTenure: countryTenure,
-          userTenure: userTenure,
-          consecutiveActive: consecutiveActive,
-          l1Tenure: currentL1Tenure,
-          rrStreak: rrStreak,
-          lastRRMonth: lastRRMonth,
-          monthsSinceRR: monthsSinceRR,
+          adoptionTenure: adoptionTenure,
+          actualTenure: actualTenure,
+          prevType: prevNode ? prevNode.l1 : null,
+          prevTenure: prevNode ? prevNode.actualTenure : null,
+          dyOrder: dyOrder,
           l1Desc: l1Desc,
           l2Desc: l2Desc,
           sqlRule: sqlRule
@@ -1624,19 +1684,13 @@
 
           <div class="node-metrics">
             <div class="metric-row">
-              <span class="m-label">Tenure:</span>
-              <span>${node.userTenure > 0 ? node.userTenure + 'm' : '—'}</span>
+              <span class="m-label">Adopción:</span>
+              <span>${node.adoptionTenure ? node.adoptionTenure + 'm' : '—'}</span>
             </div>
             <div class="metric-row">
-              <span class="m-label">En L1:</span>
-              <span style="color: #38bdf8; font-weight:700;">${node.l1Tenure > 0 ? node.l1Tenure + 'm' : '—'}</span>
+              <span class="m-label">${node.hasOrder ? 'Racha:' : 'Inactivo:'}</span>
+              <span style="color: ${node.hasOrder ? '#38bdf8' : '#fbbf24'}; font-weight:700;">${node.actualTenure}m</span>
             </div>
-            ${node.rrStreak > 0 ? `
-              <div class="metric-row rr-highlight">
-                <span class="m-label" style="color: #ff3366;">Racha RR:</span>
-                <span>🔥 ${node.rrStreak}m</span>
-              </div>
-            ` : ''}
           </div>
         `;
 
@@ -1687,25 +1741,20 @@
       document.getElementById('inspectorL2Desc').innerText = current.l2Desc;
 
       // 4 KPIs
-      document.getElementById('kpiCountryTenure').innerText = current.countryTenure > 0 ? `${current.countryTenure} meses` : '—';
-      document.getElementById('kpiUserTenure').innerText = current.userTenure > 0 ? `${current.userTenure} meses` : '—';
+      document.getElementById('kpiAdoptionTenure').innerText = current.adoptionTenure ? `${current.adoptionTenure} meses` : '— (Never Active)';
+      document.getElementById('kpiActualTenure').innerText = `${current.actualTenure} mes(es)`;
       
-      document.getElementById('kpiTypeTenure').innerText = current.l1Tenure > 0 ? `${current.l1Tenure} mes(es)` : '—';
-      document.getElementById('kpiTypeTenureDesc').innerText = `Lleva ${current.l1Tenure} mes(es) ininterrumpidos en clasificación "${current.l1}".`;
+      document.getElementById('kpiPrevType').innerText = current.prevType ? current.prevType : '—';
+      document.getElementById('kpiPrevTenureDesc').innerText = current.prevTenure ? `Tenure previo: ${current.prevTenure} mes(es) (Market_previous_type_ternure)` : 'Primer mes evaluado en la línea.';
 
-      const rrEl = document.getElementById('kpiRRTenure');
-      if (current.l1 === 'Recurring Return') {
-        rrEl.innerText = `${current.rrStreak} mes(es)`;
-        rrEl.style.color = '#ff3366';
-        document.getElementById('kpiRRTenureDesc').innerText = `Mes ${current.rrStreak} como RR (${current.l2}).`;
-      } else if (current.monthsSinceRR !== null) {
-        rrEl.innerText = `0 (Ex-RR hace ${current.monthsSinceRR}m)`;
-        rrEl.style.color = 'var(--text-muted)';
-        document.getElementById('kpiRRTenureDesc').innerText = `Fue RR por última vez en el Mes ${current.lastRRMonth} (hace ${current.monthsSinceRR} meses).`;
+      const dyEl = document.getElementById('kpiDYOrder');
+      dyEl.innerText = current.dyOrder;
+      if (current.dyOrder === 'Solo DY') {
+        dyEl.style.color = '#fcd34d';
+      } else if (current.dyOrder === 'No DY') {
+        dyEl.style.color = '#38bdf8';
       } else {
-        rrEl.innerText = `0 meses`;
-        rrEl.style.color = 'var(--text-muted)';
-        document.getElementById('kpiRRTenureDesc').innerText = `El usuario aún no ha alcanzado la condición de Recurring Return.`;
+        dyEl.style.color = 'var(--text-muted)';
       }
 
       // SQL callout

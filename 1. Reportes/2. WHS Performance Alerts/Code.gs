@@ -1889,7 +1889,7 @@ function getISO(raw) {
     'panama':'PA','panamá':'PA','paraguay':'PY','peru':'PE','perú':'PE','uruguay':'UY',
     'republica dominicana':'DO','república dominicana':'DO','rep. dominicana':'DO',
     'dominican republic':'DO','mexico':'MX','méxico':'MX',
-    'ar':'AR','bo':'BO','cl':'CL','co':'CO','cr':'CR','ec':'EC','sv':'SV','gt':'GT',
+    'ar':'AR','bo':'BO','cl':'CL','ch':'CL','co':'CO','cr':'CR','ec':'EC','sv':'SV','gt':'GT',
     'hn':'HN','ni':'NI','pa':'PA','py':'PY','pe':'PE','uy':'UY','do':'DO','rd':'DO','mx':'MX',
     'latam':'LATAM','latin america':'LATAM'
   };
@@ -1919,9 +1919,9 @@ function _fmtVal(v, fmt) {
 }
 
 var FULL_COUNTRY_NAMES_ALERT = {
-  'AR':'Argentina','BO':'Bolivia','CL':'Chile','CO':'Colombia',
+  'AR':'Argentina','BO':'Bolivia','CL':'Chile','CH':'Chile','CO':'Colombia',
   'EC':'Ecuador','SV':'El Salvador','GT':'Guatemala','HN':'Honduras','NI':'Nicaragua',
-  'PA':'Panamá','PY':'Paraguay','PE':'Perú','UY':'Uruguay','DO':'Rep. Dominicana'
+  'PA':'Panamá','PY':'Paraguay','PE':'Perú','UY':'Uruguay','DO':'Rep. Dominicana','RD':'Rep. Dominicana'
 };
 
 function backfillAlertsHistory(startDateStr, endDateStr) {

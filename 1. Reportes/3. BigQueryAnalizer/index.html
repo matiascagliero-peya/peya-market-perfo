@@ -14,7 +14,7 @@ function __bqBanner(txt){
   d.style.cssText='position:fixed;top:0;left:0;right:0;background:#dc2626;color:#fff;padding:10px 16px;z-index:99999;font:12px Consolas,monospace;white-space:pre-wrap;';
   d.textContent=txt;(document.body||document.documentElement).appendChild(d);
 }
-if(window.__BQ_WD__){__bqBanner('🛑 ARCHIVO DUPLICADO: el index quedo pegado mas de una vez. Ctrl+A, borra todo, confirma vacio, y pega UNA sola vez.');}
+if(window.__BQ_WD__){__bqBanner('[ERROR] ARCHIVO DUPLICADO: el index quedo pegado mas de una vez. Ctrl+A, borra todo, confirma vacio, y pega UNA sola vez.');}
 window.__BQ_WD__=true;
 window.onerror=function(m,s,l,c){__bqBanner('Error JS (linea '+l+':'+c+'): '+m);return false;};
 setTimeout(function(){if(!window.__BQ_OK__){__bqBanner('El script principal no ejecuto. Repega el archivo completo (Ctrl+A, borrar, pegar una vez).');}},2500);
@@ -24,15 +24,15 @@ setTimeout(function(){if(!window.__BQ_OK__){__bqBanner('El script principal no e
 <div id="header-panel">
   <!-- Top Row: Title, Cache, Actions -->
   <div id="header-top">
-    <h1>📊 BigQuery Analyzer <span class="by">by Matías Cagliero</span></h1>
+    <h1><svg class="ico ico-h2" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/></svg>BigQuery Analyzer <span class="by">by Matías Cagliero</span></h1>
     
     <div id="header-actions">
       <span id="range-lbl" style="color:var(--muted);font-size:11px"></span>
       <span id="cache-lbl" style="font-size:11px;color:var(--muted);margin-right:4px"></span>
-      <button class="ibtn" id="btn-search-user" onclick="toggleUserSelector()" title="Buscar otro usuario" style="font-weight:700">🔍 Buscar usuario</button>
-      <button class="ibtn" id="btn-adv" onclick="toggleAdvancedFilters()" title="Filtros avanzados y personalización" style="font-weight:700">⚙️ Filtros</button>
-      <button class="btn-p" id="btn-load" onclick="loadDashboard(true)" title="Vuelve a consultar BigQuery ignorando la caché">🔄 Actualizar</button>
-      <button id="theme-btn" onclick="toggleTheme()" title="Modo noche/día">🌙</button>
+      <button class="ibtn" id="btn-search-user" onclick="toggleUserSelector()" title="Buscar otro usuario" style="font-weight:700"><svg class="ico ico-btn" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>Buscar usuario</button>
+      <button class="ibtn" id="btn-adv" onclick="toggleAdvancedFilters()" title="Filtros avanzados y personalización" style="font-weight:700"><svg class="ico ico-btn" viewBox="0 0 24 24"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>Filtros</button>
+      <button class="btn-p" id="btn-load" onclick="loadDashboard(true)" title="Vuelve a consultar BigQuery ignorando la caché"><svg class="ico ico-btn" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>Actualizar</button>
+      <button id="theme-btn" onclick="toggleTheme()" title="Modo noche/día"><svg class="ico" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></button>
     </div>
   </div>
 
@@ -40,7 +40,7 @@ setTimeout(function(){if(!window.__BQ_OK__){__bqBanner('El script principal no e
   <div id="primary-filters">
     <!-- Period Selector (Pills) -->
     <div class="filter-group">
-      <span class="lbl">🗓 Período</span>
+      <span class="lbl">Período</span>
       <div class="grangrp">
         <button class="granbtn" id="pyear" onclick="setRange('year')">Año</button>
         <button class="granbtn on" id="pm" onclick="setRange('month')">Mes actual</button>
@@ -51,7 +51,7 @@ setTimeout(function(){if(!window.__BQ_OK__){__bqBanner('El script principal no e
 
     <!-- Rango de fechas manual (Siempre Visible) -->
     <div class="filter-group">
-      <span class="lbl">📅 Rango</span>
+      <span class="lbl">Rango</span>
       <div style="display:inline-flex;align-items:center;gap:6px">
         <input type="date" id="date-from" title="Fecha desde"/>
         <span style="color:var(--muted)">→</span>
@@ -62,7 +62,7 @@ setTimeout(function(){if(!window.__BQ_OK__){__bqBanner('El script principal no e
 
     <!-- User Selector -->
     <div id="cfg-user-group" class="filter-group hidden">
-      <span class="lbl">👤 Usuario</span>
+      <span class="lbl">Usuario</span>
       <input id="cfg-user" list="cfg-user-list" placeholder="Tu usuario o todos" onchange="loadDashboard()" title="Escribí o elegí un usuario" autocomplete="off"/>
       <datalist id="cfg-user-list"></datalist>
     </div>
@@ -73,9 +73,9 @@ setTimeout(function(){if(!window.__BQ_OK__){__bqBanner('El script principal no e
     <div id="adv-filters-grid">
       <!-- Project Selector (Colapsable) -->
       <div class="filter-group">
-        <span class="lbl">📁 Proyecto</span>
+        <span class="lbl">Proyecto</span>
         <select id="cfg-project" onchange="loadDashboard()">
-          <option value="all">🌐 Todos mis proyectos</option>
+          <option value="all">Todos mis proyectos</option>
           <option value="peya-food-and-groceries">peya-food-and-groceries</option>
         </select>
         <span id="proj-status" style="font-size:10px;color:var(--muted)"></span>
@@ -83,7 +83,7 @@ setTimeout(function(){if(!window.__BQ_OK__){__bqBanner('El script principal no e
 
       <!-- Plataforma -->
       <div class="filter-group">
-        <span class="lbl">🧩 Plataforma</span>
+        <span class="lbl">Plataforma</span>
         <select id="cfg-platform" onchange="loadDashboard()">
           <option value="all">Todas</option>
           <option value="GSHEET">Google Sheets</option>
@@ -97,7 +97,7 @@ setTimeout(function(){if(!window.__BQ_OK__){__bqBanner('El script principal no e
 
       <!-- Zona / Región -->
       <div class="filter-group">
-        <span class="lbl">🌍 Zona</span>
+        <span class="lbl">Zona</span>
         <select id="cfg-region" onchange="loadDashboard()" title="Zona / Región">
           <option value="all">Todas las zonas</option>
           <option value="us">us</option>
@@ -106,30 +106,24 @@ setTimeout(function(){if(!window.__BQ_OK__){__bqBanner('El script principal no e
           <option value="us-central1">us-central1</option>
         </select>
       </div>
-
-      <!-- Precio por TB -->
-      <div class="filter-group">
-        <span class="lbl">💲 USD/TB</span>
-        <input type="number" id="cfg-price" value="6.25" step="0.01" style="width:72px" title="USD por TB"/>
-      </div>
     </div>
   </div>
 </div>
 
-<div id="alert"><span class="dot" id="adot"></span><span id="alabel">Alertas</span><a class="ibtn" href="<?= appUrl ?>?page=alertas" style="text-decoration:none;font-weight:700">🔔 Configurar alertas</a></div>
+<div id="alert"><span class="dot" id="adot"></span><span id="alabel">Alertas</span><a class="ibtn" href="<?= appUrl ?>?page=alertas" style="text-decoration:none;font-weight:700"><svg class="ico ico-btn" viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>Configurar alertas</a></div>
 
 <div id="tabs">
-  <a class="tab on" id="tab-ov" href="<?= appUrl ?>?page=index">📈 Overview / Queries</a>
-  <a class="tab" id="tab-sched" href="<?= appUrl ?>?page=programadas">⏰ Programadas</a>
-  <a class="tab" id="tab-alerts" href="<?= appUrl ?>?page=alertas">🔔 Alertas</a>
+  <a class="tab on" id="tab-ov" href="<?= appUrl ?>?page=index"><svg class="ico ico-tab" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/></svg>Overview / Queries</a>
+  <a class="tab" id="tab-sched" href="<?= appUrl ?>?page=programadas"><svg class="ico ico-tab" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>Programadas</a>
+  <a class="tab" id="tab-alerts" href="<?= appUrl ?>?page=alertas"><svg class="ico ico-tab" viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>Alertas</a>
   <? if (isAdmin()) { ?>
-    <a class="tab" id="tab-analytics" href="<?= appUrl ?>?page=analytics">📊 Analytics</a>
+    <a class="tab" id="tab-analytics" href="<?= appUrl ?>?page=analytics"><svg class="ico ico-tab" viewBox="0 0 24 24"><rect x="3" y="12" width="4" height="9" rx="1"/><rect x="10" y="7" width="4" height="14" rx="1"/><rect x="17" y="3" width="4" height="18" rx="1"/></svg>Analytics</a>
   <? } ?>
 </div>
 
 <div style="display: flex; gap: 8px; margin-bottom: 12px;">
-  <button class="ibtn on" id="subtab-ov" onclick="switchSubTab('ov')">📈 Resumen Gráfico</button>
-  <button class="ibtn" id="subtab-q" onclick="switchSubTab('q')">🔎 Explorador de Queries</button>
+  <button class="ibtn on" id="subtab-ov" onclick="switchSubTab('ov')"><svg class="ico ico-btn" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/></svg>Resumen Gráfico</button>
+  <button class="ibtn" id="subtab-q" onclick="switchSubTab('q')"><svg class="ico ico-btn" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>Explorador de Queries</button>
 </div>
 
 <div id="err" class="hidden"></div>
@@ -137,46 +131,114 @@ setTimeout(function(){if(!window.__BQ_OK__){__bqBanner('El script principal no e
 
 <div id="ov">
   <div id="cards">
-      <div class="card c1"><div class="k">💵 Costo total</div><div class="v" id="c-cost">—</div><div class="s" id="c-period"></div></div>
-      <div class="card c2"><div class="k">📦 Datos facturados</div><div class="v" id="c-tb">—</div><div class="s" id="c-tb-sub"></div></div>
-      <div class="card c3"><div class="k">⚡ Slot hours</div><div class="v" id="c-slots">—</div><div class="s">horas de slot</div></div>
-      <div class="card c4"><div class="k">🔢 Queries</div><div class="v" id="c-jobs">—</div><div class="s" id="c-cache"></div></div>
-      <div class="card c5"><div class="k">🤖 Apps Script QPM <span class="badge-live">EN VIVO</span></div><div class="v" id="c-as-qpm">—</div><div class="s" id="c-as-qpm-time">pico en el período</div></div>
+      <div class="card c1">
+        <div class="k"><svg class="ico ico-card" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>Slot hours</div>
+        <div class="v" id="c-slots">—</div>
+        <div class="s" id="c-slots-sub">horas de slot</div>
+        <div id="c-slots-bar-wrap" class="slot-bar-wrap hidden">
+          <div id="c-slots-bar-fill" class="slot-bar-fill normal" style="width:0%"></div>
+        </div>
+      </div>
+      <div class="card c2">
+        <div class="k"><svg class="ico ico-card" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>Margen hoy (Slots)</div>
+        <div class="v" id="c-slots-rem">—</div>
+        <div class="s" id="c-slots-rem-sub">de 600 h límite</div>
+      </div>
+      <div class="card c3">
+        <div class="k"><svg class="ico ico-card" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>Datos procesados</div>
+        <div class="v" id="c-tb">—</div>
+        <div class="s" id="c-tb-sub"></div>
+      </div>
+      <div class="card c4">
+        <div class="k"><svg class="ico ico-card" viewBox="0 0 24 24"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>Queries</div>
+        <div class="v" id="c-jobs">—</div>
+        <div class="s" id="c-cache"></div>
+      </div>
+      <div class="card c5">
+        <div class="k"><svg class="ico ico-card" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>Apps Script QPM <span class="badge-live">EN VIVO</span></div>
+        <div class="v" id="c-as-qpm">—</div>
+        <div class="s" id="c-as-qpm-time">pico en el período</div>
+      </div>
   </div>
 
   <div class="charts">
-    <div class="chartbox"><h3>TB facturados por origen <button class="copybtn" onclick="copyChart('source',this)" title="Copiar gráfico como imagen">⧉ copiar</button></h3><div class="cwrap"><canvas id="ch-source"></canvas></div></div>
-    <div class="chartbox"><h3>TB por usuario <span class="grangrp"><button class="granbtn on" onclick="setGran('day',this)">Día</button><button class="granbtn" onclick="setGran('week',this)">Semana</button><button class="granbtn" onclick="setGran('month',this)">Mes</button></span> <button class="copybtn" onclick="copyChart('trend',this)" title="Copiar gráfico como imagen">⧉ copiar</button></h3><div class="cwrap"><canvas id="ch-trend"></canvas></div></div>
+    <div class="chartbox"><h3>Datos procesados por origen <button class="copybtn" onclick="copyChart('source',this)" title="Copiar gráfico como imagen"><svg class="ico ico-btn" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>Copiar</button></h3><div class="cwrap"><canvas id="ch-source"></canvas></div></div>
+    <div class="chartbox">
+      <h3>
+        <span id="trend-title">Horas slots por usuario</span>
+        <span class="grangrp" style="margin-left:8px;">
+          <button class="granbtn on" id="btn-metric-slots" onclick="setTrendMetric('slots',this)" title="Ver Horas Slots (Tope 600h)">Slots (h)</button>
+          <button class="granbtn" id="btn-metric-tb" onclick="setTrendMetric('tb',this)" title="Ver Datos Procesados">TB procesados</button>
+        </span>
+        <span class="grangrp" style="margin-left:auto;">
+          <button class="granbtn on" onclick="setGran('day',this)">Día</button>
+          <button class="granbtn" onclick="setGran('week',this)">Semana</button>
+          <button class="granbtn" onclick="setGran('month',this)">Mes</button>
+        </span>
+        <button class="copybtn" onclick="copyChart('trend',this)" title="Copiar gráfico como imagen"><svg class="ico ico-btn" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>Copiar</button>
+      </h3>
+      <div class="cwrap"><canvas id="ch-trend"></canvas></div>
+    </div>
   </div>
 
   <div id="proj-section" class="hidden">
-    <h2>🗂️ Consumo por proyecto <span class="cnt" id="proj-cnt">0</span><button class="copybtn" onclick="copyTable('t-projects',this)" title="Copiar tabla (pegá en Sheets)">⧉ copiar tabla</button></h2>
+    <h2><svg class="ico ico-h2" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>Consumo por proyecto <span class="cnt" id="proj-cnt">0</span><button class="copybtn" onclick="copyTable('t-projects',this)" title="Copiar tabla (pegá en Sheets)"><svg class="ico ico-btn" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>Copiar tabla</button></h2>
     <div class="tablebox"><table id="t-projects"></table></div>
   </div>
 
-  <h2>🔌 Consumo por origen <span class="cnt" id="src-cnt">0</span><button class="copybtn" onclick="copyTable('t-sources',this)" title="Copiar tabla (pegá en Sheets)">⧉ copiar tabla</button></h2>
+  <div id="users-section">
+    <h2><svg class="ico ico-h2" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Consumo por usuario <span class="cnt" id="user-cnt">0</span><button class="copybtn" onclick="copyTable('t-users',this)" title="Copiar tabla (pegá en Sheets)"><svg class="ico ico-btn" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>Copiar tabla</button></h2>
+    <div style="font-size:11px;color:var(--muted);margin:-4px 0 8px">Consumo acumulado por usuario. Tocá cualquier fila para filtrar todo el reporte por ese usuario.</div>
+    <div class="tablebox"><table id="t-users"></table></div>
+  </div>
+
+  <h2><svg class="ico ico-h2" viewBox="0 0 24 24"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>Consumo por origen <span class="cnt" id="src-cnt">0</span><button class="copybtn" onclick="copyTable('t-sources',this)" title="Copiar tabla (pegá en Sheets)"><svg class="ico ico-btn" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>Copiar tabla</button></h2>
   <div class="tablebox"><table id="t-sources"></table></div>
 
-  <h2>🏗️ Costo por tabla construida <span class="cnt" id="built-cnt">0</span><button class="copybtn" onclick="copyTable('t-built',this)" title="Copiar tabla (pegá en Sheets)">⧉ copiar tabla</button></h2>
-  <div style="font-size:11px;color:var(--muted);margin:-4px 0 8px">Cuánto costó armar/refrescar cada tabla puntual (CREATE TABLE · INSERT · MERGE). Tocá un encabezado para ordenar; la fila de abajo es el total. Buscá una tabla específica abajo.</div>
-  <div id="built-filter" style="margin-bottom:8px"><input id="f-built" placeholder="🔍 Filtrar por nombre de tabla / dataset" style="width:100%;max-width:420px" oninput="renderBuilt()"/></div>
+  <h2><svg class="ico ico-h2" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>Consumo por tabla construida <span class="cnt" id="built-cnt">0</span><button class="copybtn" onclick="copyTable('t-built',this)" title="Copiar tabla (pegá en Sheets)"><svg class="ico ico-btn" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>Copiar tabla</button></h2>
+  <div style="font-size:11px;color:var(--muted);margin:-4px 0 8px">Cuánto consumió armar/refrescar cada tabla puntual (CREATE TABLE · INSERT · MERGE). Tocá un encabezado para ordenar; la fila de abajo es el total. Buscá una tabla específica abajo.</div>
+  <div id="built-filter" style="margin-bottom:8px"><input id="f-built" placeholder="Filtrar por nombre de tabla / dataset" style="width:100%;max-width:420px" oninput="renderBuilt()"/></div>
   <div class="tablebox"><table id="t-built"></table></div>
 
-  <h2>📊 Google Sheets conectados <span class="cnt" id="sh-cnt">0</span><button class="copybtn" onclick="copyTable('t-sheets',this)" title="Copiar tabla (pegá en Sheets)">⧉ copiar tabla</button></h2>
+  <h2><svg class="ico ico-h2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>Google Sheets conectados <span class="cnt" id="sh-cnt">0</span><button class="copybtn" onclick="copyTable('t-sheets',this)" title="Copiar tabla (pegá en Sheets)"><svg class="ico ico-btn" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>Copiar tabla</button></h2>
   <div class="tablebox"><table id="t-sheets"></table></div>
 
-  <h2>🔁 Consultas repetidas <span class="cnt" id="rep-cnt">0</span><button class="copybtn" onclick="copyTable('t-repeated',this)" title="Copiar tabla (pegá en Sheets)">⧉ copiar tabla</button></h2>
+  <h2><svg class="ico ico-h2" viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>Consultas repetidas <span class="cnt" id="rep-cnt">0</span><button class="copybtn" onclick="copyTable('t-repeated',this)" title="Copiar tabla (pegá en Sheets)"><svg class="ico ico-btn" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>Copiar tabla</button></h2>
   <div style="font-size:11px;color:var(--muted);margin:-4px 0 8px">Mismo SQL ejecutado 2+ veces en el período — lo que más consumís repitiendo.</div>
   <div class="tablebox"><table id="t-repeated"></table></div>
 
   <details id="quota-panel">
-    <summary>📐 Límites de cuota — Apps Script y Sheets API</summary>
+    <summary><svg class="ico ico-h2" viewBox="0 0 24 24"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>Límites de cuota — Slots BigQuery, Apps Script y Sheets API</summary>
     <div class="qbody">
       <div style="font-size:11px;color:var(--muted);margin:8px 0 6px;line-height:1.5">
-        Topes de Google (referencia 2026), <b>no</b> consumo actual. La fuente viva es la consola de Google Cloud de tu proyecto y la doc oficial (links abajo). Los topes por-cuenta dependen de si la app corre bajo una cuenta <b>gratis</b> (@gmail.com) o <b>Workspace</b> (@pedidosya.com → tu caso).
+        Topes de Google y políticas de PedidosYa (referencia 2026). La fuente viva es la consola de Google Cloud y el DataSite oficial.
       </div>
 
-      <div class="quota-sub">🚥 Semáforo de Consultas por Minuto (QPM) <span>· pico detectado en el período</span></div>
+      <div class="quota-sub"><svg class="ico ico-sm" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>Control de Cuota Diaria de Slots BigQuery (PedidosYa) <span>· hoy vs límite oficial</span></div>
+      <div class="tablebox" style="margin-bottom:14px;"><table class="quota-tbl">
+        <thead><tr><th>Recurso</th><th>Tope Oficial PeYa</th><th>Consumo Hoy</th><th>Margen Restante</th><th>Estado</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><b>Horas Slots Diarias (Usuario)</b></td>
+            <td>600 h / día <span style="font-size:10px;color:var(--muted);">(aviso por mail al llegar a 300 h)</span></td>
+            <td id="q-slot-user-today" style="font-weight:700">—</td>
+            <td id="q-slot-user-remaining" class="mono">—</td>
+            <td><span id="q-slot-user-badge" class="badge b-none">—</span></td>
+          </tr>
+          <tr>
+            <td><b>Horas Slots Diarias (Total Proyecto)</b></td>
+            <td>Pool de slots compartido</td>
+            <td id="q-slot-total-today" style="font-weight:700">—</td>
+            <td id="q-slot-total-remaining" class="mono">—</td>
+            <td><span id="q-slot-total-badge" class="badge b-none">—</span></td>
+          </tr>
+        </tbody>
+      </table></div>
+      <div style="font-size:11px;color:var(--muted);margin:-8px 0 14px;line-height:1.4">
+        <b>Política de PedidosYa:</b> Al consumir 300 h de slots en el día recibís el correo de advertencia (50% de cuota). Si alcanzás las 600 h de slots, GCP desactiva automáticamente la posibilidad de seguir ejecutando consultas hasta el día de mañana (medianoche UTC). Podés solicitar el desbloqueo mediante un ticket de Service Desk o consultar al equipo de Data.
+      </div>
+
+      <div class="quota-sub"><svg class="ico ico-sm" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>Semáforo de Consultas por Minuto (QPM) <span>· pico detectado en el período</span></div>
       <div class="tablebox" style="margin-bottom:14px;"><table class="quota-tbl">
         <thead><tr><th>Origen</th><th>Tope Google</th><th>Consumo Máximo Detectado</th><th>Minuto Pico</th><th>Estado</th></tr></thead>
         <tbody>
@@ -204,7 +266,7 @@ setTimeout(function(){if(!window.__BQ_OK__){__bqBanner('El script principal no e
         </tbody>
       </table></div>
 
-      <div class="quota-sub">🧩 Apps Script <span>· la cuenta que ejecuta esta app</span></div>
+      <div class="quota-sub"><svg class="ico ico-sm" viewBox="0 0 24 24"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>Apps Script <span>· la cuenta que ejecuta esta app</span></div>
       <div class="tablebox"><table class="quota-tbl">
         <thead><tr><th>Recurso</th><th>Tope</th><th>Uso en esta app</th></tr></thead>
         <tbody>
@@ -217,7 +279,7 @@ setTimeout(function(){if(!window.__BQ_OK__){__bqBanner('El script principal no e
         </tbody>
       </table></div>
 
-      <div class="quota-sub">📊 Sheets API <span>· proyecto de Google Cloud · lo consumen las Hojas conectadas</span></div>
+      <div class="quota-sub"><svg class="ico ico-sm" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>Sheets API <span>· proyecto de Google Cloud · lo consumen las Hojas conectadas</span></div>
       <div class="tablebox"><table class="quota-tbl">
         <thead><tr><th>Recurso</th><th>Tope</th><th>Nota</th></tr></thead>
         <tbody>
@@ -234,8 +296,8 @@ setTimeout(function(){if(!window.__BQ_OK__){__bqBanner('El script principal no e
   <div id="filters">
     <select id="f-source" onchange="renderQueries()"><option value="">Todos los origenes</option></select>
     <select id="f-stmt" onchange="renderQueries()"><option value="">Todos los tipos</option></select>
-    <input id="f-search" placeholder="🔍 Buscar query / usuario / job id" style="flex:1;min-width:200px" oninput="renderQueries()"/>
-    <button class="copybtn" onclick="copyTable('t-queries',this)" title="Copiar tabla con totales (pegá en Sheets)">⧉ copiar tabla</button>
+    <input id="f-search" placeholder="Buscar query / usuario / job id" style="flex:1;min-width:200px" oninput="renderQueries()"/>
+    <button class="copybtn" onclick="copyTable('t-queries',this)" title="Copiar tabla con totales (pegá en Sheets)"><svg class="ico ico-btn" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>Copiar tabla</button>
   </div>
   <div class="tablebox"><table id="t-queries"></table></div>
   <div style="color:var(--muted);font-size:11px;margin-top:8px;text-align:center;">Top 100 queries por consumo. Tocá un encabezado para ordenar.</div>
@@ -271,7 +333,7 @@ function showErr(msg){
     if (lower.indexOf('jobs.create') !== -1 || lower.indexOf('access denied') !== -1 || lower.indexOf('permission denied') !== -1) {
       var helpDiv = document.createElement('div');
       helpDiv.style.cssText = 'margin-top:10px;font-size:11.5px;color:var(--text);background:rgba(239,68,68,0.08);padding:10px;border-radius:6px;border:1px solid rgba(239,68,68,0.2);line-height:1.4;text-align:left;';
-      helpDiv.innerHTML = '💡 <b>¿Falta de Permisos en BigQuery?</b><br>' +
+      helpDiv.innerHTML = '<b>¿Falta de Permisos en BigQuery?</b><br>' +
                           'Este error ocurre cuando tu cuenta de Google no tiene acceso suficiente en Google Cloud. ' +
                           'Asegurate de que tu usuario tenga asignado el rol <b>BigQuery User</b> (u otro rol con permiso <code>bigquery.jobs.create</code>) ' +
                           'en el proyecto seleccionado de GCP. Podés solicitar este acceso al equipo de Datos / Mesa de Ayuda.';
@@ -280,7 +342,7 @@ function showErr(msg){
     
     if (lower.indexOf('access') !== -1 || lower.indexOf('permission') !== -1 || lower.indexOf('authoriz') !== -1 || lower.indexOf('autoriz') !== -1 || lower.indexOf('no tienes acceso') !== -1 || lower.indexOf('permiso') !== -1 || lower.indexOf('error') !== -1) {
       var btn = document.createElement('button');
-      btn.textContent = '🔓 Forzar Autorización de Google';
+      btn.textContent = 'Forzar Autorización de Google';
       btn.style.cssText = 'display:block;margin:10px auto 0;padding:6px 12px;background:#3b82f6;color:#fff;border:none;border-radius:6px;font-weight:bold;cursor:pointer;font-family:inherit;';
       btn.onclick = function() {
         if (gAppUrl) {
@@ -305,7 +367,7 @@ function loadMyProjects(callback){
       var sel=g('cfg-project');
       var oldVal=sel.value;
       sel.textContent='';
-      var optAll=document.createElement('option');optAll.value='all';optAll.textContent='🌐 Todos mis proyectos';
+      var optAll=document.createElement('option');optAll.value='all';optAll.textContent='Todos mis proyectos';
       sel.appendChild(optAll);
       (r.projects||[]).forEach(function(p){
         var o=document.createElement('option');o.value=p.id;o.textContent=p.friendlyName||p.id;
@@ -325,7 +387,7 @@ function loadDashboard(forceBypassCache){
   var r=getRange(), ue=curUser(), platform=g('cfg-platform').value||'all';
   gProject=g('cfg-project').value||'all';
   gRegion=g('cfg-region').value||'all';
-  gPrice=parseFloat(g('cfg-price').value)||6.25;
+  gPrice=0;
 
   var key=ckey(r,ue,platform);
   var cache=forceBypassCache?null:loadCache(key);
@@ -384,7 +446,7 @@ function loadAllHistoryBehind(){
 }
 
 function setHistLoading(on){ var el=g('cache-lbl'); if(el)el.textContent=on?'precargando '+HISTORY_MONTHS+' meses por detrás…':''; }
-function markHistReady(){ var el=g('cache-lbl'); if(el)el.textContent='📦 '+HISTORY_MONTHS+' meses precargados · ampliá el rango para verlos'; }
+function markHistReady(){ var el=g('cache-lbl'); if(el)el.textContent='Histórico '+HISTORY_MONTHS+' meses precargados · ampliá el rango para verlos'; }
 
 function ymd(d){
   var m=String(d.getMonth()+1),day=String(d.getDate());
@@ -410,7 +472,7 @@ function render(d, isPartial){
     if(!isPartial) {
       clearPanels();
       var present=realUsers(d.users);
-      var msg='⚠️ No hay queries de "'+ueNow+'" en '+(gProject==='all'?'tus proyectos':gProject)+' para este período. ';
+      var msg='No hay queries de "'+ueNow+'" en '+(gProject==='all'?'tus proyectos':gProject)+' para este período. ';
       if(present.length<=1)
         msg+='Ojo: el dashboard sólo trajo '+present.length+' usuario'+(present.length===1?(' ('+present[0]+')'):'')+' → probablemente falte el permiso bigquery.jobs.listAll (corré debugFull).';
       else
@@ -427,20 +489,61 @@ function render(d, isPartial){
   var r=getRange(),s=d.summary||{};
   var tb=parseFloat(s.total_tb||0);
 
-  // Calcular diferencia en días y proyección a fin de mes (30 días)
+  // Calcular diferencia en días y proyección de datos a fin de mes (30 días)
   var fDate = new Date(r.from + 'T00:00:00');
   var tDate = new Date(r.to + 'T00:00:00');
   var diffDays = Math.round((tDate - fDate) / 86400000) + 1;
   if (!diffDays || diffDays <= 0) diffDays = 1;
 
-  var projCost = (s.total_cost_usd / diffDays) * 30;
   var projTb = (tb / diffDays) * 30;
 
-  g('c-cost').textContent=fmtUSD(s.total_cost_usd);
-  g('c-period').innerHTML=r.from+' → '+r.to + (diffDays < 30 ? '<br><span style="font-weight:700; color:var(--accent);">Proy: ' + fmtUSD(projCost) + '/mes</span>' : '');
   g('c-tb').textContent=tb>=1?tb.toFixed(1)+' TB':(tb*1000).toFixed(1)+' GB';
-  g('c-tb-sub').innerHTML='≈ '+fmtUSD(tb*gPrice)+' est.' + (diffDays < 30 ? '<br><span style="font-weight:700; color:var(--green);">Proy: ' + (projTb >= 1 ? projTb.toFixed(1)+' TB' : (projTb*1000).toFixed(1)+' GB') + '/mes</span>' : '');
+  g('c-tb-sub').innerHTML=r.from+' → '+r.to + (diffDays < 30 ? '<br><span style="font-weight:700; color:var(--green);">Proy: ' + (projTb >= 1 ? projTb.toFixed(1)+' TB' : (projTb*1000).toFixed(1)+' GB') + '/mes</span>' : '');
   g('c-slots').textContent=num(s.total_slot_hours)+' h';
+  
+  // Semáforo y barra de progreso de slot hours vs límite oficial de PedidosYa (600h)
+  var sq = d.slotQuota || {};
+  var userSlotsToday = sq.todaySlotHours !== undefined ? sq.todaySlotHours : (d.rateLimits ? d.rateLimits.userSlotHoursToday : 0);
+  var barWrap = g('c-slots-bar-wrap');
+  var barFill = g('c-slots-bar-fill');
+  var slotsSub = g('c-slots-sub');
+
+  var rem = Math.max(0, 600 - userSlotsToday);
+  var pct = Math.round((userSlotsToday / 600) * 100);
+
+  var cardRem = g('c-slots-rem');
+  if (cardRem) {
+    cardRem.textContent = num(rem) + ' h';
+    var cardRemSub = g('c-slots-rem-sub');
+    if (cardRemSub) {
+      if (userSlotsToday >= 600) cardRemSub.innerHTML = '<span style="color:var(--red);font-weight:700">[Bloqueo activo 600h]</span>';
+      else if (userSlotsToday >= 300) cardRemSub.innerHTML = '<span style="color:var(--orange);font-weight:700">' + pct + '% consumido hoy</span>';
+      else cardRemSub.innerHTML = '<span style="color:var(--green);font-weight:600">' + pct + '% consumido hoy</span>';
+    }
+  }
+
+  if (userSlotsToday > 0 || r.from === r.to) {
+    if (barWrap) barWrap.classList.remove('hidden');
+    if (barFill) {
+      barFill.style.width = Math.min(100, Math.max(3, pct)) + '%';
+      barFill.className = 'slot-bar-fill ' + (pct >= 100 ? 'crit' : (pct >= 50 ? 'warn' : 'normal'));
+    }
+    var statusText = '';
+    if (userSlotsToday >= 600) {
+      statusText = '<span style="color:var(--red);font-weight:700">[LÍMITE 600h SUPERADO]</span>';
+    } else if (userSlotsToday >= 300) {
+      statusText = '<span style="color:var(--orange);font-weight:700">[ALERTA 50% - 300/600h]</span>';
+    } else {
+      statusText = '<span style="color:var(--green);font-weight:600">' + rem.toFixed(1) + 'h restantes</span>';
+    }
+    if (slotsSub) {
+      slotsSub.innerHTML = 'Hoy: <b>' + num(userSlotsToday) + '</b>/600 h (' + pct + '%)<br>' + statusText;
+    }
+  } else {
+    if (barWrap) barWrap.classList.add('hidden');
+    if (slotsSub) slotsSub.textContent = 'horas de slot acumuladas';
+  }
+
   g('c-jobs').textContent=fmtNum(s.total_jobs);
   g('c-cache').textContent=fmtNum(s.cache_hits)+' desde cache';
 
@@ -458,6 +561,7 @@ function render(d, isPartial){
 
   drawCharts(d);
   renderProjects();
+  renderUsers();
   renderSources();
   renderBuilt();
   renderSheets();
@@ -470,7 +574,10 @@ function render(d, isPartial){
 }
 
 function clearPanels(){
-  g('c-cost').textContent='—';g('c-tb').textContent='—';g('c-slots').textContent='—';g('c-jobs').textContent='—';
+  g('c-slots').textContent='—';if(g('c-slots-rem'))g('c-slots-rem').textContent='—';g('c-tb').textContent='—';g('c-jobs').textContent='—';
+  var bw=g('c-slots-bar-wrap');if(bw)bw.classList.add('hidden');
+  var cs=g('c-slots-sub');if(cs)cs.textContent='horas de slot';
+  if(g('c-slots-rem-sub'))g('c-slots-rem-sub').textContent='de 600 h límite';
   g('ov').classList.add('hidden');g('q').classList.add('hidden');
 }
 
@@ -483,7 +590,7 @@ function fillUserSelect(users){
 function fillRegionSelect(regions){
   var sel=g('cfg-region');if(!sel)return;var oldVal=sel.value;
   sel.textContent='';
-  var optAll=document.createElement('option');optAll.value='all';optAll.textContent='🌍 Todas las zonas';
+  var optAll=document.createElement('option');optAll.value='all';optAll.textContent='Todas las zonas';
   sel.appendChild(optAll);
   (regions||[]).forEach(function(r){
     var o=document.createElement('option');o.value=r.region;o.textContent=r.region;
@@ -507,10 +614,24 @@ function drawCharts(d){
     options:{responsive:true,maintainAspectRatio:false,cutout:'62%',
       plugins:{legend:{position:'right',labels:{color:tick,boxWidth:11,padding:9,font:{size:11}}},
         tooltip:{callbacks:{label:function(c){
-          var r=src[c.dataIndex];return ' '+c.label+': '+fmtTBval(c.parsed)+'  ('+fmtUSD(r.cost_usd)+')';}}}}}
+          return ' '+c.label+': '+fmtTBval(c.parsed);}}}}}
   });
 
   drawTrend(d);
+}
+
+var trendMetric = 'slots';
+
+function setTrendMetric(m, btn){
+  trendMetric = m;
+  var parent = btn.parentNode;
+  parent.querySelectorAll('button').forEach(function(b){ b.classList.toggle('on', b === btn); });
+  var title = g('trend-title');
+  if (title) {
+    if (m === 'slots') title.textContent = 'Horas slots por usuario';
+    else title.textContent = 'Datos procesados (TB) por usuario';
+  }
+  if (gData) drawTrend(gData);
 }
 
 function drawTrend(d){
@@ -541,14 +662,14 @@ function drawTrend(d){
       daysMap[groupKey] = {
         label: label,
         b: trend.users.map(function(){return 0;}),
-        c: trend.users.map(function(){return 0;})
+        s: trend.users.map(function(){return 0;})
       };
       groupedDays.push(daysMap[groupKey]);
     }
 
     for (var i = 0; i < trend.users.length; i++) {
       daysMap[groupKey].b[i] += (r.b[i] || 0);
-      daysMap[groupKey].c[i] += (r.c[i] || 0);
+      daysMap[groupKey].s[i] += (r.s ? (r.s[i] || 0) : 0);
     }
   });
 
@@ -560,7 +681,10 @@ function drawTrend(d){
       datasets:trend.users.map(function(u,idx){
         return {
           label:u,
-          data:groupedDays.map(function(r){return r.b[idx];}),
+          data:groupedDays.map(function(r){
+            if (trendMetric === 'slots') return r.s[idx];
+            return r.b[idx];
+          }),
           backgroundColor:getUserColor(u,idx),
           stack:'s'
         };
@@ -579,7 +703,11 @@ function drawTrend(d){
           callbacks:{
             label:function(c){
               var r = groupedDays[c.dataIndex];
-              return ' ' + c.dataset.label + ': ' + fmtTBval(c.parsed.y) + ' (' + fmtUSD(r.c[c.datasetIndex]) + ')';
+              var u = c.dataset.label;
+              if (trendMetric === 'slots') {
+                return ' ' + u + ': ' + num(r.s[c.datasetIndex]) + ' h slots';
+              }
+              return ' ' + u + ': ' + fmtTBval(c.parsed.y);
             }
           }
         }
@@ -604,8 +732,7 @@ var COLS_PR=[
   {k:'project',label:'Proyecto',render:function(r){return td(r.project,'mono');}},
   {k:'jobs',label:'Queries',align:'r',render:function(r){return td(fmtNum(r.jobs),null,'r');}},
   {k:'total_bytes',label:'Datos',align:'r',render:function(r){return td(fmtTB(r.total_bytes),null,'r');}},
-  {k:'slot_hours',label:'Slot hours',align:'r',render:function(r){return td(num(r.slot_hours)+' h',null,'r');}},
-  {k:'cost_usd',label:'Costo',align:'r',render:function(r){return td(fmtUSD(r.cost_usd),null,'r');}}
+  {k:'slot_hours',label:'Slot hours',align:'r',render:function(r){return td(num(r.slot_hours)+' h',null,'r');}}
 ];
 function renderProjects(){
   var rows=(gData&&gData.byProject)||[];
@@ -624,17 +751,58 @@ function renderProjects(){
   }
 }
 
+var COLS_USR=[
+  {k:'user',label:'Usuario',render:function(r){return td(r.user,'mono');}},
+  {k:'total_jobs',label:'Queries',align:'r',render:function(r){return td(fmtNum(r.total_jobs),null,'r');}},
+  {k:'total_bytes',label:'Datos',align:'r',render:function(r){return td(fmtTB(r.total_bytes),null,'r');}},
+  {k:'slot_hours',label:'Slot hours',align:'r',render:function(r){
+    var sh = r.slot_hours || 0;
+    var c = td(num(sh)+' h',null,'r');
+    if (sh >= 600) {
+      c.innerHTML = '<span class="badge b-crit" title="Límite diario de 600h superado">' + num(sh) + ' h [Bloqueado]</span>';
+    } else if (sh >= 300) {
+      c.innerHTML = '<span class="badge b-warn" title="Alerta de mitad de cuota (300h)">' + num(sh) + ' h [Alerta 50%]</span>';
+    }
+    return c;
+  }}
+];
+function sumUsr(sorted){
+  var tj=0,tb=0,sh=0;
+  sorted.forEach(function(r){tj+=r.total_jobs;tb+=r.total_bytes;sh+=r.slot_hours;});
+  return ['Σ TOTAL ('+sorted.length+')',fmtNum(tj),fmtTB(tb),num(sh)+' h'];
+}
+function renderUsers(){
+  var raw=(gData&&gData.byUser)||[];
+  var rows=realUsers(raw.map(function(x){return x.user;})).map(function(u){
+    return raw.find(function(x){return x.user === u;});
+  }).filter(Boolean);
+  if(rows.length>0){
+    g('users-section').classList.remove('hidden');
+    set('user-cnt',rows.length);
+    buildTable('t-users',COLS_USR,rows,sortUsr,renderUsers,sumUsr,null,function(r){
+      var uInp = g('cfg-user');
+      if(uInp){
+        uInp.value = r.user;
+        var uGroup = g('cfg-user-group');
+        if(uGroup) uGroup.classList.remove('hidden');
+        loadDashboard();
+      }
+    });
+  }else{
+    g('users-section').classList.add('hidden');
+  }
+}
+
 var COLS_SRC=[
   {k:'source',label:'Origen',render:function(r){return badgeCell(r.source);}},
   {k:'jobs',label:'Queries',align:'r',render:function(r){return td(fmtNum(r.jobs),null,'r');}},
-  {k:'total_bytes',label:'Datos facturados',align:'r',render:function(r){return td(fmtTB(r.total_bytes),null,'r');}},
-  {k:'slot_hours',label:'Slot hours',align:'r',render:function(r){return td(num(r.slot_hours)+' h',null,'r');}},
-  {k:'cost_usd',label:'Costo total',align:'r',render:function(r){return td(fmtUSD(r.cost_usd),null,'r');}}
+  {k:'total_bytes',label:'Datos procesados',align:'r',render:function(r){return td(fmtTB(r.total_bytes),null,'r');}},
+  {k:'slot_hours',label:'Slot hours',align:'r',render:function(r){return td(num(r.slot_hours)+' h',null,'r');}}
 ];
 function sumSrc(sorted){
-  var tj=0,tb=0,sh=0,tc=0;
-  sorted.forEach(function(r){tj+=r.jobs;tb+=r.total_bytes;sh+=r.slot_hours;tc+=r.cost_usd;});
-  return ['Σ TOTAL ('+sorted.length+')',fmtNum(tj),fmtTB(tb),num(sh)+' h',fmtUSD(tc)];
+  var tj=0,tb=0,sh=0;
+  sorted.forEach(function(r){tj+=r.jobs;tb+=r.total_bytes;sh+=r.slot_hours;});
+  return ['Σ TOTAL ('+sorted.length+')',fmtNum(tj),fmtTB(tb),num(sh)+' h'];
 }
 function renderSources(){
   buildTable('t-sources',COLS_SRC,(gData&&gData.bySource)||[],sortSrc,renderSources,sumSrc);
@@ -643,71 +811,105 @@ function renderSources(){
 var COLS_BL=[
   {k:'table_name',label:'Tabla / Dataset de destino',render:function(r){return td(r.table_name,'mono');}},
   {k:'jobs',label:'Refrescos',align:'r',render:function(r){return td(fmtNum(r.jobs),null,'r');}},
-  {k:'total_bytes',label:'Billed Bytes',align:'r',render:function(r){return td(fmtTB(r.total_bytes),null,'r');}},
-  {k:'slot_hours',label:'Slot Hours',align:'r',render:function(r){return td(num(r.slot_hours)+' h',null,'r');}},
-  {k:'cost_usd',label:'Costo acumulado',align:'r',render:function(r){return td(fmtUSD(r.cost_usd),null,'r');}}
+  {k:'total_bytes',label:'Datos procesados',align:'r',render:function(r){return td(fmtTB(r.total_bytes),null,'r');}},
+  {k:'slot_hours',label:'Slot Hours',align:'r',render:function(r){return td(num(r.slot_hours)+' h',null,'r');}}
 ];
 function sumBl(sorted){
-  var tj=0,tb=0,sh=0,tc=0;
-  sorted.forEach(function(r){tj+=r.jobs;tb+=r.total_bytes;sh+=r.slot_hours;tc+=r.cost_usd;});
-  return ['Σ FILTRADO ('+sorted.length+')',fmtNum(tj),fmtTB(tb),num(sh)+' h',fmtUSD(tc)];
+  var tj=0,tb=0,sh=0;
+  sorted.forEach(function(r){tj+=r.jobs;tb+=r.total_bytes;sh+=r.slot_hours;});
+  return ['Σ FILTRADO ('+sorted.length+')',fmtNum(tj),fmtTB(tb),num(sh)+' h'];
 }
 function renderBuilt(){
   var raw=(gData&&gData.builtTables)||[];
   var filter=g('f-built').value.trim().toLowerCase();
   var filtered=filter?raw.filter(function(r){return r.table_name.toLowerCase().indexOf(filter)!==-1;}):raw;
   set('built-cnt',filtered.length);
-  var maxCost = filtered.length ? Math.max.apply(Math, filtered.map(function(x){return x.cost_usd || 0;})) : 1;
-  if (maxCost <= 0) maxCost = 1;
-  buildTable('t-built',COLS_BL,filtered,sortSh,renderBuilt,sumBl,function(r){
-    return heatBg((r.cost_usd || 0) / maxCost);
+  var maxSlots = filtered.length ? Math.max.apply(Math, filtered.map(function(x){return x.slot_hours || 0;})) : 1;
+  if (maxSlots <= 0) maxSlots = 1;
+  buildTable('t-built',COLS_BL,filtered,sortSrc,renderBuilt,sumBl,function(r){
+    return heatBg((r.slot_hours || 0) / maxSlots);
   });
 }
 
 var COLS_SH=[
   {k:'name',label:'Planilla',render:function(r){return linkCell(r.link,r.name);}},
   {k:'jobs',label:'Refrescos',align:'r',render:function(r){return td(fmtNum(r.jobs),null,'r');}},
-  {k:'bytes',label:'Datos facturados',align:'r',render:function(r){return td(fmtTB(r.bytes),null,'r');}},
-  {k:'cost',label:'Costo acumulado',align:'r',render:function(r){return td(fmtUSD(r.cost),null,'r');}}
+  {k:'bytes',label:'Datos procesados',align:'r',render:function(r){return td(fmtTB(r.bytes),null,'r');}}
 ];
 function sumSh(sorted){
-  var tj=0,tb=0,tc=0;
-  sorted.forEach(function(r){tj+=r.jobs;tb+=r.bytes;tc+=r.cost;});
-  return ['Σ TOTAL ('+sorted.length+')',fmtNum(tj),fmtTB(tb),fmtUSD(tc)];
+  var tj=0,tb=0;
+  sorted.forEach(function(r){tj+=r.jobs;tb+=r.bytes;});
+  return ['Σ TOTAL ('+sorted.length+')',fmtNum(tj),fmtTB(tb)];
 }
 function renderSheets(){
-  buildTable('t-sheets',COLS_SH,(gData&&gData.sheetsJobs)||[],sortSh,renderSheets,sumSh);
+  buildTable('t-sheets',COLS_SH,(gData&&gData.sheetsJobs)||[],sortSrc,renderSheets,sumSh);
 }
 
 var COLS_REP=[
   {k:'query_name',label:'Nombre de la Query',render:function(r){return td(r.query_name || '(no declarada)', 'namecell');}},
   {k:'query_preview',label:'SQL Preview',render:function(r){return qCell(r.query_preview);}},
   {k:'count',label:'Ejecuciones',align:'r',render:function(r){return td(fmtNum(r.count),null,'r');}},
-  {k:'total_bytes',label:'Datos facturados',align:'r',render:function(r){return td(fmtTB(r.total_bytes),null,'r');}},
-  {k:'slot_hours',label:'Slot Hours',align:'r',render:function(r){return td(num(r.slot_hours)+' h',null,'r');}},
-  {k:'cost_usd',label:'Costo total',align:'r',render:function(r){return td(fmtUSD(r.cost_usd),null,'r');}}
+  {k:'total_bytes',label:'Datos procesados',align:'r',render:function(r){return td(fmtTB(r.total_bytes),null,'r');}},
+  {k:'slot_hours',label:'Slot Hours',align:'r',render:function(r){return td(num(r.slot_hours)+' h',null,'r');}}
 ];
 function sumRep(sorted){
-  var tj=0,tb=0,sh=0,tc=0;
-  sorted.forEach(function(r){tj+=r.count;tb+=r.total_bytes;sh+=r.slot_hours;tc+=r.cost_usd;});
-  return ['Σ TOTAL ('+sorted.length+')','',fmtNum(tj),fmtTB(tb),num(sh)+' h',fmtUSD(tc)];
+  var tj=0,tb=0,sh=0;
+  sorted.forEach(function(r){tj+=r.count;tb+=r.total_bytes;sh+=r.slot_hours;});
+  return ['Σ TOTAL ('+sorted.length+')','',fmtNum(tj),fmtTB(tb),num(sh)+' h'];
 }
 function renderRepeated(){
   var raw = (gData && gData.repeatedQueries) || [];
   set('rep-cnt', raw.length);
-  var maxCount = raw.length ? Math.max.apply(Math, raw.map(function(x){return x.count || 0;})) : 1;
-  if (maxCount <= 0) maxCount = 1;
-  buildTable('t-repeated',COLS_REP,raw,sortSh,renderRepeated,sumRep,function(r){
-    return heatBg((r.count || 0) / maxCount);
+  var maxSlots = raw.length ? Math.max.apply(Math, raw.map(function(x){return x.slot_hours || 0;})) : 1;
+  if (maxSlots <= 0) maxSlots = 1;
+  buildTable('t-repeated',COLS_REP,raw,sortSrc,renderRepeated,sumRep,function(r){
+    return heatBg((r.slot_hours || 0) / maxSlots);
   }, function(r){
     openSqlModal(r.query_name, r.query_full || r.query_preview);
   });
 }
 
 function renderQuotas(d){
-  if(!d || !d.rateLimits) return;
-  var rl = d.rateLimits;
-  
+  if(!d) return;
+  var rl = d.rateLimits || {};
+
+  // Control de cuota diaria de slots BigQuery (PedidosYa: límite 600h, alerta 300h)
+  var sq = d.slotQuota || {};
+  var userSlots = sq.todaySlotHours !== undefined ? sq.todaySlotHours : (rl.userSlotHoursToday || 0);
+  var totalSlots = sq.totalSlotHoursToday !== undefined ? sq.totalSlotHoursToday : (rl.totalSlotHoursToday || 0);
+  var userRem = Math.max(0, 600 - userSlots);
+  var userPct = Math.round((userSlots / 600) * 100);
+
+  set('q-slot-user-today', num(userSlots) + ' h (' + userPct + '%)');
+  set('q-slot-user-remaining', userRem > 0 ? (num(userRem) + ' h disponibles') : '0 h (agotado)');
+  var bUserSlot = g('q-slot-user-badge');
+  if (bUserSlot) {
+    if (userSlots === 0) {
+      bUserSlot.textContent = 'Sin consumo hoy';
+      bUserSlot.className = 'badge b-none';
+    } else if (userSlots < 300) {
+      bUserSlot.textContent = 'Normal (< 300h)';
+      bUserSlot.className = 'badge b-gsheet';
+    } else if (userSlots < 500) {
+      bUserSlot.textContent = 'Alerta 50% (300h+)';
+      bUserSlot.className = 'badge b-warn';
+    } else if (userSlots < 600) {
+      bUserSlot.textContent = 'Crítico (< 100h restantes)';
+      bUserSlot.className = 'badge b-crit';
+    } else {
+      bUserSlot.textContent = 'BLOQUEADO (600h)';
+      bUserSlot.className = 'badge b-crit';
+    }
+  }
+
+  set('q-slot-total-today', num(totalSlots) + ' h');
+  set('q-slot-total-remaining', 'Pool dinámico');
+  var bTotSlot = g('q-slot-total-badge');
+  if (bTotSlot) {
+    bTotSlot.textContent = totalSlots > 0 ? 'Activo' : 'Sin consumo';
+    bTotSlot.className = 'badge ' + (totalSlots > 0 ? 'b-bq' : 'b-none');
+  }
+
   // Total QPM
   var qTotal = rl.peakQpm || 0;
   set('q-peak-total', qTotal + ' qpm');
@@ -757,7 +959,20 @@ var COLS_Q=[
   {k:'source',label:'Origen',render:function(r){return badgeCell(r.source);}},
   {k:'statementType',label:'Tipo',render:function(r){return stmtCell(r.statementType);}},
   {k:'totalBytesBilled',label:'Datos',align:'r',render:function(r){return td(fmtTB(r.totalBytesBilled),null,'r');}},
-  {k:'cost_usd',label:'Costo',align:'r',render:function(r){return td(fmtUSD(r.cost_usd),null,'r');}},
+  {k:'slot_hours',label:'Slot hours',align:'r',render:function(r){
+    var sh = r.slot_hours || 0;
+    var ms = r.totalSlotMs || 0;
+    var text = fmtSlotTime(sh, ms);
+    var c = td(text, null, 'r');
+    if (sh >= 10) {
+      c.style.fontWeight = '700';
+      c.style.color = 'var(--red)';
+    } else if (sh >= 2) {
+      c.style.fontWeight = '600';
+      c.style.color = 'var(--orange)';
+    }
+    return c;
+  }},
   {k:'query',label:'SQL',render:function(r){return qCell(r.query);}},
   {k:'jobId',label:'Job ID',render:function(r){var el=td(r.jobId,'mono');el.style.fontSize='10px';el.title=r.jobId;return el;}}
 ];
@@ -859,31 +1074,38 @@ function mergeUserTrend(a,b){
   a=a||{users:[],days:[]};b=b||{users:[],days:[]};
   var map={};
   function ingest(ut){var us=ut.users||[];(ut.days||[]).forEach(function(rec){if(!map[rec.day])map[rec.day]={};
-    for(var i=0;i<us.length;i++){var u=us[i];if(!map[rec.day][u])map[rec.day][u]=[0,0];
-      map[rec.day][u][0]+=(rec.b&&rec.b[i])||0;map[rec.day][u][1]+=(rec.c&&rec.c[i])||0;}});}
+    for(var i=0;i<us.length;i++){var u=us[i];if(!map[rec.day][u])map[rec.day][u]=[0,0,0];
+      map[rec.day][u][0]+=(rec.b&&rec.b[i])||0;map[rec.day][u][1]+=(rec.c&&rec.c[i])||0;map[rec.day][u][2]+=(rec.s&&rec.s[i])||0;}});}
   ingest(a);ingest(b);
   var tot={};Object.keys(map).forEach(function(d){Object.keys(map[d]).forEach(function(u){tot[u]=(tot[u]||0)+map[d][u][0];});});
   var named=Object.keys(tot).filter(function(u){return u!=='Otros';}).sort(function(x,y){return tot[y]-tot[x];});
   var top=named.slice(0,12),hasOtros=(named.length>12)||('Otros' in tot);
   var users=top.concat(hasOtros?['Otros']:[]),idx={};users.forEach(function(u,i){idx[u]=i;});
   var oi=hasOtros?idx['Otros']:-1;
-  var days=Object.keys(map).sort().map(function(d){var bb=users.map(function(){return 0;}),cc=users.map(function(){return 0;});
-    Object.keys(map[d]).forEach(function(u){var i=(idx[u]!==undefined)?idx[u]:oi;if(i<0)return;bb[i]+=map[d][u][0];cc[i]+=map[d][u][1];});
-    return {day:d,b:bb,c:cc};});
+  var days=Object.keys(map).sort().map(function(d){var bb=users.map(function(){return 0;}),cc=users.map(function(){return 0;}),ss=users.map(function(){return 0;});
+    Object.keys(map[d]).forEach(function(u){var i=(idx[u]!==undefined)?idx[u]:oi;if(i<0)return;bb[i]+=map[d][u][0];cc[i]+=map[d][u][1];ss[i]+=map[d][u][2];});
+    return {day:d,b:bb,c:cc,s:ss};});
   return {users:users,days:days};
 }
 function mergeDash(a,b){
   if(!a)return b;if(!b)return a;
-  var sa=a.summary||{},sb=b.summary||{},tj=(sa.total_jobs||0)+(sb.total_jobs||0),tc=r4((sa.total_cost_usd||0)+(sb.total_cost_usd||0));
+  var sa=a.summary||{},sb=b.summary||{},tj=(sa.total_jobs||0)+(sb.total_jobs||0);
   var res = {
     ok:true,multiMode:true,loops:[],triggerActive:a.triggerActive||b.triggerActive,
     allUsersWorked:(a.allUsersWorked!==false)&&(b.allUsersWorked!==false),
     rawJobCount:(a.rawJobCount||0)+(b.rawJobCount||0),
     projectsQueried:(a.projectsQueried||[]).concat(b.projectsQueried||[]),
-    summary:{total_jobs:tj,total_cost_usd:tc,total_tb:r4((sa.total_tb||0)+(sb.total_tb||0)),
+    summary:{total_jobs:tj,total_tb:r4((sa.total_tb||0)+(sb.total_tb||0)),
       total_slot_hours:r2((sa.total_slot_hours||0)+(sb.total_slot_hours||0)),
-      cache_hits:(sa.cache_hits||0)+(sb.cache_hits||0),total_bytes:(sa.total_bytes||0)+(sb.total_bytes||0),
-      avg_cost_per_job:tj?r4(tc/tj):0},
+      cache_hits:(sa.cache_hits||0)+(sb.cache_hits||0),total_bytes:(sa.total_bytes||0)+(sb.total_bytes||0)},
+    slotQuota:(function(x,y){x=x||{};y=y||{};
+      var uH=r2((x.todaySlotHours||0)+(y.todaySlotHours||0));
+      var totH=r2((x.totalSlotHoursToday||0)+(y.totalSlotHoursToday||0));
+      return {
+        dailyLimit:600,warnThreshold:300,todaySlotHours:uH,totalSlotHoursToday:totH,
+        todaySlotPercent:r2((uH/600)*100),remainingHours:r2(Math.max(0,600-uH)),
+        status:uH>=600?'BLOCKED':(uH>=300?'WARN':'OK')
+      };})(a.slotQuota,b.slotQuota),
     rateLimits:(function(x,y){x=x||{};y=y||{};function mx(k){return Math.max(x[k]||0,y[k]||0);}
       var qA=x.peakQpm||0,qB=y.peakQpm||0,sA=x.peakSheetsQpm||0,sB=y.peakSheetsQpm||0,asA=x.peakAppsScriptQpm||0,asB=y.peakAppsScriptQpm||0;
       return {
@@ -898,17 +1120,28 @@ function mergeDash(a,b){
         peakAppsScriptMin:(asA>=asB?x.peakAppsScriptMin:y.peakAppsScriptMin)||x.peakAppsScriptMin||y.peakAppsScriptMin||''
       };})(a.rateLimits,b.rateLimits),
     regionsPresent:mergeByKey(a.regionsPresent,b.regionsPresent,'region',['jobs'],'region',true,0),
-    bySource:mergeByKey(a.bySource,b.bySource,'source',['jobs','total_bytes','cost_usd','slot_hours'],'slot_hours',false,0),
-    byProject:mergeByKey(a.byProject,b.byProject,'project',['jobs','total_bytes','cost_usd','slot_hours'],'slot_hours',false,0),
-    byDataset:mergeByKey(a.byDataset,b.byDataset,'dataset',['jobs','total_bytes','cost_usd'],'cost_usd',false,15),
-    byTable:mergeByKey(a.byTable,b.byTable,'table_name',['jobs','total_bytes','cost_usd'],'cost_usd',false,20),
-    builtTables:mergeByKey(a.builtTables,b.builtTables,'table_name',['jobs','total_bytes','cost_usd','slot_hours'],'cost_usd',false,30),
-    byOrigin:mergeByKey(a.byOrigin,b.byOrigin,'origin',['jobs','total_bytes','cost_usd'],'cost_usd',false,0),
-    byMonth:mergeByKey(a.byMonth,b.byMonth,'month',['jobs','tb','cost_usd','slot_hours'],'month',true,0),
-    dailyTrend:mergeByKey(a.dailyTrend,b.dailyTrend,'day',['jobs','gb_processed','cost_usd','slot_hours'],'day',true,0),
-    repeatedQueries:mergeByKey(a.repeatedQueries,b.repeatedQueries,'query_preview',['count','total_bytes','cost_usd','slot_hours'],'cost_usd',false,50),
-    sheetsJobs:mergeByKey(a.sheetsJobs,b.sheetsJobs,'name',['jobs','bytes','cost'],'cost',false,0),
-    topJobs:(a.topJobs||[]).concat(b.topJobs||[]).sort(function(x,y){return (parseFloat(y.slot_ms)||0)-(parseFloat(x.slot_ms)||0);}).slice(0,100),
+    byUser:mergeByKey(a.byUser,b.byUser,'user',['total_bytes','total_jobs','slot_hours'],'slot_hours',false,0),
+    bySource:mergeByKey(a.bySource,b.bySource,'source',['jobs','total_bytes','slot_hours'],'slot_hours',false,0),
+    byProject:mergeByKey(a.byProject,b.byProject,'project',['jobs','total_bytes','slot_hours'],'slot_hours',false,0),
+    byDataset:mergeByKey(a.byDataset,b.byDataset,'dataset',['jobs','total_bytes'],'total_bytes',false,15),
+    byTable:mergeByKey(a.byTable,b.byTable,'table_name',['jobs','total_bytes'],'total_bytes',false,20),
+    builtTables:mergeByKey(a.builtTables,b.builtTables,'table_name',['jobs','total_bytes','slot_hours'],'slot_hours',false,30),
+    byOrigin:mergeByKey(a.byOrigin,b.byOrigin,'origin',['jobs','total_bytes'],'total_bytes',false,0),
+    byMonth:mergeByKey(a.byMonth,b.byMonth,'month',['jobs','tb','slot_hours'],'month',true,0),
+    dailyTrend:mergeByKey(a.dailyTrend,b.dailyTrend,'day',['jobs','gb_processed','slot_hours'],'day',true,0),
+    repeatedQueries:mergeByKey(a.repeatedQueries,b.repeatedQueries,'query_preview',['count','total_bytes','slot_hours'],'slot_hours',false,50),
+    sheetsJobs:mergeByKey(a.sheetsJobs,b.sheetsJobs,'name',['jobs','bytes'],'bytes',false,0),
+    topJobs:(function(){
+      var map={};
+      (a.topJobs||[]).concat(b.topJobs||[]).forEach(function(j){
+        if(j&&j.jobId) map[j.jobId]=j;
+      });
+      return Object.values(map).sort(function(x,y){
+        var sy = parseFloat(y.totalSlotMs) || (parseFloat(y.slot_hours)||0)*3600000;
+        var sx = parseFloat(x.totalSlotMs) || (parseFloat(x.slot_hours)||0)*3600000;
+        return sy - sx;
+      }).slice(0,150);
+    })(),
     users:(function(){var s={};(a.users||[]).concat(b.users||[]).forEach(function(u){s[u]=1;});return Object.keys(s).sort();})(),
     userTrend:mergeUserTrend(a.userTrend,b.userTrend),
     hourlyAppsScript: (function(){
@@ -930,13 +1163,12 @@ function mergeDash(a,b){
 // ── Init ──
 document.addEventListener('DOMContentLoaded',function(){
   try{if(localStorage.getItem('bq-theme')==='light')toggleTheme();}catch(e){}
-  var themeBtn=g('theme-btn');if(themeBtn)themeBtn.textContent=document.documentElement.classList.contains('light')?'☀️':'🌙';
+  var themeBtn=g('theme-btn');if(themeBtn)themeBtn.innerHTML=document.documentElement.classList.contains('light')?ICONS.sun:ICONS.moon;
   setRange('month');
   var yBtn = g('pyear'); if(yBtn) yBtn.textContent = 'Año ' + new Date().getFullYear();
 
   google.script.run.withSuccessHandler(function(cfg){
     if(cfg){
-      if(cfg.pricePerTB)g('cfg-price').value=cfg.pricePerTB;
       currentUser=cfg.currentUser||'';
       gIsAdmin=!!cfg.isAdmin;
       gIsViewer=!!cfg.isViewer;
@@ -974,7 +1206,7 @@ window.__BQ_OK__=true;
       <pre id="modal-query-text" style="margin:0; font-family:'Consolas','Fira Code',monospace; font-size:11.5px; white-space:pre-wrap; word-break:break-all; color:var(--text); padding:14px; background:var(--card2); border:1px solid var(--border); border-radius:8px; line-height:1.5; user-select:all; flex:1; overflow:auto;"></pre>
     </div>
     <div style="padding:12px 20px; border-top:1px solid var(--border); display:flex; justify-content:flex-end; gap:8px; background:var(--card2);">
-      <button onclick="copyModalSql(this)" style="background:var(--accent); color:#fff; border:none; padding:8px 16px; border-radius:6px; font-size:12px; font-weight:600; cursor:pointer; transition:var(--transition);" onmouseover="this.style.background='var(--accent2)'" onmouseout="this.style.background='var(--accent)'">⧉ Copiar SQL</button>
+      <button onclick="copyModalSql(this)" style="background:var(--accent); color:#fff; border:none; padding:8px 16px; border-radius:6px; font-size:12px; font-weight:600; cursor:pointer; transition:var(--transition);" onmouseover="this.style.background='var(--accent2)'" onmouseout="this.style.background='var(--accent)'"><svg class="ico ico-btn" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>Copiar SQL</button>
       <button onclick="closeSqlModal()" style="background:none; border:1px solid var(--border); color:var(--text); padding:8px 16px; border-radius:6px; font-size:12px; font-weight:600; cursor:pointer; transition:var(--transition);" onmouseover="this.style.background='var(--border-light)'" onmouseout="this.style.background='none'">Cerrar</button>
     </div>
   </div>
@@ -1003,7 +1235,7 @@ function copyModalSql(btn) {
   try {
     document.execCommand('copy');
     var oldText = btn.textContent;
-    btn.textContent = '✓ Copiado!';
+    btn.textContent = 'Copiado!';
     btn.style.background = 'var(--green)';
     setTimeout(function() {
       btn.textContent = oldText;
