@@ -80,23 +80,22 @@ IF NOT v_table_exists THEN
             END AS first_order_acquisition_channel
         FROM (
             SELECT
-                COALESCE(CAST(du.customer_id AS STRING), fo.customer_id) AS customer_id,
+                CAST(fo.customer_id AS STRING) AS customer_id,
                 (ds.partner_id IS NOT NULL) AS is_darkstore,
                 (aaa.partner_id IS NOT NULL AND ds.partner_id IS NULL) AS is_aaa,
                 (dy.order_id IS NOT NULL) AS is_dy,
                 fo.business_type.business_type_name,
                 DENSE_RANK() OVER (
-                    PARTITION BY COALESCE(CAST(du.customer_id AS STRING), fo.customer_id) 
+                    PARTITION BY CAST(fo.customer_id AS STRING) 
                     ORDER BY fo.registered_date ASC
                 ) AS rank_order
             FROM `peya-bi-tools-pro.il_core.fact_orders` fo
-            LEFT JOIN `peya-bi-tools-pro.il_core.dim_user` du ON fo.user.id = du.user_id
             LEFT JOIN darkstores ds ON fo.restaurant.id = ds.partner_id
             LEFT JOIN partners_aaa aaa ON fo.restaurant.id = aaa.partner_id
             LEFT JOIN dy_orders dy ON fo.order_id = dy.order_id
             WHERE fo.registered_date >= v_reload_start_date
               AND fo.order_status = 'CONFIRMED'
-              AND COALESCE(CAST(du.customer_id AS STRING), fo.customer_id) IS NOT NULL
+              AND fo.customer_id IS NOT NULL
               AND fo.country.country_name IS NOT NULL
         )
         WHERE rank_order = 1
@@ -105,7 +104,7 @@ IF NOT v_table_exists THEN
 
     monthly_raw AS (
         SELECT
-            COALESCE(CAST(du.customer_id AS STRING), fo.customer_id) AS customer_id,
+            CAST(fo.customer_id AS STRING) AS customer_id,
             fo.country.country_name AS country,
             DATE_TRUNC(fo.registered_date, MONTH) AS month,
 
@@ -128,14 +127,13 @@ IF NOT v_table_exists THEN
             LOGICAL_OR(ds.partner_id IS NOT NULL AND (mo.is_uf IS NULL OR NOT mo.is_uf)) AS has_non_uf_order
 
         FROM `peya-bi-tools-pro.il_core.fact_orders` fo
-        LEFT JOIN `peya-bi-tools-pro.il_core.dim_user` du ON fo.user.id = du.user_id
         LEFT JOIN darkstores ds ON fo.restaurant.id = ds.partner_id
         LEFT JOIN partners_aaa aaa ON fo.restaurant.id = aaa.partner_id
         LEFT JOIN dy_orders dy ON fo.order_id = dy.order_id
         LEFT JOIN market_orders_agg mo ON CAST(fo.order_id AS STRING) = mo.order_id
         WHERE fo.registered_date >= v_reload_start_date
           AND fo.order_status = 'CONFIRMED'
-          AND COALESCE(CAST(du.customer_id AS STRING), fo.customer_id) IS NOT NULL
+          AND fo.customer_id IS NOT NULL
           AND fo.country.country_name IS NOT NULL
         GROUP BY 1, 2, 3
     )
@@ -253,23 +251,22 @@ ELSE
             END AS first_order_acquisition_channel
         FROM (
             SELECT
-                COALESCE(CAST(du.customer_id AS STRING), fo.customer_id) AS customer_id,
+                CAST(fo.customer_id AS STRING) AS customer_id,
                 (ds.partner_id IS NOT NULL) AS is_darkstore,
                 (aaa.partner_id IS NOT NULL AND ds.partner_id IS NULL) AS is_aaa,
                 (dy.order_id IS NOT NULL) AS is_dy,
                 fo.business_type.business_type_name,
                 DENSE_RANK() OVER (
-                    PARTITION BY COALESCE(CAST(du.customer_id AS STRING), fo.customer_id) 
+                    PARTITION BY CAST(fo.customer_id AS STRING) 
                     ORDER BY fo.registered_date ASC
                 ) AS rank_order
             FROM `peya-bi-tools-pro.il_core.fact_orders` fo
-            LEFT JOIN `peya-bi-tools-pro.il_core.dim_user` du ON fo.user.id = du.user_id
             LEFT JOIN darkstores ds ON fo.restaurant.id = ds.partner_id
             LEFT JOIN partners_aaa aaa ON fo.restaurant.id = aaa.partner_id
             LEFT JOIN dy_orders dy ON fo.order_id = dy.order_id
             WHERE fo.registered_date >= v_reload_start_date
               AND fo.order_status = 'CONFIRMED'
-              AND COALESCE(CAST(du.customer_id AS STRING), fo.customer_id) IS NOT NULL
+              AND fo.customer_id IS NOT NULL
               AND fo.country.country_name IS NOT NULL
         )
         WHERE rank_order = 1
@@ -286,7 +283,7 @@ ELSE
 
     monthly_raw AS (
         SELECT
-            COALESCE(CAST(du.customer_id AS STRING), fo.customer_id) AS customer_id,
+            CAST(fo.customer_id AS STRING) AS customer_id,
             fo.country.country_name AS country,
             DATE_TRUNC(fo.registered_date, MONTH) AS month,
 
@@ -309,14 +306,13 @@ ELSE
             LOGICAL_OR(ds.partner_id IS NOT NULL AND (mo.is_uf IS NULL OR NOT mo.is_uf)) AS has_non_uf_order
 
         FROM `peya-bi-tools-pro.il_core.fact_orders` fo
-        LEFT JOIN `peya-bi-tools-pro.il_core.dim_user` du ON fo.user.id = du.user_id
         LEFT JOIN darkstores ds ON fo.restaurant.id = ds.partner_id
         LEFT JOIN partners_aaa aaa ON fo.restaurant.id = aaa.partner_id
         LEFT JOIN dy_orders dy ON fo.order_id = dy.order_id
         LEFT JOIN market_orders_agg mo ON CAST(fo.order_id AS STRING) = mo.order_id
         WHERE fo.registered_date >= v_reload_start_date
           AND fo.order_status = 'CONFIRMED'
-          AND COALESCE(CAST(du.customer_id AS STRING), fo.customer_id) IS NOT NULL
+          AND fo.customer_id IS NOT NULL
           AND fo.country.country_name IS NOT NULL
         GROUP BY 1, 2, 3
     )

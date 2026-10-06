@@ -4,10 +4,6 @@ DECLARE query_name STRING DEFAULT '3. Open Time - Base - Ops (Semanal)';
 -- PROPÓSITO: Cálculo de Open Time y Weighted Open Time (WOT) a nivel SEMANAL
 --            por PAÍS y total LATAM, partiendo de la tabla intermedia 'wot_hour_by_whs'.
 --
--- VENTAJAS:
---   1. Consume 99% menos cuota y tarda segundos (evita reprocesar Perseus y fact_partner_times).
---   2. Respeta el particionamiento por 'fecha' en la tabla origen.
--- ====================================================================================
 
 -- Rango de fechas: por defecto últimas 8 semanas completas hasta ayer (arrancando siempre en Lunes)
 DECLARE inicio DATE DEFAULT DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL 15 WEEK), WEEK(MONDAY));

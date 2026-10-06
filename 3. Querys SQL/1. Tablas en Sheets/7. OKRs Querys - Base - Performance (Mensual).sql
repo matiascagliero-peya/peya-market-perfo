@@ -4,3 +4,4 @@ SELECT *
 FROM `peya-food-and-groceries.automated_tables_reports.dmart_orders_okrs`
 WHERE Month >= '2024-01-01'
   AND country_name <> 'Venezuela'
+ORDER BY Month DESC;

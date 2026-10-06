@@ -71,10 +71,10 @@ pickers_orders AS (
   SELECT
     ods.month_date,
     ods.country_code,
+    COUNT(DISTINCT ods.order_id) AS picker_shift_confirmed_orders,
     SUM(order_events.order_available_to_start_duration_sec / 60) AS assignment_time,
     SUM(order_events.order_picking_duration_sec / 60) AS picking_time,
-    COUNT(DISTINCT CASE WHEN (order_events.order_available_to_start_duration_sec / 60) > 6 THEN ods.order_id END) AS assignment_time_over_6min,
-    COUNT(DISTINCT ods.order_id) AS picker_shift_confirmed_orders
+    COUNT(DISTINCT CASE WHEN (order_events.order_available_to_start_duration_sec / 60) > 6 THEN ods.order_id END) AS assignment_time_over_6min
   FROM `peya-data-origins-pro.cl_dmarts.qc_picker_shift_orders` picko,
     UNNEST(picko.shifts) AS shifts,
     UNNEST(shifts.order_events) AS order_events
@@ -135,11 +135,7 @@ timings_data AS (
     COUNT(DISTINCT order_id) AS total_orders_timings,
     SUM(items) AS picked_items,
     SUM(picking_time_s) AS total_picking_time_s,
-    COUNTIF(actual_dt_min > 35) AS is_dt_35min,
-
-    
-    COUNT(DISTINCT CASE WHEN (assignment_time_s / 60) > 6 THEN order_id END) AS assignment_time_over_6min,
-    COUNT(DISTINCT CASE WHEN (assignment_time_s / 60) > 7 THEN order_id END) AS saturation_orders_over_7min,
+    COUNTIF(actual_dt_min > 35) AS is_dt_35min
 
   FROM `peya-delivery-and-support.automated_tables_reports.dmarts_timings`
   WHERE created_date >= fecha_inicio
@@ -250,23 +246,25 @@ SELECT
   -- ===== 2) seamless_data_monthly (sdm) =====
   sdm.seamless_delivery                       AS seamless_orders,
   sdm.rejected_orders                         AS Fail_Rate,
-  sdm.forced_pre_orders,
-  sdm.modified_orders,
-  sdm.session_orders,
-  sdm.slow_orders,
+  sdm.forced_pre_orders                       AS forced_pre_orders,
+  sdm.modified_orders                         AS modified_orders,
+  sdm.session_orders                          AS session_orders,
+  sdm.slow_orders                             AS slow_orders,
   sdm.order_late                              AS order_late_ops,
 
   -- ===== 3) pickers_orders (picko) =====
+  picko.picker_shift_confirmed_orders         AS picker_shift_confirmed_orders,
   picko.assignment_time                       AS assignment_time,
+  picko.assignment_time_over_6min             AS assignment_time_over_6min,
   picko.picking_time                          AS picking_time,
 
   -- ===== 4) delivery_time_agg (dta) =====
   COALESCE(dta.non_forced_completed_orders_logistics, 0) AS non_forced_completed_orders_logistics,
-  dta.sum_delivery_time_min,
-  dta.logistics_stacked_0,
-  dta.logistics_stacked_1,
-  dta.logistics_stacked_2,
-  dta.logistics_stacked_3_mas,
+  dta.sum_delivery_time_min                   AS sum_delivery_time_min,
+  dta.logistics_stacked_0                     AS logistics_stacked_0,
+  dta.logistics_stacked_1                     AS logistics_stacked_1,
+  dta.logistics_stacked_2                     AS logistics_stacked_2,
+  dta.logistics_stacked_3_mas                 AS logistics_stacked_3_mas,
 
   -- ===== 5) timings_data (td) =====
   td.total_orders_timings                     AS Total_orders_timings,
@@ -279,28 +277,26 @@ SELECT
   lom.order_late_10_count                     AS order_late_10_count,
   lom.vendor_late_10_count                    AS vendor_late_10_count,
   lom.awt_total                               AS awt_total,
+  lom.ept_apt_over_5_min_orders               AS ept_apt_over_5_min_orders,
 
   -- ===== 7) inaccuracy =====
-  inaccuracy.total_orders_inaccuracy,
-  inaccuracy.inaccuracy_orders,
-  inaccuracy.food_issue_orders,
-  inaccuracy.wrong_missing_item_orders,
+  inaccuracy.total_orders_inaccuracy          AS total_orders_inaccuracy,
+  inaccuracy.inaccuracy_orders                AS inaccuracy_orders,
+  inaccuracy.food_issue_orders                AS food_issue_orders,
+  inaccuracy.wrong_missing_item_orders        AS wrong_missing_item_orders,
 
   -- ===== 8) productividad_data (proDa) =====
   proDa.picking_units                         AS Helper_Total_Units,
-  proDa.receiving_units,
-  ajuste_UTR,
-  proDa.picker_working_hours,
-  proDa.manager_working_hours,
+  proDa.receiving_units                       AS receiving_units,
+  proDa.ajuste_UTR                            AS ajuste_UTR,
+  proDa.picker_working_hours                  AS picker_working_hours,
+  proDa.manager_working_hours                 AS manager_working_hours,
+  proDa.received_bags                         AS received_bags,
 
   -- ===== 9) original_by_ops_diario (opsd) =====
   opsd.Total_orders_ops                       AS Total_orders_ops,
-  opsd.partial_orders,
-  opsd.lost_sessions,
-  picko.assignment_time_over_6min             AS assignment_time_over_6min,
-  lom.ept_apt_over_5_min_orders,
-  proDa.received_bags,
-  picko.picker_shift_confirmed_orders         AS picker_shift_confirmed_orders
+  opsd.partial_orders                         AS partial_orders,
+  opsd.lost_sessions                          AS lost_sessions
 
 FROM orders_data_agg od
 LEFT JOIN seamless_data_monthly sdm      ON od.month_date = sdm.month_date        AND od.country_code = sdm.country_code
@@ -311,4 +307,5 @@ LEFT JOIN logistics_orders_monthly lom   ON od.month_date = lom.month_date      
 LEFT JOIN inaccuracy                     ON od.month_date = inaccuracy.month_date AND od.country_code = inaccuracy.country_code
 LEFT JOIN productividad_data proDa       ON od.month_date = proDa.month_date      AND od.country_code = proDa.country_code
 LEFT JOIN original_by_ops_diario opsd    ON od.month_date = opsd.month_date       AND od.country_code = opsd.country_code
-LEFT JOIN `peya-bi-tools-pro.il_core.dim_country` dc ON od.country_code = LOWER(dc.country_code);
+LEFT JOIN `peya-bi-tools-pro.il_core.dim_country` dc ON od.country_code = LOWER(dc.country_code)
+ORDER BY date DESC, Country_en ASC;
