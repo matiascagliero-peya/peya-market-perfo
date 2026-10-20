@@ -13,3 +13,7 @@ desktop.ini
 # Logs & temp
 *.log
 npm-debug.log*
+
+# Pruebas locales
+0. Pruebas/
+
