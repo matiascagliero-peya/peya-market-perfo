@@ -5,9 +5,7 @@ DECLARE to_date      DATE DEFAULT DATE_SUB(CURRENT_DATE(), INTERVAL 1 DAY);
 
 WITH
 
--- ============================================================
 -- 1) Total orders de fact_orders (nivel orden, base para joins)
--- ============================================================
 orders_data_monthly AS (
   SELECT DISTINCT
     DATE_TRUNC(DATE(fo.registered_date), MONTH) AS month_date,
@@ -32,9 +30,7 @@ orders_data_agg AS (
   GROUP BY 1, 2
 ),
 
--- ============================================================
 -- 2) Integración de Seamless
--- ============================================================
 seamless_orders_new AS (
   SELECT
     CAST(platform_order_code AS STRING) AS order_id,
@@ -53,7 +49,8 @@ seamless_data_monthly AS (
   SELECT
     ods.month_date,
     ods.country_code,
-    COUNT(DISTINCT CASE WHEN so.non_seamless_order IS FALSE OR so.non_seamless_order IS NULL THEN ods.order_id END) AS seamless_delivery,    COUNT(DISTINCT CASE WHEN CAST(so.is_forced_preorder AS STRING) IN ('1','true','TRUE') THEN ods.order_id END) AS forced_pre_orders,
+    COUNT(DISTINCT CASE WHEN so.non_seamless_order IS FALSE OR so.non_seamless_order IS NULL THEN ods.order_id END) AS seamless_delivery,
+    COUNT(DISTINCT CASE WHEN CAST(so.is_forced_preorder AS STRING) IN ('1','true','TRUE') THEN ods.order_id END) AS forced_pre_orders,
     COUNT(DISTINCT CASE WHEN CAST(so.is_modified_order AS STRING) IN ('1','true','TRUE') THEN ods.order_id END) AS modified_orders,
     COUNT(DISTINCT CASE WHEN CAST(so.is_session_order AS STRING) IN ('1','true','TRUE') THEN ods.order_id END) AS session_orders,
     COUNT(DISTINCT CASE WHEN CAST(so.is_slow_order AS STRING) IN ('1','true','TRUE') THEN ods.order_id END) AS slow_orders,
@@ -64,9 +61,7 @@ seamless_data_monthly AS (
   GROUP BY 1, 2
 ),
 
--- ============================================================
 -- 3) Assignment_time / picking_time de qc_picker_shift_orders
--- ============================================================
 pickers_orders AS (
   SELECT
     ods.month_date,
@@ -86,9 +81,7 @@ pickers_orders AS (
   GROUP BY 1, 2
 ),
 
--- ============================================================
 -- 4) Delivery Time y Stacked de fact_logistic_orders (nivel orden)
--- ============================================================
 delivery_time_data AS (
   SELECT
     CAST(lo.peya_order_id AS STRING) AS order_id,
@@ -125,9 +118,7 @@ delivery_time_agg AS (
   GROUP BY 1, 2
 ),
 
--- ============================================================
 -- 5) Timings (dmarts_timings)
--- ============================================================
 timings_data AS (
   SELECT
     DATE_TRUNC(DATE(created_date), MONTH) AS month_date,
@@ -143,10 +134,8 @@ timings_data AS (
   GROUP BY 1, 2
 ),
 
--- ============================================================
 -- 6) Logística nivel MES directo desde fact_logistic_orders  [NUEVA]
 --    (AWT + late flags; sin UNNEST porque son campos order-level)
--- ============================================================
 logistics_orders_monthly AS (
   SELECT
     DATE_TRUNC(DATE(l.created_date_local), MONTH) AS month_date,
@@ -168,9 +157,7 @@ logistics_orders_monthly AS (
   GROUP BY 1, 2
 ),
 
--- ============================================================
 -- 7) Inaccuracy
--- ============================================================
 inaccuracy AS (
   SELECT
     DATE_TRUNC(i.order_date, MONTH) AS month_date,
@@ -192,9 +179,7 @@ inaccuracy AS (
   GROUP BY 1, 2
 ),
 
--- ============================================================
 -- 8) Productividad
--- ============================================================
 productividad_data AS (
   SELECT
     DATE_TRUNC(date, MONTH) AS month_date,
@@ -215,9 +200,7 @@ productividad_data AS (
   GROUP BY 1, 2
 ),
 
--- ============================================================
 -- 9) OPS daily (dmarts_ops_daily_new)
--- ============================================================
 original_by_ops_diario AS (
   SELECT
     DATE_TRUNC(DATE(date), MONTH) AS month_date,
@@ -231,9 +214,7 @@ original_by_ops_diario AS (
   GROUP BY 1, 2
 )
 
---- ============================================================
---- SELECT FINAL (ordenado según aparición de cada CTE)
---- ============================================================
+-- SELECT FINAL (ordenado según aparición de cada CTE)
 SELECT
   -- ===== 0) Claves =====
   od.month_date                               AS date,

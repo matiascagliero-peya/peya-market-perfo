@@ -1274,4 +1274,105 @@
       color: var(--text-sheet-body);
       pointer-events: auto;
     }
+
+    /* ── Leyenda Flotante de Zonas por Partner (Bottom Left) ── */
+    .partner-shapes-legend {
+      position: absolute;
+      bottom: 24px;
+      left: 18px;
+      z-index: 100;
+      background: var(--toolbar-bg);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border: 1px solid var(--border-sheet);
+      border-radius: 10px;
+      box-shadow: 0 10px 28px -6px rgba(0, 0, 0, 0.35);
+      padding: 9px 12px;
+      min-width: 220px;
+      max-width: 280px;
+      max-height: 250px;
+      overflow-y: auto;
+      color: var(--text-sheet-body);
+      font-size: 11px;
+      pointer-events: auto;
+    }
+    .legend-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 6px;
+      padding-bottom: 4px;
+      border-bottom: 1px solid var(--border-sheet);
+    }
+    .legend-title {
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-sheet-muted);
+    }
+    .legend-close-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-sheet-muted);
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 800;
+      padding: 0 4px;
+    }
+    .legend-close-btn:hover {
+      color: var(--text-sheet-title);
+    }
+    .legend-list {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 4px 6px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background-color 0.15s ease;
+      background: var(--bg-sheet-card);
+      border: 1px solid var(--border-subtle);
+    }
+    .legend-item:hover {
+      background: var(--bg-sheet-card-hover);
+      border-color: var(--border-sheet);
+    }
+    .legend-item.active {
+      background: var(--bg-card-selected);
+      border: 1.5px solid var(--brand-red);
+    }
+    .legend-item-info {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      min-width: 0;
+      flex: 1;
+    }
+    .legend-dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .legend-partner-name {
+      font-weight: 700;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      font-size: 10.5px;
+      color: var(--text-sheet-title);
+    }
+    .legend-partner-meta {
+      font-size: 9px;
+      color: var(--text-sheet-muted);
+      font-family: 'JetBrains Mono', monospace;
+      flex-shrink: 0;
+    }
   </style>

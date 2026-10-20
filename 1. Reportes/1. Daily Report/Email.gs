@@ -792,6 +792,21 @@ function sendDailyEmail(previewMode, testMode, force) {
   });
   var _nDest = getEmailRecipients().length;
   Logger.log("Email enviado (CCO) en " + batches + " lote(s) a " + _nDest + " destinatarios.");
+
+  // Si el mensaje estaba marcado como "un solo envío", se borra automáticamente
+  if (batches > 0) {
+    try {
+      var _p = PropertiesService.getScriptProperties();
+      if (_p.getProperty('EMAIL_CUSTOM_MSG_ONCE') === 'true') {
+        _p.deleteProperty('EMAIL_CUSTOM_MSG');
+        _p.deleteProperty('EMAIL_CUSTOM_MSG_BY');
+        _p.deleteProperty('EMAIL_CUSTOM_MSG_AT');
+        _p.deleteProperty('EMAIL_CUSTOM_MSG_ONCE');
+        Logger.log('[sendDailyEmail] Mensaje de un solo uso eliminado tras el envío.');
+      }
+    } catch (_eOnce) {}
+  }
+
   return { ok:true, sent:_nDest, batches:batches };
 }
 

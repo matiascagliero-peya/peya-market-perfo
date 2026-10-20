@@ -85,7 +85,7 @@ const CONFIG_GD_METRICAS = [
        { name: 'Dmart Orders CPO',     index: 44, colorFormating: 1, latam: false },
        { name: 'UF Orders',            index: 17, colorFormating: 1, latam: false },
        { name: 'Net Sales EUR',        index: 18, colorFormating: 1, latam: false },
-       { name: 'Discounts EUR',        index: 19, colorFormating: 1, latam: false },
+       { name: 'Discounts EUR',        index: 19, colorFormating: 0, latam: false },
        { name: 'DY Orders',            index: 20, colorFormating: 1, latam: false },
        { name: 'SOF Orders',           index: 21, colorFormating: 1, latam: false },
        { name: 'Units ndy_nsof',       index: 22, colorFormating: 1, latam: false },
@@ -98,7 +98,38 @@ const CONFIG_GD_METRICAS = [
        { name: 'transactions_dy',      index: 36, colorFormating: 1, latam: false },
        { name: 'instant_need',         index: 24, colorFormating: 1, latam: false },
        { name: 'fill_in',              index: 25, colorFormating: 1, latam: false },
-       { name: 'stock_up',             index: 26, colorFormating: 1, latam: false }
+       { name: 'stock_up',             index: 26, colorFormating: 1, latam: false },
+
+       // --- Métricas Calculadas en Sheet (Vacías en origen para formato de color) ---
+       { name: 'Units sold',                    colorFormating: 1 },
+       { name: 'GMV User Share Dmarts %',       colorFormating: 1 },
+       { name: 'Daily GMV User Dmarts',         colorFormating: 1 },
+       { name: 'Daily Orders per Store',        colorFormating: 1 },
+       { name: 'Order share Dmarts %',          colorFormating: 1 },
+       { name: 'Ordenes DY',                    colorFormating: 1 },
+       { name: '% Orders DY',                   colorFormating: 1 },
+       { name: '% Orders SOF',                  colorFormating: 0 },
+       { name: '% Orders Plus',                 colorFormating: 1 },
+       { name: '% Plus Users',                  colorFormating: 1 },
+       { name: 'Platform Maus penetration %',   colorFormating: 1 },
+       { name: 'Sessions - Double Ya',          colorFormating: 1 },
+       { name: 'Sessions - non Double Ya',      colorFormating: 1 },
+       { name: 'CVR3 %',                        colorFormating: 1 },
+       { name: 'CVR3 % - Double Ya',            colorFormating: 1 },
+       { name: 'CVR3 % - non Double Ya',        colorFormating: 1 },
+       { name: 'AFV €',                         colorFormating: 1 },
+       { name: 'AFV No DY no SoF',              colorFormating: 1 },
+       { name: 'Basket Size',                   colorFormating: 1 },
+       { name: 'Basket size No DY no SoF',      colorFormating: 1 },
+       { name: 'UF Basket Penetration %',       colorFormating: 1 },
+       { name: 'Frequency',                     colorFormating: 1 },
+       { name: 'Customer Units',                colorFormating: 1 },
+       { name: 'Avg PVP (wo VAT)  €',           colorFormating: 0 },
+       { name: 'Fill In %',                     colorFormating: 1 },
+       { name: 'Instant Need %',                colorFormating: 1 },
+       { name: 'Stock Up %',                    colorFormating: 1 },
+       { name: 'Gross basket discount %',       colorFormating: 1 },
+       { name: 'Promo contribution %',          colorFormating: 1 }
      ]
    }, { // 2 - OPS Data (DIARIO)
      nombreHoja: "2 - OPS Data",
@@ -169,14 +200,33 @@ const CONFIG_GD_METRICAS = [
        { name: 'Ajuste utr',                          index: 34, colorFormating: 1, latam: true },
        { name: 'Picker working hours',                index: 35, colorFormating: 1, latam: false },
        { name: 'Manager working hours',               index: 36, colorFormating: 1, latam: false },
-       { name: 'Received bags',                       index: 37, colorFormating: 1, latam: false },
+       { name: 'Received bags',                       index: 37, colorFormating: 0, latam: false },
 
        // ════════════════════════════════════════════════════════════════
        // original_by_ops_diario (opsd)  → cols 38-40
        // ════════════════════════════════════════════════════════════════
        { name: 'Total_orders_ops',                    index: 38, colorFormating: 1, latam: false },
        { name: 'Partial orders',                      index: 39, colorFormating: 0, latam: false },
-       { name: 'Lost orders',                         index: 40, colorFormating: 0, latam: false }
+       { name: 'Lost orders',                         index: 40, colorFormating: 0, latam: false },
+
+       // --- Métricas Calculadas en Sheet (Vacías en origen para formato de color) ---
+       { name: 'Seamless Delivery %',                 colorFormating: 1 },
+       { name: 'Modified orders %',                  colorFormating: 0 },
+       { name: 'HC Sessions orders %',               colorFormating: 0 },
+       { name: 'Rejected orders %',                  colorFormating: 0 },
+       { name: 'Late Orders %',                      colorFormating: 0 },
+       { name: 'Forced Pre Orders %',                colorFormating: 0 },
+       { name: 'Slow orders %',                      colorFormating: 0 },
+       { name: 'Assignment Time %',                  colorFormating: 0 },
+       { name: 'Assignment Time',                    colorFormating: 0 },
+       { name: 'Assignment Time > 6 min %',          colorFormating: 0 },
+       { name: 'Lost orders %',                      colorFormating: 0 },
+       { name: 'Avg. Delivery Time',                 colorFormating: 0 },
+       { name: 'Non_forced_completed_orders_logistics', colorFormating: 1 },
+       { name: 'Delivery time > 35 min %',           colorFormating: 0 },
+       { name: 'Confirmed Orders from timings',      colorFormating: 1 },
+       { name: 'Ajuste UTR',                         colorFormating: 1 },
+       { name: 'UTR+',                               colorFormating: 1 }
      ]
    }, { // 3 - Supply Data
      nombreHoja: "3 - Supply Data",
@@ -195,7 +245,17 @@ const CONFIG_GD_METRICAS = [
        { name: 'Supplier Issues Numerador',   index: 15, colorFormating: 0, latam: false },
        { name: 'Supplier Issues Denominador', index: 16, colorFormating: 1, latam: false },
        { name: 'Supplier Issues UF Numerador',   index: 18, colorFormating: 0, latam: false },
-       { name: 'Supplier Issues UF Denominador', index: 19, colorFormating: 1, latam: false }
+       { name: 'Supplier Issues UF Denominador', index: 19, colorFormating: 1, latam: false },
+
+       // --- Métricas Calculadas en Sheet (Vacías en origen para formato de color) ---
+       { name: 'Days on hand (DOH)',           colorFormating: 0 },
+       { name: 'Stock ZM (Eur) %',             colorFormating: 0 },
+       { name: 'Stock SM (Eur) %',             colorFormating: 0 },
+       { name: 'WIS %',                        colorFormating: 1 },
+       { name: 'WIS UF %',                     colorFormating: 1 },
+       { name: 'WLT Lvl3 - Peya Issues %',     colorFormating: 0 },
+       { name: 'WLT Lvl3 - Supplier Issues %', colorFormating: 0 },
+       { name: 'Listed SKUs',                  colorFormating: 1 }
      ]
    }, { // 4 - MTD Users
      nombreHoja: "4 - MTD Users",
@@ -207,6 +267,12 @@ const CONFIG_GD_METRICAS = [
        { name: 'Dmart MAUs - MTD',      index: 4, colorFormating: 1, latam: true },
        { name: 'Dmart MAUs - Plus - MTD', index: 5, colorFormating: 1, latam: true },
        { name: 'New Users - Dmart - MTD',  index: 6, colorFormating: 1, latam: true },
+
+       // --- Métricas Calculadas en Sheet (Vacías en origen para formato de color) ---
+       { name: 'Dmart MAUs',                   colorFormating: 1 },
+       { name: 'New Users - Dmart',            colorFormating: 1 },
+       { name: 'Dmart MAUs - Plus',            colorFormating: 1 },
+       { name: 'PeYa MAUs',                    colorFormating: 1 }
      ]
    }, { // 5 - Open Time (DIARIO)
      nombreHoja: "5 - Open Time",
@@ -214,7 +280,12 @@ const CONFIG_GD_METRICAS = [
      calcularLatam: false,
      esGranularidadDiaria: true,
      metricas: [
-       { name: 'Weighted Open time %', index: 7, colorFormating: 1, format: '0.00%', latam: false }
+       { name: 'Weighted Open time %', index: 7, colorFormating: 1, format: '0.00%', latam: false },
+
+       // --- Métricas Calculadas en Sheet (Vacías en origen para formato de color) ---
+       { name: 'WHS minutes schedule',         colorFormating: 1 },
+       { name: 'WHS minutes closed',           colorFormating: 0 },
+       { name: 'Open Time Simple',             colorFormating: 1 }
      ]
    }
 ];
@@ -601,14 +672,19 @@ function GeneralData_ConsolidarMetricas() {
              MAPA_COMPONENTES_PAIS[key][k] += (val || 0);
            });
          } else {
-           let valor = 0;
-           if (metrica.calculo) {
-             try { valor = metrica.calculo(fila); } catch (_) { valor = 0; }
-           } else if (metrica.index !== undefined) {
-             valor = parseFloat(fila[metrica.index]) || 0;
+           const esVacia = (metrica.index === undefined && !metrica.calculo);
+           if (esVacia) {
+             MAPA_RESULTADOS[key] = "";
+           } else {
+             let valor = 0;
+             if (metrica.calculo) {
+               try { valor = metrica.calculo(fila); } catch (_) { valor = 0; }
+             } else if (metrica.index !== undefined) {
+               valor = parseFloat(fila[metrica.index]) || 0;
+             }
+             if (MAPA_RESULTADOS[key] === undefined) MAPA_RESULTADOS[key] = 0;
+             MAPA_RESULTADOS[key] += valor;
            }
-           if (MAPA_RESULTADOS[key] === undefined) MAPA_RESULTADOS[key] = 0;
-           MAPA_RESULTADOS[key] += valor;
          }
        });
 
@@ -652,9 +728,12 @@ function GeneralData_ConsolidarMetricas() {
      if (config.calcularLatam) {
        for (const fecha in acumuladorLatam) {
          config.metricas.forEach(m => {
-           if (!m.latam) return;          // solo escribe fila LATAM si la métrica lo pide
+           const esVacia = (m.index === undefined && !m.calculo);
+           if (!m.latam && !esVacia) return;          // solo escribe fila LATAM si la métrica lo pide o es vacía
            let valLatam = 0;
-           if (m.calculoLatam && m.indicesLatam && !m.averageLatam) {
+           if (esVacia) {
+             valLatam = "";
+           } else if (m.calculoLatam && m.indicesLatam && !m.averageLatam) {
              const comps = acumuladorLatam[fecha][m.name + '_components'];
              if (comps) {
                try { valLatam = m.calculoLatam(comps, fecha); } catch (_) { valLatam = 0; }
@@ -1087,7 +1166,7 @@ function ejecutar_sincronizacion_pruebas_total() {
  * Ejecuta el proceso completo ('Importar_Consolidar_Y_Enviar') exactamente una vez en cada uno de
  * los siguientes rangos horarios (según la zona horaria de la hoja de cálculo):
  * - Rango 1 (8:45 AM): Se ejecuta una vez entre las 08:45 y las 09:00 hs.
- * - Rango 2 (11:30 AM): Se ejecuta una vez entre las 11:30 y las 11:45 hs.
+ * - Rango 2 (10:00 AM): Se ejecuta una vez entre las 10:00 y las 10:15 hs.
  * Se utiliza 'PropertiesService' para garantizar que no haya ejecuciones duplicadas dentro de cada ventana.
  */
 function Ejecutar_Con_Filtro_Horario() {
@@ -1109,8 +1188,8 @@ function Ejecutar_Con_Filtro_Horario() {
   const inicio845am = (8 * 60) + 45; // 08:45 (525 minutos)
   const fin845am    = (9 * 60) + 0;  // 09:00 (540 minutos)
   
-  const inicio1130am = (11 * 60) + 30; // 11:30 (690 minutos)
-  const fin1130am    = (11 * 60) + 45;  // 11:45 (705 minutos)
+  const inicio1000am = (10 * 60) + 0;  // 10:00 (600 minutos)
+  const fin1000am    = (10 * 60) + 15; // 10:15 (615 minutos)
   
   const properties = PropertiesService.getScriptProperties();
   
@@ -1129,23 +1208,23 @@ function Ejecutar_Con_Filtro_Horario() {
       properties.deleteProperty("LAST_RUN_8_45AM"); // Remueve la propiedad para permitir un reintento en el siguiente ciclo si falló
     }
   } 
-  else if (minutosTotales >= inicio1130am && minutosTotales <= fin1130am) {
-    const ultimaEjecucion1130am = properties.getProperty("LAST_RUN_11_30AM");
-    if (ultimaEjecucion1130am === hoyStr) {
-      Logger.log(`⏰ [RANGO 11:30 - 11:45] Ya se ejecutó el proceso completo el día de hoy (${hoyStr}).`);
+  else if (minutosTotales >= inicio1000am && minutosTotales <= fin1000am) {
+    const ultimaEjecucion1000am = properties.getProperty("LAST_RUN_10_00AM");
+    if (ultimaEjecucion1000am === hoyStr) {
+      Logger.log(`⏰ [RANGO 10:00 - 10:15] Ya se ejecutó el proceso completo el día de hoy (${hoyStr}).`);
       return;
     }
-    Logger.log(`⏰ [RANGO 11:30 - 11:45] Hora actual: ${horaFormateada}. Iniciando ejecución del proceso completo...`);
+    Logger.log(`⏰ [RANGO 10:00 - 10:15] Hora actual: ${horaFormateada}. Iniciando ejecución del proceso completo...`);
     try {
-      properties.setProperty("LAST_RUN_11_30AM", hoyStr);
+      properties.setProperty("LAST_RUN_10_00AM", hoyStr);
       Importar_Consolidar_Y_Enviar();
     } catch (e) {
-      Logger.log(`❌ Error al ejecutar el proceso de las 11:30 AM: ${e.message}`);
-      properties.deleteProperty("LAST_RUN_11_30AM"); // Remueve la propiedad en caso de fallo
+      Logger.log(`❌ Error al ejecutar el proceso de las 10:00 AM: ${e.message}`);
+      properties.deleteProperty("LAST_RUN_10_00AM"); // Remueve la propiedad en caso de fallo
     }
   } 
   else {
-    Logger.log(`💤 [FUERA DE RANGO] Hora actual: ${horaFormateada}. No es momento de ejecutar (Ventanas: 08:45-09:00 y 11:30-11:45).`);
+    Logger.log(`💤 [FUERA DE RANGO] Hora actual: ${horaFormateada}. No es momento de ejecutar (Ventanas: 08:45-09:00 y 10:00-10:15).`);
   }
 }
 

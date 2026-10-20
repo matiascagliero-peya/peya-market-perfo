@@ -13,23 +13,24 @@
  * de la ventana horaria, y sin haber enviado ya esa semana).
  *
  * Funciones útiles (correr desde el editor):
- *   • setupTriggerSemanal()  → instala el envío automático (correr UNA vez)
- *   • previewWeeklyEmail()   → genera el mail SIN enviar y guarda HTML+PDF en tu Drive
- *   • forzarEnvioSemanal()   → ENVÍA ahora (semana cerrada), ignorando ventana/dedup
- *   • checkYEnviarSemanal()  → lo que corre el trigger cada 10 min
+ *   • setupTriggerSemanal()        → instala el envío automático (correr UNA vez)
+ *   • previewWeeklyEmail()         → genera el mail SIN enviar y guarda HTML+PDF en tu Drive
+ *   • forzarEnvioSemanal()         → ENVÍA ahora a TODOS (semana cerrada), ignorando ventana/dedup/validaciones
+ *   • forzarEnvioPruebaSemanal()   → ENVÍA de PRUEBA a matias.cagliero forzando el envío (ignora datos incompletos)
+ *   • checkYEnviarSemanal()        → lo que corre el trigger cada 10 min
  */
 
 // Ventana de envío semanal: lunes ~12:00 (mismo esquema que el Daily).
 const DIA_ENVIO_SEM    = 1;   // getDay(): 0=Dom .. 1=Lun
 const HORA_ENVIO_SEM   = 12;
 const MINUTO_ENVIO_SEM = 0;
-const VENTANA_SEM_MIN  = 10;  // tolerancia (trigger cada 10 min → 12:00–12:09)
+const VENTANA_SEM_MIN  = 20;  // tolerancia (trigger cada 10 min → 12:00–12:20)
 const PROP_KEY_SEM     = 'ULTIMO_ENVIO_SEMANAL';
 
 // Orden y color (por NOMBRE de métrica).
 var WK_METRIC_ORDER = [
   'Confirmed Orders','GMV User Dmarts',
-  // Usuarios SEMANALES (pestaña "C. Weekly data"): foto de la semana cerrada.
+  // Usuarios SEMANALES (pestaña "C. Weekly users"): foto de la semana cerrada.
   // Van JUSTO DESPUÉS de GMV, igual que en el MTD (usuarios, new users, cobertura).
   'Dmart MAUs','Dmart MAUs - Plus % (Weekly)','New Users - Dmart','Covered MAUs penetration %',
   'WIS %','WIS UF %','Seamless Delivery %','Avg. Delivery Time',
@@ -46,7 +47,8 @@ var WK_METRIC_EXCLUDE = ['New Users', 'Users DMart', 'Platform Maus penetration 
 // cambia para no romper el lookup en metrics/config/color; solo se muestra distinto.
 var WK_METRIC_DISPLAY = { 
   'Covered MAUs penetration %': 'Platform Maus penetration %',
-  'Dmart MAUs - Plus % (Weekly)': 'Dmart MAUs - Plus %'
+  'Dmart MAUs - Plus % (Weekly)': 'Dmart MAUs - Plus %',
+  'Users DMart': 'Dmart MAUs'
 };
 var WK_METRIC_COLOR = {
   'Confirmed Orders':'#e50044','GMV User Dmarts':'#2563eb','Users DMart':'#0284c7',
@@ -239,11 +241,30 @@ function _buildWeeklyMtdHtml(rng, forPdf) {
   var RR_LY_LBL  = RR_CLOSE ? 'Cierre de mes vs LY' : 'RR vs LY';
 
   // Orden de métricas + exclusiones (New Users fuera del mail semanal, e ignorar métricas MTD).
-  var keys = WK_METRIC_ORDER.filter(function(m){ return metrics[m] && WK_METRIC_EXCLUDE.indexOf(m) < 0; });
+  var hasWeeklyMaus = !!(metrics['Dmart MAUs'] && Object.keys(metrics['Dmart MAUs']).length > 0);
+  var effectiveExclude = WK_METRIC_EXCLUDE.slice();
+  if (!hasWeeklyMaus && metrics['Users DMart']) {
+    // Si no se cargó la base semanal, usar Users DMart de la hoja diaria como fallback en lugar de excluirlo
+    effectiveExclude = effectiveExclude.filter(function(e){ return e !== 'Users DMart' && e !== 'Platform Maus penetration %'; });
+  }
+
+  var keys = WK_METRIC_ORDER.filter(function(m){ return metrics[m] && effectiveExclude.indexOf(m) < 0; });
+  if (!hasWeeklyMaus && metrics['Users DMart'] && keys.indexOf('Users DMart') < 0) {
+    var gmvIdx = keys.indexOf('GMV User Dmarts');
+    if (gmvIdx >= 0) {
+      keys.splice(gmvIdx + 1, 0, 'Users DMart');
+      if (metrics['Platform Maus penetration %']) {
+        keys.splice(gmvIdx + 2, 0, 'Platform Maus penetration %');
+      }
+    } else {
+      keys.push('Users DMart');
+    }
+  }
+
   Object.keys(metrics).forEach(function(m){
     var cfg = config[m] || {};
     var isMtd = !!(cfg.mtd || /- MTD/i.test(m));
-    if (keys.indexOf(m) < 0 && WK_METRIC_EXCLUDE.indexOf(m) < 0 && !isMtd) {
+    if (keys.indexOf(m) < 0 && effectiveExclude.indexOf(m) < 0 && !isMtd) {
       keys.push(m);
     }
   });
@@ -499,16 +520,19 @@ function verificarDatosActualizadosSemanal(rng) {
     faltantes.push('GMV User Dmarts en Actuals llega hasta ' + (act.gmv || 'sin dato') + ' (la semana cierra el ' + rng.end + ')');
   }
 
-  // 2) Pestaña "C. Weekly data": debe existir la fila de la semana cerrada
+  // 2) Pestaña "C. Weekly users": debe existir la fila de la semana cerrada
+  var hasWeeklyUsersSheetOk = false;
   try {
     var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     var sh = _openWeeklyUsersSheet(ss);
     if (!sh) {
-      faltantes.push('Pestaña "' + WEEKLY_USERS_SHEET + '" no encontrada');
+      faltantes.push('Pestaña de usuarios semanales ("' + WEEKLY_USERS_SHEET + '") no encontrada');
     } else {
       var data = sh.getDataRange().getValues();
-      var H = (data[0] || []).map(function(h){ return String(h).trim(); });
-      var iW = H.indexOf('Week');
+      var H = (data[0] || []).map(function(h){ return String(h || '').trim().toLowerCase(); });
+      var iW = H.indexOf('week');
+      if (iW < 0) iW = H.indexOf('semana');
+      if (iW < 0) iW = H.indexOf('date');
       var hasWeek = false;
       if (iW >= 0) {
         for (var i = 1; i < data.length; i++) {
@@ -520,11 +544,13 @@ function verificarDatosActualizadosSemanal(rng) {
         }
       }
       if (!hasWeek) {
-        faltantes.push('Usuarios semanales ("' + WEEKLY_USERS_SHEET + '") no tiene cargada la semana ' + rng.labelShort + ' (' + rng.start + ' al ' + rng.end + ')');
+        faltantes.push('Pestaña "' + sh.getName() + '": falta cargar la semana ' + rng.labelShort + ' (' + rng.start + ' al ' + rng.end + ')');
+      } else {
+        hasWeeklyUsersSheetOk = true;
       }
     }
   } catch (eWk) {
-    faltantes.push('Error leyendo "' + WEEKLY_USERS_SHEET + '": ' + eWk.message);
+    faltantes.push('Error leyendo usuarios semanales: ' + eWk.message);
   }
 
   // 3) Targets diarios de la semana (weeklyBE)
@@ -540,20 +566,70 @@ function verificarDatosActualizadosSemanal(rng) {
     faltantes.push('Error leyendo targets semanales: ' + eBe.message);
   }
 
-  // 4) Métricas MTD de la semana
+  // 4) Validación exhaustiva de todas las métricas del Reporte Semanal
   try {
     var mtdRes = fetchMtdActuals(rng.start, rng.end);
     var p = mtdRes && mtdRes.payload;
     if (!p || p.error || !p.metrics) {
-      faltantes.push('Cálculo de métricas MTD falló para la semana ' + rng.labelShort + ': ' + ((p && p.error) || 'sin datos'));
+      faltantes.push('Cálculo de métricas falló para la semana ' + rng.labelShort + ': ' + ((p && p.error) || 'sin datos'));
     } else {
-      var oLatam = p.metrics['Confirmed Orders'] && p.metrics['Confirmed Orders']['LATAM'];
-      var gLatam = p.metrics['GMV User Dmarts'] && p.metrics['GMV User Dmarts']['LATAM'];
-      if (!oLatam || !oLatam.current || oLatam.current <= 0) {
-        faltantes.push('Confirmed Orders LATAM sin valor acumulado positivo en la semana');
-      }
-      if (!gLatam || !gLatam.current || gLatam.current <= 0) {
-        faltantes.push('GMV User Dmarts LATAM sin valor acumulado positivo en la semana');
+      var metrics = p.metrics || {};
+      var config  = p.config  || {};
+      var dtByMetric = p.dataThroughByMetric || {};
+
+      // Lista de métricas que componen el mail semanal (respetando orden y exclusiones)
+      var metricKeys = WK_METRIC_ORDER.filter(function(m){
+        return WK_METRIC_EXCLUDE.indexOf(m) < 0;
+      });
+      Object.keys(metrics).forEach(function(m){
+        var cfg = config[m] || {};
+        var isMtd = !!(cfg.mtd || /- MTD/i.test(m));
+        if (metricKeys.indexOf(m) < 0 && WK_METRIC_EXCLUDE.indexOf(m) < 0 && !isMtd) {
+          metricKeys.push(m);
+        }
+      });
+
+      var metricsByLagDate = {}; // dt -> [displayName, ...]
+      var metricsSinDatos = [];
+
+      metricKeys.forEach(function(m){
+        var cfg = config[m] || {};
+        var mRows = metrics[m];
+        var displayName = WK_METRIC_DISPLAY[m] || m;
+
+        // 4.1 Métricas semanales fijas de usuarios (C. Weekly users)
+        // Solo las reportamos si no se reportó ya la pestaña completa en el paso 2
+        if (cfg.weekly) {
+          if (!hasWeeklyUsersSheetOk) return;
+          if (!mRows || Object.keys(mRows).length === 0) {
+            faltantes.push('Usuarios semanales ("' + displayName + '"): sin registros cargados');
+          }
+          return;
+        }
+
+        // 4.2 Métricas diarias acumuladas: deben tener datos hasta el domingo de cierre (rng.end)
+        if (m === 'Confirmed Orders' && (!act.orders || act.orders < rng.end)) return;
+        if (m === 'GMV User Dmarts' && (!act.gmv || act.gmv < rng.end)) return;
+
+        var dt = dtByMetric[m];
+        if (!dt) {
+          metricsSinDatos.push(displayName);
+        } else if (dt < rng.end) {
+          if (!metricsByLagDate[dt]) metricsByLagDate[dt] = [];
+          metricsByLagDate[dt].push(displayName);
+        } else if (!mRows || Object.keys(mRows).length === 0) {
+          faltantes.push(displayName + ': sin datos consolidados para la semana ' + rng.labelShort);
+        }
+      });
+
+      // Agrupar métricas retrasadas en una sola línea clara por fecha
+      Object.keys(metricsByLagDate).forEach(function(dt){
+        var list = metricsByLagDate[dt];
+        faltantes.push('Métricas con datos hasta el ' + dt + ' (falta domingo ' + rng.end + '): ' + list.join(', '));
+      });
+
+      if (metricsSinDatos.length > 0) {
+        faltantes.push('Métricas sin datos cargados: ' + metricsSinDatos.join(', '));
       }
     }
   } catch (eMtd) {
@@ -569,6 +645,95 @@ function verificarDatosActualizadosSemanal(rng) {
     faltantes: faltantes,
     motivo: faltantes.join(' · ')
   };
+}
+
+// ── Envío de aviso por correo a Matias cuando fallan las métricas semanales ──
+function enviarAlertaMetricasDesactualizadasSemanal(rng, check) {
+  var ALERTA_RECIPIENT = 'matias.cagliero@pedidosya.com';
+  if (!rng) rng = _weekRangeLunDom();
+  if (!check) check = verificarDatosActualizadosSemanal(rng);
+
+  var itemsHtml = '';
+  (check.faltantes || []).forEach(function(item) {
+    itemsHtml += '<li style="margin-bottom:8px;line-height:1.45;color:#991b1b;font-weight:600;">' + item + '</li>';
+  });
+  if (!itemsHtml) {
+    itemsHtml = '<li style="color:#991b1b;">' + (check.motivo || 'Métricas con datos incompletos') + '</li>';
+  }
+
+  var subject = '[ALERTA] Reporte Semanal NO enviado — Métricas desactualizadas (' + rng.labelShort + ')';
+
+  var htmlBody =
+    '<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">' +
+    '<meta name="viewport" content="width=device-width,initial-scale=1">' +
+    '</head><body style="margin:0;background:#f8fafc;font-family:Arial,Helvetica,sans-serif;color:#0f172a;padding:24px 12px;">' +
+    '<div style="max-width:620px;margin:0 auto;background:#ffffff;border:1px solid #fee2e2;border-radius:12px;overflow:hidden;box-shadow:0 4px 6px -1px rgba(0,0,0,0.05);">' +
+      '<div style="background:#dc2626;padding:16px 20px;color:#ffffff;">' +
+        '<div style="font-size:11px;font-weight:800;letter-spacing:0.5px;text-transform:uppercase;opacity:0.9;">PeYa Markets · Alerta Automática</div>' +
+        '<div style="font-size:18px;font-weight:900;margin-top:4px;">Reporte Semanal NO Enviado</div>' +
+      '</div>' +
+      '<div style="padding:20px;">' +
+        '<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:14px 16px;margin-bottom:18px;">' +
+          '<div style="font-size:13px;color:#991b1b;line-height:1.5;">' +
+            'El envío automático programado para las <b>12:00 hs</b> de hoy fue <b>cancelado y bloqueado</b> porque se detectaron métricas sin actualizar para la semana cerrada <b>' + rng.labelShort + '</b> (' + rng.start + ' al ' + rng.end + ').' +
+          '</div>' +
+        '</div>' +
+        '<div style="font-size:13px;font-weight:800;color:#0f172a;margin-bottom:8px;text-transform:uppercase;letter-spacing:0.3px;">' +
+          'Métricas o datos faltantes / desactualizados:' +
+        '</div>' +
+        '<ul style="margin:0 0 20px 0;padding-left:20px;font-size:12.5px;">' +
+          itemsHtml +
+        '</ul>' +
+        '<div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:14px 16px;font-size:12.5px;color:#0369a1;line-height:1.5;margin-bottom:20px;">' +
+          '<b>¿Cómo proceder?</b><br>' +
+          '1. Verificá la actualización de BigQuery / Sheets para las métricas indicadas.<br>' +
+          '2. Una vez que los datos estén al día (hasta el domingo ' + rng.end + '), ingresá a la sección <b>Email</b> del dashboard y hacé clic en <b>"Enviar semanal forzado"</b> para despachar el reporte a todos los destinatarios.' +
+        '</div>' +
+        '<div style="text-align:center;margin-bottom:10px;">' +
+          '<a href="' + APP_URL + '?page=email&src=alerta-semanal" target="_blank" style="display:inline-block;background:#e50044;color:#ffffff;text-decoration:none;font-weight:700;font-size:13px;padding:10px 22px;border-radius:8px;">' +
+            'Abrir Panel de Envío de Email →' +
+          '</a>' +
+        '</div>' +
+      '</div>' +
+      '<div style="background:#f8fafc;border-top:1px solid #f1f5f9;padding:12px 20px;font-size:11px;color:#94a3b8;text-align:center;">' +
+        'Alerta automática generada por el sistema de reportes de PeYa Markets' +
+      '</div>' +
+    '</div>' +
+    '</body></html>';
+
+  try {
+    MailApp.sendEmail({
+      to: ALERTA_RECIPIENT,
+      subject: subject,
+      htmlBody: htmlBody,
+      name: 'PeYa Market Performance - Alertas'
+    });
+    Logger.log('[enviarAlertaMetricasDesactualizadasSemanal] Alerta enviada con éxito a ' + ALERTA_RECIPIENT);
+    return { ok: true, recipient: ALERTA_RECIPIENT, items: check.faltantes };
+  } catch (err) {
+    Logger.log('[enviarAlertaMetricasDesactualizadasSemanal] Error enviando alerta: ' + err.message);
+    return { ok: false, error: err.message };
+  }
+}
+
+// Función para probar el envío del correo de alerta desde el editor
+function probarAlertaSemanal() {
+  var rng = _weekRangeLunDom();
+  var check = verificarDatosActualizadosSemanal(rng);
+  if (check.ok) {
+    check = {
+      ok: false,
+      semana: rng.labelShort,
+      start: rng.start,
+      end: rng.end,
+      faltantes: [
+        '[SIMULACIÓN] WIS %: datos hasta ' + rng.start + ' (esperado hasta domingo ' + rng.end + ')',
+        '[SIMULACIÓN] Seamless Delivery %: datos hasta ' + rng.start + ' (esperado hasta domingo ' + rng.end + ')'
+      ],
+      motivo: 'Simulación de prueba de alerta'
+    };
+  }
+  return enviarAlertaMetricasDesactualizadasSemanal(rng, check);
 }
 
 // ── Envío / preview ──────────────────────────────────────────────────
@@ -661,6 +826,21 @@ function sendWeeklyMtdEmail(previewMode, testMode, force) {
   });
   var _nDest = getEmailRecipients().length;
   Logger.log('Email SEMANAL enviado (CCO) en ' + batches + ' lote(s) a ' + _nDest + ' destinatarios. Semana ' + rng.labelShort);
+
+  // Si el mensaje estaba marcado como "un solo envío", se borra automáticamente
+  if (batches > 0) {
+    try {
+      var _p = PropertiesService.getScriptProperties();
+      if (_p.getProperty('WEEKLY_EMAIL_CUSTOM_MSG_ONCE') === 'true') {
+        _p.deleteProperty('WEEKLY_EMAIL_CUSTOM_MSG');
+        _p.deleteProperty('WEEKLY_EMAIL_CUSTOM_MSG_BY');
+        _p.deleteProperty('WEEKLY_EMAIL_CUSTOM_MSG_AT');
+        _p.deleteProperty('WEEKLY_EMAIL_CUSTOM_MSG_ONCE');
+        Logger.log('[sendWeeklyMtdEmail] Mensaje semanal de un solo uso eliminado tras el envío.');
+      }
+    } catch (_eOnce) {}
+  }
+
   return { ok:true, sent:_nDest, week:rng, batches:batches };
 }
 
@@ -671,8 +851,20 @@ function previewWeeklyEmail() { var r = sendWeeklyMtdEmail(true);  Logger.log(JS
 // resto y con [PRUEBA] en el asunto. No toca el guard semanal (PROP_KEY_SEM),
 // así que no marca la semana como enviada ni interfiere con el envío real.
 function enviarPruebaSemanal(force) {
-  var r = sendWeeklyMtdEmail(false, true, !!force);   // previewMode=false, testMode=true, force
+  var isForce = (force !== undefined) ? !!force : true;
+  var r = sendWeeklyMtdEmail(false, true, isForce);   // previewMode=false, testMode=true, force
   Logger.log('Envío SEMANAL de PRUEBA → ' + JSON.stringify(r, null, 2));
+  return r;
+}
+
+// ENVÍO DE PRUEBA FORZADO (semanal): Se puede seleccionar y correr DIRECTAMENTE
+// desde el editor de Apps Script. Saltea todas las validaciones de datos incompletos
+// o pestañas faltantes (force=true) y envía el reporte semanal de prueba
+// exclusivamente a matias.cagliero@pedidosya.com sin CCO y con [PRUEBA].
+function forzarEnvioPruebaSemanal() {
+  Logger.log('>>> [forzarEnvioPruebaSemanal] Iniciando envío de prueba forzado a matias.cagliero@pedidosya.com...');
+  var r = sendWeeklyMtdEmail(false, true, true); // previewMode=false, testMode=true, force=true
+  Logger.log('Resultado envío SEMANAL de PRUEBA FORZADO → ' + JSON.stringify(r, null, 2));
   return r;
 }
 
@@ -737,6 +929,18 @@ function getWeeklyEmailStatus() {
   } catch (e) {
     check = { ok: false, motivo: 'Error verificando datos: ' + e.message };
   }
+
+  // Si estaba bloqueado pero los datos AHORA están listos, se desbloquea automáticamente
+  if (isBlocked && check && check.ok) {
+    props.deleteProperty(PROP_KEY_SEM);
+    props.deleteProperty('WEEKLY_BLOCKED_REASON');
+    isBlocked = false;
+    ultimo = '';
+  } else if (isBlocked && check && !check.ok && check.motivo) {
+    // Si sigue bloqueado, actualizamos el motivo con el estado en vivo más reciente
+    props.setProperty('WEEKLY_BLOCKED_REASON', check.motivo);
+  }
+
   return {
     dia: DIA_ENVIO_SEM,
     hora: HORA_ENVIO_SEM,
@@ -749,7 +953,7 @@ function getWeeklyEmailStatus() {
     ultimoEnvio: ultimo,
     enviadoEstaSemana: isSent,
     bloqueadoEstaSemana: isBlocked,
-    motivoBloqueo: props.getProperty('WEEKLY_BLOCKED_REASON') || '',
+    motivoBloqueo: (check && !check.ok) ? check.motivo : (props.getProperty('WEEKLY_BLOCKED_REASON') || ''),
     dataCheck: check
   };
 }
@@ -788,15 +992,19 @@ function checkYEnviarSemanal() {
 
   // ── Validación de datos completos al momento del envío ──────────────────────
   // Si los datos de la semana no están completos, se BLOQUEA el envío para toda
-  // la semana (no se reintenta automáticamente). El admin lo enviará forzado luego.
+  // la semana (no se reintenta automáticamente) y se envía una ALERTA por mail
+  // a matias.cagliero@pedidosya.com informando el detalle de las métricas faltantes.
   const check = verificarDatosActualizadosSemanal(rng);
   if (!check.ok) {
     props.setProperty(PROP_KEY_SEM, rng.start + '_BLOCKED');
     props.setProperty('WEEKLY_BLOCKED_REASON', check.motivo);
     Logger.log('Estado      : DATOS INCOMPLETOS — ' + check.motivo);
-    Logger.log('Acción      : [BLOQUEADO] Envío semanal cancelado y bloqueado para la semana ' + rng.labelShort + ' (' + rng.start + '). NO se volverá a intentar automáticamente.');
+    Logger.log('Acción      : [BLOQUEADO] Envío semanal cancelado para la semana ' + rng.labelShort + ' (' + rng.start + '). Enviando alerta a matias.cagliero@pedidosya.com...');
+
+    enviarAlertaMetricasDesactualizadasSemanal(rng, check);
+
     Logger.log('===');
-    return { ok: false, blocked: true, error: check.motivo, week: rng };
+    return { ok: false, blocked: true, error: check.motivo, week: rng, alertaEnviada: true };
   }
 
   Logger.log('Estado      : DENTRO DE VENTANA Y DATOS COMPLETOS — enviando...');
@@ -927,11 +1135,9 @@ function debugWeeklyMetrics() {
     var res = fetchMtdActuals('2026-08-10', '2026-08-16');
     if (res && res.payload) {
       var metrics = res.payload.metrics || {};
-      Logger.log("Métricas calculadas en la semana pasada para Argentina:");
+      Logger.log("Métricas calculadas en la semana pasada para Argentina (TODAS):");
       Object.keys(metrics).forEach(function(mKey) {
-        if (mKey.includes('WIS') || mKey.includes('Delivery') || mKey.includes('Orders')) {
-          Logger.log("· " + mKey + " -> " + JSON.stringify(metrics[mKey]['AR'] || {}));
-        }
+        Logger.log("· " + mKey + " -> " + JSON.stringify(metrics[mKey]['AR'] || {}));
       });
     } else {
       Logger.log("[ERROR] fetchMtdActuals no devolvió payload");

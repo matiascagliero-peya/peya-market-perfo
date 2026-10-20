@@ -594,7 +594,7 @@
 
       var cachedMm = (WHS_WEATHER_BY_DATE[activeDate] && WHS_WEATHER_BY_DATE[activeDate][wh] !== undefined)
         ? WHS_WEATHER_BY_DATE[activeDate][wh]
-        : (WHS_WEATHER[wh] !== undefined ? WHS_WEATHER[wh] : null);
+        : null;
 
       if (cachedMm !== null && !isNaN(cachedMm)) {
         el.innerHTML = buildRainBadgeHtml(cachedMm);
@@ -617,12 +617,11 @@
         if (wMap && typeof wMap === 'object') {
           if (!WHS_WEATHER_BY_DATE[activeDate]) WHS_WEATHER_BY_DATE[activeDate] = {};
           Object.assign(WHS_WEATHER_BY_DATE[activeDate], wMap);
-          Object.assign(WHS_WEATHER, wMap);
 
           document.querySelectorAll('.whs-rain-slot').forEach(function(el) {
             var wh = el.getAttribute('data-wh');
-            if (wh && wMap[wh] !== undefined) {
-              el.innerHTML = buildRainBadgeHtml(wMap[wh]);
+            if (wh && WHS_WEATHER_BY_DATE[activeDate] && WHS_WEATHER_BY_DATE[activeDate][wh] !== undefined) {
+              el.innerHTML = buildRainBadgeHtml(WHS_WEATHER_BY_DATE[activeDate][wh]);
             }
           });
         }
@@ -793,8 +792,9 @@
         fFechaEl.value = LATEST_DATE;
       }
 
-      if (LATEST_DATE && res.whsWeather) {
-        WHS_WEATHER_BY_DATE[LATEST_DATE] = res.whsWeather;
+      var wDate = res.weatherDate || LATEST_DATE;
+      if (wDate && res.whsWeather) {
+        WHS_WEATHER_BY_DATE[wDate] = res.whsWeather;
       }
       
       applyFilters();
@@ -1236,8 +1236,6 @@
           whRainVal = a.lluvia_mm;
         } else if (typeof WHS_WEATHER_BY_DATE !== 'undefined' && WHS_WEATHER_BY_DATE[a.fecha] && WHS_WEATHER_BY_DATE[a.fecha][a.pais] !== undefined) {
           whRainVal = WHS_WEATHER_BY_DATE[a.fecha][a.pais];
-        } else if (typeof WHS_WEATHER !== 'undefined' && WHS_WEATHER && WHS_WEATHER[a.pais] !== undefined) {
-          whRainVal = WHS_WEATHER[a.pais];
         }
         rainOk = (whRainVal !== null && !isNaN(whRainVal) && parseFloat(whRainVal) >= 0.1);
       }
@@ -1842,6 +1840,10 @@
           flagTopBorder = 'border-top: 3.5px solid #ef4444;'; // Rojo cerrado
         }
 
+        var fFechaEl = document.getElementById('f-fecha');
+        var fFechaVal = fFechaEl ? fFechaEl.value : 'ALL';
+        var activeDate = (fFechaVal && fFechaVal !== 'ALL') ? fFechaVal : LATEST_DATE;
+
         var whRain = null;
         for (var k = 0; k < groupAlerts.length; k++) {
           if (groupAlerts[k].lluvia_mm !== undefined && groupAlerts[k].lluvia_mm !== null) {
@@ -1849,8 +1851,8 @@
             break;
           }
         }
-        if (whRain === null && typeof WHS_WEATHER !== 'undefined' && WHS_WEATHER && WHS_WEATHER[wh] !== undefined) {
-          whRain = WHS_WEATHER[wh];
+        if (whRain === null && typeof WHS_WEATHER_BY_DATE !== 'undefined' && WHS_WEATHER_BY_DATE[activeDate] && WHS_WEATHER_BY_DATE[activeDate][wh] !== undefined) {
+          whRain = WHS_WEATHER_BY_DATE[activeDate][wh];
         }
         var hadRain = (whRain !== null && !isNaN(whRain) && parseFloat(whRain) >= 0.1);
         
@@ -2002,6 +2004,10 @@
         var subCountryCode = String(wh).split('_')[0].toUpperCase();
         var borderGradient = getCountryBorders(subCountryCode);
 
+        var fFechaEl = document.getElementById('f-fecha');
+        var fFechaVal = fFechaEl ? fFechaEl.value : 'ALL';
+        var activeDate = (fFechaVal && fFechaVal !== 'ALL') ? fFechaVal : LATEST_DATE;
+
         var whRain = null;
         for (var k = 0; k < groupAlerts.length; k++) {
           if (groupAlerts[k].lluvia_mm !== undefined && groupAlerts[k].lluvia_mm !== null) {
@@ -2009,8 +2015,8 @@
             break;
           }
         }
-        if (whRain === null && typeof WHS_WEATHER !== 'undefined' && WHS_WEATHER && WHS_WEATHER[wh] !== undefined) {
-          whRain = WHS_WEATHER[wh];
+        if (whRain === null && typeof WHS_WEATHER_BY_DATE !== 'undefined' && WHS_WEATHER_BY_DATE[activeDate] && WHS_WEATHER_BY_DATE[activeDate][wh] !== undefined) {
+          whRain = WHS_WEATHER_BY_DATE[activeDate][wh];
         }
         
         // Fila cabecera del Warehouse (WHS) con letra MUCHO más chica (9.5px) y fondo premium

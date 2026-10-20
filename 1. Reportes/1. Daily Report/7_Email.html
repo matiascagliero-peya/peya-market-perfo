@@ -119,7 +119,18 @@
     </div>
     <div class="card-body">
       <textarea id="msg" placeholder="Escribí un mensaje para destacar arriba del mail diario (ej: 'Hoy es feriado en AR, los datos pueden llegar más tarde'). Dejalo vacío para no mostrar nada."></textarea>
-      <div class="row">
+      
+      <!-- Opción de un solo envío + contador -->
+      <div style="margin-top:8px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+        <label style="display:inline-flex;align-items:center;gap:7px;font-size:12px;font-weight:600;color:var(--text-sub);cursor:pointer;user-select:none;">
+          <input type="checkbox" id="chk-once" onchange="updatePreview()" style="width:15px;height:15px;accent-color:var(--primary);cursor:pointer;">
+          <span>Mensaje de un solo envío (se borra automáticamente tras enviarlo)</span>
+        </label>
+        <span class="count" id="count">0 caracteres</span>
+      </div>
+
+      <!-- Línea 1: Mensaje y Previsualización -->
+      <div class="row" style="margin-top:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
         <button class="btn btn-primary" id="btn-save" onclick="saveMsg()">
           <svg viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
           Guardar Diario
@@ -132,12 +143,20 @@
           <svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
           Previsualizar mail diario
         </button>
-        <button class="btn" id="btn-force-daily" onclick="abrirModalEnvioForzado('daily')" style="color:#b91c1c;border-color:#fecdd3;" title="Envía el correo diario forzado con 3 verificaciones">
+        <span class="status" id="status"></span>
+      </div>
+
+      <!-- Línea 2: Operaciones y Envío -->
+      <div class="row" style="margin-top:10px;padding-top:10px;border-top:1px dashed #e2e8f0;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <button class="btn" id="btn-check-daily" onclick="verificarDatosDiarioUi()" style="color:#0369a1;border-color:#bae6fd;background:#f0f9ff;" title="Verifica si los datos del día están completos sin enviar nada">
+          <svg viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+          Verificar datos
+        </button>
+        <button class="btn" id="btn-force-daily" onclick="abrirModalEnvioForzado('daily')" style="color:#b91c1c;border-color:#fecdd3;background:#fff1f2;" title="Envía el correo diario forzado con 3 verificaciones">
           <svg viewBox="0 0 24 24"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
           Enviar diario forzado
         </button>
-        <span class="status" id="status"></span>
-        <span class="count" id="count">0 caracteres</span>
+        <span class="status" id="check-status-daily"></span>
       </div>
       <div class="hint">
         <b>Importante:</b> <b>Guardar Diario</b> solo guarda el mensaje — <b>no envía el mail</b>. El Daily Report se envía <b>automáticamente</b> a su hora; lo que esté guardado se incluye arriba de todo. Para verlo antes, usá <b>Previsualizar mail diario</b>.
@@ -186,7 +205,18 @@
     </div>
     <div class="card-body">
       <textarea id="msg-weekly" placeholder="Escribí un mensaje para destacar arriba del mail semanal (ej: 'Cierre de la Semana 31 finalizado, excelente performance general!'). Dejalo vacío para no mostrar nada."></textarea>
-      <div class="row">
+      
+      <!-- Opción de un solo envío + contador -->
+      <div style="margin-top:8px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+        <label style="display:inline-flex;align-items:center;gap:7px;font-size:12px;font-weight:600;color:var(--text-sub);cursor:pointer;user-select:none;">
+          <input type="checkbox" id="chk-once-weekly" onchange="updatePreviewWeekly()" style="width:15px;height:15px;accent-color:#0284c7;cursor:pointer;">
+          <span>Mensaje de un solo envío (se borra automáticamente tras enviarlo)</span>
+        </label>
+        <span class="count" id="count-weekly">0 caracteres</span>
+      </div>
+
+      <!-- Línea 1: Mensaje y Previsualización -->
+      <div class="row" style="margin-top:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
         <button class="btn btn-primary" id="btn-save-weekly" onclick="saveMsgWeekly()" style="background:#0284c7;border-color:#0284c7;">
           <svg viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
           Guardar Semanal
@@ -199,12 +229,20 @@
           <svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
           Previsualizar mail semanal
         </button>
-        <button class="btn" id="btn-force-weekly" onclick="forzarEnvioSemanalUi()" style="color:#b91c1c;border-color:#fecdd3;" title="Envía el correo semanal inmediatamente a todos los destinatarios (fuerza el envío ignorando bloqueos)">
+        <span class="status" id="status-weekly"></span>
+      </div>
+
+      <!-- Línea 2: Operaciones y Envío -->
+      <div class="row" style="margin-top:10px;padding-top:10px;border-top:1px dashed #e2e8f0;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <button class="btn" id="btn-check-weekly" onclick="verificarDatosSemanalUi()" style="color:#0369a1;border-color:#bae6fd;background:#f0f9ff;" title="Verifica si los datos de la semana están completos en Sheets sin enviar nada">
+          <svg viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+          Verificar datos
+        </button>
+        <button class="btn" id="btn-force-weekly" onclick="abrirModalEnvioForzado('weekly')" style="color:#b91c1c;border-color:#fecdd3;background:#fff1f2;" title="Envía el correo semanal forzado con 3 verificaciones de seguridad">
           <svg viewBox="0 0 24 24"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
           Enviar semanal forzado
         </button>
-        <span class="status" id="status-weekly"></span>
-        <span class="count" id="count-weekly">0 caracteres</span>
+        <span class="status" id="check-status-weekly"></span>
       </div>
       <div class="hint">
         <b>Importante:</b> <b>Guardar Semanal</b> solo guarda el mensaje — <b>no envía el mail</b>. El Reporte Semanal se envía <b>automáticamente</b> cada lunes; si los datos no están 100% listos a su hora, se <b>bloquea</b> para que no se reintente y deberás usar <b>Enviar semanal forzado</b>.
@@ -272,7 +310,7 @@
       <!-- PASO 1 -->
       <div id="mf-step-1">
         <div style="background:#fff1f2;border:1px solid #fecdd3;border-radius:8px;padding:12px 14px;color:#991b1b;font-size:12.5px;line-height:1.5;margin-bottom:16px;">
-          <b>⚠️ Advertencia:</b> Estás por forzar el envío del correo oficial ignorando los chequeos automáticos de datos desactualizados o bloqueos.
+          <b>Advertencia:</b> Estás por forzar el envío del correo oficial ignorando los chequeos automáticos de datos desactualizados o bloqueos.
         </div>
         <div style="font-size:13px;color:#334155;line-height:1.6;" id="mf-info-text">
           Estás por forzar el envío del reporte.
@@ -300,7 +338,7 @@
           </div>
         </div>
 
-        <input type="text" id="mf-search" placeholder="🔍 Buscar por nombre o email..." oninput="mfFilterRecipients(this.value)" style="width:100%;height:34px;border:1px solid #cbd5e1;border-radius:7px;padding:0 10px;font-size:12px;margin-bottom:10px;outline:none;box-sizing:border-box;">
+        <input type="text" id="mf-search" placeholder="Buscar por nombre o email..." oninput="mfFilterRecipients(this.value)" style="width:100%;height:34px;border:1px solid #cbd5e1;border-radius:7px;padding:0 10px;font-size:12px;margin-bottom:10px;outline:none;box-sizing:border-box;">
 
         <div id="mf-recip-list" style="border:1px solid #e2e8f0;border-radius:8px;max-height:250px;overflow-y:auto;background:#f8fafc;padding:6px;">
           <!-- items checkboxes -->
@@ -310,7 +348,7 @@
       <!-- PASO 3 -->
       <div id="mf-step-3" style="display:none;">
         <div style="background:#fef2f2;border:1.5px solid #ef4444;border-radius:10px;padding:14px;color:#991b1b;margin-bottom:16px;">
-          <div style="font-size:13.5px;font-weight:800;margin-bottom:6px;">🚨 Verificación final antes del disparo</div>
+          <div style="font-size:13.5px;font-weight:800;margin-bottom:6px;">Verificación final antes del disparo</div>
           <div style="font-size:12px;line-height:1.6;" id="mf-summary"></div>
         </div>
         <div style="font-size:12.5px;color:#334155;margin-bottom:8px;font-weight:600;">
@@ -392,12 +430,15 @@
       $('prev-off').style.display = 'none';
       var pb = $('prev-by');
       if(pb){
+        var onceTag = ($('chk-once') && $('chk-once').checked)
+          ? ' <span style="font-size:10px;font-weight:700;color:#e50044;background:#fff1f2;padding:2px 7px;border-radius:10px;border:1px solid #fecdd3;margin-left:6px;">Un solo envío</span>'
+          : '';
         if(dirty){
           pb.style.display = 'block';
-          pb.innerHTML = '<i>Al guardar quedará a tu nombre.</i>';
+          pb.innerHTML = '<i>Al guardar quedará a tu nombre.</i>' + onceTag;
         } else if(SAVED_BY){
           pb.style.display = 'block';
-          pb.innerHTML = 'Escrito por <b style="color:#475569">' + (SAVED_BYNAME || SAVED_BY) + ' &lt;' + SAVED_BY + '&gt;</b>' + (SAVED_AT ? (' · ' + SAVED_AT) : '');
+          pb.innerHTML = 'Escrito por <b style="color:#475569">' + (SAVED_BYNAME || SAVED_BY) + ' &lt;' + SAVED_BY + '&gt;</b>' + (SAVED_AT ? (' · ' + SAVED_AT) : '') + onceTag;
         } else {
           pb.style.display = 'none';
         }
@@ -421,12 +462,15 @@
       $('prev-weekly-off').style.display = 'none';
       var pb = $('prev-weekly-by');
       if(pb){
+        var onceTagW = ($('chk-once-weekly') && $('chk-once-weekly').checked)
+          ? ' <span style="font-size:10px;font-weight:700;color:#0284c7;background:#e0f2fe;padding:2px 7px;border-radius:10px;border:1px solid #bae6fd;margin-left:6px;">Un solo envío</span>'
+          : '';
         if(dirty){
           pb.style.display = 'block';
-          pb.innerHTML = '<i>Al guardar quedará a tu nombre.</i>';
+          pb.innerHTML = '<i>Al guardar quedará a tu nombre.</i>' + onceTagW;
         } else if(SAVED_WEEKLY_BY){
           pb.style.display = 'block';
-          pb.innerHTML = 'Escrito por <b style="color:#475569">' + (SAVED_WEEKLY_BYNAME || SAVED_WEEKLY_BY) + ' &lt;' + SAVED_WEEKLY_BY + '&gt;</b>' + (SAVED_WEEKLY_AT ? (' · ' + SAVED_WEEKLY_AT) : '');
+          pb.innerHTML = 'Escrito por <b style="color:#475569">' + (SAVED_WEEKLY_BYNAME || SAVED_WEEKLY_BY) + ' &lt;' + SAVED_WEEKLY_BY + '&gt;</b>' + (SAVED_WEEKLY_AT ? (' · ' + SAVED_WEEKLY_AT) : '') + onceTagW;
         } else {
           pb.style.display = 'none';
         }
@@ -451,7 +495,7 @@
     } else {
       var warn = '';
       if(STATUS.dataCheck && !STATUS.dataCheck.ok){
-        warn = '<div style="margin-top:7px;padding:6px 10px;background:#fff1f2;border:1px solid #fecdd3;border-radius:6px;color:#991b1b;font-size:11.5px;font-weight:600">⚠️ En espera de datos: ' + STATUS.dataCheck.motivo + '. El mail automático no se enviará hasta que Orders y GMV alcancen la fecha del daily.</div>';
+        warn = '<div style="margin-top:7px;padding:6px 10px;background:#fff1f2;border:1px solid #fecdd3;border-radius:6px;color:#991b1b;font-size:11.5px;font-weight:600">En espera de datos: ' + STATUS.dataCheck.motivo + '. El mail automático no se enviará hasta que Orders y GMV alcancen la fecha del daily.</div>';
       }
       el.innerHTML = 'El mail se envía <b>automáticamente hoy ~' + STATUS.horaStr + '</b> (' + STATUS.zona + ') a ' + STATUS.recipients + ' destinatarios.' + warn + '<div style="margin-top:4px">' + pieza + ' en ese envío.</div>';
     }
@@ -488,11 +532,30 @@
     if(w.enviadoEstaSemana){
       el.innerHTML = 'El Reporte Semanal de la semana <b>' + w.semana + ' ya se envió</b> a ' + STATUS.recipients + ' destinatarios. El próximo sale el <b>próximo lunes ~' + w.horaStr + '</b> (' + w.zona + '). ' + pieza + ' en ese envío.';
     } else if(w.bloqueadoEstaSemana){
-      el.innerHTML = '<span style="color:#b91c1c;font-weight:700">⛔ ENVÍO AUTOMÁTICO BLOQUEADO PARA LA SEMANA ' + w.semana + ':</span> ' + (w.motivoBloqueo || 'Datos incompletos al momento del envío') + '. El sistema no reintentará automáticamente. Usá el botón <b>Enviar semanal forzado</b> cuando los datos estén listos.';
+      var listaHtml = '';
+      if(w.dataCheck && w.dataCheck.faltantes && w.dataCheck.faltantes.length > 0){
+        listaHtml = '<ul style="margin:8px 0 6px 18px;padding:0;line-height:1.6;font-size:12px;font-weight:600;color:#991b1b;">' +
+          w.dataCheck.faltantes.map(function(f){ return '<li>' + f + '</li>'; }).join('') +
+          '</ul>';
+      } else if(w.motivoBloqueo){
+        var items = w.motivoBloqueo.split(' · ');
+        listaHtml = '<ul style="margin:8px 0 6px 18px;padding:0;line-height:1.6;font-size:12px;font-weight:600;color:#991b1b;">' +
+          items.map(function(f){ return '<li>' + f + '</li>'; }).join('') +
+          '</ul>';
+      }
+      el.innerHTML = '<div style="color:#b91c1c;font-weight:800;font-size:13px;">ENVÍO AUTOMÁTICO BLOQUEADO PARA LA SEMANA ' + w.semana + ':</div>' +
+        listaHtml +
+        '<div style="margin-top:6px;font-size:11.5px;color:#475569;">El sistema no reintentará automáticamente. Usá el botón <b>Enviar semanal forzado</b> cuando los datos estén listos.</div>';
     } else {
       var warn = '';
       if(w.dataCheck && !w.dataCheck.ok){
-        warn = '<div style="margin-top:6px;padding:6px 10px;background:#fff1f2;border:1px solid #fecdd3;border-radius:6px;color:#991b1b;font-size:11.5px;font-weight:600">⚠️ Datos de la semana ' + w.semana + ' aún incompletos: ' + w.dataCheck.motivo + '. Si no están listos el lunes a las ' + w.horaStr + ', el envío automático se cancelará y bloqueará permanentemente.</div>';
+        var items = (w.dataCheck.faltantes && w.dataCheck.faltantes.length > 0)
+          ? w.dataCheck.faltantes.map(function(f){ return '<li>' + f + '</li>'; }).join('')
+          : ('<li>' + w.dataCheck.motivo + '</li>');
+        warn = '<div style="margin-top:8px;padding:8px 12px;background:#fff1f2;border:1px solid #fecdd3;border-radius:8px;color:#991b1b;font-size:12px;">' +
+               '<b>Datos de la semana ' + w.semana + ' aún incompletos:</b>' +
+               '<ul style="margin:4px 0 0 16px;padding:0;line-height:1.5;font-weight:600;">' + items + '</ul>' +
+               '</div>';
       }
       el.innerHTML = 'El Reporte Semanal se envía <b>automáticamente los lunes ~' + w.horaStr + '</b> (' + w.zona + ') para la semana ' + w.semana + ' a ' + STATUS.recipients + ' destinatarios.' + warn + '<div style="margin-top:4px">' + pieza + ' en ese envío.</div>';
     }
@@ -516,20 +579,40 @@
     $('mf-title').textContent = esDaily ? 'Envío Forzado: Daily Report' : 'Envío Forzado: Reporte Semanal';
 
     // Texto informativo en Paso 1
+    var numRecip = (STATUS && STATUS.recipients) ? STATUS.recipients : '132';
     var info = '';
     if(esDaily){
       var dFecha = (STATUS && STATUS.dataCheck && STATUS.dataCheck.dailyDateDmy) || 'más reciente';
-      info = 'Estás por forzar el envío del <b>Daily Report</b> (' + dFecha + ').';
+      info = 'Estás por forzar el envío del <b>Daily Report</b> (' + dFecha + ') a <b>' + numRecip + ' destinatarios</b>.<br><br>' +
+             '<div style="background:#fef2f2;border:1.5px solid #fecdd3;padding:12px;border-radius:8px;font-size:13.5px;color:#991b1b;font-weight:700;">' +
+             '¿Estás seguro de que querés enviar esto a los ' + numRecip + ' destinatarios?' +
+             '</div>';
       if(STATUS && STATUS.dataCheck && !STATUS.dataCheck.ok){
-        info += '<br><br><span style="color:#b91c1c;">Motivo actual de espera: ' + STATUS.dataCheck.motivo + '</span>';
+        info += '<br><span style="color:#b91c1c;">Motivo actual de espera: ' + STATUS.dataCheck.motivo + '</span>';
       }
     } else {
       var wSem = (STATUS && STATUS.weekly && STATUS.weekly.semana) || 'cerrada anterior';
-      info = 'Estás por forzar el envío del <b>Reporte Semanal</b> (semana ' + wSem + ').';
+      info = 'Estás por forzar el envío del <b>Reporte Semanal</b> (semana ' + wSem + ') a <b>' + numRecip + ' destinatarios</b>.<br><br>' +
+             '<div style="background:#fef2f2;border:1.5px solid #fecdd3;padding:12px;border-radius:8px;font-size:13.5px;color:#991b1b;font-weight:700;">' +
+             '¿Estás seguro de que querés enviar esto a los ' + numRecip + ' destinatarios?' +
+             '</div>';
       if(STATUS && STATUS.weekly && STATUS.weekly.bloqueadoEstaSemana){
-        info += '<br><br><span style="color:#b91c1c;">El envío automático estaba BLOQUEADO: ' + (STATUS.weekly.motivoBloqueo || 'Datos incompletos') + '</span>';
+        var itemsHtml = '';
+        if(STATUS.weekly.dataCheck && STATUS.weekly.dataCheck.faltantes && STATUS.weekly.dataCheck.faltantes.length > 0){
+          itemsHtml = '<ul style="margin:6px 0 0 16px;padding:0;line-height:1.5;font-weight:600;">' +
+            STATUS.weekly.dataCheck.faltantes.map(function(f){ return '<li>' + f + '</li>'; }).join('') +
+            '</ul>';
+        } else if(STATUS.weekly.motivoBloqueo){
+          itemsHtml = '<ul style="margin:6px 0 0 16px;padding:0;line-height:1.5;font-weight:600;">' +
+            STATUS.weekly.motivoBloqueo.split(' · ').map(function(f){ return '<li>' + f + '</li>'; }).join('') +
+            '</ul>';
+        }
+        info += '<br><div style="color:#b91c1c;font-weight:700;">El envío automático estaba BLOQUEADO:</div>' + itemsHtml;
       } else if(STATUS && STATUS.weekly && STATUS.weekly.dataCheck && !STATUS.weekly.dataCheck.ok){
-        info += '<br><br><span style="color:#b91c1c;">Datos incompletos: ' + STATUS.weekly.dataCheck.motivo + '</span>';
+        var itemsHtml = (STATUS.weekly.dataCheck.faltantes && STATUS.weekly.dataCheck.faltantes.length > 0)
+          ? ('<ul style="margin:6px 0 0 16px;padding:0;line-height:1.5;font-weight:600;">' + STATUS.weekly.dataCheck.faltantes.map(function(f){ return '<li>' + f + '</li>'; }).join('') + '</ul>')
+          : ('<div style="margin-top:4px;">' + STATUS.weekly.dataCheck.motivo + '</div>');
+        info += '<br><div style="color:#b91c1c;font-weight:700;">Datos incompletos:</div>' + itemsHtml;
       }
     }
     $('mf-info-text').innerHTML = info;
@@ -568,6 +651,110 @@
 
   function cerrarModalEnvioForzado(){
     $('modal-force').style.display = 'none';
+  }
+
+  function forzarEnvioSemanalUi(){
+    abrirModalEnvioForzado('weekly');
+  }
+
+  function setCheckStatusWeekly(kind, text){
+    var s = $('check-status-weekly');
+    if(!s) return;
+    var icons = {
+      ok:'<svg viewBox="0 0 24 24" width="14" height="14" style="stroke:currentColor;fill:none;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;"><polyline points="20 6 9 17 4 12"/></svg>',
+      err:'<svg viewBox="0 0 24 24" width="14" height="14" style="stroke:currentColor;fill:none;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>',
+      info:'<svg viewBox="0 0 24 24" width="14" height="14" style="stroke:currentColor;fill:none;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>'
+    };
+    s.className = 'status show ' + kind;
+    s.style.display = 'inline-flex';
+    s.innerHTML = (icons[kind]||'') + '<span style="margin-left:4px;">' + text + '</span>';
+  }
+
+  function setCheckStatusDaily(kind, text){
+    var s = $('check-status-daily');
+    if(!s) return;
+    var icons = {
+      ok:'<svg viewBox="0 0 24 24" width="14" height="14" style="stroke:currentColor;fill:none;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;"><polyline points="20 6 9 17 4 12"/></svg>',
+      err:'<svg viewBox="0 0 24 24" width="14" height="14" style="stroke:currentColor;fill:none;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>',
+      info:'<svg viewBox="0 0 24 24" width="14" height="14" style="stroke:currentColor;fill:none;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>'
+    };
+    s.className = 'status show ' + kind;
+    s.style.display = 'inline-flex';
+    s.innerHTML = (icons[kind]||'') + '<span style="margin-left:4px;">' + text + '</span>';
+  }
+
+  function verificarDatosSemanalUi(){
+    var btn = $('btn-check-weekly');
+    var orig = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<svg class="spin" viewBox="0 0 24 24" width="14" height="14" style="stroke:currentColor;fill:none;stroke-width:2.5;"><circle cx="12" cy="12" r="10" stroke-opacity="0.25"/><path d="M12 2a10 10 0 0 1 10 10"/></svg> Verificando...';
+    setCheckStatusWeekly('info', 'Verificando datos de la semana en Google Sheets...');
+
+    if(LOCAL){
+      setTimeout(function(){
+        btn.disabled = false; btn.innerHTML = orig;
+        setCheckStatusWeekly('ok', 'Simulación: datos verificados');
+      }, 600);
+      return;
+    }
+
+    google.script.run
+      .withSuccessHandler(function(s){
+        btn.disabled = false; btn.innerHTML = orig;
+        STATUS = s;
+        renderSendInfoWeekly();
+        if(s && s.weekly && s.weekly.dataCheck){
+          if(s.weekly.dataCheck.ok){
+            setCheckStatusWeekly('ok', 'Datos de la semana completos y listos para enviar');
+          } else {
+            setCheckStatusWeekly('err', 'Faltan datos: ' + s.weekly.dataCheck.motivo);
+          }
+        } else {
+          setCheckStatusWeekly('info', 'Verificación finalizada');
+        }
+      })
+      .withFailureHandler(function(err){
+        btn.disabled = false; btn.innerHTML = orig;
+        setCheckStatusWeekly('err', 'Error al verificar: ' + err);
+      })
+      .getEmailStatus();
+  }
+
+  function verificarDatosDiarioUi(){
+    var btn = $('btn-check-daily');
+    var orig = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<svg class="spin" viewBox="0 0 24 24" width="14" height="14" style="stroke:currentColor;fill:none;stroke-width:2.5;"><circle cx="12" cy="12" r="10" stroke-opacity="0.25"/><path d="M12 2a10 10 0 0 1 10 10"/></svg> Verificando...';
+    setCheckStatusDaily('info', 'Verificando datos diarios en Google Sheets...');
+
+    if(LOCAL){
+      setTimeout(function(){
+        btn.disabled = false; btn.innerHTML = orig;
+        setCheckStatusDaily('ok', 'Simulación: datos diarios verificados');
+      }, 600);
+      return;
+    }
+
+    google.script.run
+      .withSuccessHandler(function(s){
+        btn.disabled = false; btn.innerHTML = orig;
+        STATUS = s;
+        renderSendInfo();
+        if(s && s.dataCheck){
+          if(s.dataCheck.ok){
+            setCheckStatusDaily('ok', 'Datos diarios completos y listos para enviar');
+          } else {
+            setCheckStatusDaily('err', 'Faltan datos: ' + s.dataCheck.motivo);
+          }
+        } else {
+          setCheckStatusDaily('info', 'Verificación finalizada');
+        }
+      })
+      .withFailureHandler(function(err){
+        btn.disabled = false; btn.innerHTML = orig;
+        setCheckStatusDaily('err', 'Error al verificar: ' + err);
+      })
+      .getEmailStatus();
   }
 
   function mfUpdateStepUi(){
@@ -696,6 +883,9 @@
     var excl = MF_RECIPIENTS.filter(function(r){ return !r.checked; });
 
     var html = '<b>Reporte:</b> ' + (esDaily ? 'Daily Report' : 'Reporte Semanal MTD') + '<br>' +
+      '<div style="margin:10px 0;padding:10px 12px;background:#fee2e2;border-radius:8px;color:#991b1b;font-weight:800;font-size:13px;border:1px solid #f87171;">' +
+      '¿Estás seguro de que querés enviar esto a los ' + sel.length + ' destinatarios seleccionados?' +
+      '</div>' +
       '<b>Destinatarios a enviar:</b> <span style="font-size:13px;font-weight:800;color:#0f172a;">' + sel.length + ' personas</span><br>' +
       '<b>Destinatarios excluidos (deslistados):</b> ' + (excl.length > 0 ? ('<b style="color:#dc2626">' + excl.length + '</b>') : '0');
 
@@ -720,7 +910,14 @@
     btn.innerHTML = 'Enviando correo forzado...';
 
     var excluidos = MF_RECIPIENTS.filter(function(r){ return !r.checked; }).map(function(r){ return r.email; });
+    var activosCount = MF_RECIPIENTS.length - excluidos.length;
     var esDaily = (MF_TYPE === 'daily');
+
+    if(!confirm('¿Estás seguro de que querés enviar este reporte a los ' + activosCount + ' destinatarios?')){
+      btn.disabled = false;
+      btn.innerHTML = orig;
+      return;
+    }
 
     if(LOCAL){
       setTimeout(function(){
@@ -793,7 +990,9 @@
       .withSuccessHandler(function(info){
         info = info || {};
         SAVED = info.msg || ''; SAVED_BY = info.by || ''; SAVED_BYNAME = info.byName || ''; SAVED_AT = info.at || '';
-        $('msg').value = SAVED; updatePreview(); if(cb) cb();
+        $('msg').value = SAVED;
+        if($('chk-once')) $('chk-once').checked = !!info.once;
+        updatePreview(); if(cb) cb();
       })
       .withFailureHandler(function(err){ setStatus('err', 'No se pudo cargar: ' + err); if(cb) cb(); })
       .getEmailMessageInfo();
@@ -811,7 +1010,9 @@
       .withSuccessHandler(function(info){
         info = info || {};
         SAVED_WEEKLY = info.msg || ''; SAVED_WEEKLY_BY = info.by || ''; SAVED_WEEKLY_BYNAME = info.byName || ''; SAVED_WEEKLY_AT = info.at || '';
-        $('msg-weekly').value = SAVED_WEEKLY; updatePreviewWeekly(); if(cb) cb();
+        $('msg-weekly').value = SAVED_WEEKLY;
+        if($('chk-once-weekly')) $('chk-once-weekly').checked = !!info.once;
+        updatePreviewWeekly(); if(cb) cb();
       })
       .withFailureHandler(function(err){ setStatusWeekly('err', 'No se pudo cargar: ' + err); if(cb) cb(); })
       .getWeeklyEmailMessageInfo();
@@ -819,6 +1020,7 @@
 
   function saveMsg(){
     var v = $('msg').value;
+    var once = $('chk-once') ? $('chk-once').checked : false;
     $('btn-save').disabled = true;
     if(LOCAL){
       try { if(v.trim()==='') localStorage.removeItem(LS_KEY); else localStorage.setItem(LS_KEY, v.trim()); } catch(e){}
@@ -834,14 +1036,15 @@
         SAVED = (res && res.message) || '';
         SAVED_BY = (res && res.by) || ''; SAVED_BYNAME = (res && res.byName) || ''; SAVED_AT = (res && res.at) || '';
         $('btn-save').disabled = false; updatePreview(); renderSendInfo();
-        setStatus('ok', SAVED ? 'Guardado — se incluye en el próximo envío' : 'Mensaje vacío — no se mostrará');
+        setStatus('ok', SAVED ? (once ? 'Guardado (un solo envío) — se borrará tras enviar' : 'Guardado — se incluye en el próximo envío') : 'Mensaje vacío — no se mostrará');
       })
       .withFailureHandler(function(err){ $('btn-save').disabled = false; setStatus('err', 'Error al guardar: ' + err); })
-      .setEmailMessage(v);
+      .setEmailMessage(v, once);
   }
 
   function saveMsgWeekly(){
     var v = $('msg-weekly').value;
+    var once = $('chk-once-weekly') ? $('chk-once-weekly').checked : false;
     $('btn-save-weekly').disabled = true;
     if(LOCAL){
       try { if(v.trim()==='') localStorage.removeItem(LS_KEY_WEEKLY); else localStorage.setItem(LS_KEY_WEEKLY, v.trim()); } catch(e){}
@@ -857,19 +1060,21 @@
         SAVED_WEEKLY = (res && res.message) || '';
         SAVED_WEEKLY_BY = (res && res.by) || ''; SAVED_WEEKLY_BYNAME = (res && res.byName) || ''; SAVED_WEEKLY_AT = (res && res.at) || '';
         $('btn-save-weekly').disabled = false; updatePreviewWeekly();
-        setStatusWeekly('ok', SAVED_WEEKLY ? 'Guardado — se incluye en el próximo envío' : 'Mensaje vacío — no se mostrará');
+        setStatusWeekly('ok', SAVED_WEEKLY ? (once ? 'Guardado (un solo envío) — se borrará tras enviar' : 'Guardado — se incluye en el próximo envío') : 'Mensaje vacío — no se mostrará');
       })
       .withFailureHandler(function(err){ $('btn-save-weekly').disabled = false; setStatusWeekly('err', 'Error al guardar: ' + err); })
-      .setWeeklyEmailMessage(v);
+      .setWeeklyEmailMessage(v, once);
   }
 
   function clearMsg(){
     $('msg').value = '';
+    if($('chk-once')) $('chk-once').checked = false;
     saveMsg();
   }
 
   function clearMsgWeekly(){
     $('msg-weekly').value = '';
+    if($('chk-once-weekly')) $('chk-once-weekly').checked = false;
     saveMsgWeekly();
   }
 

@@ -20,8 +20,8 @@ CREATE TABLE IF NOT EXISTS `peya-food-and-groceries.automated_tables_reports.abs
 PARTITION BY fecha CLUSTER BY country_code;
 
 SET max_fuente = (
-    SELECT MAX(period_day)
-    FROM `fulfillment-dwh-production.curated_data_shared_dmart.availability_data`
+    SELECT MAX(date)
+    FROM `peya-delivery-and-support.automated_tables_reports.dmarts_loss_tree`
 );
 
 SET cantidad_filas = (

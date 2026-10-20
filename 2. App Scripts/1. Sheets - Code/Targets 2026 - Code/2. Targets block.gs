@@ -11,15 +11,21 @@
  */
 
 function onOpen() {
+  // 1. Verificación automática de hojas de Automatización por minuto (si ScriptMaestro está presente)
+  try {
+    if (typeof verificarOCrearHojas === 'function') {
+      verificarOCrearHojas();
+    }
+  } catch (e) {
+    console.error("Error al verificar hojas en onOpen: " + e.message);
+  }
+
   var ui = SpreadsheetApp.getUi();
   
   // Menú 1: Gestión de Reportes (Automatización por minuto)
   ui.createMenu('🚀 Gestión de Reportes')
     .addItem('⚠️ FORZAR Sincronizar Extracto', 'forzarSincronizacion')
     .addItem('⚠️ FORZAR Enviar a destinos',    'forzarEnvios')
-    .addSeparator()
-    .addItem('🧩 Preparar hoja (Columnas Maestro)', 'prepararHojaMaestro')
-    .addItem('📧 Enviar Estado Actual', 'enviarEstado')
     .addToUi();
 
   // Menú 2: Mis Scripts (Procesamiento de Targets)

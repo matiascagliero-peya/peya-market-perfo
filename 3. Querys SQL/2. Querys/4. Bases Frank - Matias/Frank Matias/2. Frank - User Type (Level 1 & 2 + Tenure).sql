@@ -1,19 +1,6 @@
-DECLARE query_name STRING DEFAULT '2. Frank - User Type (Level 1 & 2 + Tenure)';
-
 -- ==============================================================================
--- Frank - User Type (Motor de Ciclo de Vida L1 y L2)
---
--- Origen: peya-food-and-groceries.automated_tables_reports.frank_user_monthly_activity
+-- TABLA 2: Frank - User Type (Motor de Ciclo de Vida L1 y L2: Market + AAA)
 -- Destino: peya-food-and-groceries.automated_tables_reports.frank_user_type_monthly
---
--- Granularidad: Mes (DATE_TRUNC), customer_id, country (con línea temporal continua y fantasmas)
---
--- Cobertura:
---   1. PLATFORM: Ciclo de vida y tenures en toda la plataforma PeYa.
---   2. AAA: Ciclo de vida y tenures en Supermercados de Terceros (partners AAA).
---   3. MARKET: Ciclo de vida y tenures en Peya Market (Darkstores).
---   4. FLAGS: DY_order (Double Ya) y UF_order (Ultra Fresh).
---   5. L2_Actual_Type: Sub-tipo de ciclo de vida de Market y comportamiento cross-negocio.
 -- ==============================================================================
 
 DROP TABLE IF EXISTS `peya-food-and-groceries.automated_tables_reports.frank_user_type_monthly`;
@@ -24,24 +11,23 @@ CLUSTER BY country, customer_id AS
 
 WITH
 
--- 1. Base consolidada desde la tabla de actividad previa (Zero joins pesados)
+-- 1. Base consolidada desde la tabla de actividad previa
 base_activity AS (
     SELECT
         month,
         customer_id,
         country,
         is_active_platform,
-        is_active_market,
-        is_active_aaa,
         is_active_food,
+        is_active_aaa,
+        is_active_dmart AS is_active_market,
         DY_order,
-        UF_order,
-        first_order_acquisition_channel
+        UF_order
     FROM `peya-food-and-groceries.automated_tables_reports.frank_user_monthly_activity`
     WHERE country IS NOT NULL
 ),
 
--- 2. Detección de Cohorts / Adopciones globales y por negocio
+-- 2. Detección de fechas de adopción y próxima compra por negocio
 customer_adoptions AS (
     SELECT
         *,
@@ -53,7 +39,7 @@ customer_adoptions AS (
     FROM base_activity
 ),
 
--- 3. Timeline Continuo (Meses Activos + Generador de Fantasmas)
+-- 3. Timeline continuo y generación de meses fantasma para usuarios inactivos
 user_timeline AS (
     -- Meses reales con compra
     SELECT
@@ -69,8 +55,7 @@ user_timeline AS (
         is_active_market,
         is_active_food,
         DY_order,
-        UF_order,
-        first_order_acquisition_channel
+        UF_order
     FROM customer_adoptions
 
     UNION ALL
@@ -89,15 +74,14 @@ user_timeline AS (
         FALSE AS is_active_market,
         FALSE AS is_active_food,
         'Sin compras' AS DY_order,
-        'Sin compras' AS UF_order,
-        first_order_acquisition_channel
+        'Sin compras' AS UF_order
     FROM customer_adoptions,
          UNNEST(GENERATE_ARRAY(1, 60)) AS gap
     WHERE (next_month IS NULL OR DATE_DIFF(next_month, month, MONTH) > gap)
       AND DATE_ADD(month, INTERVAL gap MONTH) <= DATE_TRUNC(CURRENT_DATE(), MONTH)
 ),
 
--- 4. Cálculo de Rachas Consecutivas (Islands & Gaps)
+-- 4. Cálculo de grupos de racha (Islands & Gaps)
 streaks_calc AS (
     SELECT
         *,
@@ -125,6 +109,7 @@ streaks_calc AS (
     FROM user_timeline
 ),
 
+-- 5. Enumeración de meses consecutivos activos e inactivos
 streaks_counted AS (
     SELECT
         *,
@@ -140,7 +125,7 @@ streaks_counted AS (
     FROM streaks_calc
 ),
 
--- 5. Asignación de Estados L1 y Tenures
+-- 6. Asignación de macro estados L1 y tenures
 types_assigned AS (
     SELECT
         month,
@@ -151,7 +136,6 @@ types_assigned AS (
         is_active_market,
         DY_order,
         UF_order,
-        first_order_acquisition_channel,
 
         -- Platform
         platform_adoption_date_global AS Platform_adoption_date,
@@ -217,38 +201,51 @@ types_assigned AS (
     FROM streaks_counted
 ),
 
--- 6. Contexto y Clasificación L2_Actual_Type (22 Subtipos)
+-- 7. Contexto de estados y tenures previos (LAG)
 l2_context AS (
     SELECT
         t.*,
+        -- Contexto Market
         LAG(t.Market_Actual_type_ternure) OVER (PARTITION BY t.customer_id, t.country ORDER BY t.month) AS prev_market_tenure,
         LAG(t.Market_Actual_type_ternure, 2) OVER (PARTITION BY t.customer_id, t.country ORDER BY t.month) AS prev_prev_market_tenure,
-        LAG(t.DY_order) OVER (PARTITION BY t.customer_id, t.country ORDER BY t.month) AS prev_dy_order
+        LAG(t.DY_order) OVER (PARTITION BY t.customer_id, t.country ORDER BY t.month) AS prev_dy_order,
+        MIN(IF(t.is_active_market AND t.month = t.Market_adoption_date, t.DY_order, NULL)) OVER (PARTITION BY t.customer_id) AS market_adoption_dy,
+
+        -- Contexto AAA
+        LAG(t.AAA_Actual_type_ternure) OVER (PARTITION BY t.customer_id, t.country ORDER BY t.month) AS prev_aaa_tenure,
+        LAG(t.AAA_Actual_type_ternure, 2) OVER (PARTITION BY t.customer_id, t.country ORDER BY t.month) AS prev_prev_aaa_tenure,
+        MIN(IF(t.is_active_aaa AND t.month = t.AAA_adoption_date, t.DY_order, NULL)) OVER (PARTITION BY t.customer_id) AS aaa_adoption_dy
     FROM types_assigned t
 ),
 
+-- 8. Clasificación de Level 2 (Market y AAA)
 l2_assigned AS (
     SELECT
         *,
+
+        -- L2 PeYa Market
         CASE
-            -- 1. NEVER ACTIVE
-            WHEN Market_Actual_Type = 'Never Active' THEN 'Never Active'
+            -- 1. Never Active
+            WHEN Market_Actual_Type = 'Never Active' THEN '-'
 
-            -- 2. NEW USER (Origen al entrar a la app)
+            -- 2. New User
             WHEN Market_Actual_Type = 'New User' THEN
-                COALESCE(first_order_acquisition_channel, 'Acquired by Food')
-
-            -- 3. M1 RETURN (Mes 2 en Market)
-            WHEN Market_Actual_Type = 'M1 Return' THEN
                 CASE
-                    WHEN is_active_food AND (is_active_market OR is_active_aaa) THEN 'M1 Multi-Vertical'
-                    WHEN DY_order = 'Solo DY' THEN 'M1 Dmart DY'
-                    WHEN DY_order IN ('No DY', 'DY y No DY') THEN 'M1 Dmart Full'
-                    WHEN is_active_aaa THEN 'M1 AAA'
-                    ELSE 'M1 Food Only'
+                    WHEN DY_order = 'Solo DY' THEN 'DY Adoption'
+                    WHEN month = Platform_adoption_date THEN 'App Adoption'
+                    WHEN AAA_adoption_date IS NOT NULL AND AAA_adoption_date < Market_adoption_date THEN 'AAA Adoption'
+                    ELSE 'Dmart Adoption'
                 END
 
-            -- 4. REACTIVATION (Regreso tras inactividad)
+            -- 3. M1 Return
+            WHEN Market_Actual_Type = 'M1 Return' THEN
+                CASE
+                    WHEN market_adoption_dy = 'Solo DY' AND DY_order = 'Solo DY' THEN 'M1 Dmart DY'
+                    WHEN market_adoption_dy = 'Solo DY' THEN 'M1 Dmart DY Converted'
+                    ELSE 'M1 Return Users - Dmart'
+                END
+
+            -- 4. Reactivation
             WHEN Market_Actual_Type = 'Reactivation' THEN
                 CASE
                     WHEN DY_order = 'Solo DY' THEN 'DY Reactivation'
@@ -258,7 +255,7 @@ l2_assigned AS (
                     ELSE 'Occasional Reactivation'
                 END
 
-            -- 5. RE-ORDER (Mes 2 post-reactivación)
+            -- 5. Re-Order
             WHEN Market_Actual_Type = 'Re-Order' THEN
                 CASE
                     WHEN prev_dy_order = 'Solo DY' AND DY_order = 'Solo DY' THEN 'Re-Order DY'
@@ -269,7 +266,7 @@ l2_assigned AS (
                     ELSE 'Re-Order Occasional'
                 END
 
-            -- 6. RECURRING RETURN (Racha ininterrumpida)
+            -- 6. Recurring Return
             WHEN Market_Actual_Type = 'Recurring Return' THEN
                 CASE
                     WHEN Market_Actual_type_ternure = 3 THEN 'Recent Recurring Return'
@@ -277,7 +274,7 @@ l2_assigned AS (
                     ELSE 'Royal Recurring Return'
                 END
 
-            -- 7. CHURNED (Inactividad en Market)
+            -- 7. Churned
             WHEN Market_Actual_Type = 'Churned' THEN
                 CASE
                     WHEN Market_Actual_type_ternure IN (1, 2) THEN 'Recently Churn'
@@ -286,18 +283,81 @@ l2_assigned AS (
                 END
 
             ELSE '-'
-        END AS L2_Actual_Type
+        END AS L2_Market_Actual_Type,
+
+        -- L2 AAA
+        CASE
+            -- 1. Never Active
+            WHEN AAA_Actual_Type = 'Never Active' THEN '-'
+
+            -- 2. New User
+            WHEN AAA_Actual_Type = 'New User' THEN
+                CASE
+                    WHEN DY_order = 'Solo DY' THEN 'DY Adoption'
+                    WHEN month = Platform_adoption_date THEN 'App Adoption'
+                    WHEN Market_adoption_date IS NOT NULL AND Market_adoption_date < AAA_adoption_date THEN 'Dmart Adoption'
+                    ELSE 'AAA Adoption'
+                END
+
+            -- 3. M1 Return
+            WHEN AAA_Actual_Type = 'M1 Return' THEN
+                CASE
+                    WHEN aaa_adoption_dy = 'Solo DY' AND DY_order = 'Solo DY' THEN 'M1 AAA DY'
+                    WHEN aaa_adoption_dy = 'Solo DY' THEN 'M1 AAA DY Converted'
+                    ELSE 'M1 Return Users - AAA'
+                END
+
+            -- 4. Reactivation
+            WHEN AAA_Actual_Type = 'Reactivation' THEN
+                CASE
+                    WHEN DY_order = 'Solo DY' THEN 'DY Reactivation'
+                    WHEN prev_aaa_tenure = 1 THEN 'Occasional Reactivation'
+                    WHEN prev_aaa_tenure BETWEEN 2 AND 4 THEN 'Warm Reactivation'
+                    WHEN prev_aaa_tenure >= 5 THEN 'True Reactivation'
+                    ELSE 'Occasional Reactivation'
+                END
+
+            -- 5. Re-Order
+            WHEN AAA_Actual_Type = 'Re-Order' THEN
+                CASE
+                    WHEN prev_dy_order = 'Solo DY' AND DY_order = 'Solo DY' THEN 'Re-Order DY'
+                    WHEN prev_dy_order = 'Solo DY' THEN 'Re-Order DY Converted'
+                    WHEN prev_prev_aaa_tenure = 1 THEN 'Re-Order Occasional'
+                    WHEN prev_prev_aaa_tenure BETWEEN 2 AND 4 THEN 'Re-Order Warm'
+                    WHEN prev_prev_aaa_tenure >= 5 THEN 'Re-Order True'
+                    ELSE 'Re-Order Occasional'
+                END
+
+            -- 6. Recurring Return
+            WHEN AAA_Actual_Type = 'Recurring Return' THEN
+                CASE
+                    WHEN AAA_Actual_type_ternure = 3 THEN 'Recent Recurring Return'
+                    WHEN AAA_Actual_type_ternure BETWEEN 4 AND 12 THEN 'Old Recurring Return'
+                    ELSE 'Royal Recurring Return'
+                END
+
+            -- 7. Churned
+            WHEN AAA_Actual_Type = 'Churned' THEN
+                CASE
+                    WHEN AAA_Actual_type_ternure IN (1, 2) THEN 'Recently Churn'
+                    WHEN AAA_Actual_type_ternure BETWEEN 3 AND 5 THEN 'Churn > 3 Months'
+                    ELSE 'Churn > 6 Months'
+                END
+
+            ELSE '-'
+        END AS L2_AAA_Actual_Type
+
     FROM l2_context
 )
 
--- 7. Output Final
+-- 9. Salida final estructurada (26 columnas)
 SELECT
     month AS Fecha,
     month AS Mes,
     customer_id,
     country,
 
-    -- PLATFORM
+    -- Platform
     Platform_adoption_date,
     Platform_user_adoption_tenure,
     LAG(Platform_Actual_type_ternure) OVER (PARTITION BY customer_id, country ORDER BY month) AS Platform_previous_type_ternure,
@@ -312,18 +372,17 @@ SELECT
     LAG(AAA_Actual_Type) OVER (PARTITION BY customer_id, country ORDER BY month) AS AAA_previous_type,
     AAA_Actual_type_ternure,
     AAA_Actual_Type,
+    L2_AAA_Actual_Type,
 
-    -- MARKET
+    -- Market
     Market_adoption_date,
     Market_user_adoption_tenure,
     LAG(Market_Actual_type_ternure) OVER (PARTITION BY customer_id, country ORDER BY month) AS Market_previous_type_ternure,
     LAG(Market_Actual_Type) OVER (PARTITION BY customer_id, country ORDER BY month) AS Market_previous_type,
     Market_Actual_type_ternure,
     Market_Actual_Type,
+    L2_Market_Actual_Type,
     DY_order,
-    UF_order,
-
-    -- L2
-    L2_Actual_Type
+    UF_order
 
 FROM l2_assigned;

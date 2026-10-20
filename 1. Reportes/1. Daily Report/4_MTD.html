@@ -21,7 +21,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>MTD by Country - PeYa Markets</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
 <link rel="stylesheet" href="https://npmcdn.com/flatpickr/dist/themes/airbnb.css">
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
@@ -445,8 +444,7 @@
           <div class="p-subtitle">${CURRENT_DATA.currentStart} al ${CURRENT_DATA.currentEnd} · ORDEN: ${orderLabel(m)}</div>
         </div>
         <div class="btn-actions">
-          <button class="btn-copy-val" onclick="copiarTSV('${mq}',this)"><svg viewBox="0 0 24 24"><path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2"/></svg> Copiar</button>
-          <button class="btn-copy" onclick="copyPNG('panel-${mid}',this)"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg> PNG</button>
+          <button class="btn-copy-val" onclick="copyTable('panel-${mid}',this)"><svg viewBox="0 0 24 24"><path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2"/></svg> Copiar</button>
         </div>
       </div>
       <div class="table-wrap"><table><thead>${thead}</thead><tbody>${tbody}</tbody></table></div>
@@ -503,8 +501,7 @@
           <div class="p-subtitle">${wkTxt}</div>
         </div>
         <div class="btn-actions">
-          <button class="btn-copy-val" onclick="copiarTSV('${mq}',this)"><svg viewBox="0 0 24 24"><path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2"/></svg> Copiar</button>
-          <button class="btn-copy" onclick="copyPNG('panel-${mid}',this)"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg> PNG</button>
+          <button class="btn-copy-val" onclick="copyTable('panel-${mid}',this)"><svg viewBox="0 0 24 24"><path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2"/></svg> Copiar</button>
         </div>
       </div>
       <div class="table-wrap"><table><thead>${thead}</thead><tbody>${tbody}</tbody></table></div>
@@ -552,8 +549,7 @@
           <div class="p-subtitle" style="white-space:normal;overflow:visible">${dataThroughBadge(m)} vs MTD del mes pasado, mismo día${pl}</div>
         </div>
         <div class="btn-actions">
-          <button class="btn-copy-val" onclick="copiarTSV('${mq}',this)"><svg viewBox="0 0 24 24"><path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2"/></svg> Copiar</button>
-          <button class="btn-copy" onclick="copyPNG('panel-${mid}',this)"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg> PNG</button>
+          <button class="btn-copy-val" onclick="copyTable('panel-${mid}',this)"><svg viewBox="0 0 24 24"><path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2"/></svg> Copiar</button>
         </div>
       </div>
       <div class="table-wrap"><table><thead>${thead}</thead><tbody>${tbody}</tbody></table></div>
@@ -609,44 +605,118 @@
     });
   }
 
-  function copiarTSV(m, btn) {
-    const orig=btn.innerHTML; btn.innerHTML='Copiando...';
-    const rows=CURRENT_DATA.metrics[m], fmt=CURRENT_DATA.config[m]?.formato||'num';
-    // Métricas MTD (snapshot): País + MTD + últ. día sem. pasada + variación.
-    if (CURRENT_DATA.config[m]?.mtd) {
-      const pl = CURRENT_DATA.config[m].prevLabel ? ` (${CURRENT_DATA.config[m].prevLabel})` : '';
-      let tsvM=`${m.toUpperCase()} (MTD · fecha final del rango)\nPeriodo:\t${CURRENT_DATA.currentStart} al ${CURRENT_DATA.currentEnd}\n\nPaís\tMTD\tMTD mes ant.${pl}\tVar\n`;
-      CURRENT_DATA.countries.filter(c=>rows[c]?.current!=null).concat(['LATAM']).forEach(c=>{ const d=rows[c]; if(!d)return; tsvM+=(COUNTRY_NAMES[c]||c)+'\t'+d.current+'\t'+(d.prev!=null?d.prev:'')+'\t'+varText(d.current,d.prev,fmt)+'\n'; });
-      navigator.clipboard.writeText(tsvM).then(()=>{ btn.innerHTML='Copiado'; btn.style.color='var(--positive)'; setTimeout(()=>{btn.innerHTML=orig;btn.style.color='';},2000); }).catch(()=>{btn.innerHTML='Error';setTimeout(()=>{btn.innerHTML=orig;},2000);});
-      return;
-    }
-    const isH=HERO_METRICS.has(m);
-    let tsv=`${m.toUpperCase()}\nPeriodo:\t${CURRENT_DATA.currentStart} al ${CURRENT_DATA.currentEnd}\n\n`;
-    tsv+=isH?`País\tActual\t${window.BE_LABEL}\tM-1\tYoY\n`:"País\tActual\tM-1\tYoY\n";
-    CURRENT_DATA.countries.filter(c=>rows[c]?.current).concat(['LATAM']).forEach(c=>{
-      const d=rows[c]; if(!d)return;
-      tsv+=(COUNTRY_NAMES[c]||c)+'\t'+d.current+(isH?'\t'+d.target:'')+'\t'+d.m1+'\t'+varText(d.current,d.y1,fmt)+'\n';
+  function copyTable(panelId, btn) {
+    const panel = document.getElementById(panelId);
+    if (!panel) return;
+    const table = panel.querySelector('table');
+    if (!table) return;
+
+    const orig = btn ? btn.innerHTML : '';
+    if (btn) btn.innerHTML = 'Copiando...';
+
+    const tsvRows = [];
+    const htmlRows = [];
+
+    const getCellText = (cell) => {
+      const clone = cell.cloneNode(true);
+      clone.querySelectorAll('.sort-icon, svg, .tgt-loading-dot').forEach(el => el.remove());
+      const range = clone.querySelector('.th-range');
+      if (range) {
+        range.textContent = ' (' + range.textContent.trim() + ')';
+      }
+      return (clone.innerText || clone.textContent || '').replace(/\s+/g, ' ').trim();
+    };
+
+    table.querySelectorAll('thead tr').forEach(tr => {
+      const cells = tr.querySelectorAll('th');
+      if (!cells.length) return;
+      const tsvCols = [];
+      const htmlCols = [];
+      cells.forEach(th => {
+        const txt = getCellText(th);
+        tsvCols.push(txt);
+        htmlCols.push(`<th style="border:1px solid #cbd5e1;padding:6px 10px;background:#f8fafc;font-weight:700;text-align:${th.style.textAlign || 'right'}">${escapeHtml(txt)}</th>`);
+      });
+      tsvRows.push(tsvCols.join('\t'));
+      htmlRows.push(`<tr>${htmlCols.join('')}</tr>`);
     });
-    navigator.clipboard.writeText(tsv).then(()=>{
-      btn.innerHTML='Copiado'; btn.style.color='var(--positive)';
-      setTimeout(()=>{btn.innerHTML=orig;btn.style.color='';},2000);
-    }).catch(()=>{btn.innerHTML='Error';setTimeout(()=>{btn.innerHTML=orig;},2000);});
+
+    table.querySelectorAll('tbody tr').forEach(tr => {
+      const cells = tr.querySelectorAll('td');
+      if (!cells.length) return;
+      const tsvCols = [];
+      const htmlCols = [];
+      cells.forEach(td => {
+        const txt = getCellText(td);
+        tsvCols.push(txt);
+        htmlCols.push(`<td style="border:1px solid #e2e8f0;padding:6px 10px;text-align:${td.style.textAlign || 'center'}">${escapeHtml(txt)}</td>`);
+      });
+      tsvRows.push(tsvCols.join('\t'));
+      htmlRows.push(`<tr>${htmlCols.join('')}</tr>`);
+    });
+
+    const tsv = tsvRows.join('\n');
+    const html = `<table style="border-collapse:collapse;font-family:'Inter',system-ui,sans-serif;font-size:12px;">${htmlRows.join('')}</table>`;
+
+    const onSuccess = () => {
+      if (btn) {
+        btn.innerHTML = '✓ Copiado';
+        btn.style.color = 'var(--positive)';
+        setTimeout(() => { btn.innerHTML = orig; btn.style.color = ''; }, 2000);
+      }
+    };
+
+    const onError = () => {
+      if (btn) {
+        btn.innerHTML = 'Error';
+        btn.style.color = 'var(--negative)';
+        setTimeout(() => { btn.innerHTML = orig; btn.style.color = ''; }, 2000);
+      }
+    };
+
+    if (navigator.clipboard && window.ClipboardItem) {
+      try {
+        const item = new ClipboardItem({
+          'text/plain': new Blob([tsv], { type: 'text/plain' }),
+          'text/html': new Blob([html], { type: 'text/html' })
+        });
+        navigator.clipboard.write([item]).then(onSuccess).catch(() => {
+          navigator.clipboard.writeText(tsv).then(onSuccess).catch(onError);
+        });
+      } catch (e) {
+        navigator.clipboard.writeText(tsv).then(onSuccess).catch(onError);
+      }
+    } else if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(tsv).then(onSuccess).catch(onError);
+    } else {
+      const ta = document.createElement('textarea');
+      ta.value = tsv;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        document.execCommand('copy');
+        onSuccess();
+      } catch (e) {
+        onError();
+      }
+      document.body.removeChild(ta);
+    }
   }
 
-  function copyPNG(id, btn) {
-    const orig=btn.innerHTML; btn.innerHTML='...';
-    setTimeout(async()=>{
-      try{
-        const panel=document.getElementById(id);
-        const canvas=await html2canvas(panel,{backgroundColor:'#ffffff',scale:1.5});
-        canvas.toBlob(blob=>{
-          navigator.clipboard.write([new ClipboardItem({'image/png':blob})]).then(()=>{
-            btn.innerHTML='Ok!'; btn.style.color='var(--positive)';
-            setTimeout(()=>{btn.innerHTML=orig;btn.style.color='';},2000);
-          });
-        });
-      }catch(e){btn.innerHTML='Error';setTimeout(()=>{btn.innerHTML=orig;},2000);}
-    },50);
+  function escapeHtml(str) {
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function copiarTSV(m, btn) {
+    const mid = m.replace(/[^a-zA-Z0-9]/g, '-');
+    copyTable('panel-' + mid, btn);
   }
 
   window.addEventListener('load', () => {

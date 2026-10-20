@@ -1,37 +1,89 @@
 DECLARE query_name STRING DEFAULT '6. Nielsen Market Coverage - Base - Comercial';
 
-WITH szm_stock as (
+WITH szm_stock AS (
   SELECT
     month,
-    country_code,
-    SAFE_DIVIDE(SUM(CASE WHEN sku_efficiency != "Other" THEN month_end_stock_value_eur ELSE 0 END), SUM(month_end_stock_value_eur)) as szm_stock_pct,
-    SUM(CASE WHEN sku_efficiency != "Other" THEN month_end_stock_value_eur ELSE 0 END) as szm_stock_eur,
-    SUM(month_end_stock_value_eur) as total_stock_eur
+    LOWER(country_code) AS country_code,
+    SUM(month_end_stock_value_eur) AS total_stock_eur,
+    SUM(CASE WHEN sku_efficiency != 'Other' THEN month_end_stock_value_eur ELSE 0 END) AS szm_stock_eur
   FROM `peya-delivery-and-support.automated_tables_reports.dmarts_clearence_crusader_monitor`
-  GROUP BY 1,2
+  GROUP BY 1, 2
 ),
-gmv as (
+
+nielsen AS (
   SELECT
-    DATE_TRUNC(order_date,month) as month,
-    country_code,
-    SUM(total_amount_sold_net_eur) as gmv_eur
+    month,
+    LOWER(country_code) AS country_code,
+    SAFE_DIVIDE(SUM(IF(activos_por_tienda_con_stock = 1, net_sales_market, 0)), SUM(net_sales_market)) AS market_coverage,
+    SAFE_DIVIDE(SUM(net_sales_peya), SUM(net_sales_market)) AS retail_market_share
+  FROM `peya-food-and-groceries.automated_tables_reports.base_market_assortment_coverage`
+  GROUP BY 1, 2
+),
+
+sales AS (
+  SELECT
+    DATE_TRUNC(order_date, MONTH) AS month,
+    LOWER(country_code) AS country_code,
+    SUM(total_amount_net_with_discount_eur) AS net_sales
   FROM `peya-datamarts-pro.dm_dmarts.customer_orders_sku_level`
-  WHERE order_date >= "2024-06-01"
-  GROUP BY 1,2
+  WHERE order_date >= '2024-06-01'
+  GROUP BY 1, 2
+),
+
+all_keys AS (
+  SELECT month, country_code FROM szm_stock
+  UNION DISTINCT
+  SELECT month, country_code FROM nielsen
+),
+
+country_level AS (
+  SELECT
+    k.month,
+    COALESCE(dc.country_name, UPPER(k.country_code)) AS country_code,
+    n.market_coverage,
+    n.retail_market_share,
+    szm.total_stock_eur,
+    szm.szm_stock_eur,
+    s.net_sales
+  FROM all_keys k
+  LEFT JOIN nielsen n
+    ON k.month = n.month AND k.country_code = n.country_code
+  LEFT JOIN szm_stock szm
+    ON k.month = szm.month AND k.country_code = szm.country_code
+  LEFT JOIN sales s
+    ON k.month = s.month AND k.country_code = s.country_code
+  LEFT JOIN (
+    SELECT LOWER(country_code) AS country_code, ANY_VALUE(country_name_en) AS country_name
+    FROM `peya-bi-tools-pro.il_core.dim_country`
+    GROUP BY 1
+  ) dc ON k.country_code = dc.country_code
 )
 
+-- Resultados por país
 SELECT
-  base.month,
-  COALESCE(dc.country_name_en, UPPER(base.country_code)) as country_code,
-  SUM(base.net_sales_market) as market_coverage_total,
-  SUM(IF(base.activos_por_tienda_con_stock = 1, base.net_sales_market, 0)) as market_coverage_captured,
-  szm.total_stock_eur,
-  szm.szm_stock_eur,
-  g.gmv_eur
-FROM `peya-food-and-groceries.automated_tables_reports.base_market_assortment_coverage` base
-LEFT JOIN szm_stock szm ON base.country_code = szm.country_code AND base.month = szm.month
-LEFT JOIN gmv g ON base.country_code = g.country_code AND base.month = g.month
-LEFT JOIN `peya-bi-tools-pro.il_core.dim_country` dc ON LOWER(base.country_code) = LOWER(dc.country_code)
-WHERE base.month < DATE_TRUNC(current_date, MONTH)
-GROUP BY 1,2,5,6,7
-ORDER BY month DESC, country_code ASC;
+  month,
+  country_code,
+  market_coverage,
+  retail_market_share,
+  total_stock_eur,
+  szm_stock_eur,
+  net_sales
+FROM country_level
+
+UNION ALL
+
+-- Fila LATAM consolidada (ponderada por Net Sales)
+SELECT
+  month,
+  'LATAM' AS country_code,
+  SAFE_DIVIDE(SUM(market_coverage * net_sales), SUM(IF(market_coverage IS NOT NULL, net_sales, 0))) AS market_coverage,
+  SAFE_DIVIDE(SUM(retail_market_share * net_sales), SUM(IF(retail_market_share IS NOT NULL, net_sales, 0))) AS retail_market_share,
+  SUM(total_stock_eur) AS total_stock_eur,
+  SAFE_DIVIDE(SUM(szm_stock_eur), SUM(total_stock_eur)) AS szm_stock_eur,
+  SUM(net_sales) AS net_sales
+FROM country_level
+GROUP BY 1
+
+ORDER BY
+  month DESC,
+  country_code ASC;

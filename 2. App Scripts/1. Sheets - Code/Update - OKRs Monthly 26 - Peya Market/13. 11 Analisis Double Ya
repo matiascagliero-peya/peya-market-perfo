@@ -4,7 +4,7 @@
 
 const CONFIG_ANALISIS_DOUBLE_YA = {
   nombreHoja: "11 Analisis Double Ya",
-  celdaPais: "D6"
+  celdaPais: "E5"
 };
 
 function _analisisDoubleYaWorker(targetCountry) {

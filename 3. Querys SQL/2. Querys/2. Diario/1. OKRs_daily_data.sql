@@ -1,54 +1,35 @@
--- ====================================================================================
--- dmart_okrs_daily  (INCREMENTAL OPTIMIZED & SELF-HEALING)
--- PROPÓSITO: Métricas diarias de OKRs para D-Marts (2025 y 2026 hasta la fecha actual).
--- RANGO: Completamente automatizado y auto-reparable (Self-Healing):
---        - Si la tabla NO existe -> '2025-01-01' (Backfill completo)
---        - Si existe pero no tiene el histórico cargado -> Carga lo que falte automáticamente.
---        - Si tiene el histórico completo -> procesa solo los últimos 7 días.
--- GRAIN: (day, country_name)
--- ====================================================================================
+-- dmart_okrs_daily: Métricas diarias de OKRs para D-Marts (Self-Healing incremental)
 
--- PASO 0: VARIABLES DE FECHA (DECLARACIONES AL INICIO)
 DECLARE query_name       STRING DEFAULT '1. OKRs_daily_data.sql';
-DECLARE to_date          DATE DEFAULT DATE_SUB(CURRENT_DATE(), INTERVAL 1 DAY);
+DECLARE to_date          DATE DEFAULT CURRENT_DATE(); -- Fecha actual
 DECLARE date_from_cupons DATE DEFAULT '2022-08-01';
-DECLARE reload_from      DATE DEFAULT DATE_SUB(CURRENT_DATE(), INTERVAL 30 DAY);
+DECLARE reload_from      DATE DEFAULT DATE_SUB(CURRENT_DATE(), INTERVAL 2 MONTH); -- Últimos 2 meses hasta la fecha actual
 DECLARE from_date        DATE;
 
--- DETERMINACIÓN DINÁMICA DE LA VENTANA DE TIEMPO (LÓGICA AUTO-REPARABLE)
+-- Ventana de tiempo dinámica
 IF (
   SELECT COUNT(1)
   FROM `peya-food-and-groceries.automated_tables_reports`.INFORMATION_SCHEMA.TABLES
   WHERE table_name = 'dmart_okrs_daily'
 ) = 0 THEN
-  -- Primera carga (Backfill completo)
   SET from_date = DATE '2025-01-01';
-  
 ELSEIF (
-  -- Si la tabla existe pero le falta el histórico (el mínimo día cargado es posterior al 2025-01-10)
   SELECT COALESCE(MIN(day), DATE '2025-01-01')
   FROM `peya-food-and-groceries.automated_tables_reports.dmart_okrs_daily`
 ) > DATE '2025-01-10' THEN
-  -- Auto-carga del histórico faltante (desde 2025-01-01 hasta el día previo a tus datos ya cargados)
   SET from_date = DATE '2025-01-01';
   SET to_date = DATE_SUB((
     SELECT MIN(day)
     FROM `peya-food-and-groceries.automated_tables_reports.dmart_okrs_daily`
   ), INTERVAL 1 DAY);
-  
 ELSE
-  -- Cargas incrementales diarias normales (Optimizado para procesar solo los últimos 7 días)
   SET from_date = reload_from;
 END IF;
 
-
--- PASO 1: CALCULAR EL RESULTADO EN UNA TABLA TEMPORAL (una sola vez)
--- ====================================================================================
 CREATE TEMP TABLE _staging AS
 WITH
 
--- 1. PARTNERS: Identifica los darkstores
--- ====================================================================================
+-- 1. Darkstores operativos
 partners AS (
   SELECT
     p.country_id,
@@ -58,15 +39,19 @@ partners AS (
   FROM `peya-bi-tools-pro.il_core.dim_partner` p
   INNER JOIN `peya-datamarts-pro.dm_dmarts.dim_partner_darkstore` AS pd
     ON p.partner_id = pd.partner_id
+  WHERE p.partner_name NOT IN (
+    "RD_12_Torre OV", "PA_9_Midtown", "SV_6_Torre Futura",
+    "EC_17_TiendaPick-Up Oficina", "PE_3_PuntaHermosa", "BO_19_Truck",
+    "UY_15_Eventos", "PE_24_FILO", "EC_6_Oficina"
+  )
 ),
 
--- 2. ACTIVE STORES: Almacenes activos por día y país
--- ====================================================================================
+-- 2. Almacenes activos
 active_stores AS (
   SELECT
-    order_date                          AS day,
+    order_date                   AS day,
     country_code,
-    COUNT(DISTINCT warehouse_id)        AS active_warehouses
+    COUNT(DISTINCT warehouse_id) AS active_warehouses
   FROM `peya-datamarts-pro.dm_dmarts.customer_orders_sku_level`
   WHERE order_date BETWEEN from_date AND to_date
     AND state = "CONFIRMED"
@@ -78,15 +63,14 @@ active_stores AS (
   GROUP BY 1, 2
 ),
 
--- 3. ORDERS: Datos a nivel de pedido con ingresos netos e impuestos
--- ====================================================================================
+-- 3. Pedidos y facturación
 orders AS (
   SELECT
     o.order_id,
     o.registered_date                                        AS order_placed_local,
     o.country.country_name,
     o.country_id,
-    o.customer_id AS customer_id,
+    o.customer_id,
     o.country.country_code,
     o.restaurant.id                                          AS restaurant_id,
     o.order_status,
@@ -110,7 +94,7 @@ orders AS (
     END AS service_fee_paid_net,
     o.discount_amount,
     o.plus_shipping_cost_discount_amount / (1 + co.percentage_effective_tax) AS discount_plus_net,
-    DY.order_details.id.secondary                            AS double_ya_order_id,
+    DY.order_id                                              AS double_ya_order_id,
     CASE WHEN o.fees_v2.small_order_fee_amount > 0 THEN 'small_order_fee' END AS sof
   FROM `peya-bi-tools-pro.il_core.fact_orders` AS o
   INNER JOIN `peya-data-origins-pro.cl_core.country_details` co
@@ -126,28 +110,31 @@ orders AS (
     WHERE order_date BETWEEN from_date AND to_date
     GROUP BY 1
   ) dco_agg ON CAST(o.order_id AS STRING) = dco_agg.order_id
-  LEFT JOIN `peya-bi-tools-pro.il_qcommerce.fact_orders_double_ya` DY
-  ON o.order_id = dy.order_details.id.secondary AND order_type = 'DOUBLE_YA'
+  LEFT JOIN (
+    SELECT DISTINCT
+      dy.order_details.id.secondary AS order_id
+    FROM `peya-bi-tools-pro.il_qcommerce.fact_orders_double_ya` dy
+    WHERE dy.order_type = 'DOUBLE_YA'
+  ) DY
+    ON o.order_id = DY.order_id
   WHERE DATE(o.registered_date) BETWEEN from_date AND to_date
   GROUP BY ALL
 ),
 
--- 4. SHOPPING MISSIONS: Misiones de compra por día y país
--- ====================================================================================
+-- 4. Misiones de compra
 shopping_missions AS (
   SELECT
-    DATE(registered_date)                                                                    AS day,
+    DATE(registered_date)                                                            AS day,
     country_name,
-    COUNT(DISTINCT CASE WHEN sm.mission_type = 'instant need' THEN sm.order_id END)         AS orders_instant_need,
-    COUNT(DISTINCT CASE WHEN sm.mission_type = 'fill in'     THEN sm.order_id END)         AS orders_fill_in,
-    COUNT(DISTINCT CASE WHEN sm.mission_type = 'stock up'     THEN sm.order_id END)         AS orders_stock_up
+    COUNT(DISTINCT CASE WHEN sm.mission_type = 'instant need' THEN sm.order_id END) AS orders_instant_need,
+    COUNT(DISTINCT CASE WHEN sm.mission_type = 'fill in'     THEN sm.order_id END) AS orders_fill_in,
+    COUNT(DISTINCT CASE WHEN sm.mission_type = 'stock up'     THEN sm.order_id END) AS orders_stock_up
   FROM `peya-bi-tools-pro.il_qcommerce.fact_groceries_shopping_missions` sm
   WHERE DATE(registered_date) BETWEEN from_date AND to_date
   GROUP BY 1, 2
 ),
 
--- 5. FX MENSUAL DESDE SAP
--- ====================================================================================
+-- 5. Tasas de cambio FX SAP
 fx AS (
   SELECT
     fx_source.month,
@@ -161,8 +148,7 @@ fx AS (
   GROUP BY 1, 2, 3
 ),
 
--- 6. GMV USER (MÉTODO NUEVO): (total + envío + service fee) / FX SAP — grain (día, país)
--- ====================================================================================
+-- 6. GMV método usuario
 gmv_user_data AS (
   SELECT
     DATE(fo.registered_date) AS date_day,
@@ -184,11 +170,10 @@ gmv_user_data AS (
   GROUP BY 1, 2
 ),
 
--- 7. GMV VENDOR (MÉTODO VIEJO): fact_order_profitability / monthly_rate_eu
--- ====================================================================================
+-- 7. GMV método comercio
 gmv_data AS (
   SELECT
-    DATE(registered_date)                                                                  AS date_day,
+    DATE(registered_date) AS date_day,
     fop.country_id,
     SAFE_DIVIDE(SUM(CASE WHEN p.darkstore = TRUE THEN gmv.gmv_vendor END), monthly_rate_eu) AS gmv_vendor_dmarts,
     SAFE_DIVIDE(SUM(gmv.gmv_vendor), monthly_rate_eu)                                       AS gmv_vendor_total
@@ -198,36 +183,33 @@ gmv_data AS (
   GROUP BY 1, 2, fop.monthly_rate_eu
 ),
 
--- 8. SESSIONS: Sesiones con y Sin Double Ya (04/08/2026)
--- ====================================================================================
+-- 8. Sesiones y transacciones Perseus
 sessions_perseus AS (
   SELECT
-    DATE(fp.date) AS day,
-    fp.country_id,
+    DATE(fp.date)       AS day,
+    partners.country_id AS country_id,
     
-    -- 1. TODO (Total general)
-    SUM(fp.funnel_shop_details) AS sessions,
+    SUM(fp.funnel_shop_details)     AS sessions,
     SUM(fp.funnel_shop_transaction) AS transactions,
     
-    -- 2. SIN DOUBLE YA
     SUM(CASE WHEN (fp.funnel_shop_double_ya = 0 OR fp.funnel_shop_double_ya IS NULL) 
         THEN fp.funnel_shop_details ELSE 0 END) AS sessions_non_dy,
     SUM(CASE WHEN (fp.funnel_shop_double_ya = 0 OR fp.funnel_shop_double_ya IS NULL) 
         THEN fp.funnel_shop_transaction ELSE 0 END) AS transactions_non_dy,
         
-    -- 3. CON DOUBLE YA (Solo tráfico que provino de Double Ya)
     SUM(CASE WHEN fp.funnel_shop_double_ya > 0 
         THEN fp.funnel_shop_details ELSE 0 END) AS sessions_dy,
     SUM(CASE WHEN fp.funnel_shop_double_ya > 0 
         THEN fp.funnel_shop_transaction ELSE 0 END) AS transactions_dy
   FROM `peya-bi-tools-pro.il_sessions.perseus_fact_partner_funnel` fp
-  INNER JOIN partners ON fp.partner_id = partners.partner_id
+  INNER JOIN partners
+    ON fp.partner_id = partners.partner_id
+   AND (fp.country_id = partners.country_id OR fp.country_id IS NULL OR fp.country_id = 0)
   WHERE DATE(fp.date) BETWEEN from_date AND to_date
-  GROUP BY ALL
+  GROUP BY 1, 2
 ),
 
--- 9. COUPON DATA: Cupones usados por pedido
--- ====================================================================================
+-- 9. Cupones de descuento
 coupon_data AS (
   SELECT DISTINCT
     cou.order_id,
@@ -239,8 +221,7 @@ coupon_data AS (
   GROUP BY 1
 ),
 
--- 10. COST PER ORDER: CPO por día, país y vertical
--- ====================================================================================
+-- 10. Costo por orden (CPO)
 cost_per_order_raw AS (
   SELECT
     DATE(registered_date)  AS day,
@@ -270,17 +251,12 @@ cost_per_order AS (
   GROUP BY 1, 2
 ),
 
--- 11. FINAL: Ensamblado de todas las métricas diarias
--- ====================================================================================
+-- 11. Consolidación diaria
 final_data AS (
   SELECT
     DATE(o.order_placed_local)   AS Day,
     o.country_name               AS Country_name,
-    
-    -- From ACTIVE STORES
     a.active_warehouses,
-
-    -- From ORDERS (and aggregates)
     COUNT(DISTINCT CASE WHEN o.order_status = 'CONFIRMED' AND hp.darkstore = TRUE                       THEN o.order_id END) AS Confirmed_orders,
     COUNT(DISTINCT CASE WHEN o.order_status = 'CONFIRMED'                                               THEN o.order_id END) AS total_platform_confirmed_orders,
     COUNT(DISTINCT CASE WHEN o.order_status <> 'CONFIRMED' AND hp.darkstore = TRUE                      THEN o.order_id END) AS failed_orders,
@@ -302,40 +278,27 @@ final_data AS (
     COUNT(DISTINCT CASE WHEN o.order_status = 'CONFIRMED' AND hp.darkstore = TRUE AND o.sof IS NOT NULL    THEN o.order_id END) AS small_order_fee_orders,
     SUM(CASE WHEN o.order_status = 'CONFIRMED' AND hp.darkstore = TRUE AND o.double_ya_order_id IS NULL AND o.sof IS NULL THEN COALESCE(o.units_sold, 0) ELSE 0 END)                 AS units_excl_dy_sof,
     SUM(CASE WHEN o.order_status = 'CONFIRMED' AND hp.darkstore = TRUE AND o.double_ya_order_id IS NULL AND o.sof IS NULL THEN COALESCE(o.net_sales, 0)  ELSE 0 END)                 AS net_sales_excl_dy_sof_EU,
-
-    -- From SHOPPING MISSIONS
     sm.orders_instant_need,
     sm.orders_fill_in,
     sm.orders_stock_up,
-
-    -- From GMV USER
     gmvu.gmv_user_dmarts,
     gmvu.gmv_user_total,
-
-    -- From GMV VENDOR
     gmv.gmv_vendor_dmarts,
     gmv.gmv_vendor_total,
-
-    -- From SESSIONS PERSEUS
     sp.sessions,
     sp.transactions,
     sp.sessions_non_dy,
     sp.transactions_non_dy,
     sp.sessions_dy,
     sp.transactions_dy,
-
-    -- From COUPON DATA
-    COUNT(DISTINCT CASE WHEN o.order_status = 'CONFIRMED' AND hp.darkstore = TRUE AND cd.coupon_used_amount > 0                                                                          THEN o.order_id END) AS Voucher_Orders,
-    COUNT(DISTINCT CASE WHEN o.order_status = 'CONFIRMED' AND hp.darkstore = TRUE AND (cd.coupon_used_amount > 0 OR (o.delivery_fee_no_discount = 0 AND o.pickup = FALSE))               THEN o.order_id END) AS Incentivized_Orders,
-    SUM(CASE WHEN o.order_status = 'CONFIRMED' AND hp.darkstore = TRUE THEN (cd.coupon_used_amount / (1 + co.percentage_effective_tax)) ELSE 0 END)                                          AS Voucher_amount,
-
-    -- From COST PER ORDER
+    COUNT(DISTINCT CASE WHEN o.order_status = 'CONFIRMED' AND hp.darkstore = TRUE AND cd.coupon_used_amount > 0                                                            THEN o.order_id END) AS Voucher_Orders,
+    COUNT(DISTINCT CASE WHEN o.order_status = 'CONFIRMED' AND hp.darkstore = TRUE AND (cd.coupon_used_amount > 0 OR (o.delivery_fee_no_discount = 0 AND o.pickup = FALSE)) THEN o.order_id END) AS Incentivized_Orders,
+    SUM(CASE WHEN o.order_status = 'CONFIRMED' AND hp.darkstore = TRUE THEN (cd.coupon_used_amount / (1 + co.percentage_effective_tax)) ELSE 0 END)                            AS Voucher_amount,
     cpo.dmarts_cpo,
     cpo.platform_cpo,
     cpo.courier_cpo,
     cpo.platform_orders_excl_dmarts,
     cpo.dmart_orders_cpo
-
   FROM orders o
   INNER JOIN `peya-bi-tools-pro.il_core.dim_country` AS c
     ON c.country_id = o.country_id AND c.active = TRUE
@@ -380,101 +343,80 @@ final_data AS (
     sm.orders_instant_need, sm.orders_fill_in, sm.orders_stock_up
 )
 SELECT
-  -- ====================================================================================
-  -- GRAIN & GEOGRAPHY
-  -- ====================================================================================
-  Day                         AS day,
-  Country_name                AS country_name,
+  -- Geografía y Fecha
+  Day                                   AS day,
+  Country_name                          AS country_name,
 
-  -- ====================================================================================
-  -- From 2. ACTIVE STORES (Darkstores activos por día/país)
-  -- ====================================================================================
-  active_warehouses           AS active_warehouses_count,
+  -- Almacenes
+  active_warehouses                     AS active_warehouses_count,
 
-  -- ====================================================================================
-  -- From 3. ORDERS (Órdenes, Ingresos netos, Descuentos e Impuestos)
-  -- ====================================================================================
-  Confirmed_orders            AS confirmed_orders_count,
-  total_platform_confirmed_orders AS total_platform_confirmed_orders_count,
-  failed_orders               AS failed_orders_count,
-  CAST(units_sold AS INT64)   AS units_sold_qty,
-  Plus_orders                 AS plus_confirmed_orders_count,
-  discount_amount_EU          AS discount_amount_eur,
-  DF_revenue_EU               AS delivery_fee_revenue_gross_eur,
-  SF_revenue_EU               AS service_fee_revenue_gross_eur,
-  revenue_fee_EU              AS total_fee_revenue_gross_eur,
-  DF_net_EU                   AS delivery_fee_revenue_net_eur,
-  SF_net_EU                   AS service_fee_revenue_net_eur,
-  RF_net_EU                   AS total_fee_revenue_net_eur,
-  discount_plus_net_EU        AS plus_discount_amount_net_eur,
-  DF0_orders                  AS free_delivery_orders_count,
-  UF_orders                   AS ultra_fast_orders_count,
-  net_sales_EU                AS net_sales_eur,
-  discounts_EU                AS order_discounts_amount_eur,
-  double_ya_orders            AS double_ya_orders_count,
-  small_order_fee_orders      AS small_order_fee_orders_count,
-  CAST(units_excl_dy_sof AS INT64) AS units_sold_excl_dy_sof_qty,
-  net_sales_excl_dy_sof_EU    AS net_sales_excl_dy_sof_eur,
+  -- Pedidos y Volumen
+  Confirmed_orders                      AS confirmed_orders_count,
+  total_platform_confirmed_orders       AS total_platform_confirmed_orders_count,
+  failed_orders                         AS failed_orders_count,
+  CAST(units_sold AS INT64)             AS units_sold_qty,
+  Plus_orders                           AS plus_confirmed_orders_count,
 
-  -- ====================================================================================
-  -- From 4. SHOPPING MISSIONS (Misiones de compra por día/país)
-  -- ====================================================================================
-  orders_instant_need         AS instant_need_orders_count,
-  orders_fill_in              AS fill_in_orders_count,
-  orders_stock_up             AS stock_up_orders_count,
+  -- Revenue, Fees y Descuentos
+  discount_amount_EU                    AS discount_amount_eur,
+  DF_revenue_EU                         AS delivery_fee_revenue_gross_eur,
+  SF_revenue_EU                         AS service_fee_revenue_gross_eur,
+  revenue_fee_EU                        AS total_fee_revenue_gross_eur,
+  DF_net_EU                             AS delivery_fee_revenue_net_eur,
+  SF_net_EU                             AS service_fee_revenue_net_eur,
+  RF_net_EU                             AS total_fee_revenue_net_eur,
+  discount_plus_net_EU                  AS plus_discount_amount_net_eur,
+  DF0_orders                            AS free_delivery_orders_count,
 
-  -- ====================================================================================
-  -- From 6. GMV USER (MÉTODO NUEVO)
-  -- ====================================================================================
-  gmv_user_dmarts             AS gmv_user_dmarts_eur,
-  gmv_user_total              AS gmv_user_total_eur,
+  -- Ventas Netas y Tipología
+  UF_orders                             AS ultra_fast_orders_count,
+  net_sales_EU                          AS net_sales_eur,
+  discounts_EU                          AS order_discounts_amount_eur,
+  double_ya_orders                      AS double_ya_orders_count,
+  small_order_fee_orders                AS small_order_fee_orders_count,
+  CAST(units_excl_dy_sof AS INT64)      AS units_sold_excl_dy_sof_qty,
+  net_sales_excl_dy_sof_EU              AS net_sales_excl_dy_sof_eur,
 
-  -- ====================================================================================
-  -- From 7. GMV VENDOR (MÉTODO VIEJO)
-  -- ====================================================================================
-  gmv_vendor_dmarts           AS gmv_vendor_dmarts_eur,
-  gmv_vendor_total            AS gmv_vendor_total_eur,
+  -- Misiones de Compra
+  orders_instant_need                   AS instant_need_orders_count,
+  orders_fill_in                        AS fill_in_orders_count,
+  orders_stock_up                       AS stock_up_orders_count,
 
-  -- ====================================================================================
-  -- From 8. SESSIONS (Métricas de tráfico web/app y Double Ya)
-  -- ====================================================================================
-  sessions                    AS total_sessions,
-  transactions                AS total_transactions,
-  sessions_non_dy             AS non_double_ya_sessions,
-  transactions_non_dy         AS non_double_ya_transactions,
-  sessions_dy                 AS double_ya_sessions,
-  transactions_dy             AS double_ya_transactions,
+  -- GMV
+  gmv_user_dmarts                       AS gmv_user_dmarts_eur,
+  gmv_user_total                        AS gmv_user_total_eur,
+  gmv_vendor_dmarts                     AS gmv_vendor_dmarts_eur,
+  gmv_vendor_total                      AS gmv_vendor_total_eur,
 
-  -- ====================================================================================
-  -- From 9. COUPON DATA
-  -- ====================================================================================
-  Voucher_Orders              AS voucher_orders_count,
-  Incentivized_Orders         AS incentivized_orders_count,
-  Voucher_amount              AS voucher_discount_amount_net_eur,
+  -- Sesiones y Funnel
+  sessions                              AS total_sessions,
+  transactions                          AS total_transactions,
+  sessions_non_dy                       AS non_double_ya_sessions,
+  transactions_non_dy                   AS non_double_ya_transactions,
+  sessions_dy                           AS double_ya_sessions,
+  transactions_dy                       AS double_ya_transactions,
 
-  -- ====================================================================================
-  -- From 10. COST PER ORDER (Métricas CPO por día/país/vertical)
-  -- ====================================================================================
-  dmarts_cpo                  AS dmart_cpo_eur,
-  platform_cpo                AS platform_cpo_eur,
-  courier_cpo                 AS courier_cpo_eur,
-  platform_orders_excl_dmarts AS platform_orders_excl_dmarts_count,
-  dmart_orders_cpo            AS dmart_orders_cpo_count
+  -- Cupones e Incentivos
+  Voucher_Orders                        AS voucher_orders_count,
+  Incentivized_Orders                   AS incentivized_orders_count,
+  Voucher_amount                        AS voucher_discount_amount_net_eur,
+
+  -- Costo por Orden (CPO)
+  dmarts_cpo                            AS dmart_cpo_eur,
+  platform_cpo                          AS platform_cpo_eur,
+  courier_cpo                           AS courier_cpo_eur,
+  platform_orders_excl_dmarts           AS platform_orders_excl_dmarts_count,
+  dmart_orders_cpo                      AS dmart_orders_cpo_count
 FROM final_data
 ORDER BY day DESC, country_name ASC;
 
--- ====================================================================================
--- PASO 2: CARGA INCREMENTAL
---   - Si la tabla NO existe -> backfill completo.
---   - Si la tabla existe    -> borra los últimos 7 días e inserta de nuevo.
--- ====================================================================================
+-- Carga incremental / inicial
 IF (
   SELECT COUNT(1)
   FROM `peya-food-and-groceries.automated_tables_reports`.INFORMATION_SCHEMA.TABLES
   WHERE table_name = 'dmart_okrs_daily'
 ) = 0 THEN
 
-  -- Primera ejecución: crear la tabla especificando tipos de datos y descripciones de campos nativas
   CREATE TABLE `peya-food-and-groceries.automated_tables_reports.dmart_okrs_daily` (
     day DATE OPTIONS(description="Fecha del día de los pedidos (local). Grain: Día."),
     country_name STRING OPTIONS(description="Nombre del país al que pertenece el pedido."),
@@ -523,16 +465,14 @@ IF (
     dmart_orders_cpo_count INT64 OPTIONS(description="Cantidad de pedidos confirmados de D-Marts a domicilio (OD) usados para el CPO.")
   );
 
-  -- Insertar todo el histórico de la ventana desde _staging
   INSERT INTO `peya-food-and-groceries.automated_tables_reports.dmart_okrs_daily`
   SELECT * FROM _staging
   ORDER BY day DESC, country_name ASC;
 
 ELSE
 
-  -- Ejecuciones siguientes: refrescar solo los últimos 7 días
   DELETE FROM `peya-food-and-groceries.automated_tables_reports.dmart_okrs_daily`
-  WHERE day >= reload_from;
+  WHERE day BETWEEN from_date AND to_date;
 
   INSERT INTO `peya-food-and-groceries.automated_tables_reports.dmart_okrs_daily`
   SELECT * FROM _staging

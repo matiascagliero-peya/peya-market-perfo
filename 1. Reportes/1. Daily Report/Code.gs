@@ -13,7 +13,7 @@ const TARGET_KEY_GMV = "Daily GMV BE - Target";
 //  ÚNICO lugar para cambiar el número de BE que se muestra en TODAS las
 // páginas y en el email. Es solo etiqueta (no cambia de qué columna se leen
 // los targets). Para usar otro BE, cambiá esto y listo. Ej: 'BE_LABEL'.
-const BE_LABEL = "BE07";
+const BE_LABEL = "BE09";
 
 //  LISTA ÚNICA DE ADMINS. Quien esté en este array ve los paneles de ADMIN:
 // "Email" (mensajes) y "Analytics". Quien NO esté —incluido vos si te sacás— NO
@@ -301,6 +301,10 @@ function enviarPruebaSemanalRapido() {
   return enviarPruebaSemanal(); // Delegado en la función de Weekly_Email.gs
 }
 
+function forzarEnvioPruebaSemanalRapido() {
+  return forzarEnvioPruebaSemanal(); // Delegado en la función de Weekly_Email.gs
+}
+
 const EMAIL_SUBJECT = "PedidosYa Market - Daily Report";
 const APP_URL = "https://script.google.com/a/pedidosya.com/macros/s/AKfycbweXEclWcWIkaH1OZ7YxMvWj70-Ku4oyA9g098Ea_is7-Pqr0GPVPNpdYIn8q3NOzKqsw/exec";
 
@@ -460,10 +464,12 @@ function _accessDeniedHtml() {
 const EMAIL_MSG_KEY = 'EMAIL_CUSTOM_MSG';
 const EMAIL_MSG_BY_KEY = 'EMAIL_CUSTOM_MSG_BY';   // email del admin que escribió el mensaje
 const EMAIL_MSG_AT_KEY = 'EMAIL_CUSTOM_MSG_AT';   // fecha/hora (texto) en que se guardó
+const EMAIL_MSG_ONCE_KEY = 'EMAIL_CUSTOM_MSG_ONCE'; // 'true' si se autodestruye tras el envío
 
 const WEEKLY_EMAIL_MSG_KEY = 'WEEKLY_EMAIL_CUSTOM_MSG';
 const WEEKLY_EMAIL_MSG_BY_KEY = 'WEEKLY_EMAIL_CUSTOM_MSG_BY';
 const WEEKLY_EMAIL_MSG_AT_KEY = 'WEEKLY_EMAIL_CUSTOM_MSG_AT';
+const WEEKLY_EMAIL_MSG_ONCE_KEY = 'WEEKLY_EMAIL_CUSTOM_MSG_ONCE';
 
 // El admin de "Email" y "Analytics" se controla con ADMIN_EMAILS (al principio del archivo).
 
@@ -497,8 +503,7 @@ function _emailToName(email) {
     .join(' ');
 }
 
-// Mensaje + quién lo escribió + cuándo. Lo usan el panel y el render del mail
-// para mostrar la autoría (así no hay confusión sobre qué admin lo redactó).
+// Mensaje + quién lo escribió + cuándo + si es de un solo uso.
 function getEmailMessageInfo() {
   var p = PropertiesService.getScriptProperties();
   var by = p.getProperty(EMAIL_MSG_BY_KEY) || '';
@@ -506,11 +511,12 @@ function getEmailMessageInfo() {
     msg:    p.getProperty(EMAIL_MSG_KEY) || '',
     by:     by,
     byName: _emailToName(by),
-    at:     p.getProperty(EMAIL_MSG_AT_KEY) || ''
+    at:     p.getProperty(EMAIL_MSG_AT_KEY) || '',
+    once:   p.getProperty(EMAIL_MSG_ONCE_KEY) === 'true'
   };
 }
 
-function setEmailMessage(msg) {
+function setEmailMessage(msg, once) {
   if (!_isEmailAdmin()) return { ok: false, error: 'No autorizado.' };
   var props = PropertiesService.getScriptProperties();
   var clean = (msg == null) ? '' : String(msg).trim();
@@ -518,15 +524,21 @@ function setEmailMessage(msg) {
     props.deleteProperty(EMAIL_MSG_KEY);
     props.deleteProperty(EMAIL_MSG_BY_KEY);
     props.deleteProperty(EMAIL_MSG_AT_KEY);
-    return { ok: true, message: '', by: '', byName: '', at: '' };
+    props.deleteProperty(EMAIL_MSG_ONCE_KEY);
+    return { ok: true, message: '', by: '', byName: '', at: '', once: false };
   }
-  // Guardamos QUIÉN lo escribió (el admin logueado) y CUÁNDO.
+  // Guardamos QUIÉN lo escribió (el admin logueado), CUÁNDO y si es de un solo envío.
   var by = _currentUserEmail();
   var at = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm');
   props.setProperty(EMAIL_MSG_KEY, clean);
   props.setProperty(EMAIL_MSG_BY_KEY, by);
   props.setProperty(EMAIL_MSG_AT_KEY, at);
-  return { ok: true, message: clean, by: by, byName: _emailToName(by), at: at };
+  if (once) {
+    props.setProperty(EMAIL_MSG_ONCE_KEY, 'true');
+  } else {
+    props.deleteProperty(EMAIL_MSG_ONCE_KEY);
+  }
+  return { ok: true, message: clean, by: by, byName: _emailToName(by), at: at, once: !!once };
 }
 
 function getWeeklyEmailMessageInfo() {
@@ -536,11 +548,12 @@ function getWeeklyEmailMessageInfo() {
     msg:    p.getProperty(WEEKLY_EMAIL_MSG_KEY) || '',
     by:     by,
     byName: _emailToName(by),
-    at:     p.getProperty(WEEKLY_EMAIL_MSG_AT_KEY) || ''
+    at:     p.getProperty(WEEKLY_EMAIL_MSG_AT_KEY) || '',
+    once:   p.getProperty(WEEKLY_EMAIL_MSG_ONCE_KEY) === 'true'
   };
 }
 
-function setWeeklyEmailMessage(msg) {
+function setWeeklyEmailMessage(msg, once) {
   if (!_isEmailAdmin()) return { ok: false, error: 'No autorizado.' };
   var props = PropertiesService.getScriptProperties();
   var clean = (msg == null) ? '' : String(msg).trim();
@@ -548,14 +561,20 @@ function setWeeklyEmailMessage(msg) {
     props.deleteProperty(WEEKLY_EMAIL_MSG_KEY);
     props.deleteProperty(WEEKLY_EMAIL_MSG_BY_KEY);
     props.deleteProperty(WEEKLY_EMAIL_MSG_AT_KEY);
-    return { ok: true, message: '', by: '', byName: '', at: '' };
+    props.deleteProperty(WEEKLY_EMAIL_MSG_ONCE_KEY);
+    return { ok: true, message: '', by: '', byName: '', at: '', once: false };
   }
   var by = _currentUserEmail();
   var at = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm');
   props.setProperty(WEEKLY_EMAIL_MSG_KEY, clean);
   props.setProperty(WEEKLY_EMAIL_MSG_BY_KEY, by);
   props.setProperty(WEEKLY_EMAIL_MSG_AT_KEY, at);
-  return { ok: true, message: clean, by: by, byName: _emailToName(by), at: at };
+  if (once) {
+    props.setProperty(WEEKLY_EMAIL_MSG_ONCE_KEY, 'true');
+  } else {
+    props.deleteProperty(WEEKLY_EMAIL_MSG_ONCE_KEY);
+  }
+  return { ok: true, message: clean, by: by, byName: _emailToName(by), at: at, once: !!once };
 }
 
 // =================================================================
@@ -2545,19 +2564,47 @@ function parseDateToMs(raw) {
   return ms;
 }
 
-// ── Usuarios SEMANALES (pestaña "Weekly data" del MISMO spreadsheet) ──────────
+// ── Usuarios SEMANALES (pestaña "Weekly users" del MISMO spreadsheet) ──────────
 // Son snapshots semanales (no existen a nivel día → no se pueden sumar). Se muestra
 // el valor FIJO de una semana, con WoW vs la semana anterior. Métricas:
 //   • Dmart MAUs                 = Users_dmart_weekly
 //   • New Users - Dmart          = Dmart_New_Users
 //   • Covered MAUs penetration % = Users_dmart_weekly / Users_Peya_Weekly (%)
-var WEEKLY_USERS_SHEET = 'C. Weekly data';   // nombre EXACTO (antes "1. Weekly data"); ojo: es "…data", NO "…users"
+var WEEKLY_USERS_SHEET = 'C. Weekly users';   // nombre exacto en el Sheet: "C. Weekly users"
 
-// Busca la pestaña de usuarios semanales tolerante al PREFIJO (cambió de "1." a "C."):
-// intenta el nombre exacto y, si no, cualquier pestaña que matchee "weekly data".
+// Busca la pestaña de usuarios semanales tolerante al PREFIJO y nombre:
+// 1) Intenta el nombre exacto configurado
+// 2) Búsqueda tolerante por regex de nombre (weekly data, weekly users, etc.)
+// 3) Búsqueda por encabezados de la fila 1 (si tiene Week y Users_dmart_weekly)
 function _openWeeklyUsersSheet(ss){
-  return ss.getSheetByName(WEEKLY_USERS_SHEET) ||
-         ss.getSheets().find(function(s){ return /weekly\s*data/i.test(s.getName()); });
+  if (!ss) return null;
+  var direct = ss.getSheetByName(WEEKLY_USERS_SHEET);
+  if (direct) return direct;
+
+  var sheets = ss.getSheets();
+  var found = sheets.find(function(s){
+    var n = s.getName().trim().toLowerCase();
+    return /weekly\s*(data|users?)/i.test(n) ||
+           /usuarios?\s*semanal/i.test(n) ||
+           (n.includes('weekly') && (n.includes('user') || n.includes('data'))) ||
+           n.includes('weekly users');
+  });
+  if (found) return found;
+
+  // Inspección inteligente de encabezados de la fila 1
+  for (var i = 0; i < sheets.length; i++) {
+    try {
+      var lastCol = sheets[i].getLastColumn();
+      if (lastCol < 3) continue;
+      var headerRow = sheets[i].getRange(1, 1, 1, Math.min(15, lastCol)).getValues()[0];
+      var headerStr = headerRow.map(function(c){ return String(c || '').toLowerCase().trim(); }).join(',');
+      if (headerStr.includes('week') && (headerStr.includes('users_dmart') || headerStr.includes('dmart_new_users') || headerStr.includes('users_peya'))) {
+        return sheets[i];
+      }
+    } catch(e) {}
+  }
+
+  return null;
 }
 
 // Nombre de país (la pestaña usa INGLÉS: "Dominican Republic", "Panama", "Peru") → ISO.
@@ -2577,14 +2624,34 @@ function _readWeeklyUsers(startStr, endStr){
   var out = { ok:false, metrics:{}, config:{}, countries:[] };
   try {
     var sh = _openWeeklyUsersSheet(SpreadsheetApp.openById(SPREADSHEET_ID));
-    if(!sh) return out;
+    if(!sh) {
+      Logger.log('[_readWeeklyUsers] No se encontró ninguna pestaña de usuarios semanales en SPREADSHEET_ID.');
+      return out;
+    }
     var data = sh.getDataRange().getValues();
     if(data.length < 2) return out;
-    var H = data[0].map(function(h){ return String(h).trim(); });
-    var iW=H.indexOf('Week'), iWN=H.indexOf('Week_Number'), iC=H.indexOf('country_name'),
-        iPe=H.indexOf('Users_Peya_Weekly'), iDm=H.indexOf('Users_dmart_weekly'),
-        iDp=H.indexOf('Users_dmart_plus_weekly'), iNu=H.indexOf('Dmart_New_Users');
-    if(iW<0||iC<0||iPe<0||iDm<0||iNu<0) return out;   // Week_Number y Users_dmart_plus_weekly son opcionales
+    var H = data[0].map(function(h){ return String(h || '').trim().toLowerCase(); });
+
+    var findCol = function(candidates) {
+      for (var c = 0; c < candidates.length; c++) {
+        var idx = H.indexOf(candidates[c].toLowerCase());
+        if (idx >= 0) return idx;
+      }
+      return -1;
+    };
+
+    var iW  = findCol(['week', 'semana', 'date', 'fecha']);
+    var iWN = findCol(['week_number', 'week number', 'week_num', 'semana_numero']);
+    var iC  = findCol(['country_name', 'country', 'pais', 'country_code']);
+    var iPe = findCol(['users_peya_weekly', 'users_peya', 'peya_users_weekly']);
+    var iDm = findCol(['users_dmart_weekly', 'dmart_maus', 'users_dmart', 'dmart_users_weekly']);
+    var iDp = findCol(['users_dmart_plus_weekly', 'users_dmart_plus', 'plus_users_weekly']);
+    var iNu = findCol(['dmart_new_users', 'new_users_dmart', 'new_users']);
+
+    if(iW<0 || iC<0 || iPe<0 || iDm<0 || iNu<0) {
+      Logger.log('[_readWeeklyUsers] Columnas faltantes en ' + sh.getName() + ': iW=' + iW + ', iC=' + iC + ', iPe=' + iPe + ', iDm=' + iDm + ', iNu=' + iNu);
+      return out;
+    }
     var tz = Session.getScriptTimeZone();
     var startMs = parseDateToMs(startStr), endMs = parseDateToMs(endStr);
     if(isNaN(startMs)||isNaN(endMs)) return out;

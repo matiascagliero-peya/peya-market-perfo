@@ -39,7 +39,7 @@ END IF;
 --      - Si se corre a diario: max_fecha = D-1, por lo que solo recarga el último día.
 --      - Si no se corrió por varios días: arranca desde max_fecha y recupera todos los días sin perder datos.
 IF NOT table_exists THEN
-  SET inicio = DATE '2026-01-01';
+  SET inicio = DATE '2025-01-01';
 ELSE
   SET inicio = GREATEST(DATE '2026-01-01', LEAST(max_fecha, fin));
 END IF;

@@ -145,6 +145,30 @@ function GeneralData_ImportarTablas() {
   });
 }
 
+// ====================================================================================
+// HELPERS NUMÉRICOS Y COMPARATIVOS PARA SUPPLY CHAIN
+// ====================================================================================
+function _scNum(val) {
+  if (val === null || val === undefined) return 0;
+  if (typeof val === "number") return isNaN(val) ? 0 : val;
+  let str = String(val).trim();
+  if (str === "" || str === "#NUM!" || str === "#N/A" || str === "-" || str === "NaN" || str === "null") return 0;
+  const isPercent = str.includes("%");
+  str = str.replace("%", "").trim().replace(",", ".");
+  const n = parseFloat(str);
+  if (isNaN(n)) return 0;
+  return isPercent ? n / 100 : n;
+}
+
+function _scMatch(val, targets) {
+  if (val === null || val === undefined) return false;
+  const v = String(val).trim().toUpperCase();
+  if (Array.isArray(targets)) {
+    return targets.some(t => v === String(t).trim().toUpperCase());
+  }
+  return v === String(targets).trim().toUpperCase();
+}
+
 // --- PARTE C: Configuración de Métricas ---
 const CONFIG_GD_METRICAS = [
   { // 0 - Orders
@@ -156,7 +180,7 @@ const CONFIG_GD_METRICAS = [
       { name: 'Active warehouses', index: 2, colorFormating: 1 },
 
       // --- INDEX 4 ---
-      { name: 'PeYa MAUs', index: 4, colorFormating: 1 },
+      // { name: 'PeYa MAUs', index: 4, colorFormating: 1 },
 
       // --- INDEX 5 ---
       { name: 'Dmart MAUs', index: 5, colorFormating: 1 },
@@ -538,39 +562,44 @@ const CONFIG_GD_METRICAS = [
     calcularLatam: false,
     metricas: [
       // --- 1. KPIs Principales de Inventario (DOH & WIS) ---
-      // ACTUALIZADO: DOH ahora usa colorFormating: 1 según requerimiento
-      { name: 'Days on hand (DOH)',      calculo: (f) => String(f[1]).trim() === 'DOH'    ? f[5] : 0, format: '0.0', colorFormating: 0 },
-      { name: 'WIS %',                   calculo: (f) => String(f[1]).trim() === 'WIS'    ? f[5] : 0, format: '0.00%', colorFormating: 1 },
-      { name: 'WIS UF %',                calculo: (f) => String(f[1]).trim() === 'WIS UF' ? f[5] : 0, format: '0.00%', colorFormating: 1 },
-      { name: 'Velocity',                calculo: (f) => String(f[1]).trim() === 'Velocity' ? f[5] : 0, format: '0.00', colorFormating: 1 },
+      { name: 'Days on hand (DOH)',      calculo: (f) => _scMatch(f[1], 'DOH') ? _scNum(f[5]) : 0, format: '0.0', colorFormating: 0 },
+      { name: 'WIS %',                   calculo: (f) => _scMatch(f[1], 'WIS') ? _scNum(f[5]) : 0, format: '0.00%', colorFormating: 1 },
+      { name: 'WIS UF %',                calculo: (f) => _scMatch(f[1], 'WIS UF') ? _scNum(f[5]) : 0, format: '0.00%', colorFormating: 1 },
+      { name: 'Velocity',                calculo: (f) => _scMatch(f[1], 'Velocity') ? _scNum(f[5]) : 0, format: '0.00', colorFormating: 1 },
 
       // --- 2. Composición de Stock y Ventas ---
-      { name: 'Active FM (DOH)',      calculo: (f) => String(f[1]).trim() === 'Active Fast Movers (DOH)'     ? f[5] : 0, format: '0.0', colorFormating: 0 },
-      { name: 'Active ZM (DOH)',              calculo: (f) => String(f[1]).trim() === 'Active ZM (DOH)'    ? f[5] : 0, format: '0.0', colorFormating: 1 },
-      { name: 'Stock ZM (Eur) %',              calculo: (f) => String(f[1]).trim() === '% Stock ZM (Eur)'   ? f[5] : 0, format: '0.00%', colorFormating: 0 },
-      { name: 'Active SM (eur)',               calculo: (f) => String(f[1]).trim() === 'Active SM (eur)'              ? f[5] : 0, format: '#,##0.00', colorFormating: 1 },
-      { name: 'AVG Stock (Eur)',               calculo: (f) => String(f[1]).trim() === 'AVG Stock (Eur)'              ? f[5] : 0, format: '#,##0.00', colorFormating: 0 },
-      { name: 'F&UF Net Sales Participation',  calculo: (f) => String(f[1]).trim() === 'F&UF Net Sales Participation' ? f[5] : 0, format: '0.00%', colorFormating: 1 },
+      { name: 'Active FM (DOH)',         calculo: (f) => _scMatch(f[1], ['Active Fast Movers (DOH)', 'Active FM (DOH)']) ? _scNum(f[5]) : 0, format: '0.0', colorFormating: 0 },
+      { name: 'Active Fast Movers (DOH)', calculo: (f) => _scMatch(f[1], ['Active Fast Movers (DOH)', 'Active FM (DOH)']) ? _scNum(f[5]) : 0, format: '0.0', colorFormating: 0 },
+      { name: 'Active ZM (DOH)',         calculo: (f) => _scMatch(f[1], 'Active ZM (DOH)') ? _scNum(f[5]) : 0, format: '0.0', colorFormating: 1 },
+      { name: 'Stock ZM (Eur) %',        calculo: (f) => _scMatch(f[1], ['% Stock ZM (Eur)', 'Stock ZM (Eur) %']) ? _scNum(f[5]) : 0, format: '0.00%', colorFormating: 0 },
+      { name: '% Stock ZM (Eur)',        calculo: (f) => _scMatch(f[1], ['% Stock ZM (Eur)', 'Stock ZM (Eur) %']) ? _scNum(f[5]) : 0, format: '0.00%', colorFormating: 0 },
+      { name: 'Active SM (eur)',         calculo: (f) => _scMatch(f[1], 'Active SM (eur)') ? _scNum(f[5]) : 0, format: '#,##0.00', colorFormating: 1 },
+      { name: 'AVG Stock (Eur)',         calculo: (f) => _scMatch(f[1], 'AVG Stock (Eur)') ? _scNum(f[5]) : 0, format: '#,##0.00', colorFormating: 0 },
+      { name: 'F&UF Net Sales Participation', calculo: (f) => _scMatch(f[1], 'F&UF Net Sales Participation') ? _scNum(f[5]) : 0, format: '0.00%', colorFormating: 1 },
 
       // --- 3. Costos (W&DC) ---
-      { name: 'Net W&DC Cost / GFV (Income St)', calculo: (f) => String(f[1]).trim() === 'Net W&DC Cost / GFV (Income St)' ? f[5] : 0, format: '0.00%', colorFormating: 0 },
-      { name: 'Net W&DC Cost / CMT (Income St)', calculo: (f) => String(f[1]).trim() === 'Net W&DC Cost / CMT (Income St)' ? f[5] : 0, format: '0.00', colorFormating: 1 },
-      { name: 'W&DC Cost / CMT (SC)',            calculo: (f) => String(f[1]).trim() === 'W&DC Cost / CMT (SC)'            ? f[5] : 0, format: '0.00', colorFormating: 0 },
+      { name: 'Net W&DC Cost / GFV (Income St)', calculo: (f) => _scMatch(f[1], 'Net W&DC Cost / GFV (Income St)') ? _scNum(f[5]) : 0, format: '0.00%', colorFormating: 0 },
+      { name: 'Net W&DC Cost / CMT (Income St)', calculo: (f) => _scMatch(f[1], 'Net W&DC Cost / CMT (Income St)') ? _scNum(f[5]) : 0, format: '0.00', colorFormating: 1 },
+      { name: 'W&DC Cost / CMT (SC)',            calculo: (f) => _scMatch(f[1], 'W&DC Cost / CMT (SC)') ? _scNum(f[5]) : 0, format: '0.00', colorFormating: 0 },
 
       // --- 4. Pérdidas y Expiración ---
-      { name: 'Expired',                 calculo: (f) => String(f[1]).trim() === 'Expired'                 ? f[5] : 0, format: '#,##0.00', colorFormating: 0 },
-      { name: 'Loss & Damaged (DC/HUB)', calculo: (f) => String(f[1]).trim() === 'Loss & Damaged (DC/HUB)' ? f[5] : 0, format: '#,##0.00', colorFormating: 0 },
-      { name: 'Expiration Impact',       calculo: (f) => String(f[1]).trim() === 'Expiration Impact'       ? f[5] : 0, format: '#,##0.00', colorFormating: 0 },
-      { name: 'Expire Shrinkage (PVP)',  calculo: (f) => String(f[1]).trim() === 'Expire Shrinkage (PVP)'  ? f[5] : 0, format: '#,##0.00', colorFormating: 0 },
+      { name: 'Expired',                 calculo: (f) => _scMatch(f[1], 'Expired') ? _scNum(f[5]) : 0, format: '#,##0.00', colorFormating: 0 },
+      { name: 'Loss & Damaged (DC/HUB)', calculo: (f) => _scMatch(f[1], 'Loss & Damaged (DC/HUB)') ? _scNum(f[5]) : 0, format: '#,##0.00', colorFormating: 0 },
+      { name: 'Expiration Impact',       calculo: (f) => _scMatch(f[1], 'Expiration Impact') ? _scNum(f[5]) : 0, format: '#,##0.00', colorFormating: 0 },
+      { name: 'Expire Shrinkage (PVP)',  calculo: (f) => _scMatch(f[1], 'Expire Shrinkage (PVP)') ? _scNum(f[5]) : 0, format: '#,##0.00', colorFormating: 0 },
 
       // --- 5. Nivel de Servicio (WLT Issues) ---
-      { name: 'WLT Lvl3 - Peya Issues %',      calculo: (f) => String(f[1]).trim() === 'WLT Lvl3 - Peya Issues'      ? f[5] : 0, format: '0.00%', colorFormating: 0 },
-      { name: 'WLT Lvl3 - Supplier Issues %',  calculo: (f) => String(f[1]).trim() === 'WLT Lvl3 - Supplier Issues'  ? f[5] : 0, format: '0.00%', colorFormating: 0 },
-      { name: 'WLT UF Lvl3 - Peya Issues %',   calculo: (f) => String(f[1]).trim() === 'WLT UF Lvl3 - Peya Issues'   ? f[5] : 0, format: '0.00%', colorFormating: 0 },
-      { name: 'WLT UF Lvl3 - Supplier Issues %', calculo: (f) => String(f[1]).trim() === 'WLT UF Lvl3 - Supplier Issues' ? f[5] : 0, format: '0.00%', colorFormating: 0 },
+      { name: 'WLT Lvl3 - Peya Issues %',     calculo: (f) => _scMatch(f[1], ['WLT Lvl3 - Peya Issues', 'WLT Lvl3 - Peya Issues %']) ? _scNum(f[5]) : 0, format: '0.00%', colorFormating: 0 },
+      { name: 'WLT Lvl3 - Peya Issues',       calculo: (f) => _scMatch(f[1], ['WLT Lvl3 - Peya Issues', 'WLT Lvl3 - Peya Issues %']) ? _scNum(f[5]) : 0, format: '0.00%', colorFormating: 0 },
+      { name: 'WLT Lvl3 - Supplier Issues %', calculo: (f) => _scMatch(f[1], ['WLT Lvl3 - Supplier Issues', 'WLT Lvl3 - Supplier Issues %']) ? _scNum(f[5]) : 0, format: '0.00%', colorFormating: 0 },
+      { name: 'WLT Lvl3 - Supplier Issues',   calculo: (f) => _scMatch(f[1], ['WLT Lvl3 - Supplier Issues', 'WLT Lvl3 - Supplier Issues %']) ? _scNum(f[5]) : 0, format: '0.00%', colorFormating: 0 },
+      { name: 'WLT UF Lvl3 - Peya Issues %',  calculo: (f) => _scMatch(f[1], ['WLT UF Lvl3 - Peya Issues', 'WLT UF Lvl3 - Peya Issues %']) ? _scNum(f[5]) : 0, format: '0.00%', colorFormating: 0 },
+      { name: 'WLT UF Lvl3 - Peya Issues',    calculo: (f) => _scMatch(f[1], ['WLT UF Lvl3 - Peya Issues', 'WLT UF Lvl3 - Peya Issues %']) ? _scNum(f[5]) : 0, format: '0.00%', colorFormating: 0 },
+      { name: 'WLT UF Lvl3 - Supplier Issues %', calculo: (f) => _scMatch(f[1], ['WLT UF Lvl3 - Supplier Issues', 'WLT UF Lvl3 - Supplier Issues %']) ? _scNum(f[5]) : 0, format: '0.00%', colorFormating: 0 },
+      { name: 'WLT UF Lvl3 - Supplier Issues',   calculo: (f) => _scMatch(f[1], ['WLT UF Lvl3 - Supplier Issues', 'WLT UF Lvl3 - Supplier Issues %']) ? _scNum(f[5]) : 0, format: '0.00%', colorFormating: 0 },
 
       // --- 6. Otros Scores ---
-      { name: 'Assortment Score',        calculo: (f) => String(f[1]).trim() === 'Assortment Score' ? f[5] : 0, format: '0.00', colorFormating: 1 }
+      { name: 'Assortment Score',        calculo: (f) => _scMatch(f[1], 'Assortment Score') ? _scNum(f[5]) : 0, format: '0.00', colorFormating: 1 }
     ]
   }, { // 6 - Active User Dmart - old
     nombreHoja: "6 - Active User Dmart - old", 
@@ -606,29 +635,17 @@ const CONFIG_GD_METRICAS = [
   }, { // 7 - Market Coverage (Nielsen)
     nombreHoja: "7 - Market Coverage",
     indices: { month: 0, country: 1 }, 
-    calcularLatam: true, 
+    calcularLatam: false, 
     metricas: [
       { 
-        name: 'Nielsen Market Total EUR', 
-        index: 2, 
-        format: '#,##0.00', 
-        colorFormating: 1 
-      },
-      { 
-        name: 'Dmart Market Captured EUR', 
-        index: 3, 
-        format: '#,##0.00', 
-        colorFormating: 1 
-      },
-      { 
         name: 'Nielsen Market Coverage %', 
-        calculo: (f) => safeDiv(f[3], f[2]),
-        usarComponentes: true,
-        indicesLatam: [
-          (f) => safeDiv(f[3], f[2]) * (parseFloat(f[6]) || 1e-9),
-          (f) => parseFloat(f[6]) || 1e-9
-        ], 
-        calculoLatam: (c) => safeDiv(c[0], c[1]), 
+        index: 2, 
+        format: '0.00%', 
+        colorFormating: 1 
+      },
+      { 
+        name: 'Nielsen Market Share %', 
+        index: 3, 
         format: '0.00%', 
         colorFormating: 1 
       },
@@ -646,12 +663,9 @@ const CONFIG_GD_METRICAS = [
       },
       { 
         name: '% SM & ZM Stock Value', 
-        calculo: (f) => safeDiv(f[5], f[4]),
-        usarComponentes: true,
-        indicesLatam: [5, 4], 
-        calculoLatam: (c) => safeDiv(c[0], c[1]), 
+        calculo: (f) => String(f[1]).trim().toUpperCase() === 'LATAM' ? (parseFloat(f[5]) || 0) : safeDiv(f[5], f[4]), 
         format: '0.00%', 
-        colorFormating: 1 
+        colorFormating: 0 
       },
     ]
   }, { // 8 - Stacked deliveries
@@ -935,8 +949,12 @@ const CONFIG_GD_METRICAS = [
     indices: { month: 0, country: 1 }, 
     calcularLatam: true, 
     metricas: [
+
+    { name: 'PeYa MAUs', index: 2, colorFormating: 1 },
+
       // --- VOLÚMENES BASE ---
       { name: 'Covered MAUs', index: 3, colorFormating: 1 },
+      
       
       // --- RATIOS CALCULADOS ---
       { 
@@ -1068,7 +1086,7 @@ const CONFIG_GD_METRICAS = [
         colorFormating: 1 
       },
       { 
-        name: 'Weighted Availability %', 
+        name: 'Weighted Availability % - PQS', 
         calculo: (f) => f[8] === "" ? 0 : (Number(f[8]) || 0), 
         format: '0.00%',
         colorFormating: 1 
@@ -1149,91 +1167,290 @@ const CONFIG_GD_METRICAS = [
     indices: { month: 0, country: 1 }, 
     calcularLatam: true, 
     metricas: [
-      // --- SCOPE: DOUBLE YA (VOLUMEN) ---
-      { name: 'Dmart MAUs - Double Ya', calculo: (f) => String(f[2]).trim() === 'Double Ya' ? (parseFloat(f[3]) || 0) : 0, colorFormating: 1 },
-      { name: 'New Users - Double Ya', calculo: (f) => String(f[2]).trim() === 'Double Ya' ? (parseFloat(f[4]) || 0) : 0, colorFormating: 1 },
-      { name: 'Confirmed Orders - Double Ya', calculo: (f) => String(f[2]).trim() === 'Double Ya' ? (parseFloat(f[5]) || 0) : 0, colorFormating: 1 },
-      { name: 'Units sold - Double Ya', calculo: (f) => String(f[2]).trim() === 'Double Ya' ? (parseFloat(f[6]) || 0) : 0, colorFormating: 1 },
-      { name: 'Net Sales - Double Ya', calculo: (f) => String(f[2]).trim() === 'Double Ya' ? (parseFloat(f[7]) || 0) : 0, colorFormating: 1 },
-      { name: 'COGS - Double Ya', calculo: (f) => String(f[2]).trim() === 'Double Ya' ? (parseFloat(f[8]) || 0) : 0, colorFormating: 1 },
-      { name: 'Sessions - Double Ya', calculo: (f) => String(f[2]).trim() === 'Double Ya' ? (parseFloat(f[9]) || 0) : 0, colorFormating: 1 },
-      { name: 'Transactions - Double Ya', calculo: (f) => String(f[2]).trim() === 'Double Ya' ? (parseFloat(f[10]) || 0) : 0, colorFormating: 1 },
-      { name: 'M1 Return Users - Double Ya', calculo: (f) => String(f[2]).trim() === 'Double Ya' ? (parseFloat(f[11]) || 0) : 0, colorFormating: 1 },
+      // ════════════════════════════════════════════════════════════════
+      // 1. CONFIRMED ORDERS & SHARE %
+      // ════════════════════════════════════════════════════════════════
+      // Canal Puro (Absoluto a nivel orden)
+      { name: 'Confirmed Orders - Double Ya', calculo: (f) => _dyVal(f, 'orders_dy_abs', 'Double Ya Abs', 41), format: '#,##0', colorFormating: 1 },
+      { 
+        name: 'Confirmed Orders Share % - Double Ya', 
+        calculo: (f) => safeDiv(_dyVal(f, 'orders_dy_abs', 'Double Ya Abs', 41), _dyVal(f, 'total_orders', 'Total', 2)),
+        usarComponentes: true,
+        indicesLatam: [
+          f => _dyVal(f, 'orders_dy_abs', 'Double Ya Abs', 41), 
+          f => _dyVal(f, 'total_orders', 'Total', 2)
+        ],
+        calculoLatam: (c) => safeDiv(c[0], c[1]), format: '0.00%', colorFormating: 1 
+      },
+      { name: 'Confirmed Orders - non Double Ya', calculo: (f) => _dyVal(f, 'orders_direct_abs', 'Direct Abs', 45), format: '#,##0', colorFormating: 1 },
+      { 
+        name: 'Confirmed Orders Share % - non Double Ya', 
+        calculo: (f) => safeDiv(_dyVal(f, 'orders_direct_abs', 'Direct Abs', 45), _dyVal(f, 'total_orders', 'Total', 2)),
+        usarComponentes: true,
+        indicesLatam: [
+          f => _dyVal(f, 'orders_direct_abs', 'Direct Abs', 45), 
+          f => _dyVal(f, 'total_orders', 'Total', 2)
+        ],
+        calculoLatam: (c) => safeDiv(c[0], c[1]), format: '0.00%', colorFormating: 1 
+      },
 
-      // --- SCOPE: DOUBLE YA (RATIOS) ---
+      // Por Tipo de Usuario (Comportamiento Mensual)
+      { name: 'Confirmed Orders - Double Ya user', calculo: (f) => _dyVal(f, 'orders_dy', 'Double Ya', 9), format: '#,##0', colorFormating: 1 },
+      { 
+        name: 'Confirmed Orders Share % - Double Ya user', 
+        calculo: (f) => safeDiv(_dyVal(f, 'orders_dy', 'Double Ya', 9), _dyVal(f, 'total_orders', 'Total', 2)),
+        usarComponentes: true,
+        indicesLatam: [
+          f => _dyVal(f, 'orders_dy', 'Double Ya', 9), 
+          f => _dyVal(f, 'total_orders', 'Total', 2)
+        ],
+        calculoLatam: (c) => safeDiv(c[0], c[1]), format: '0.00%', colorFormating: 1 
+      },
+      { name: 'Confirmed Orders - non Double Ya user', calculo: (f) => _dyVal(f, 'orders_direct', ['No Double Ya', 'non Double Ya', 'Direct'], 16), format: '#,##0', colorFormating: 1 },
+      { 
+        name: 'Confirmed Orders Share % - non Double Ya user', 
+        calculo: (f) => safeDiv(_dyVal(f, 'orders_direct', ['No Double Ya', 'non Double Ya', 'Direct'], 16), _dyVal(f, 'total_orders', 'Total', 2)),
+        usarComponentes: true,
+        indicesLatam: [
+          f => _dyVal(f, 'orders_direct', ['No Double Ya', 'non Double Ya', 'Direct'], 16), 
+          f => _dyVal(f, 'total_orders', 'Total', 2)
+        ],
+        calculoLatam: (c) => safeDiv(c[0], c[1]), format: '0.00%', colorFormating: 1 
+      },
+      { name: 'Confirmed Orders - Hibrid Double Ya user', calculo: (f) => _dyVal(f, 'orders_hybrid', ['Hibrid Double Ya', 'Hybrid Double Ya', 'Hybrid', 'non Double Ya & Double Ya'], 23), format: '#,##0', colorFormating: 1 },
+      { name: 'Confirmed Orders - Hibrid Double Ya', calculo: (f) => _dyVal(f, 'orders_hybrid', ['Hibrid Double Ya', 'Hybrid Double Ya', 'Hybrid', 'non Double Ya & Double Ya'], 23), format: '#,##0', colorFormating: 1 },
+      { 
+        name: 'Confirmed Orders Share % - Hibrid Double Ya user', 
+        calculo: (f) => safeDiv(_dyVal(f, 'orders_hybrid', ['Hibrid Double Ya', 'Hybrid Double Ya', 'Hybrid', 'non Double Ya & Double Ya'], 23), _dyVal(f, 'total_orders', 'Total', 2)),
+        usarComponentes: true,
+        indicesLatam: [
+          f => _dyVal(f, 'orders_hybrid', ['Hibrid Double Ya', 'Hybrid Double Ya', 'Hybrid', 'non Double Ya & Double Ya'], 23), 
+          f => _dyVal(f, 'total_orders', 'Total', 2)
+        ],
+        calculoLatam: (c) => safeDiv(c[0], c[1]), format: '0.00%', colorFormating: 1 
+      },
+
+      // ════════════════════════════════════════════════════════════════
+      // 2. UNITS SOLD & SHARE %
+      // ════════════════════════════════════════════════════════════════
+      // Canal Puro (Absoluto a nivel orden)
+      { name: 'Units Sold - Double Ya', calculo: (f) => _dyVal(f, 'units_sold_dy_abs', 'Double Ya Abs', 42), format: '#,##0', colorFormating: 1 },
+      { 
+        name: 'Units Sold Share % - Double Ya', 
+        calculo: (f) => safeDiv(_dyVal(f, 'units_sold_dy_abs', 'Double Ya Abs', 42), _dyVal(f, 'total_units_sold', 'Total', 3)),
+        usarComponentes: true,
+        indicesLatam: [
+          f => _dyVal(f, 'units_sold_dy_abs', 'Double Ya Abs', 42), 
+          f => _dyVal(f, 'total_units_sold', 'Total', 3)
+        ],
+        calculoLatam: (c) => safeDiv(c[0], c[1]), format: '0.00%', colorFormating: 1 
+      },
+      { name: 'Units Sold - non Double Ya', calculo: (f) => _dyVal(f, 'units_sold_direct_abs', 'Direct Abs', 46), format: '#,##0', colorFormating: 1 },
+      { 
+        name: 'Units Sold Share % - non Double Ya', 
+        calculo: (f) => safeDiv(_dyVal(f, 'units_sold_direct_abs', 'Direct Abs', 46), _dyVal(f, 'total_units_sold', 'Total', 3)),
+        usarComponentes: true,
+        indicesLatam: [
+          f => _dyVal(f, 'units_sold_direct_abs', 'Direct Abs', 46), 
+          f => _dyVal(f, 'total_units_sold', 'Total', 3)
+        ],
+        calculoLatam: (c) => safeDiv(c[0], c[1]), format: '0.00%', colorFormating: 1 
+      },
+
+      // Por Tipo de Usuario (Comportamiento Mensual)
+      { name: 'Units Sold - Double Ya user', calculo: (f) => _dyVal(f, 'units_sold_dy', 'Double Ya', 10), format: '#,##0', colorFormating: 1 },
+      { 
+        name: 'Units Sold Share % - Double Ya user', 
+        calculo: (f) => safeDiv(_dyVal(f, 'units_sold_dy', 'Double Ya', 10), _dyVal(f, 'total_units_sold', 'Total', 3)),
+        usarComponentes: true,
+        indicesLatam: [
+          f => _dyVal(f, 'units_sold_dy', 'Double Ya', 10), 
+          f => _dyVal(f, 'total_units_sold', 'Total', 3)
+        ],
+        calculoLatam: (c) => safeDiv(c[0], c[1]), format: '0.00%', colorFormating: 1 
+      },
+      { name: 'Units Sold - non Double Ya user', calculo: (f) => _dyVal(f, 'units_sold_direct', ['No Double Ya', 'non Double Ya', 'Direct'], 17), format: '#,##0', colorFormating: 1 },
+      { 
+        name: 'Units Sold Share % - non Double Ya user', 
+        calculo: (f) => safeDiv(_dyVal(f, 'units_sold_direct', ['No Double Ya', 'non Double Ya', 'Direct'], 17), _dyVal(f, 'total_units_sold', 'Total', 3)),
+        usarComponentes: true,
+        indicesLatam: [
+          f => _dyVal(f, 'units_sold_direct', ['No Double Ya', 'non Double Ya', 'Direct'], 17), 
+          f => _dyVal(f, 'total_units_sold', 'Total', 3)
+        ],
+        calculoLatam: (c) => safeDiv(c[0], c[1]), format: '0.00%', colorFormating: 1 
+      },
+      { name: 'Units Sold - Hibrid Double Ya user', calculo: (f) => _dyVal(f, 'units_sold_hybrid', ['Hibrid Double Ya', 'Hybrid Double Ya', 'Hybrid', 'non Double Ya & Double Ya'], 24), format: '#,##0', colorFormating: 1 },
+      { name: 'Units Sold - Hibrid Double Ya', calculo: (f) => _dyVal(f, 'units_sold_hybrid', ['Hibrid Double Ya', 'Hybrid Double Ya', 'Hybrid', 'non Double Ya & Double Ya'], 24), format: '#,##0', colorFormating: 1 },
+      { 
+        name: 'Units Sold Share % - Hibrid Double Ya user', 
+        calculo: (f) => safeDiv(_dyVal(f, 'units_sold_hybrid', ['Hibrid Double Ya', 'Hybrid Double Ya', 'Hybrid', 'non Double Ya & Double Ya'], 24), _dyVal(f, 'total_units_sold', 'Total', 3)),
+        usarComponentes: true,
+        indicesLatam: [
+          f => _dyVal(f, 'units_sold_hybrid', ['Hibrid Double Ya', 'Hybrid Double Ya', 'Hybrid', 'non Double Ya & Double Ya'], 24), 
+          f => _dyVal(f, 'total_units_sold', 'Total', 3)
+        ],
+        calculoLatam: (c) => safeDiv(c[0], c[1]), format: '0.00%', colorFormating: 1 
+      },
+
+      // ════════════════════════════════════════════════════════════════
+      // 3. NET SALES & SHARE %
+      // ════════════════════════════════════════════════════════════════
+      // Canal Puro (Absoluto a nivel orden)
+      { name: 'Net Sales - Double Ya', calculo: (f) => _dyVal(f, 'net_sales_eur_dy_abs', 'Double Ya Abs', 43), format: '#,##0.00', colorFormating: 1 },
+      { 
+        name: 'Net Sales Share % - Double Ya', 
+        calculo: (f) => safeDiv(_dyVal(f, 'net_sales_eur_dy_abs', 'Double Ya Abs', 43), _dyVal(f, 'total_net_sales_eur', 'Total', 4)),
+        usarComponentes: true,
+        indicesLatam: [
+          f => _dyVal(f, 'net_sales_eur_dy_abs', 'Double Ya Abs', 43), 
+          f => _dyVal(f, 'total_net_sales_eur', 'Total', 4)
+        ],
+        calculoLatam: (c) => safeDiv(c[0], c[1]), format: '0.00%', colorFormating: 1 
+      },
+      { name: 'Net Sales - non Double Ya', calculo: (f) => _dyVal(f, 'net_sales_eur_direct_abs', 'Direct Abs', 47), format: '#,##0.00', colorFormating: 1 },
+      { 
+        name: 'Net Sales Share % - non Double Ya', 
+        calculo: (f) => safeDiv(_dyVal(f, 'net_sales_eur_direct_abs', 'Direct Abs', 47), _dyVal(f, 'total_net_sales_eur', 'Total', 4)),
+        usarComponentes: true,
+        indicesLatam: [
+          f => _dyVal(f, 'net_sales_eur_direct_abs', 'Direct Abs', 47), 
+          f => _dyVal(f, 'total_net_sales_eur', 'Total', 4)
+        ],
+        calculoLatam: (c) => safeDiv(c[0], c[1]), format: '0.00%', colorFormating: 1 
+      },
+
+      // Por Tipo de Usuario (Comportamiento Mensual)
+      { name: 'Net Sales - Double Ya user', calculo: (f) => _dyVal(f, 'net_sales_eur_dy', 'Double Ya', 11), format: '#,##0.00', colorFormating: 1 },
+      { 
+        name: 'Net Sales Share % - Double Ya user', 
+        calculo: (f) => safeDiv(_dyVal(f, 'net_sales_eur_dy', 'Double Ya', 11), _dyVal(f, 'total_net_sales_eur', 'Total', 4)),
+        usarComponentes: true,
+        indicesLatam: [
+          f => _dyVal(f, 'net_sales_eur_dy', 'Double Ya', 11), 
+          f => _dyVal(f, 'total_net_sales_eur', 'Total', 4)
+        ],
+        calculoLatam: (c) => safeDiv(c[0], c[1]), format: '0.00%', colorFormating: 1 
+      },
+      { name: 'Net Sales - non Double Ya user', calculo: (f) => _dyVal(f, 'net_sales_eur_direct', ['No Double Ya', 'non Double Ya', 'Direct'], 18), format: '#,##0.00', colorFormating: 1 },
+      { 
+        name: 'Net Sales Share % - non Double Ya user', 
+        calculo: (f) => safeDiv(_dyVal(f, 'net_sales_eur_direct', ['No Double Ya', 'non Double Ya', 'Direct'], 18), _dyVal(f, 'total_net_sales_eur', 'Total', 4)),
+        usarComponentes: true,
+        indicesLatam: [
+          f => _dyVal(f, 'net_sales_eur_direct', ['No Double Ya', 'non Double Ya', 'Direct'], 18), 
+          f => _dyVal(f, 'total_net_sales_eur', 'Total', 4)
+        ],
+        calculoLatam: (c) => safeDiv(c[0], c[1]), format: '0.00%', colorFormating: 1 
+      },
+      { name: 'Net Sales - Hibrid Double Ya user', calculo: (f) => _dyVal(f, 'net_sales_eur_hybrid', ['Hibrid Double Ya', 'Hybrid Double Ya', 'Hybrid', 'non Double Ya & Double Ya'], 25), format: '#,##0.00', colorFormating: 1 },
+      { name: 'Net Sales - Hibrid Double Ya', calculo: (f) => _dyVal(f, 'net_sales_eur_hybrid', ['Hibrid Double Ya', 'Hybrid Double Ya', 'Hybrid', 'non Double Ya & Double Ya'], 25), format: '#,##0.00', colorFormating: 1 },
+      { 
+        name: 'Net Sales Share % - Hibrid Double Ya user', 
+        calculo: (f) => safeDiv(_dyVal(f, 'net_sales_eur_hybrid', ['Hibrid Double Ya', 'Hybrid Double Ya', 'Hybrid', 'non Double Ya & Double Ya'], 25), _dyVal(f, 'total_net_sales_eur', 'Total', 4)),
+        usarComponentes: true,
+        indicesLatam: [
+          f => _dyVal(f, 'net_sales_eur_hybrid', ['Hibrid Double Ya', 'Hybrid Double Ya', 'Hybrid', 'non Double Ya & Double Ya'], 25), 
+          f => _dyVal(f, 'total_net_sales_eur', 'Total', 4)
+        ],
+        calculoLatam: (c) => safeDiv(c[0], c[1]), format: '0.00%', colorFormating: 1 
+      },
+
+      // ════════════════════════════════════════════════════════════════
+      // 4. COGS (VOLUMEN)
+      // ════════════════════════════════════════════════════════════════
+      { name: 'COGS - Double Ya', calculo: (f) => _dyVal(f, 'cogs_dy_abs', 'Double Ya Abs', 44), format: '#,##0.00', colorFormating: 1 },
+      { name: 'COGS - non Double Ya', calculo: (f) => _dyVal(f, 'cogs_direct_abs', 'Direct Abs', 48), format: '#,##0.00', colorFormating: 1 },
+      { name: 'COGS - Double Ya user', calculo: (f) => _dyVal(f, 'cogs_dy', 'Double Ya', 12), format: '#,##0.00', colorFormating: 1 },
+      { name: 'COGS - non Double Ya user', calculo: (f) => _dyVal(f, 'cogs_direct', ['No Double Ya', 'non Double Ya', 'Direct'], 19), format: '#,##0.00', colorFormating: 1 },
+      { name: 'COGS - Hibrid Double Ya user', calculo: (f) => _dyVal(f, 'cogs_hybrid', ['Hibrid Double Ya', 'Hybrid Double Ya', 'Hybrid', 'non Double Ya & Double Ya'], 26), format: '#,##0.00', colorFormating: 1 },
+      { name: 'COGS - Hibrid Double Ya', calculo: (f) => _dyVal(f, 'cogs_hybrid', ['Hibrid Double Ya', 'Hybrid Double Ya', 'Hybrid', 'non Double Ya & Double Ya'], 26), format: '#,##0.00', colorFormating: 1 },
+
+      // ════════════════════════════════════════════════════════════════
+      // 5. SESSIONS & TRANSACTIONS (VOLUMEN)
+      // ════════════════════════════════════════════════════════════════
+      { name: 'Sessions - Double Ya', calculo: (f) => _dyVal(f, 'sessions_details_dy', 'Double Ya', 14), format: '#,##0', colorFormating: 1 },
+      { name: 'Sessions - non Double Ya', calculo: (f) => _dyVal(f, 'sessions_details_direct', ['No Double Ya', 'non Double Ya', 'Direct'], 21), format: '#,##0', colorFormating: 1 },
+
+      { name: 'Transactions - Double Ya', calculo: (f) => _dyVal(f, 'sessions_transaction_dy', 'Double Ya', 15), format: '#,##0', colorFormating: 1 },
+      { name: 'Transactions - non Double Ya', calculo: (f) => _dyVal(f, 'sessions_transaction_direct', ['No Double Ya', 'non Double Ya', 'Direct'], 22), format: '#,##0', colorFormating: 1 },
+
+      // ════════════════════════════════════════════════════════════════
+      // 6. DMART MAUS (VOLUMEN)
+      // ════════════════════════════════════════════════════════════════
+      { name: 'Dmart MAUs - Double Ya', calculo: (f) => _dyVal(f, 'active_users_dy', 'Double Ya', 13), format: '#,##0', colorFormating: 1 },
+      { name: 'Dmart MAUs - non Double Ya', calculo: (f) => _dyVal(f, 'active_users_direct', ['No Double Ya', 'non Double Ya', 'Direct'], 20), format: '#,##0', colorFormating: 1 },
+      { name: 'Dmart MAUs - Hibrid Double Ya', calculo: (f) => _dyVal(f, 'active_users_hybrid', ['Hibrid Double Ya', 'Hybrid Double Ya', 'Hybrid', 'non Double Ya & Double Ya'], 27), format: '#,##0', colorFormating: 1 },
+      { name: 'Dmart MAUs  - Hibrid Double Ya', calculo: (f) => _dyVal(f, 'active_users_hybrid', ['Hibrid Double Ya', 'Hybrid Double Ya', 'Hybrid', 'non Double Ya & Double Ya'], 27), format: '#,##0', colorFormating: 1 },
+
+      // ════════════════════════════════════════════════════════════════
+      // 7. NEW USERS (VOLUMEN)
+      // ════════════════════════════════════════════════════════════════
+      { name: 'New Users - Double Ya', calculo: (f) => _dyVal(f, 'new_users_dy', 'Double Ya', 29), format: '#,##0', colorFormating: 1 },
+      { name: 'New Users - non Double Ya', calculo: (f) => _dyVal(f, 'new_users_direct', ['No Double Ya', 'non Double Ya', 'Direct'], 30), format: '#,##0', colorFormating: 1 },
+      { name: 'New Users - non Double Ya & Double Ya', calculo: (f) => _dyVal(f, 'new_users_hybrid', ['Hibrid Double Ya', 'Hybrid Double Ya', 'Hybrid', 'non Double Ya & Double Ya'], 31), format: '#,##0', colorFormating: 1 },
+      { name: 'New Users - Hibrid Double Ya', calculo: (f) => _dyVal(f, 'new_users_hybrid', ['Hibrid Double Ya', 'Hybrid Double Ya', 'Hybrid', 'non Double Ya & Double Ya'], 31), format: '#,##0', colorFormating: 1 },
+      { name: 'New Users  - Hibrid Double Ya', calculo: (f) => _dyVal(f, 'new_users_hybrid', ['Hibrid Double Ya', 'Hybrid Double Ya', 'Hybrid', 'non Double Ya & Double Ya'], 31), format: '#,##0', colorFormating: 1 },
+
+      // --- Las 9 Variantes M1 Return Users (Destino from Origen - Dmart) ---
+      // 1) Destino DY:
+      { name: 'M1 Return Users DY from DY - Dmart', calculo: (f) => _dyVal(f, 'ret_dy_to_dy', 'Double Ya', 32), colorFormating: 1 },
+      { name: 'M1 Return Users DY from non DY - Dmart', calculo: (f) => _dyVal(f, 'ret_direct_to_dy', ['No Double Ya', 'non Double Ya', 'Direct'], 35), colorFormating: 1 },
+      { name: 'M1 Return Users DY from Hibrid - Dmart', calculo: (f) => _dyVal(f, 'ret_hybrid_to_dy', ['Hibrid Double Ya', 'Hybrid Double Ya', 'Hybrid', 'non Double Ya & Double Ya'], 38), colorFormating: 1 },
+
+      // 2) Destino non DY:
+      { name: 'M1 Return Users non DY from DY - Dmart', calculo: (f) => _dyVal(f, 'ret_dy_to_direct', 'Double Ya', 33), colorFormating: 1 },
+      { name: 'M1 Return Users non DY from non DY - Dmart', calculo: (f) => _dyVal(f, 'ret_direct_to_direct', ['No Double Ya', 'non Double Ya', 'Direct'], 36), colorFormating: 1 },
+      { name: 'M1 Return Users non DY from Hibrid - Dmart', calculo: (f) => _dyVal(f, 'ret_hybrid_to_direct', ['Hibrid Double Ya', 'Hybrid Double Ya', 'Hybrid', 'non Double Ya & Double Ya'], 39), colorFormating: 1 },
+
+      // 3) Destino Hibrid:
+      { name: 'M1 Return Users Hibrid from DY - Dmart', calculo: (f) => _dyVal(f, 'ret_dy_to_hybrid', 'Double Ya', 34), colorFormating: 1 },
+      { name: 'M1 Return Users Hibrid from non DY - Dmart', calculo: (f) => _dyVal(f, 'ret_direct_to_hybrid', ['No Double Ya', 'non Double Ya', 'Direct'], 37), colorFormating: 1 },
+      { name: 'M1 Return Users Hibrid from Hibrid - Dmart', calculo: (f) => _dyVal(f, 'ret_hybrid_to_hybrid', ['Hibrid Double Ya', 'Hybrid Double Ya', 'Hybrid', 'non Double Ya & Double Ya'], 40), colorFormating: 1 },
+      { name: 'M1 Return Users Hibrid  from Hibrid - Dmart', calculo: (f) => _dyVal(f, 'ret_hybrid_to_hybrid', ['Hibrid Double Ya', 'Hybrid Double Ya', 'Hybrid', 'non Double Ya & Double Ya'], 40), colorFormating: 1 },
+
       { 
         name: 'M1 Return Users Share % - Double Ya', 
-        calculo: (f) => String(f[2]).trim() === 'Double Ya' ? safeDiv(f[11], f[4]) : 0,
+        calculo: (f) => safeDiv(_dyVal(f, 'ret_dy_to_dy', 'Double Ya', 32), _dyVal(f, 'new_users_dy', 'Double Ya', 29)),
         usarComponentes: true,
         indicesLatam: [
-          f => String(f[2]).trim() === 'Double Ya' ? (parseFloat(f[11])||0) : 0, 
-          f => String(f[2]).trim() === 'Double Ya' ? (parseFloat(f[4])||0) : 0
+          f => _dyVal(f, 'ret_dy_to_dy', 'Double Ya', 32), 
+          f => _dyVal(f, 'new_users_dy', 'Double Ya', 29)
         ],
         calculoLatam: (c) => safeDiv(c[0], c[1]), format: '0.00%', colorFormating: 1 
       },
       { 
-        name: 'AFV - Double Ya', 
-        calculo: (f) => String(f[2]).trim() === 'Double Ya' ? safeDiv(f[7], f[5]) : 0,
+        name: 'M1 Return Users Share % - non Double Ya', 
+        calculo: (f) => safeDiv(_dyVal(f, 'ret_direct_to_direct', ['No Double Ya', 'non Double Ya', 'Direct'], 36), _dyVal(f, 'new_users_direct', ['No Double Ya', 'non Double Ya', 'Direct'], 30)),
         usarComponentes: true,
         indicesLatam: [
-          f => String(f[2]).trim() === 'Double Ya' ? (parseFloat(f[7])||0) : 0, 
-          f => String(f[2]).trim() === 'Double Ya' ? (parseFloat(f[5])||0) : 0
-        ],
-        calculoLatam: (c) => safeDiv(c[0], c[1]), format: '0.00', colorFormating: 1 
-      },
-      { 
-        name: 'CVR3 % - Double Ya', 
-        calculo: (f) => String(f[2]).trim() === 'Double Ya' ? safeDiv(f[10], f[9]) : 0,
-        usarComponentes: true,
-        indicesLatam: [
-          f => String(f[2]).trim() === 'Double Ya' ? (parseFloat(f[10])||0) : 0, 
-          f => String(f[2]).trim() === 'Double Ya' ? (parseFloat(f[9])||0) : 0
-        ],
-        calculoLatam: (c) => safeDiv(c[0], c[1]), format: '0.00%', colorFormating: 1 
-      },
-
-      // --- SCOPE: NO DOUBLE YA (VOLUMEN) ---
-      { name: 'Confirmed Orders - non Double Ya', calculo: (f) => String(f[2]).trim() === 'No Double Ya' ? (parseFloat(f[5]) || 0) : 0, colorFormating: 1 },
-      { name: 'Net Sales - non Double Ya', calculo: (f) => String(f[2]).trim() === 'No Double Ya' ? (parseFloat(f[7]) || 0) : 0, colorFormating: 1 },
-      { name: 'Units sold - non Double Ya', calculo: (f) => String(f[2]).trim() === 'No Double Ya' ? (parseFloat(f[6]) || 0) : 0, colorFormating: 1 },
-      { name: 'Sessions - non Double Ya', calculo: (f) => String(f[2]).trim() === 'No Double Ya' ? (parseFloat(f[9]) || 0) : 0, colorFormating: 1 },
-      { name: 'Transactions - non Double Ya', calculo: (f) => String(f[2]).trim() === 'No Double Ya' ? (parseFloat(f[10]) || 0) : 0, colorFormating: 1 },
-      { name: 'Dmart MAUs - non Double Ya', calculo: (f) => String(f[2]).trim() === 'No Double Ya' ? (parseFloat(f[3]) || 0) : 0, colorFormating: 1 },
-      { name: 'New Users - non Double Ya', calculo: (f) => String(f[2]).trim() === 'No Double Ya' ? (parseFloat(f[4]) || 0) : 0, colorFormating: 1 },
-      { name: 'M1 Return Users - non Double Ya', calculo: (f) => String(f[2]).trim() === 'No Double Ya' ? (parseFloat(f[11]) || 0) : 0, colorFormating: 1 },
-
-      // --- SCOPE: NO DOUBLE YA (RATIOS) ---
-      { 
-        name: 'CVR3 % - non Double Ya', 
-        calculo: (f) => String(f[2]).trim() === 'No Double Ya' ? safeDiv(f[10], f[9]) : 0,
-        usarComponentes: true,
-        indicesLatam: [
-          f => String(f[2]).trim() === 'No Double Ya' ? (parseFloat(f[10])||0) : 0, 
-          f => String(f[2]).trim() === 'No Double Ya' ? (parseFloat(f[9])||0) : 0
+          f => _dyVal(f, 'ret_direct_to_direct', ['No Double Ya', 'non Double Ya', 'Direct'], 36), 
+          f => _dyVal(f, 'new_users_direct', ['No Double Ya', 'non Double Ya', 'Direct'], 30)
         ],
         calculoLatam: (c) => safeDiv(c[0], c[1]), format: '0.00%', colorFormating: 1 
       },
       { 
-        name: 'AFV - non Double Ya', 
-        calculo: (f) => String(f[2]).trim() === 'No Double Ya' ? safeDiv(f[7], f[5]) : 0,
+        name: 'M1 Return Users Share % - Hibrid Double Ya', 
+        calculo: (f) => safeDiv(_dyVal(f, 'ret_hybrid_to_hybrid', ['Hibrid Double Ya', 'Hybrid Double Ya', 'Hybrid', 'non Double Ya & Double Ya'], 40), _dyVal(f, 'new_users_hybrid', ['Hibrid Double Ya', 'Hybrid Double Ya', 'Hybrid', 'non Double Ya & Double Ya'], 31)),
         usarComponentes: true,
         indicesLatam: [
-          f => String(f[2]).trim() === 'No Double Ya' ? (parseFloat(f[7])||0) : 0, 
-          f => String(f[2]).trim() === 'No Double Ya' ? (parseFloat(f[5])||0) : 0
+          f => _dyVal(f, 'ret_hybrid_to_hybrid', ['Hibrid Double Ya', 'Hybrid Double Ya', 'Hybrid', 'non Double Ya & Double Ya'], 40), 
+          f => _dyVal(f, 'new_users_hybrid', ['Hibrid Double Ya', 'Hybrid Double Ya', 'Hybrid', 'non Double Ya & Double Ya'], 31)
         ],
-        calculoLatam: (c) => safeDiv(c[0], c[1]), format: '0.00', colorFormating: 1 
+        calculoLatam: (c) => safeDiv(c[0], c[1]), format: '0.00%', colorFormating: 1 
       },
 
-      // ====================================================================================
-      // NUEVO: Métricas Double Ya calculadas directamente en su sección CONFIG_GD_METRICAS
-      // ====================================================================================
+      // ════════════════════════════════════════════════════════════════
+      // 8. BASKET SIZE (RATIOS)
+      // ════════════════════════════════════════════════════════════════
+      // Canal Puro (Absoluto a nivel orden)
       { 
         name: 'Basket Size - Double Ya', 
-        calculo: (f) => String(f[2]).trim() === 'Double Ya' ? safeDiv(f[6], f[5]) : 0,
+        calculo: (f) => safeDiv(_dyVal(f, 'units_sold_dy_abs', 'Double Ya Abs', 42), _dyVal(f, 'orders_dy_abs', 'Double Ya Abs', 41)),
         usarComponentes: true,
         indicesLatam: [
-          f => String(f[2]).trim() === 'Double Ya' ? (parseFloat(f[6])||0) : 0, 
-          f => String(f[2]).trim() === 'Double Ya' ? (parseFloat(f[5])||0) : 0
+          f => _dyVal(f, 'units_sold_dy_abs', 'Double Ya Abs', 42), 
+          f => _dyVal(f, 'orders_dy_abs', 'Double Ya Abs', 41)
         ],
         calculoLatam: (c) => safeDiv(c[0], c[1]), 
         format: '0.00', 
@@ -1241,23 +1458,175 @@ const CONFIG_GD_METRICAS = [
       },
       { 
         name: 'Basket Size - non Double Ya', 
-        calculo: (f) => String(f[2]).trim() === 'No Double Ya' ? safeDiv(f[6], f[5]) : 0,
+        calculo: (f) => safeDiv(_dyVal(f, 'units_sold_direct_abs', 'Direct Abs', 46), _dyVal(f, 'orders_direct_abs', 'Direct Abs', 45)),
         usarComponentes: true,
         indicesLatam: [
-          f => String(f[2]).trim() === 'No Double Ya' ? (parseFloat(f[6])||0) : 0, 
-          f => String(f[2]).trim() === 'No Double Ya' ? (parseFloat(f[5])||0) : 0
+          f => _dyVal(f, 'units_sold_direct_abs', 'Direct Abs', 46), 
+          f => _dyVal(f, 'orders_direct_abs', 'Direct Abs', 45)
+        ],
+        calculoLatam: (c) => safeDiv(c[0], c[1]), 
+        format: '0.00', 
+        colorFormating: 1 
+      },
+      // Por Tipo de Usuario (Comportamiento Mensual)
+      { 
+        name: 'Basket Size - Double Ya user', 
+        calculo: (f) => safeDiv(_dyVal(f, 'units_sold_dy', 'Double Ya', 10), _dyVal(f, 'orders_dy', 'Double Ya', 9)),
+        usarComponentes: true,
+        indicesLatam: [
+          f => _dyVal(f, 'units_sold_dy', 'Double Ya', 10), 
+          f => _dyVal(f, 'orders_dy', 'Double Ya', 9)
         ],
         calculoLatam: (c) => safeDiv(c[0], c[1]), 
         format: '0.00', 
         colorFormating: 1 
       },
       { 
-        name: 'Frequency - Double Ya', 
-        calculo: (f) => String(f[2]).trim() === 'Double Ya' ? safeDiv(f[5], f[3]) : 0,
+        name: 'Basket Size - non Double Ya user', 
+        calculo: (f) => safeDiv(_dyVal(f, 'units_sold_direct', ['No Double Ya', 'non Double Ya', 'Direct'], 17), _dyVal(f, 'orders_direct', ['No Double Ya', 'non Double Ya', 'Direct'], 16)),
         usarComponentes: true,
         indicesLatam: [
-          f => String(f[2]).trim() === 'Double Ya' ? (parseFloat(f[5])||0) : 0, 
-          f => String(f[2]).trim() === 'Double Ya' ? (parseFloat(f[3])||0) : 0
+          f => _dyVal(f, 'units_sold_direct', ['No Double Ya', 'non Double Ya', 'Direct'], 17), 
+          f => _dyVal(f, 'orders_direct', ['No Double Ya', 'non Double Ya', 'Direct'], 16)
+        ],
+        calculoLatam: (c) => safeDiv(c[0], c[1]), 
+        format: '0.00', 
+        colorFormating: 1 
+      },
+      { 
+        name: 'Basket Size - Hibrid Double Ya user', 
+        calculo: (f) => safeDiv(_dyVal(f, 'units_sold_hybrid', ['Hibrid Double Ya', 'Hybrid Double Ya', 'Hybrid', 'non Double Ya & Double Ya'], 24), _dyVal(f, 'orders_hybrid', ['Hibrid Double Ya', 'Hybrid Double Ya', 'Hybrid', 'non Double Ya & Double Ya'], 23)),
+        usarComponentes: true,
+        indicesLatam: [
+          f => _dyVal(f, 'units_sold_hybrid', ['Hibrid Double Ya', 'Hybrid Double Ya', 'Hybrid', 'non Double Ya & Double Ya'], 24), 
+          f => _dyVal(f, 'orders_hybrid', ['Hibrid Double Ya', 'Hybrid Double Ya', 'Hybrid', 'non Double Ya & Double Ya'], 23)
+        ],
+        calculoLatam: (c) => safeDiv(c[0], c[1]), 
+        format: '0.00', 
+        colorFormating: 1 
+      },
+      { 
+        name: 'Basket Size - Hibrid Double Ya', 
+        calculo: (f) => safeDiv(_dyVal(f, 'units_sold_hybrid', ['Hibrid Double Ya', 'Hybrid Double Ya', 'Hybrid', 'non Double Ya & Double Ya'], 24), _dyVal(f, 'orders_hybrid', ['Hibrid Double Ya', 'Hybrid Double Ya', 'Hybrid', 'non Double Ya & Double Ya'], 23)),
+        usarComponentes: true,
+        indicesLatam: [
+          f => _dyVal(f, 'units_sold_hybrid', ['Hibrid Double Ya', 'Hybrid Double Ya', 'Hybrid', 'non Double Ya & Double Ya'], 24), 
+          f => _dyVal(f, 'orders_hybrid', ['Hibrid Double Ya', 'Hybrid Double Ya', 'Hybrid', 'non Double Ya & Double Ya'], 23)
+        ],
+        calculoLatam: (c) => safeDiv(c[0], c[1]), 
+        format: '0.00', 
+        colorFormating: 1 
+      },
+      { 
+        name: 'Basket Size  - Hibrid Double Ya', 
+        calculo: (f) => safeDiv(_dyVal(f, 'units_sold_hybrid', ['Hibrid Double Ya', 'Hybrid Double Ya', 'Hybrid', 'non Double Ya & Double Ya'], 24), _dyVal(f, 'orders_hybrid', ['Hibrid Double Ya', 'Hybrid Double Ya', 'Hybrid', 'non Double Ya & Double Ya'], 23)),
+        usarComponentes: true,
+        indicesLatam: [
+          f => _dyVal(f, 'units_sold_hybrid', ['Hibrid Double Ya', 'Hybrid Double Ya', 'Hybrid', 'non Double Ya & Double Ya'], 24), 
+          f => _dyVal(f, 'orders_hybrid', ['Hibrid Double Ya', 'Hybrid Double Ya', 'Hybrid', 'non Double Ya & Double Ya'], 23)
+        ],
+        calculoLatam: (c) => safeDiv(c[0], c[1]), 
+        format: '0.00', 
+        colorFormating: 1 
+      },
+
+      // ════════════════════════════════════════════════════════════════
+      // 9. AFV (RATIOS)
+      // ════════════════════════════════════════════════════════════════
+      // Canal Puro (Absoluto a nivel orden)
+      { 
+        name: 'AFV - Double Ya', 
+        calculo: (f) => safeDiv(_dyVal(f, 'net_sales_eur_dy_abs', 'Double Ya Abs', 43), _dyVal(f, 'orders_dy_abs', 'Double Ya Abs', 41)),
+        usarComponentes: true,
+        indicesLatam: [
+          f => _dyVal(f, 'net_sales_eur_dy_abs', 'Double Ya Abs', 43), 
+          f => _dyVal(f, 'orders_dy_abs', 'Double Ya Abs', 41)
+        ],
+        calculoLatam: (c) => safeDiv(c[0], c[1]), format: '0.00', colorFormating: 1 
+      },
+      { 
+        name: 'AFV - non Double Ya', 
+        calculo: (f) => safeDiv(_dyVal(f, 'net_sales_eur_direct_abs', 'Direct Abs', 47), _dyVal(f, 'orders_direct_abs', 'Direct Abs', 45)),
+        usarComponentes: true,
+        indicesLatam: [
+          f => _dyVal(f, 'net_sales_eur_direct_abs', 'Direct Abs', 47), 
+          f => _dyVal(f, 'orders_direct_abs', 'Direct Abs', 45)
+        ],
+        calculoLatam: (c) => safeDiv(c[0], c[1]), format: '0.00', colorFormating: 1 
+      },
+      // Por Tipo de Usuario (Comportamiento Mensual)
+      { 
+        name: 'AFV - Double Ya user', 
+        calculo: (f) => safeDiv(_dyVal(f, 'net_sales_eur_dy', 'Double Ya', 11), _dyVal(f, 'orders_dy', 'Double Ya', 9)),
+        usarComponentes: true,
+        indicesLatam: [
+          f => _dyVal(f, 'net_sales_eur_dy', 'Double Ya', 11), 
+          f => _dyVal(f, 'orders_dy', 'Double Ya', 9)
+        ],
+        calculoLatam: (c) => safeDiv(c[0], c[1]), format: '0.00', colorFormating: 1 
+      },
+      { 
+        name: 'AFV - non Double Ya user', 
+        calculo: (f) => safeDiv(_dyVal(f, 'net_sales_eur_direct', ['No Double Ya', 'non Double Ya', 'Direct'], 18), _dyVal(f, 'orders_direct', ['No Double Ya', 'non Double Ya', 'Direct'], 16)),
+        usarComponentes: true,
+        indicesLatam: [
+          f => _dyVal(f, 'net_sales_eur_direct', ['No Double Ya', 'non Double Ya', 'Direct'], 18), 
+          f => _dyVal(f, 'orders_direct', ['No Double Ya', 'non Double Ya', 'Direct'], 16)
+        ],
+        calculoLatam: (c) => safeDiv(c[0], c[1]), format: '0.00', colorFormating: 1 
+      },
+      { 
+        name: 'AFV - Hibrid Double Ya user', 
+        calculo: (f) => safeDiv(_dyVal(f, 'net_sales_eur_hybrid', ['Hibrid Double Ya', 'Hybrid Double Ya', 'Hybrid', 'non Double Ya & Double Ya'], 25), _dyVal(f, 'orders_hybrid', ['Hibrid Double Ya', 'Hybrid Double Ya', 'Hybrid', 'non Double Ya & Double Ya'], 23)),
+        usarComponentes: true,
+        indicesLatam: [
+          f => _dyVal(f, 'net_sales_eur_hybrid', ['Hibrid Double Ya', 'Hybrid Double Ya', 'Hybrid', 'non Double Ya & Double Ya'], 25), 
+          f => _dyVal(f, 'orders_hybrid', ['Hibrid Double Ya', 'Hybrid Double Ya', 'Hybrid', 'non Double Ya & Double Ya'], 23)
+        ],
+        calculoLatam: (c) => safeDiv(c[0], c[1]), format: '0.00', colorFormating: 1 
+      },
+      { 
+        name: 'AFV  - Hibrid Double Ya user', 
+        calculo: (f) => safeDiv(_dyVal(f, 'net_sales_eur_hybrid', ['Hibrid Double Ya', 'Hybrid Double Ya', 'Hybrid', 'non Double Ya & Double Ya'], 25), _dyVal(f, 'orders_hybrid', ['Hibrid Double Ya', 'Hybrid Double Ya', 'Hybrid', 'non Double Ya & Double Ya'], 23)),
+        usarComponentes: true,
+        indicesLatam: [
+          f => _dyVal(f, 'net_sales_eur_hybrid', ['Hibrid Double Ya', 'Hybrid Double Ya', 'Hybrid', 'non Double Ya & Double Ya'], 25), 
+          f => _dyVal(f, 'orders_hybrid', ['Hibrid Double Ya', 'Hybrid Double Ya', 'Hybrid', 'non Double Ya & Double Ya'], 23)
+        ],
+        calculoLatam: (c) => safeDiv(c[0], c[1]), format: '0.00', colorFormating: 1 
+      },
+      { 
+        name: 'AFV - Hibrid Double Ya', 
+        calculo: (f) => safeDiv(_dyVal(f, 'net_sales_eur_hybrid', ['Hibrid Double Ya', 'Hybrid Double Ya', 'Hybrid', 'non Double Ya & Double Ya'], 25), _dyVal(f, 'orders_hybrid', ['Hibrid Double Ya', 'Hybrid Double Ya', 'Hybrid', 'non Double Ya & Double Ya'], 23)),
+        usarComponentes: true,
+        indicesLatam: [
+          f => _dyVal(f, 'net_sales_eur_hybrid', ['Hibrid Double Ya', 'Hybrid Double Ya', 'Hybrid', 'non Double Ya & Double Ya'], 25), 
+          f => _dyVal(f, 'orders_hybrid', ['Hibrid Double Ya', 'Hybrid Double Ya', 'Hybrid', 'non Double Ya & Double Ya'], 23)
+        ],
+        calculoLatam: (c) => safeDiv(c[0], c[1]), format: '0.00', colorFormating: 1 
+      },
+      { 
+        name: 'AFV  - Hibrid Double Ya', 
+        calculo: (f) => safeDiv(_dyVal(f, 'net_sales_eur_hybrid', ['Hibrid Double Ya', 'Hybrid Double Ya', 'Hybrid', 'non Double Ya & Double Ya'], 25), _dyVal(f, 'orders_hybrid', ['Hibrid Double Ya', 'Hybrid Double Ya', 'Hybrid', 'non Double Ya & Double Ya'], 23)),
+        usarComponentes: true,
+        indicesLatam: [
+          f => _dyVal(f, 'net_sales_eur_hybrid', ['Hibrid Double Ya', 'Hybrid Double Ya', 'Hybrid', 'non Double Ya & Double Ya'], 25), 
+          f => _dyVal(f, 'orders_hybrid', ['Hibrid Double Ya', 'Hybrid Double Ya', 'Hybrid', 'non Double Ya & Double Ya'], 23)
+        ],
+        calculoLatam: (c) => safeDiv(c[0], c[1]), format: '0.00', colorFormating: 1 
+      },
+
+      // ════════════════════════════════════════════════════════════════
+      // 10. FREQUENCY (RATIOS)
+      // ════════════════════════════════════════════════════════════════
+      // Canal Puro (Absoluto a nivel orden)
+      { 
+        name: 'Frequency - Double Ya', 
+        calculo: (f) => safeDiv(_dyVal(f, 'orders_dy_abs', 'Double Ya Abs', 41), _dyVal(f, 'active_users_dy', 'Double Ya', 13) + _dyVal(f, 'active_users_hybrid', 'Hybrid', 27)),
+        usarComponentes: true,
+        indicesLatam: [
+          f => _dyVal(f, 'orders_dy_abs', 'Double Ya Abs', 41), 
+          f => _dyVal(f, 'active_users_dy', 'Double Ya', 13) + _dyVal(f, 'active_users_hybrid', 'Hybrid', 27)
         ],
         calculoLatam: (c) => safeDiv(c[0], c[1]), 
         format: '0.00', 
@@ -1265,14 +1634,127 @@ const CONFIG_GD_METRICAS = [
       },
       { 
         name: 'Frequency - non Double Ya', 
-        calculo: (f) => String(f[2]).trim() === 'No Double Ya' ? safeDiv(f[5], f[3]) : 0,
+        calculo: (f) => safeDiv(_dyVal(f, 'orders_direct_abs', 'Direct Abs', 45), _dyVal(f, 'active_users_direct', ['No Double Ya', 'non Double Ya', 'Direct'], 20) + _dyVal(f, 'active_users_hybrid', 'Hybrid', 27)),
         usarComponentes: true,
         indicesLatam: [
-          f => String(f[2]).trim() === 'No Double Ya' ? (parseFloat(f[5])||0) : 0, 
-          f => String(f[2]).trim() === 'No Double Ya' ? (parseFloat(f[3])||0) : 0
+          f => _dyVal(f, 'orders_direct_abs', 'Direct Abs', 45), 
+          f => _dyVal(f, 'active_users_direct', ['No Double Ya', 'non Double Ya', 'Direct'], 20) + _dyVal(f, 'active_users_hybrid', 'Hybrid', 27)
         ],
         calculoLatam: (c) => safeDiv(c[0], c[1]), 
         format: '0.00', 
+        colorFormating: 1 
+      },
+      // Por Tipo de Usuario (Comportamiento Mensual)
+      { 
+        name: 'Frequency - Double Ya user', 
+        calculo: (f) => safeDiv(_dyVal(f, 'orders_dy', 'Double Ya', 9), _dyVal(f, 'active_users_dy', 'Double Ya', 13)),
+        usarComponentes: true,
+        indicesLatam: [
+          f => _dyVal(f, 'orders_dy', 'Double Ya', 9), 
+          f => _dyVal(f, 'active_users_dy', 'Double Ya', 13)
+        ],
+        calculoLatam: (c) => safeDiv(c[0], c[1]), 
+        format: '0.00', 
+        colorFormating: 1 
+      },
+      { 
+        name: 'Frequency - non Double Ya user', 
+        calculo: (f) => safeDiv(_dyVal(f, 'orders_direct', ['No Double Ya', 'non Double Ya', 'Direct'], 16), _dyVal(f, 'active_users_direct', ['No Double Ya', 'non Double Ya', 'Direct'], 20)),
+        usarComponentes: true,
+        indicesLatam: [
+          f => _dyVal(f, 'orders_direct', ['No Double Ya', 'non Double Ya', 'Direct'], 16), 
+          f => _dyVal(f, 'active_users_direct', ['No Double Ya', 'non Double Ya', 'Direct'], 20)
+        ],
+        calculoLatam: (c) => safeDiv(c[0], c[1]), 
+        format: '0.00', 
+        colorFormating: 1 
+      },
+      { 
+        name: 'Frequency - Hibrid Double Ya user', 
+        calculo: (f) => safeDiv(_dyVal(f, 'orders_hybrid', ['Hibrid Double Ya', 'Hybrid Double Ya', 'Hybrid', 'non Double Ya & Double Ya'], 23), _dyVal(f, 'active_users_hybrid', ['Hibrid Double Ya', 'Hybrid Double Ya', 'Hybrid', 'non Double Ya & Double Ya'], 27)),
+        usarComponentes: true,
+        indicesLatam: [
+          f => _dyVal(f, 'orders_hybrid', ['Hibrid Double Ya', 'Hybrid Double Ya', 'Hybrid', 'non Double Ya & Double Ya'], 23), 
+          f => _dyVal(f, 'active_users_hybrid', ['Hibrid Double Ya', 'Hybrid Double Ya', 'Hybrid', 'non Double Ya & Double Ya'], 27)
+        ],
+        calculoLatam: (c) => safeDiv(c[0], c[1]), 
+        format: '0.00', 
+        colorFormating: 1 
+      },
+      { 
+        name: 'Frequency - Hibrid Double Ya', 
+        calculo: (f) => safeDiv(_dyVal(f, 'orders_hybrid', ['Hibrid Double Ya', 'Hybrid Double Ya', 'Hybrid', 'non Double Ya & Double Ya'], 23), _dyVal(f, 'active_users_hybrid', ['Hibrid Double Ya', 'Hybrid Double Ya', 'Hybrid', 'non Double Ya & Double Ya'], 27)),
+        usarComponentes: true,
+        indicesLatam: [
+          f => _dyVal(f, 'orders_hybrid', ['Hibrid Double Ya', 'Hybrid Double Ya', 'Hybrid', 'non Double Ya & Double Ya'], 23), 
+          f => _dyVal(f, 'active_users_hybrid', ['Hibrid Double Ya', 'Hybrid Double Ya', 'Hybrid', 'non Double Ya & Double Ya'], 27)
+        ],
+        calculoLatam: (c) => safeDiv(c[0], c[1]), 
+        format: '0.00', 
+        colorFormating: 1 
+      },
+      { 
+        name: 'Frequency  - Hibrid Double Ya', 
+        calculo: (f) => safeDiv(_dyVal(f, 'orders_hybrid', ['Hibrid Double Ya', 'Hybrid Double Ya', 'Hybrid', 'non Double Ya & Double Ya'], 23), _dyVal(f, 'active_users_hybrid', ['Hibrid Double Ya', 'Hybrid Double Ya', 'Hybrid', 'non Double Ya & Double Ya'], 27)),
+        usarComponentes: true,
+        indicesLatam: [
+          f => _dyVal(f, 'orders_hybrid', ['Hibrid Double Ya', 'Hybrid Double Ya', 'Hybrid', 'non Double Ya & Double Ya'], 23), 
+          f => _dyVal(f, 'active_users_hybrid', ['Hibrid Double Ya', 'Hybrid Double Ya', 'Hybrid', 'non Double Ya & Double Ya'], 27)
+        ],
+        calculoLatam: (c) => safeDiv(c[0], c[1]), 
+        format: '0.00', 
+        colorFormating: 1 
+      },
+
+      // ════════════════════════════════════════════════════════════════
+      // 11. CVR3 % (RATIOS)
+      // ════════════════════════════════════════════════════════════════
+      { 
+        name: 'CVR3 % - Double Ya', 
+        calculo: (f) => safeDiv(_dyVal(f, 'sessions_transaction_dy', 'Double Ya', 15), _dyVal(f, 'sessions_details_dy', 'Double Ya', 14)),
+        usarComponentes: true,
+        indicesLatam: [
+          f => _dyVal(f, 'sessions_transaction_dy', 'Double Ya', 15), 
+          f => _dyVal(f, 'sessions_details_dy', 'Double Ya', 14)
+        ],
+        calculoLatam: (c) => safeDiv(c[0], c[1]), format: '0.00%', colorFormating: 1 
+      },
+      { 
+        name: 'CVR3 % - non Double Ya', 
+        calculo: (f) => safeDiv(_dyVal(f, 'sessions_transaction_direct', ['No Double Ya', 'non Double Ya', 'Direct'], 22), _dyVal(f, 'sessions_details_direct', ['No Double Ya', 'non Double Ya', 'Direct'], 21)),
+        usarComponentes: true,
+        indicesLatam: [
+          f => _dyVal(f, 'sessions_transaction_direct', ['No Double Ya', 'non Double Ya', 'Direct'], 22), 
+          f => _dyVal(f, 'sessions_details_direct', ['No Double Ya', 'non Double Ya', 'Direct'], 21)
+        ],
+        calculoLatam: (c) => safeDiv(c[0], c[1]), format: '0.00%', colorFormating: 1 
+      },
+
+      // ════════════════════════════════════════════════════════════════
+      // 12. SESSIONS SHARE % (RATIOS NATIVOS DENTRO DE DOUBLE YA DATA)
+      // ════════════════════════════════════════════════════════════════
+      { 
+        name: 'Sessions Share % - Double Ya', 
+        calculo: (f) => safeDiv(_dyVal(f, 'sessions_details_dy', 'Double Ya', 14), _dyVal(f, 'total_sessions_details', 'Total', 7)),
+        usarComponentes: true,
+        indicesLatam: [
+          f => _dyVal(f, 'sessions_details_dy', 'Double Ya', 14), 
+          f => _dyVal(f, 'total_sessions_details', 'Total', 7)
+        ],
+        calculoLatam: (c) => safeDiv(c[0], c[1]), 
+        format: '0.00%', 
+        colorFormating: 1 
+      },
+      { 
+        name: 'Sessions Share % - non Double Ya', 
+        calculo: (f) => safeDiv(_dyVal(f, 'sessions_details_direct', ['No Double Ya', 'non Double Ya', 'Direct'], 21), _dyVal(f, 'total_sessions_details', 'Total', 7)),
+        usarComponentes: true,
+        indicesLatam: [
+          f => _dyVal(f, 'sessions_details_direct', ['No Double Ya', 'non Double Ya', 'Direct'], 21), 
+          f => _dyVal(f, 'total_sessions_details', 'Total', 7)
+        ],
+        calculoLatam: (c) => safeDiv(c[0], c[1]), 
+        format: '0.00%', 
         colorFormating: 1 
       }
     ]
@@ -1294,13 +1776,13 @@ const CONFIG_GD_METRICAS = [
         colorFormating: 1 
       },
 
-      // 2. NEW USERS
+      // 2. NEW USERS (Adoption / New User)
       { 
-        name: 'Retention Rate - New Users %- Dmart', 
+        name: 'Retention Rate - New Users % - Dmart', 
         usarComponentes: true, 
         indicesLatam: [
-          f => String(f[2]).trim() === 'Adoption' ? (parseFloat(f[4]) || 0) : 0, 
-          f => String(f[2]).trim() === 'Adoption' ? (parseFloat(f[3]) || 0) : 0
+          f => _scMatch(f[2], ['Adoption', 'New User', 'New Users']) ? (parseFloat(f[4]) || 0) : 0, 
+          f => _scMatch(f[2], ['Adoption', 'New User', 'New Users']) ? (parseFloat(f[3]) || 0) : 0
         ],
         calculoLatam: c => c[1] !== 0 ? 1 - (c[0] / c[1]) : 0,
         format: '0.00%',
@@ -1312,8 +1794,8 @@ const CONFIG_GD_METRICAS = [
         name: 'Retention Rate - M1 Return Users % - Dmart', 
         usarComponentes: true, 
         indicesLatam: [
-          f => String(f[2]).trim() === 'M1 Return' ? (parseFloat(f[4]) || 0) : 0, 
-          f => String(f[2]).trim() === 'M1 Return' ? (parseFloat(f[3]) || 0) : 0
+          f => _scMatch(f[2], ['M1 Return', 'M1-Return', 'M1']) ? (parseFloat(f[4]) || 0) : 0, 
+          f => _scMatch(f[2], ['M1 Return', 'M1-Return', 'M1']) ? (parseFloat(f[3]) || 0) : 0
         ],
         calculoLatam: c => c[1] !== 0 ? 1 - (c[0] / c[1]) : 0,
         format: '0.00%',
@@ -1325,8 +1807,8 @@ const CONFIG_GD_METRICAS = [
         name: 'Retention Rate - Reorder Users % - Dmart', 
         usarComponentes: true, 
         indicesLatam: [
-          f => String(f[2]).trim() === 'Reorder' ? (parseFloat(f[4]) || 0) : 0, 
-          f => String(f[2]).trim() === 'Reorder' ? (parseFloat(f[3]) || 0) : 0
+          f => _scMatch(f[2], ['Reorder', 'Re-Order', 'Re Order']) ? (parseFloat(f[4]) || 0) : 0, 
+          f => _scMatch(f[2], ['Reorder', 'Re-Order', 'Re Order']) ? (parseFloat(f[3]) || 0) : 0
         ],
         calculoLatam: c => c[1] !== 0 ? 1 - (c[0] / c[1]) : 0,
         format: '0.00%',
@@ -1338,8 +1820,8 @@ const CONFIG_GD_METRICAS = [
         name: 'Retention Rate - Recurring Return % - Dmart', 
         usarComponentes: true, 
         indicesLatam: [
-          f => String(f[2]).trim() === 'Recurring Return' ? (parseFloat(f[4]) || 0) : 0, 
-          f => String(f[2]).trim() === 'Recurring Return' ? (parseFloat(f[3]) || 0) : 0
+          f => _scMatch(f[2], ['Recurring Return', 'Recurring', 'Recurring-Return']) ? (parseFloat(f[4]) || 0) : 0, 
+          f => _scMatch(f[2], ['Recurring Return', 'Recurring', 'Recurring-Return']) ? (parseFloat(f[3]) || 0) : 0
         ],
         calculoLatam: c => c[1] !== 0 ? 1 - (c[0] / c[1]) : 0,
         format: '0.00%',
@@ -1351,8 +1833,8 @@ const CONFIG_GD_METRICAS = [
         name: 'Retention Rate - Re-Activation Users % - Dmart', 
         usarComponentes: true, 
         indicesLatam: [
-          f => (String(f[2]).trim() === 'Reactivated' || String(f[2]).trim() === 'Re-Activation') ? (parseFloat(f[4]) || 0) : 0, 
-          f => (String(f[2]).trim() === 'Reactivated' || String(f[2]).trim() === 'Re-Activation') ? (parseFloat(f[3]) || 0) : 0
+          f => _scMatch(f[2], ['Reactivated', 'Re-Activation', 'Reactivation']) ? (parseFloat(f[4]) || 0) : 0, 
+          f => _scMatch(f[2], ['Reactivated', 'Re-Activation', 'Reactivation']) ? (parseFloat(f[3]) || 0) : 0
         ],
         calculoLatam: c => c[1] !== 0 ? 1 - (c[0] / c[1]) : 0,
         format: '0.00%',
@@ -2201,6 +2683,34 @@ const CONFIG_GD_METRICAS_RELACIONADAS = [
     format: '0.00',
     colorFormating: 1
   },
+  { // AFV - Hibrid Double Ya
+    name: 'AFV - Hibrid Double Ya',
+    numerator: 'Net Sales - Hibrid Double Ya',
+    denominator: 'Confirmed Orders - Hibrid Double Ya',
+    format: '0.00',
+    colorFormating: 1
+  },
+  { // AFV  - Hibrid Double Ya (alias 2 espacios)
+    name: 'AFV  - Hibrid Double Ya',
+    numerator: 'Net Sales - Hibrid Double Ya',
+    denominator: 'Confirmed Orders - Hibrid Double Ya',
+    format: '0.00',
+    colorFormating: 1
+  },
+  { // AFV - Hibrid Double Ya user
+    name: 'AFV - Hibrid Double Ya user',
+    numerator: 'Net Sales - Hibrid Double Ya user',
+    denominator: 'Confirmed Orders - Hibrid Double Ya user',
+    format: '0.00',
+    colorFormating: 1
+  },
+  { // AFV  - Hibrid Double Ya user (alias 2 espacios)
+    name: 'AFV  - Hibrid Double Ya user',
+    numerator: 'Net Sales - Hibrid Double Ya user',
+    denominator: 'Confirmed Orders - Hibrid Double Ya user',
+    format: '0.00',
+    colorFormating: 1
+  },
   { // Dmart Churn Share %
     name: 'Dmart Churn Share %',
     numerator: 'Churned Users - Dmart',
@@ -2342,7 +2852,7 @@ const CONFIG_GD_METRICAS_RELACIONADAS = [
   },
 
   // ==========================================
-  // MÉTRICAS DOUBLE YA (Generales)
+  // MÉTRICAS DOUBLE YA (Generales & Shares)
   // ==========================================
   { // Confirmed Orders Share % - Double Ya
     name: 'Confirmed Orders Share % - Double Ya',
@@ -2351,23 +2861,96 @@ const CONFIG_GD_METRICAS_RELACIONADAS = [
     format: '0.00%',
     colorFormating: 1
   },
+  { // Confirmed Orders Share % - non Double Ya
+    name: 'Confirmed Orders Share % - non Double Ya',
+    numerator: 'Confirmed Orders - non Double Ya',
+    denominator: 'Confirmed Orders',
+    format: '0.00%',
+    colorFormating: 1
+  },
+  { // Confirmed Orders Share % - Hibrid Double Ya
+    name: 'Confirmed Orders Share % - Hibrid Double Ya',
+    numerator: 'Confirmed Orders - Hibrid Double Ya',
+    denominator: 'Confirmed Orders',
+    format: '0.00%',
+    colorFormating: 1
+  },
+  { // Confirmed Orders Share %  - Hibrid Double Ya (alias 2 espacios)
+    name: 'Confirmed Orders Share %  - Hibrid Double Ya',
+    numerator: 'Confirmed Orders - Hibrid Double Ya',
+    denominator: 'Confirmed Orders',
+    format: '0.00%',
+    colorFormating: 1
+  },
+
   { // Net Sales Share % - Double Ya
-    name: 'Net sales Share % - Double Ya',
+    name: 'Net Sales Share % - Double Ya',
     numerator: 'Net Sales - Double Ya',
     denominator: 'Net Sales',
     format: '0.00%',
     colorFormating: 1
   },
+  { // Net Sales Share % - non Double Ya
+    name: 'Net Sales Share % - non Double Ya',
+    numerator: 'Net Sales - non Double Ya',
+    denominator: 'Net Sales',
+    format: '0.00%',
+    colorFormating: 1
+  },
+  { // Net Sales Share % - Hibrid Double Ya
+    name: 'Net Sales Share % - Hibrid Double Ya',
+    numerator: 'Net Sales - Hibrid Double Ya',
+    denominator: 'Net Sales',
+    format: '0.00%',
+    colorFormating: 1
+  },
+  { // Net Sales Share %  - Hibrid Double Ya (alias 2 espacios)
+    name: 'Net Sales Share %  - Hibrid Double Ya',
+    numerator: 'Net Sales - Hibrid Double Ya',
+    denominator: 'Net Sales',
+    format: '0.00%',
+    colorFormating: 1
+  },
+
   { // Units Sold Share % - Double Ya
-    name: 'Units sold Share % - Double Ya',
-    numerator: 'Units sold - Double Ya',
+    name: 'Units Sold Share % - Double Ya',
+    numerator: 'Units Sold - Double Ya',
     denominator: 'Units Sold',
     format: '0.00%',
     colorFormating: 1
   },
+  { // Units Sold Share % - non Double Ya
+    name: 'Units Sold Share % - non Double Ya',
+    numerator: 'Units Sold - non Double Ya',
+    denominator: 'Units Sold',
+    format: '0.00%',
+    colorFormating: 1
+  },
+  { // Units Sold Share % - Hibrid Double Ya
+    name: 'Units Sold Share % - Hibrid Double Ya',
+    numerator: 'Units Sold - Hibrid Double Ya',
+    denominator: 'Units Sold',
+    format: '0.00%',
+    colorFormating: 1
+  },
+  { // Units Sold Share %  - Hibrid Double Ya (alias 2 espacios)
+    name: 'Units Sold Share %  - Hibrid Double Ya',
+    numerator: 'Units Sold - Hibrid Double Ya',
+    denominator: 'Units Sold',
+    format: '0.00%',
+    colorFormating: 1
+  },
+
   { // Sessions Share % - Double Ya
     name: 'Sessions Share % - Double Ya',
     numerator: 'Sessions - Double Ya',
+    denominator: 'Sessions',
+    format: '0.00%',
+    colorFormating: 1
+  },
+  { // Sessions Share % - non Double Ya
+    name: 'Sessions Share % - non Double Ya',
+    numerator: 'Sessions - non Double Ya',
     denominator: 'Sessions',
     format: '0.00%',
     colorFormating: 1
@@ -2383,9 +2966,59 @@ const CONFIG_GD_METRICAS_RELACIONADAS = [
     format: '0.00%',
     colorFormating: 1
   },
+  { // Dmart MAUs Share % - non Double Ya
+    name: 'Dmart MAUs Share % - non Double Ya',
+    numerator: 'Dmart MAUs - non Double Ya',
+    denominator: 'Dmart MAUs', 
+    format: '0.00%',
+    colorFormating: 1
+  },
+  { // Dmart MAUs Share % - Hibrid Double Ya
+    name: 'Dmart MAUs Share % - Hibrid Double Ya',
+    numerator: 'Dmart MAUs - Hibrid Double Ya',
+    denominator: 'Dmart MAUs', 
+    format: '0.00%',
+    colorFormating: 1
+  },
+  { // Dmart MAUs Share %  - Hibrid Double Ya (alias 2 espacios)
+    name: 'Dmart MAUs Share %  - Hibrid Double Ya',
+    numerator: 'Dmart MAUs - Hibrid Double Ya',
+    denominator: 'Dmart MAUs', 
+    format: '0.00%',
+    colorFormating: 1
+  },
+
   { // New Users Share % - Double Ya
     name: 'New Users Share % - Double Ya',
     numerator: 'New Users - Double Ya',
+    denominator: 'New Users - Dmart', 
+    format: '0.00%',
+    colorFormating: 1
+  },
+  { // New Users Share % - non Double Ya
+    name: 'New Users Share % - non Double Ya',
+    numerator: 'New Users - non Double Ya',
+    denominator: 'New Users - Dmart', 
+    format: '0.00%',
+    colorFormating: 1
+  },
+  { // New Users Share % - non Double Ya & Double Ya
+    name: 'New Users Share % - non Double Ya & Double Ya',
+    numerator: 'New Users - non Double Ya & Double Ya',
+    denominator: 'New Users - Dmart', 
+    format: '0.00%',
+    colorFormating: 1
+  },
+  { // New Users Share % - Hibrid Double Ya (alias)
+    name: 'New Users Share % - Hibrid Double Ya',
+    numerator: 'New Users - Hibrid Double Ya',
+    denominator: 'New Users - Dmart', 
+    format: '0.00%',
+    colorFormating: 1
+  },
+  { // New Users Share %  - Hibrid Double Ya (alias 2 espacios)
+    name: 'New Users Share %  - Hibrid Double Ya',
+    numerator: 'New Users - Hibrid Double Ya',
     denominator: 'New Users - Dmart', 
     format: '0.00%',
     colorFormating: 1
@@ -2518,12 +3151,177 @@ const CONFIG_GD_METRICAS_RELACIONADAS = [
 
 // --- HELPERS Y UTILIDADES ---
 // ==========================================
+let _DY_COLS = {
+  // Totales (Cols 2 - 8)
+  'total_orders': 2,
+  'total_units_sold': 3,
+  'total_net_sales_eur': 4,
+  'total_cogs': 5,
+  'total_active_users': 6,
+  'total_sessions_details': 7,
+  'total_sessions': 7,
+  'sum of total_sessions_details': 7,
+  'total_sessions_transaction': 8,
+  'total_transactions': 8,
+  'sum of total_sessions_transaction': 8,
+
+  // Double Ya (Cols 9 - 15)
+  'orders_dy': 9,
+  'units_sold_dy': 10,
+  'net_sales_eur_dy': 11,
+  'cogs_dy': 12,
+  'active_users_dy': 13,
+  'dmart_maus_dy': 13,
+  'sessions_details_dy': 14,
+  'sessions_dy': 14,
+  'dy_sessions': 14,
+  'sum of sessions_details_dy': 14,
+  'sessions_transaction_dy': 15,
+  'transactions_dy': 15,
+  'dy_transactions': 15,
+  'sum of sessions_transaction_dy': 15,
+
+  // Direct (No Double Ya) (Cols 16 - 22)
+  'orders_direct': 16,
+  'units_sold_direct': 17,
+  'net_sales_eur_direct': 18,
+  'cogs_direct': 19,
+  'active_users_direct': 20,
+  'dmart_maus_direct': 20,
+  'sessions_details_direct': 21,
+  'sessions_direct': 21,
+  'direct_sessions': 21,
+  'sessions_non_dy': 21,
+  'sum of sessions_details_direct': 21,
+  'sessions_transaction_direct': 22,
+  'transactions_direct': 22,
+  'direct_transactions': 22,
+  'transactions_non_dy': 22,
+  'sum of sessions_transaction_direct': 22,
+
+  // Híbridos (Cols 23 - 27)
+  'orders_hybrid': 23,
+  'orders_hibrid': 23,
+  'units_sold_hybrid': 24,
+  'units_sold_hibrid': 24,
+  'net_sales_eur_hybrid': 25,
+  'net_sales_eur_hibrid': 25,
+  'cogs_hybrid': 26,
+  'cogs_hibrid': 26,
+  'active_users_hybrid': 27,
+  'active_users_hibrid': 27,
+  'dmart_maus_hybrid': 27,
+  'dmart_maus_hibrid': 27,
+
+  // New Users (Cols 28 - 31)
+  'total_new_users': 28,
+  'new_users_dy': 29,
+  'new_users_direct': 30,
+  'new_users_hybrid': 31,
+  'new_users_hibrid': 31,
+
+  // M1 Retention (Cols 32 - 40)
+  'ret_dy_to_dy': 32,
+  'ret_dy_to_direct': 33,
+  'ret_dy_to_hybrid': 34,
+  'ret_dy_to_hibrid': 34,
+  'ret_direct_to_dy': 35,
+  'ret_direct_to_direct': 36,
+  'ret_direct_to_hybrid': 37,
+  'ret_direct_to_hibrid': 37,
+  'ret_hybrid_to_dy': 38,
+  'ret_hibrid_to_dy': 38,
+  'ret_hybrid_to_direct': 39,
+  'ret_hibrid_to_direct': 39,
+  'ret_hybrid_to_hybrid': 40,
+  'ret_hibrid_to_hibrid': 40,
+
+  // Absoluto por Canal a Nivel Orden (Cols 41 - 48)
+  'orders_dy_abs': 41,
+  'units_sold_dy_abs': 42,
+  'net_sales_eur_dy_abs': 43,
+  'cogs_dy_abs': 44,
+  'orders_direct_abs': 45,
+  'units_sold_direct_abs': 46,
+  'net_sales_eur_direct_abs': 47,
+  'cogs_direct_abs': 48
+};
+
 function safeDiv(num, den) {
   const n = (typeof num === 'string') ? parseFloat(num.replace(/,/g, '')) : parseFloat(num);
   const d = (typeof den === 'string') ? parseFloat(den.replace(/,/g, '')) : parseFloat(den);
 
   if (isNaN(n) || isNaN(d) || d === 0) return 0;
   return n / d;
+}
+
+// Helper para parsear números que Sheets pudo haber formateado erróneamente como fechas
+function _dyParseNum(val) {
+  if (val === null || val === undefined) return 0;
+  if (typeof val === 'number') return isNaN(val) ? 0 : val;
+  if (val instanceof Date || (typeof val === 'object' && typeof val.getTime === 'function')) {
+    const baseSheetsDate = new Date(1899, 11, 30);
+    const days = Math.round((val.getTime() - baseSheetsDate.getTime()) / 86400000);
+    return days >= 0 ? days : 0;
+  }
+  let str = String(val).trim();
+  if (str === '' || str === '-' || str === 'NaN' || str === 'null') return 0;
+
+  // Si Sheets exportó un número grande como fecha (ej: "08/10/9210" o "30/12/1899")
+  const m = str.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/);
+  if (m) {
+    const day = parseInt(m[1], 10);
+    const month = parseInt(m[2], 10);
+    const year = parseInt(m[3], 10);
+    if (year === 1899 || year >= 2030) {
+      const d = new Date(year, month - 1, day);
+      const baseSheetsDate = new Date(1899, 11, 30);
+      const days = Math.round((d.getTime() - baseSheetsDate.getTime()) / 86400000);
+      return days >= 0 ? days : 0;
+    }
+  }
+  const mISO = str.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/);
+  if (mISO) {
+    const year = parseInt(mISO[1], 10);
+    const month = parseInt(mISO[2], 10);
+    const day = parseInt(mISO[3], 10);
+    if (year === 1899 || year >= 2030) {
+      const d = new Date(year, month - 1, day);
+      const baseSheetsDate = new Date(1899, 11, 30);
+      const days = Math.round((d.getTime() - baseSheetsDate.getTime()) / 86400000);
+      return days >= 0 ? days : 0;
+    }
+  }
+  return parseFloat(str.replace(/,/g, '')) || 0;
+}
+
+function _dyVal(f, colNameOrWideCol, longScope, longCol) {
+  if (f.length > 20) {
+    if (typeof colNameOrWideCol === 'string') {
+      const colKey = colNameOrWideCol.trim().toLowerCase();
+      if (_DY_COLS[colKey] !== undefined && _DY_COLS[colKey] < f.length) {
+        return _dyParseNum(f[_DY_COLS[colKey]]);
+      }
+      const cleanKey = colKey.replace('hibrid', 'hybrid');
+      if (_DY_COLS[cleanKey] !== undefined && _DY_COLS[cleanKey] < f.length) {
+        return _dyParseNum(f[_DY_COLS[cleanKey]]);
+      }
+    } else if (typeof colNameOrWideCol === 'number') {
+      if (colNameOrWideCol >= 0 && colNameOrWideCol < f.length) {
+        return _dyParseNum(f[colNameOrWideCol]);
+      }
+    }
+    // Fallback directo al índice de columna física si por nombre no se resolvió
+    if (typeof longCol === 'number' && longCol >= 0 && longCol < f.length) {
+      return _dyParseNum(f[longCol]);
+    }
+    return 0;
+  }
+  const scope = String(f[2]).trim();
+  if (Array.isArray(longScope) ? longScope.includes(scope) : scope === longScope) {
+    return _dyParseNum(f[longCol]);
+  }
+  return 0;
 }
 function textHas(val, txt) {
   return String(val).toLowerCase().includes(txt.toLowerCase());
@@ -2540,7 +3338,34 @@ function GeneralData_Helper_NormalizarFecha(valor) {
   } else if (typeof valor === 'number') {
     d = new Date(((valor - 25569) * 86400000) + 43200000);
   } else {
-    d = new Date(String(valor).trim().replace(/-/g, '\/'));
+    let str = String(valor).trim();
+    // 1. Soporte para formato DD/MM/YYYY o DD-MM-YYYY (ej: 01/09/2026)
+    const matchDDMM = str.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/);
+    if (matchDDMM) {
+      const day = parseInt(matchDDMM[1], 10);
+      const month = parseInt(matchDDMM[2], 10);
+      const year = parseInt(matchDDMM[3], 10);
+      d = new Date(year, month - 1, day);
+    } else if (/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/.test(str)) {
+      // 2. Soporte para formato YYYY-MM-DD o YYYY/MM/DD (ej: 2026-09-01)
+      const parts = str.split(/[-/]/);
+      d = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+    } else if (/^\d{4}[-/]\d{1,2}$/.test(str)) {
+      // 3. Soporte para formato "YYYY-MM" o "YYYY/MM"
+      const parts = str.split(/[-/]/);
+      d = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, 1);
+    } else if (/^\d{1,2}[-/]\d{4}$/.test(str)) {
+      // 4. Soporte para formato "MM-YYYY" o "MM/YYYY"
+      const parts = str.split(/[-/]/);
+      d = new Date(parseInt(parts[1], 10), parseInt(parts[0], 10) - 1, 1);
+    } else if (/^\d{6}$/.test(str)) {
+      // 5. Soporte para formato "YYYYMM" (ej: 202603)
+      const anio = parseInt(str.substring(0, 4), 10);
+      const mes = parseInt(str.substring(4, 6), 10);
+      d = new Date(anio, mes - 1, 1);
+    } else {
+      d = new Date(str.replace(/-/g, '\/'));
+    }
   }
 
   if (isNaN(d.getTime())) return null;
@@ -2578,14 +3403,36 @@ function GeneralData_Helper_QuitarFiltros(sheet, forceUnhide) {
 // ====================================================================================
 function GeneralData_Helper_Importar(conf, ssDestino) {
   try {
-    const ssOrigen = obtenerSpreadsheetConCache(conf.id_origen);
-    const hojaOrigen = ssOrigen.getSheetByName(conf.nombre_hoja_origen);
-    if (!hojaOrigen) {
-      Logger.log(`❌ No existe '${conf.nombre_hoja_origen}' en el archivo origen.`);
+    let datos = [];
+    try {
+      const ssOrigen = obtenerSpreadsheetConCache(conf.id_origen);
+      const hojaOrigen = ssOrigen ? ssOrigen.getSheetByName(conf.nombre_hoja_origen) : null;
+      if (hojaOrigen) {
+        datos = hojaOrigen.getDataRange().getValues();
+      }
+    } catch (errOrigen) {
+      Logger.log(`⚠️ Error al abrir origen configurado para '${conf.nombre_hoja_destino}': ${errOrigen.message}`);
+    }
+
+    // Fallback especial para Supply Chain si la hoja intermedia está vacía o inaccesible
+    if (datos.length <= 1 && conf.nombre_hoja_destino === '5 - Supply Chain') {
+      Logger.log("ℹ️ Intentando fallback directo a scorecard de Supply Chain (ACTUALS-M)...");
+      try {
+        const ssDirecto = obtenerSpreadsheetConCache("14yjg9Vx6uwgaba-JOECa6sqaNYkh48m2pJax2Om5Rlw");
+        const hojaDirecta = ssDirecto.getSheetByName("//ACTUALS-M") || ssDirecto.getSheetByName("ACTUALS-M");
+        if (hojaDirecta) {
+          datos = hojaDirecta.getDataRange().getValues();
+          Logger.log(`✅ Obtenidas ${datos.length} filas directamente desde //ACTUALS-M.`);
+        }
+      } catch (errDirect) {
+        Logger.log(`⚠️ Fallback directo falló: ${errDirect.message}`);
+      }
+    }
+
+    if (!datos || datos.length === 0) {
+      Logger.log(`⚠️ No se obtuvieron datos para '${conf.nombre_hoja_destino}'.`);
       return;
     }
-    const datos = hojaOrigen.getDataRange().getValues();
-    if (datos.length === 0) return;
 
     let hojaDest = ssDestino.getSheetByName(conf.nombre_hoja_destino);
     if (!hojaDest) hojaDest = ssDestino.insertSheet(conf.nombre_hoja_destino);
@@ -2593,8 +3440,18 @@ function GeneralData_Helper_Importar(conf, ssDestino) {
     GeneralData_Helper_QuitarFiltros(hojaDest);
     hojaDest.clearContents(); // clearContents preserva cuadrículas limpias y es muy veloz
 
+    // Asegurar dimensiones suficientes para evitar error "Coordinates exceed sheet boundaries"
+    const maxRows = hojaDest.getMaxRows();
+    if (maxRows < datos.length) {
+      hojaDest.insertRowsAfter(maxRows, datos.length - maxRows);
+    }
+    const maxCols = hojaDest.getMaxColumns();
+    if (maxCols < datos[0].length) {
+      hojaDest.insertColumnsAfter(maxCols, datos[0].length - maxCols);
+    }
+
     hojaDest.getRange(1, 1, datos.length, datos[0].length).setValues(datos);
-    Logger.log(`✅ Importado: '${conf.nombre_hoja_destino}'`);
+    Logger.log(`✅ Importado: '${conf.nombre_hoja_destino}' (${datos.length} filas)`);
   } catch (e) {
     Logger.log(`❌ Error importando '${conf.nombre_hoja_destino}': ${e.message}`);
   }
@@ -2644,13 +3501,58 @@ function GeneralData_ConsolidarMetricas() {
   // 1. PROCESAMIENTO DE MÉTRICAS NORMALES (Desde las hojas)
   // ====================================================================================
   CONFIG_GD_METRICAS.forEach(config => {
-    const hoja = ss.getSheetByName(config.nombreHoja);
-    if (!hoja) return;
+    let hoja = ss.getSheetByName(config.nombreHoja);
+    if (!hoja) {
+      const targetNameClean = config.nombreHoja.trim().toLowerCase();
+      hoja = ss.getSheets().find(s => s.getName().trim().toLowerCase() === targetNameClean);
+    }
+    if (!hoja) {
+      Logger.log(`⚠️ Hoja '${config.nombreHoja}' no encontrada en el Spreadsheet.`);
+      return;
+    }
 
     GeneralData_Helper_QuitarFiltros(hoja);
 
     const datos = hoja.getDataRange().getValues();
-    if (datos.length <= 1) return;
+    if (datos.length <= 1) {
+      Logger.log(`⚠️ Hoja '${config.nombreHoja}' sin datos suficientes (${datos.length} filas).`);
+      return;
+    }
+
+    // Si es 21 - Double Ya Data, mapear todos los nombres de columnas del encabezado manteniendo los fallbacks
+    if (config.nombreHoja.includes("Double Ya Data") || config.nombreHoja.includes("DY Data")) {
+      if (datos[0] && Array.isArray(datos[0])) {
+        datos[0].forEach((colName, idx) => {
+          const colClean = String(colName).trim().toLowerCase();
+          _DY_COLS[colClean] = idx;
+        });
+      }
+    }
+
+    // Detección dinámica de columna de Fecha y País desde los headers
+    let monthColIdx = config.indices.month;
+    let countryColIdx = config.indices.country;
+
+    if (datos[0] && Array.isArray(datos[0])) {
+      datos[0].forEach((h, colIdx) => {
+        const hClean = String(h).trim().toLowerCase();
+        if (hClean === 'country' || hClean === 'country_name' || hClean === 'pais' || hClean === 'país' || hClean === 'country_name_en') {
+          countryColIdx = colIdx;
+        } else if (
+          config.indices.month < 3 &&
+          colIdx < 3 &&
+          !hClean.includes('cohort') &&
+          !hClean.includes('status') &&
+          !hClean.includes('growth') &&
+          !hClean.includes('stage') &&
+          (hClean === 'month' || hClean === 'mes' || hClean === 'date' || hClean === 'fecha' || hClean === 'order_month' || hClean === 'session_month' || hClean.includes('month') || hClean.includes('fecha'))
+        ) {
+          monthColIdx = colIdx;
+        }
+      });
+    }
+
+    Logger.log(`📊 Hoja '${config.nombreHoja}': ${datos.length - 1} filas detectadas (Mes col ${monthColIdx}, País col ${countryColIdx}).`);
 
     const acumuladorLatam = {};
 
@@ -2658,8 +3560,8 @@ function GeneralData_ConsolidarMetricas() {
       const fila = datos[i];
       if (config.filtroFila && !config.filtroFila(fila)) continue;
 
-      const rawDate = fila[config.indices.month];
-      let country = fila[config.indices.country];
+      const rawDate = fila[monthColIdx];
+      let country = fila[countryColIdx];
 
       // OPTIMIZACIÓN: Cache de normalización de fecha para evitar llamadas CPU-bound redundantes
       const rawDateStr = String(rawDate);
@@ -2679,29 +3581,34 @@ function GeneralData_ConsolidarMetricas() {
       
       mesesProcesados.add(monthStr); // Registramos el mes para exportación estructural posterior
 
+      // Mapeo de códigos de país (ej: AR, CL, etc.) a nombres completos permitidos
+      const MAPEO_CODIGOS_PAISES = {
+        "AR": "Argentina",
+        "BO": "Bolivia",
+        "CL": "Chile",
+        "CR": "Costa Rica",
+        "DO": "Republica Dominicana",
+        "RD": "Republica Dominicana",
+        "EC": "Ecuador",
+        "GT": "Guatemala",
+        "HN": "Honduras",
+        "NI": "Nicaragua",
+        "PA": "Panama",
+        "UY": "Uruguay",
+        "PY": "Paraguay",
+        "PE": "Peru",
+        "SV": "El Salvador",
+        "REGIONAL": "LATAM",
+        "LATAM REGIONAL": "LATAM",
+        "TOTAL LATAM": "LATAM",
+        "REGION": "LATAM",
+        "LATAM": "LATAM"
+      };
+
       // OPTIMIZACIÓN: Cache de normalización de nombres de países para evitar normalizar strings miles de veces
       const rawCountryStr = String(country).trim();
       let cleanCountry = cachePaisesLimpios[rawCountryStr];
       if (cleanCountry === undefined) {
-        // Mapeo de códigos de país (ej: AR, CL, etc.) a nombres completos permitidos
-        const MAPEO_CODIGOS_PAISES = {
-          "AR": "Argentina",
-          "BO": "Bolivia",
-          "CL": "Chile",
-          "CR": "Costa Rica",
-          "DO": "Republica Dominicana",
-          "RD": "Republica Dominicana",
-          "EC": "Ecuador",
-          "GT": "Guatemala",
-          "HN": "Honduras",
-          "NI": "Nicaragua",
-          "PA": "Panama",
-          "UY": "Uruguay",
-          "PY": "Paraguay",
-          "PE": "Peru",
-          "SV": "El Salvador"
-        };
-        
         const paisNormalizado = rawCountryStr.toUpperCase();
         if (MAPEO_CODIGOS_PAISES[paisNormalizado]) {
           cleanCountry = MAPEO_CODIGOS_PAISES[paisNormalizado];
@@ -2720,6 +3627,34 @@ function GeneralData_ConsolidarMetricas() {
       if (esPaisValido === undefined) {
         esPaisValido = mapPaisesPermitidosUpper.indexOf(country.toUpperCase()) !== -1;
         cachePaisesValidos[country] = esPaisValido;
+      }
+
+      // FALLBACK AUTOMÁTICO: Si la columna no tiene un país válido, buscar en las primeras 5 columnas
+      if (!esPaisValido) {
+        for (let colTest = 0; colTest < Math.min(fila.length, 5); colTest++) {
+          if (colTest === monthColIdx) continue;
+          const altCountryStr = String(fila[colTest]).trim();
+          let altClean = cachePaisesLimpios[altCountryStr];
+          if (altClean === undefined) {
+            const paisNorm = altCountryStr.toUpperCase();
+            if (MAPEO_CODIGOS_PAISES[paisNorm]) {
+              altClean = MAPEO_CODIGOS_PAISES[paisNorm];
+            } else {
+              altClean = GeneralData_Helper_LimpiarTexto(altCountryStr);
+              if (altClean === "Republic Dominican" || altClean === "Dominican Republic") {
+                altClean = "Republica Dominicana";
+              }
+            }
+            cachePaisesLimpios[altCountryStr] = altClean;
+          }
+          if (mapPaisesPermitidosUpper.indexOf(altClean.toUpperCase()) !== -1) {
+            country = altClean;
+            esPaisValido = true;
+            cachePaisesValidos[country] = true;
+            countryColIdx = colTest;
+            break;
+          }
+        }
       }
 
       const esHolding = country === "LATAM Holding";
@@ -3438,4 +4373,23 @@ function enviar_LATAM() {
   procesarEnvios([{ id: "1cy2rAvbx2Wbnrgn_ArHmzSxhwlAxWBxCbdvAWogg-Bo", country: "VIP_ACCESS", alias: "Dmarts Perfomance Commercial" }]);
 }function enviar_AnalisisTempEuge() {
   procesarEnvios([{ id: "1R2dRp9PblfkUnjIp6EqXpHr-qnfbJL30oBkqk5heidU", country: "VIP_ACCESS", alias: "Analisis Temp Euge" }]);
+}
+
+// ==========================================
+// FUNCIÓN DE DIAGNÓSTICO: MAUs Coverage
+// ==========================================
+function Diagnostico_MAUs_Coverage() {
+  const ss = obtenerSpreadsheetConCache(ID_ARCHIVO_UNICO.trim());
+  const hoja = ss.getSheetByName("15 - MAUs Coverage");
+  if (!hoja) {
+    Logger.log("❌ La hoja '15 - MAUs Coverage' NO EXISTE en el spreadsheet destino.");
+    return;
+  }
+  const datos = hoja.getDataRange().getValues();
+  Logger.log(`📊 Hoja '15 - MAUs Coverage' encontrada. Total filas: ${datos.length}, Columnas: ${datos[0] ? datos[0].length : 0}`);
+  if (datos.length === 0) return;
+  Logger.log("📋 Encabezados (Fila 1): " + JSON.stringify(datos[0]));
+  for (let i = 1; i <= Math.min(5, datos.length - 1); i++) {
+    Logger.log(`📌 Fila ${i} (Datos): ` + JSON.stringify(datos[i]));
+  }
 }

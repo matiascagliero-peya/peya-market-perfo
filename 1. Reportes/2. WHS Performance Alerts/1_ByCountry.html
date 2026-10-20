@@ -532,7 +532,7 @@
 
       var cachedMm = (WHS_WEATHER_BY_DATE[selDate] && WHS_WEATHER_BY_DATE[selDate][wh] !== undefined)
         ? WHS_WEATHER_BY_DATE[selDate][wh]
-        : (WHS_WEATHER[wh] !== undefined ? WHS_WEATHER[wh] : null);
+        : null;
 
       if (cachedMm !== null && !isNaN(cachedMm)) {
         el.innerHTML = buildRainBadgeHtml(cachedMm);
@@ -555,12 +555,11 @@
         if (wMap && typeof wMap === 'object') {
           if (!WHS_WEATHER_BY_DATE[selDate]) WHS_WEATHER_BY_DATE[selDate] = {};
           Object.assign(WHS_WEATHER_BY_DATE[selDate], wMap);
-          Object.assign(WHS_WEATHER, wMap);
 
           document.querySelectorAll('.whs-rain-slot').forEach(function(el) {
             var wh = el.getAttribute('data-wh');
-            if (wh && wMap[wh] !== undefined) {
-              el.innerHTML = buildRainBadgeHtml(wMap[wh]);
+            if (wh && WHS_WEATHER_BY_DATE[selDate] && WHS_WEATHER_BY_DATE[selDate][wh] !== undefined) {
+              el.innerHTML = buildRainBadgeHtml(WHS_WEATHER_BY_DATE[selDate][wh]);
             }
           });
         }
@@ -1031,8 +1030,8 @@
           break;
         }
       }
-      if (whRain === null && typeof WHS_WEATHER !== 'undefined' && WHS_WEATHER && WHS_WEATHER[wh] !== undefined) {
-        whRain = WHS_WEATHER[wh];
+      if (whRain === null && typeof WHS_WEATHER_BY_DATE !== 'undefined' && WHS_WEATHER_BY_DATE[selectedDate] && WHS_WEATHER_BY_DATE[selectedDate][wh] !== undefined) {
+        whRain = WHS_WEATHER_BY_DATE[selectedDate][wh];
       }
 
       var rHtml = '<tr><td class="td-base td-whs">' +

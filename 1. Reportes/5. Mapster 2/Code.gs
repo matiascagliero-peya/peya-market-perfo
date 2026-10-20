@@ -193,62 +193,139 @@ function fetchWhsDataFromSheetsApi() {
     return (idx >= 0 && row[idx] !== undefined && row[idx] !== null && String(row[idx]).trim() !== '') ? row[idx] : null;
   };
 
-  const records = [];
+  const warehouseGroups = new Map();
+
   for (let i = headerRowIndex + 1; i < values.length; i++) {
     const row = values[i];
     const whId = getCol(row, 'warehouse_id');
     if (!whId || String(whId).trim() === '') continue;
 
-    const isActiveVal = getCol(row, 'is_active');
-    const isActive = (isActiveVal === null || isActiveVal === undefined || isActiveVal === '')
-      ? true
-      : String(isActiveVal).trim().toUpperCase() !== 'FALSE';
+    const normDate = normalizeDateStr(getCol(row, 'month_date'));
+    const normWhId = String(whId).trim();
+    const groupKey = `${normDate}__${normWhId}`;
 
-    let geojsonObj = null;
+    // Datos del partner de esta fila
+    const partnerId = String(getCol(row, 'partner_id') || '').trim();
+    const partnerName = String(getCol(row, 'partner_name') || '').trim();
+    const businessType = String(getCol(row, 'business_type') || '').trim();
+    const hurrierVertical = String(getCol(row, 'hurrier_vertical_type') || '').trim();
+    const rankVal = parseInt(getCol(row, 'partner_rank'), 10) || 1;
+    const isMainPartner = Boolean(
+      getCol(row, 'is_main_partner') === true || 
+      String(getCol(row, 'is_main_partner')).toLowerCase() === 'true' || 
+      rankVal === 1
+    );
+    const partnerOrders = parseInt(getCol(row, 'partner_monthly_orders'), 10) || parseInt(getCol(row, 'monthly_orders'), 10) || 0;
+    const isPartnerActive = Boolean(
+      getCol(row, 'is_partner_active') === true || 
+      String(getCol(row, 'is_partner_active')).toLowerCase() === 'true' || 
+      partnerOrders > 0
+    );
+    const partnerCoverageKm2 = parseCoordinate(getCol(row, 'coverage_area_km2')) || 0;
+
+    let partnerGeojson = null;
     const geojsonRaw = getCol(row, 'shape_geojson');
     if (geojsonRaw && typeof geojsonRaw === 'string') {
       const trimmed = geojsonRaw.trim();
       if (trimmed.startsWith('{')) {
-        try { geojsonObj = JSON.parse(trimmed); } catch(e) {}
+        try { partnerGeojson = JSON.parse(trimmed); } catch(e) {}
       }
     } else if (geojsonRaw && typeof geojsonRaw === 'object') {
-      geojsonObj = geojsonRaw;
+      partnerGeojson = geojsonRaw;
     }
 
-    const normDate = normalizeDateStr(getCol(row, 'month_date'));
-    const lat = parseCoordinate(getCol(row, 'store_lat'));
-    const lng = parseCoordinate(getCol(row, 'store_lng'));
+    const partnerItem = {
+      partner_id: partnerId,
+      partner_name: partnerName,
+      business_type: businessType,
+      hurrier_vertical_type: hurrierVertical,
+      is_main: isMainPartner,
+      is_partner_active: isPartnerActive,
+      monthly_orders: partnerOrders,
+      coverage_area_km2: partnerCoverageKm2,
+      shape_geojson: partnerGeojson,
+      geojson: partnerGeojson
+    };
 
-    const countryRaw = String(getCol(row, 'country') || '').trim();
-    const countryLower = countryRaw.toLowerCase();
-    if (!countryRaw || countryLower === 'desconocido' || countryLower === 'costa rica' || countryLower === 'cr') {
-      continue; // Excluir Desconocido y Costa Rica
+    if (!warehouseGroups.has(groupKey)) {
+      const countryRaw = String(getCol(row, 'country') || '').trim();
+      const countryLower = countryRaw.toLowerCase();
+      if (!countryRaw || countryLower === 'desconocido' || countryLower === 'costa rica' || countryLower === 'cr') {
+        continue; // Excluir Desconocido y Costa Rica
+      }
+
+      const totalWhsOrders = parseInt(getCol(row, 'total_whs_monthly_orders'), 10) || partnerOrders;
+      const isStoreActiveVal = getCol(row, 'is_store_active') || getCol(row, 'is_active');
+      const isStoreActive = Boolean(
+        isStoreActiveVal === true || 
+        String(isStoreActiveVal).toLowerCase() === 'true' || 
+        totalWhsOrders > 0
+      );
+
+      warehouseGroups.set(groupKey, {
+        month_date: normDate,
+        warehouse_id: normWhId,
+        warehouse_name: String(getCol(row, 'warehouse_name') || whId).trim(),
+        fecha_apertura: normalizeDateStr(getCol(row, 'fecha_apertura')),
+        fecha_cierre: normalizeDateStr(getCol(row, 'fecha_cierre')),
+        country: countryRaw,
+        country_code: String(getCol(row, 'country_code') || '').trim().toLowerCase(),
+        city: String(getCol(row, 'city') || countryRaw || 'General').trim(),
+        neighborhood: String(getCol(row, 'neighborhood') || getCol(row, 'city') || 'Centro').trim(),
+        lat: parseCoordinate(getCol(row, 'store_lat')),
+        lng: parseCoordinate(getCol(row, 'store_lng')),
+        is_active: isStoreActive,
+        main_partner_id: isMainPartner ? partnerId : '',
+        main_partner_name: isMainPartner ? partnerName : '',
+        main_partner_orders: isMainPartner ? partnerOrders : 0,
+        monthly_orders: totalWhsOrders,
+        coverage_area_km2: isMainPartner ? partnerCoverageKm2 : 0,
+        centroid_lat: parseCoordinate(getCol(row, 'centroid_lat')),
+        centroid_lng: parseCoordinate(getCol(row, 'centroid_lng')),
+        geojson: isMainPartner ? partnerGeojson : null,
+        partners_detail: partnerId ? [partnerItem] : []
+      });
+    } else {
+      const wh = warehouseGroups.get(groupKey);
+      if (partnerId) {
+        wh.partners_detail.push(partnerItem);
+      }
+      if (isMainPartner) {
+        wh.main_partner_id = partnerId;
+        wh.main_partner_name = partnerName;
+        wh.main_partner_orders = partnerOrders;
+        if (partnerGeojson) wh.geojson = partnerGeojson;
+        if (partnerCoverageKm2) wh.coverage_area_km2 = partnerCoverageKm2;
+      }
     }
-
-    records.push({
-      month_date: normDate,
-      warehouse_id: String(whId).trim(),
-      warehouse_name: String(getCol(row, 'warehouse_name') || whId).trim(),
-      country: countryRaw,
-      country_code: String(getCol(row, 'country_code') || '').trim().toLowerCase(),
-      city: String(getCol(row, 'city') || countryRaw || 'General').trim(),
-      neighborhood: String(getCol(row, 'neighborhood') || getCol(row, 'city') || 'Centro').trim(),
-      lat: lat,
-      lng: lng,
-      is_active: isActive,
-      main_partner_id: String(getCol(row, 'main_partner_id') || '').trim(),
-      main_partner_name: String(getCol(row, 'main_partner_name') || '').trim(),
-      all_partner_ids: String(getCol(row, 'all_partner_ids') || '').trim(),
-      all_partners_display: String(getCol(row, 'all_partners_display') || '').trim(),
-      total_enabled_partners: parseInt(getCol(row, 'total_enabled_partners'), 10) || 1,
-      active_partners_in_month: parseInt(getCol(row, 'active_partners_in_month'), 10) || 0,
-      monthly_orders: parseInt(getCol(row, 'partners_detail.monthly_orders'), 10) || parseInt(getCol(row, 'total_whs_monthly_orders'), 10) || 0,
-      coverage_area_km2: parseCoordinate(getCol(row, 'coverage_area_km2')) || 0,
-      centroid_lat: parseCoordinate(getCol(row, 'centroid_lat')),
-      centroid_lng: parseCoordinate(getCol(row, 'centroid_lng')),
-      geojson: geojsonObj
-    });
   }
+
+  const records = [];
+  warehouseGroups.forEach(wh => {
+    // Si no se asignó geojson de partner principal pero algún partner tiene geojson, tomar el primero
+    if (!wh.geojson && wh.partners_detail.length > 0) {
+      const withShape = wh.partners_detail.find(p => p.geojson);
+      if (withShape) {
+        wh.geojson = withShape.geojson;
+        wh.coverage_area_km2 = withShape.coverage_area_km2;
+      }
+    }
+
+    wh.total_enabled_partners = wh.partners_detail.length || 1;
+    wh.active_partners_in_month = wh.partners_detail.filter(p => p.is_partner_active).length;
+    wh.all_partner_ids = wh.partners_detail.map(p => p.partner_id).filter(Boolean).join(', ');
+
+    // Reconstruir all_partners_display para StoreExplorer
+    wh.all_partners_display = wh.partners_detail.map(p => {
+      const parts = [
+        p.partner_name,
+        `[ID: ${p.partner_id}${p.business_type ? ' - ' + p.business_type : ''}${p.is_main ? ' - Principal' : ''}${p.monthly_orders > 0 ? ' - ' + p.monthly_orders.toLocaleString('es-AR') + ' órd.' : ''}${p.geojson ? ' - Con Shape' : ' - Sin Shape'}]`
+      ];
+      return parts.join(' ');
+    }).join(' | ');
+
+    records.push(wh);
+  });
 
   return records;
 }
@@ -431,7 +508,20 @@ function getStoreExplorerInitialData() {
         dmart_users: 0,
         coverage_area_km2: w.coverage_area_km2,
         main_partner_name: w.main_partner_name,
-        all_partners_display: w.all_partners_display
+        all_partners_display: w.all_partners_display,
+        fecha_apertura: w.fecha_apertura || '',
+        fecha_cierre: w.fecha_cierre || '',
+        whs_unified_area_km2: w.whs_unified_area_km2 || 0,
+        partners_detail: (w.partners_detail || []).map(p => ({
+          partner_id: p.partner_id,
+          partner_name: p.partner_name,
+          business_type: p.business_type,
+          hurrier_vertical_type: p.hurrier_vertical_type,
+          is_main: p.is_main,
+          is_partner_active: p.is_partner_active,
+          monthly_orders: p.monthly_orders,
+          coverage_area_km2: p.coverage_area_km2
+        }))
       });
     }
   });
@@ -457,7 +547,20 @@ function getStoreExplorerInitialData() {
         dmart_users: 0,
         coverage_area_km2: w.coverage_area_km2,
         main_partner_name: w.main_partner_name,
-        all_partners_display: w.all_partners_display
+        all_partners_display: w.all_partners_display,
+        fecha_apertura: w.fecha_apertura || '',
+        fecha_cierre: w.fecha_cierre || '',
+        whs_unified_area_km2: w.whs_unified_area_km2 || 0,
+        partners_detail: (w.partners_detail || []).map(p => ({
+          partner_id: p.partner_id,
+          partner_name: p.partner_name,
+          business_type: p.business_type,
+          hurrier_vertical_type: p.hurrier_vertical_type,
+          is_main: p.is_main,
+          is_partner_active: p.is_partner_active,
+          monthly_orders: p.monthly_orders,
+          coverage_area_km2: p.coverage_area_km2
+        }))
       });
     }
   });
@@ -474,7 +577,17 @@ function getStoreExplorerInitialData() {
       orders: r.monthly_orders || 0,
       total_enabled_partners: r.total_enabled_partners || 1,
       active_partners_in_month: r.active_partners_in_month || 0,
-      all_partners_display: r.all_partners_display || ''
+      all_partners_display: r.all_partners_display || '',
+      partners_detail: (r.partners_detail || []).map(p => ({
+        partner_id: p.partner_id,
+        partner_name: p.partner_name,
+        business_type: p.business_type,
+        hurrier_vertical_type: p.hurrier_vertical_type,
+        is_main: p.is_main,
+        is_partner_active: p.is_partner_active,
+        monthly_orders: p.monthly_orders,
+        coverage_area_km2: p.coverage_area_km2
+      }))
     };
   });
 
@@ -486,6 +599,22 @@ function getStoreExplorerInitialData() {
   const cities = [...new Set(warehouses.map(w => w.city).filter(Boolean))].sort();
   const neighborhoods = [...new Set(warehouses.map(w => w.neighborhood).filter(Boolean))].sort();
 
+  // Precarga de polígonos del mes actual / mes por defecto para carga instantánea
+  const preloadedPolygons = [];
+  sheetRecords.filter(r => r.month_date === defaultMonth && r.geojson).forEach(r => {
+    preloadedPolygons.push({
+      warehouse_id: r.warehouse_id,
+      real_id: r.warehouse_id,
+      warehouse_name: r.warehouse_name,
+      country: r.country,
+      lat: r.lat,
+      lng: r.lng,
+      coverage_area_km2: r.coverage_area_km2,
+      geojson: r.geojson,
+      partners_detail: r.partners_detail || []
+    });
+  });
+
   return {
     dataSource: 'Google Sheets (1. WHS data & 2. WHS orders)',
     months: months,
@@ -494,7 +623,8 @@ function getStoreExplorerInitialData() {
     cities: cities,
     neighborhoods: neighborhoods,
     warehouses: warehouses,
-    monthlyStatus: monthlyStatusMap
+    monthlyStatus: monthlyStatusMap,
+    preloadedPolygons: preloadedPolygons
   };
 }
 
@@ -528,7 +658,7 @@ function getWarehousesPolygons(warehouseIds, monthDate) {
 
   // 1. Coincidencia estricta de mes y almacén
   sheetRecords.forEach(r => {
-    if (!r.geojson) return;
+    if (!r.geojson && !r.whs_unified_geojson && (!r.partners_detail || r.partners_detail.length === 0)) return;
     if (normMonth && r.month_date && r.month_date !== normMonth) return;
 
     const matchedId = findMatchingTargetId(r);
@@ -541,7 +671,10 @@ function getWarehousesPolygons(warehouseIds, monthDate) {
         lat: r.lat,
         lng: r.lng,
         coverage_area_km2: r.coverage_area_km2,
-        geojson: r.geojson
+        geojson: r.geojson,
+        whs_unified_geojson: r.whs_unified_geojson,
+        whs_unified_area_km2: r.whs_unified_area_km2,
+        partners_detail: r.partners_detail || []
       });
       pendingIds.delete(matchedId);
     }
@@ -550,7 +683,7 @@ function getWarehousesPolygons(warehouseIds, monthDate) {
   // 2. Si no se encontró shape en ese mes específico, tomar el disponible de cualquier mes
   if (pendingIds.size > 0) {
     sheetRecords.forEach(r => {
-      if (!r.geojson) return;
+      if (!r.geojson && !r.whs_unified_geojson && (!r.partners_detail || r.partners_detail.length === 0)) return;
       const matchedId = findMatchingTargetId(r);
       if (matchedId) {
         foundPolygons.push({
@@ -561,7 +694,10 @@ function getWarehousesPolygons(warehouseIds, monthDate) {
           lat: r.lat,
           lng: r.lng,
           coverage_area_km2: r.coverage_area_km2,
-          geojson: r.geojson
+          geojson: r.geojson,
+          whs_unified_geojson: r.whs_unified_geojson,
+          whs_unified_area_km2: r.whs_unified_area_km2,
+          partners_detail: r.partners_detail || []
         });
         pendingIds.delete(matchedId);
       }

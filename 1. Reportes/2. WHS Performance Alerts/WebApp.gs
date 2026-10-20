@@ -225,7 +225,14 @@ function getDashboardData(forceRecalc) {
     var userSub = getSubscriptionFromDb(user);
     var metricsList = METRICS_TO_ALERT.map(function(m) { return { key: m.key, label: m.label }; });
 
-    var latestDateStr = (finalAlerts && finalAlerts.length > 0) ? finalAlerts[0].fecha : null;
+    var latestDateStr = null;
+    if (finalAlerts && finalAlerts.length > 0) {
+      finalAlerts.forEach(function(a) {
+        if (a && a.fecha && (!latestDateStr || a.fecha > latestDateStr)) {
+          latestDateStr = a.fecha;
+        }
+      });
+    }
     var whsWeatherMap = latestDateStr ? getWarehouseWeatherMapForDate(latestDateStr) : {};
 
     return {
@@ -234,7 +241,8 @@ function getDashboardData(forceRecalc) {
       metricsList: metricsList,
       masterWhs: masterWhs,
       metricsAvailability: metricsAvail,
-      whsWeather: whsWeatherMap
+      whsWeather: whsWeatherMap,
+      weatherDate: latestDateStr
     };
   } catch (e) {
     Logger.log("ERROR FATAL en getDashboardData: " + e.stack);

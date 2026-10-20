@@ -4,7 +4,7 @@
 
 const CONFIG_ANALISIS_UF = {
   nombreHoja: "10 Analisis UF",
-  celdaPais: "C4"
+  celdaPais: "C6"
 };
 
 function _analisisUFWorker(targetCountry) {
