@@ -3,7 +3,6 @@
 Este proyecto concentra los datamarts de BigQuery, automatizaciones de Google Apps Script y dashboards operativos de PedidosYa Market.
 
 ## 1. Métricas Operativas y Reglas de Alertas
-* **Glosario Central:** Consultar `1. Reportes/2. WHS Performance Alerts/GLOSARIO_ALERTAS.md` para las fórmulas oficiales y criterios de disparo de las 16 métricas monitoreadas.
 * **Evaluación en Puntos Porcentuales (`pp`):** Todas las métricas de porcentaje operacional evalúan variaciones y desvíos estrictamente en puntos porcentuales para evitar distorsiones con denominadores bajos.
 * **Baselines (L3W):** Las alertas de volumen y tiempos comparan contra el promedio del mismo día de la semana de las últimas 3 semanas (L3W).
 
@@ -15,3 +14,7 @@ Este proyecto concentra los datamarts de BigQuery, automatizaciones de Google Ap
 ## 3. Consultas SQL y Datamarts (BigQuery)
 * **Particionado y Costos:** Siempre filtrar por fecha o partición correspondiente para evitar escaneos completos de tablas.
 * **Consistencia de Nomenclatura:** Mantener uniformidad en los identificadores de almacén (`whs_id`, `warehouse_name`) y campos estándar entre datamarts.
+
+## 4. Control de Versiones y Sincronización (Git)
+* **Sincronización Previa Obligatoria:** Antes de realizar cualquier modificación, creación o edición de archivos en este proyecto, es MANDATORIO descargar y sincronizar la última versión del repositorio remoto (`git pull origin main` o verificar el estado frente al remoto) para garantizar que todo cambio se construya sobre la versión más reciente del código.
+
