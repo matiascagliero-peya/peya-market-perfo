@@ -1396,6 +1396,16 @@
     <?!= JSON.stringify(obtenerBootstrapServidor()) ?>
   </script>
 
+  <!-- DEBUG PANEL (oculto por defecto, visible en caso de error) -->
+  <div id="debugLogBox" style="display:none; position:fixed; bottom:0; left:0; right:0; max-height:200px; background:#0F172A; color:#94A3B8; font-family:monospace; font-size:11px; z-index:9999; overflow-y:auto; border-top:2px solid #334155; padding:8px 12px;">
+    <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px;">
+      <span id="debugDot" style="width:8px;height:8px;border-radius:50%;background:#22C55E;display:inline-block;"></span>
+      <span id="debugText" style="flex:1; font-weight:600;">Inicializando...</span>
+      <button onclick="document.getElementById('debugLogBox').style.display='none'" style="background:none;border:none;color:#94A3B8;cursor:pointer;font-size:14px;">✕</button>
+    </div>
+    <pre id="debugLogPre" style="margin:0;white-space:pre-wrap;max-height:160px;overflow-y:auto;"></pre>
+  </div>
+
   <!-- HEADER -->
   <header>
     <div class="brand-wrap">
@@ -1446,7 +1456,7 @@
     <!-- SELECTOR DE SEMANA FORMATO: ‹ Semana 43 | 19 Oct - 25 Oct › -->
     <div class="semana-control" id="wrapperSemanaControl">
       <button class="semana-nav-btn" id="btnSemanaPrev" onclick="desplazarSemana(-1)" title="Semana anterior">&lsaquo;</button>
-      <select class="semana-select" id="selectSemanaActual" onchange="cambiarSemanaDirecta()"><option value="Semana 35 | 24 Ago - 30 Ago">Semana 35 | 24 Ago - 30 Ago</option><option value="Semana 36 | 31 Ago - 06 Sep">Semana 36 | 31 Ago - 06 Sep</option><option value="Semana 37 | 07 Sep - 13 Sep">Semana 37 | 07 Sep - 13 Sep</option><option value="Semana 38 | 14 Sep - 20 Sep">Semana 38 | 14 Sep - 20 Sep</option><option value="Semana 39 | 21 Sep - 27 Sep">Semana 39 | 21 Sep - 27 Sep</option><option value="Semana 40 | 28 Sep - 04 Oct">Semana 40 | 28 Sep - 04 Oct</option><option value="Semana 41 | 05 Oct - 11 Oct">Semana 41 | 05 Oct - 11 Oct</option><option value="Semana 42 | 12 Oct - 18 Oct">Semana 42 | 12 Oct - 18 Oct</option><option value="Semana 43 | 19 Oct - 25 Oct" selected>Semana 43 | 19 Oct - 25 Oct — Semana Actual</option><option value="Semana 44 | 26 Oct - 01 Nov">Semana 44 | 26 Oct - 01 Nov</option><option value="Semana 45 | 02 Nov - 08 Nov">Semana 45 | 02 Nov - 08 Nov</option><option value="Semana 46 | 09 Nov - 15 Nov">Semana 46 | 09 Nov - 15 Nov</option></select>
+      <select class="semana-select" id="selectSemanaActual" onchange="cambiarSemanaDirecta()"><option value="Semana 35 | 24 Ago - 30 Ago">Semana 35 | 24 Ago - 30 Ago</option><option value="Semana 36 | 31 Ago - 06 Sep">Semana 36 | 31 Ago - 06 Sep</option><option value="Semana 37 | 07 Sep - 13 Sep">Semana 37 | 07 Sep - 13 Sep</option><option value="Semana 38 | 14 Sep - 20 Sep">Semana 38 | 14 Sep - 20 Sep</option><option value="Semana 39 | 21 Sep - 27 Sep">Semana 39 | 21 Sep - 27 Sep</option><option value="Semana 40 | 28 Sep - 04 Oct">Semana 40 | 28 Sep - 04 Oct</option><option value="Semana 41 | 05 Oct - 11 Oct">Semana 41 | 05 Oct - 11 Oct</option><option value="Semana 42 | 12 Oct - 18 Oct">Semana 42 | 12 Oct - 18 Oct</option><option value="Semana 44 | 26 Oct - 01 Nov" selected>Semana 43 | 19 Oct - 25 Oct — Semana Actual</option><option value="Semana 44 | 26 Oct - 01 Nov">Semana 44 | 26 Oct - 01 Nov</option><option value="Semana 45 | 02 Nov - 08 Nov">Semana 45 | 02 Nov - 08 Nov</option><option value="Semana 46 | 09 Nov - 15 Nov">Semana 46 | 09 Nov - 15 Nov</option></select>
       <button class="semana-nav-btn" id="btnSemanaNext" onclick="desplazarSemana(1)" title="Semana siguiente">&rsaquo;</button>
     </div>
 
@@ -3022,22 +3032,56 @@
       if (box) box.style.display = "block";
     };
 
+    function calcularSemanaClienteActual(fechaRef) {
+      const d = fechaRef ? new Date(fechaRef) : new Date();
+      const diaSem = d.getDay();
+      const diffLunes = (diaSem === 0 ? -6 : 1) - diaSem;
+      const lunes = new Date(d);
+      lunes.setDate(d.getDate() + diffLunes);
+      const domingo = new Date(lunes);
+      domingo.setDate(lunes.getDate() + 6);
+      const dTarget = new Date(d.valueOf());
+      const dayNr = (d.getDay() + 6) % 7;
+      dTarget.setDate(dTarget.getDate() - dayNr + 3);
+      const primerJueves = dTarget.valueOf();
+      dTarget.setMonth(0, 1);
+      if (dTarget.getDay() !== 4) {
+        dTarget.setMonth(0, 1 + ((4 - dTarget.getDay()) + 7) % 7);
+      }
+      const numeroSemana = 1 + Math.ceil((primerJueves - dTarget) / 604800000);
+      const meses = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+      const pad = n => String(n).padStart(2, "0");
+      const strLunes = pad(lunes.getDate()) + " " + meses[lunes.getMonth()];
+      const strDomingo = pad(domingo.getDate()) + " " + meses[domingo.getMonth()];
+      return "Semana " + pad(numeroSemana) + " | " + strLunes + " - " + strDomingo;
+    }
+
+    function generarSemanasDisponiblesCliente(semanaActual) {
+      const lista = [];
+      const hoy = new Date();
+      for (let i = -8; i <= 8; i++) {
+        const d = new Date(hoy);
+        d.setDate(hoy.getDate() + (i * 7));
+        const s = calcularSemanaClienteActual(d);
+        if (!lista.includes(s)) lista.push(s);
+      }
+      if (semanaActual && !lista.some(s => coincidenSemanasClient(s, semanaActual))) {
+        lista.push(semanaActual);
+      }
+      return lista;
+    }
+
     const SEED_DATA = {
-      semanas: [
-        "Semana 35 | 24 Ago - 30 Ago", "Semana 36 | 31 Ago - 06 Sep", "Semana 37 | 07 Sep - 13 Sep",
-        "Semana 38 | 14 Sep - 20 Sep", "Semana 39 | 21 Sep - 27 Sep", "Semana 40 | 28 Sep - 04 Oct",
-        "Semana 41 | 05 Oct - 11 Oct", "Semana 42 | 12 Oct - 18 Oct", "Semana 43 | 19 Oct - 25 Oct",
-        "Semana 44 | 26 Oct - 01 Nov", "Semana 45 | 02 Nov - 08 Nov", "Semana 46 | 09 Nov - 15 Nov"
-      ],
+      semanas: generarSemanasDisponiblesCliente(calcularSemanaClienteActual()),
       equipo: [
         { nombre: "Matías Cagliero", email: "matias.cagliero@pedidosya.com", rol: "Lead Analyst" },
         { nombre: "Nicki Krawiecki", email: "nicole.krawiecki@pedidosya.com", rol: "Head of Performance" },
         { nombre: "Juan Pablo Pinori Diaz", email: "juan.pinori@pedidosya.com", rol: "Specialist Data" }
       ],
       semanal: [
-        { id: "SEM-001", semana: "Semana 44 | 26 Oct - 01 Nov", owner: "Matías Cagliero", proyecto: "HoD & Monthly Regional", todos: "- [x] Revisar comments en la HoD y Monthly regional\n- [ ] Cerrar metricas de cierre de mes\n- [ ] Validar datamart de OKRs", estado: "En proceso" },
-        { id: "SEM-002", semana: "Semana 44 | 26 Oct - 01 Nov", owner: "Nicki Krawiecki", proyecto: "Seguimiento de Proyectos", todos: "- [x] Alinear prioridades de Q4 con analistas\n- [ ] Revisar tablero de iniciativas clave", estado: "En proceso" },
-        { id: "SEM-003", semana: "Semana 44 | 26 Oct - 01 Nov", owner: "Juan Pablo Pinori Diaz", proyecto: "Auditoria de Datamarts BQ", todos: "- [x] Validar reservas de slots en queries de usuarios\n- [ ] Optimizar consultas L3W", estado: "Pendiente" }
+        { id: "SEM-001", semana: calcularSemanaClienteActual(), owner: "Matías Cagliero", proyecto: "HoD & Monthly Regional", todos: "- [x] Revisar comments en la HoD y Monthly regional\n- [ ] Cerrar metricas de cierre de mes\n- [ ] Validar datamart de OKRs", estado: "En proceso" },
+        { id: "SEM-002", semana: calcularSemanaClienteActual(), owner: "Nicki Krawiecki", proyecto: "Seguimiento de Proyectos", todos: "- [x] Alinear prioridades de Q4 con analistas\n- [ ] Revisar tablero de iniciativas clave", estado: "En proceso" },
+        { id: "SEM-003", semana: calcularSemanaClienteActual(), owner: "Juan Pablo Pinori Diaz", proyecto: "Auditoria de Datamarts BQ", todos: "- [x] Validar reservas de slots en queries de usuarios\n- [ ] Optimizar consultas L3W", estado: "Pendiente" }
       ],
       recurrentes: [
         { id: "REC-001", owner: "Matías Cagliero", tarea: "Monitoreo Diario de Alertas Operativas WHS", frecuencia: "Diario", links: "" },
@@ -3129,7 +3173,7 @@
                     nombre: "Matías Cagliero",
                     esAdmin: true
                   },
-                  semanaActual: "Semana 43 | 19 Oct - 25 Oct",
+                  semanaActual: calcularSemanaClienteActual(),
                   semanasDisponibles: [
                     "Semana 35 | 24 Ago - 30 Ago",
                     "Semana 36 | 31 Ago - 06 Sep",
@@ -3153,7 +3197,7 @@
                 if (this._success) setTimeout(() => this._success(res), 50);
               },
               obtenerDatosCompletos: function(sem) {
-                const semanaSel = sem || "Semana 43 | 19 Oct - 25 Oct";
+                const semanaSel = sem || calcularSemanaClienteActual();
                 const res = {
                   seguimientoSemanal: localSemanal,
                   recurrentes: localRecurrentes,
@@ -3161,7 +3205,7 @@
                   reportes: localReportes,
                   bolsa: localBolsa,
                   semanaSeleccionada: semanaSel,
-                  semanaActual: "Semana 43 | 19 Oct - 25 Oct"
+                  semanaActual: calcularSemanaClienteActual()
                 };
                 if (this._success) setTimeout(() => this._success(res), 50);
               },
@@ -3347,8 +3391,8 @@
     const STATE = {
       usuario: { email: "matias.cagliero@pedidosya.com", nombre: "Matías Cagliero", esAdmin: true },
       esAdmin: true,
-      semana: "Semana 44 | 26 Oct - 01 Nov",
-      semanaActual: "Semana 44 | 26 Oct - 01 Nov",
+      semana: calcularSemanaClienteActual(),
+      semanaActual: calcularSemanaClienteActual(),
       semanas: [...SEED_DATA.semanas],
       equipo: [...SEED_DATA.equipo],
       semanal: [...SEED_DATA.semanal],
@@ -3465,8 +3509,8 @@
       const btnAdmin = document.getElementById("tabBtnAdmin");
       if (btnAdmin) btnAdmin.style.display = "flex";
 
-      STATE.semana = STATE.semana || "Semana 44 | 26 Oct - 01 Nov";
-      STATE.semanaActual = STATE.semanaActual || "Semana 44 | 26 Oct - 01 Nov";
+      STATE.semana = STATE.semana || calcularSemanaClienteActual();
+      STATE.semanaActual = STATE.semanaActual || calcularSemanaClienteActual();
       if (!STATE.semanas || STATE.semanas.length === 0) STATE.semanas = [...SEED_DATA.semanas];
       if (!STATE.equipo || STATE.equipo.length === 0) STATE.equipo = [...SEED_DATA.equipo];
       if (!STATE.semanal || STATE.semanal.length === 0) STATE.semanal = [...SEED_DATA.semanal];
