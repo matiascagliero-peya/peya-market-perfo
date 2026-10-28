@@ -1,5 +1,9 @@
 DECLARE query_name STRING DEFAULT '7. OKRs Querys - Base - Performance (Mensual)';
 
+-- Sheets Name: 1. TD - OKRs Mensual (0 - Orders)
+-- Sheets Link: https://docs.google.com/spreadsheets/d/13yTO_kFzIvISmbSz6p93BFUub1HODpuiGhB3yElZ2fw
+
+
 SELECT *
 FROM `peya-food-and-groceries.automated_tables_reports.dmart_orders_okrs`
 WHERE Month >= '2024-01-01'

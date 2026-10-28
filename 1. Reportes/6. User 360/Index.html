@@ -1,0 +1,2647 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>User 360 | Matriz, Desglose por País y Glosario</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #F8F9FA;
+      --card-bg: #FFFFFF;
+      --text-main: #202124;
+      --text-muted: #5F6368;
+      --border: #DADCE0;
+      --primary: #EA1D2C;
+      --primary-hover: #D0101E;
+      --accent: #1A73E8;
+      --accent-light: #E8F0FE;
+      --positive: #188038;
+      --positive-bg: #E6F4EA;
+      --negative: #D93025;
+      --negative-bg: #FCE8E6;
+      --row-total-bg: #E8EAED;
+      --row-l1-bg: #F1F3F4;
+      --row-l1-hover: #E8EAED;
+      --row-l2-bg: #FFFFFF;
+      --row-l2-hover: #F8F9FA;
+      --row-latam-bg: #E8EAED;
+      --font: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: var(--font); background: var(--bg); color: var(--text-main); font-size: 13px; line-height: 1.4; }
+
+    header {
+      background: var(--card-bg);
+      border-bottom: 1px solid var(--border);
+      padding: 7px 18px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      flex-wrap: nowrap;
+      white-space: nowrap;
+      gap: 12px;
+      overflow: hidden;
+    }
+    .brand { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+    .brand-badge { background: var(--primary); color: #fff; font-weight: 700; font-size: 10.5px; padding: 2px 7px; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .brand-title { font-size: 14px; font-weight: 700; color: var(--text-main); line-height: 1.1; }
+
+    /* INDICADOR EN VIVO (CÍRCULO VERDE ANIMADO Y BYTES) */
+    .live-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      font-weight: 600;
+      color: #137333;
+      background: #E6F4EA;
+      padding: 3px 8px;
+      border-radius: 20px;
+      border: 1px solid #CEEAD6;
+      flex-shrink: 0;
+    }
+    .live-dot {
+      width: 7px;
+      height: 7px;
+      background-color: #1E8E3E;
+      border-radius: 50%;
+      position: relative;
+    }
+    .live-dot::after {
+      content: '';
+      position: absolute;
+      top: -3px;
+      left: -3px;
+      width: 13px;
+      height: 13px;
+      border-radius: 50%;
+      border: 2px solid #1E8E3E;
+      animation: livePulse 1.8s infinite ease-out;
+      opacity: 0;
+    }
+    @keyframes livePulse {
+      0% { transform: scale(0.6); opacity: 0.9; }
+      60% { transform: scale(1.4); opacity: 0; }
+      100% { transform: scale(1.6); opacity: 0; }
+    }
+    .bytes-counter {
+      font-size: 10px;
+      font-weight: 600;
+      color: #5F6368;
+      background: #FFFFFF;
+      padding: 1.5px 6px;
+      border-radius: 10px;
+      border: 1px solid #CEEAD6;
+      margin-left: 2px;
+      letter-spacing: 0.2px;
+    }
+
+    /* NAVEGACIÓN PRINCIPAL ENTRE PÁGINAS */
+    .nav-tabs {
+      display: flex;
+      gap: 3px;
+      background: #E8EAED;
+      padding: 2.5px;
+      border-radius: 7px;
+      flex-shrink: 0;
+    }
+    .nav-tab {
+      padding: 5px 11px;
+      font-size: 11.5px;
+      font-weight: 600;
+      font-family: inherit;
+      border: none;
+      background: transparent;
+      color: var(--text-muted);
+      cursor: pointer;
+      border-radius: 5px;
+      transition: all 0.15s ease;
+      white-space: nowrap;
+    }
+    .nav-tab:hover { color: var(--text-main); }
+    .nav-tab.active {
+      background: #FFFFFF;
+      color: var(--accent);
+      box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+    }
+
+    /* BOTONES MINIMALISTAS Y DESAPERCIBIDOS */
+    .btn-ghost-mini {
+      height: 25px;
+      padding: 0 8px;
+      font-size: 11px;
+      font-weight: 500;
+      font-family: inherit;
+      color: #5F6368;
+      background: transparent;
+      border: 1px solid transparent;
+      border-radius: 4px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      transition: all 0.15s ease;
+      white-space: nowrap;
+    }
+    .btn-ghost-mini:hover {
+      background: #F1F3F4;
+      color: #202124;
+      border-color: #E0E0E0;
+    }
+
+    .container { max-width: 1750px; margin: 0 auto; padding: 18px 24px; display: flex; flex-direction: column; gap: 16px; }
+
+    /* FILTERS PANEL */
+    .filter-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px 18px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-end;
+      gap: 14px;
+    }
+    .filter-group { display: flex; flex-direction: column; gap: 5px; min-width: 140px; }
+    .filter-label { font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.3px; }
+    .filter-select {
+      height: 34px;
+      padding: 0 10px;
+      font-size: 12.5px;
+      font-family: inherit;
+      color: var(--text-main);
+      background: #FFFFFF;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      outline: none;
+      cursor: pointer;
+    }
+    .filter-select:focus { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(26,115,232,0.15); }
+
+    .btn {
+      height: 34px;
+      padding: 0 16px;
+      font-size: 12.5px;
+      font-weight: 600;
+      font-family: inherit;
+      border-radius: 6px;
+      border: none;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.15s ease;
+    }
+    .btn-outline { background: #fff; border: 1px solid var(--border); color: var(--text-main); }
+    .btn-outline:hover { background: #F1F3F4; }
+
+    /* METRIC SELECTOR RIBBON (PÁGINA 1) */
+    .metric-ribbon-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 18px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      flex-wrap: wrap;
+    }
+    .metric-ribbon-label {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      letter-spacing: 0.5px;
+      white-space: nowrap;
+    }
+    .metric-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .pill {
+      height: 32px;
+      padding: 0 14px;
+      font-size: 12px;
+      font-weight: 600;
+      font-family: inherit;
+      border-radius: 16px;
+      border: 1px solid var(--border);
+      background: #FFFFFF;
+      color: var(--text-main);
+      cursor: pointer;
+      transition: all 0.15s ease;
+      display: inline-flex;
+      align-items: center;
+    }
+    .pill:hover { background: #F1F3F4; }
+    .pill.active {
+      background: var(--accent-light);
+      border-color: var(--accent);
+      color: var(--accent);
+      box-shadow: 0 1px 2px rgba(26,115,232,0.1);
+    }
+    .pill.disabled-pill {
+      opacity: 0.35 !important;
+      background: #F1F3F4 !important;
+      color: #9AA0A6 !important;
+      border-color: #E0E0E0 !important;
+      cursor: not-allowed !important;
+      box-shadow: none !important;
+    }
+    .pill.disabled-pill:hover {
+      background: #F1F3F4 !important;
+      border-color: #E0E0E0 !important;
+    }
+
+    /* SELECTOR DUAL PROLIJO L1 / L2 (PÁGINA 2) */
+    .dual-selector-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .selector-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .selector-title-tag {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      min-width: 170px;
+      letter-spacing: 0.4px;
+    }
+    .pills-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .pill-sub {
+      height: 28px;
+      padding: 0 12px;
+      font-size: 11.5px;
+      font-weight: 600;
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      background: #FFFFFF;
+      color: var(--text-main);
+      cursor: pointer;
+      transition: all 0.15s ease;
+      display: inline-flex;
+      align-items: center;
+    }
+    .pill-sub:hover { background: #F1F3F4; }
+    .pill-sub.active {
+      background: #1A73E8;
+      border-color: #1A73E8;
+      color: #FFFFFF;
+    }
+    .pill-sub.active-top {
+      background: #0D9488;
+      border-color: #0D9488;
+      color: #FFFFFF;
+    }
+
+    /* CARDS & TABLES */
+    .content-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    .toolbar-bar {
+      padding: 12px 18px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+      background: #FAFAFA;
+    }
+    .toolbar-title { font-size: 14px; font-weight: 700; color: var(--text-main); }
+    .badge-indicator {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--accent);
+      background: var(--accent-light);
+      padding: 3px 9px;
+      border-radius: 12px;
+    }
+
+    .table-container { overflow-x: auto; max-height: 720px; }
+    table.data-table { width: 100%; border-collapse: collapse; text-align: left; }
+    table.data-table th, table.data-table td {
+      border-right: 1px solid #FFFFFF;
+      vertical-align: middle;
+    }
+    table.data-table th:last-child, table.data-table td:last-child {
+      border-right: none;
+    }
+
+    th.tbl-th {
+      background: #E8EAED;
+      color: var(--text-main);
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+      padding: 9px 12px;
+      border-bottom: 2px solid var(--border);
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      white-space: nowrap;
+      vertical-align: middle;
+    }
+    th.col-right { text-align: center !important; min-width: 105px; }
+
+    /* FILAS DE PENETRACIÓN Y COBERTURA (PÁGINA 1) */
+    tr.row-penetration {
+      background: #F0FDF4;
+      border-bottom: 1px solid #DCFCE7;
+      font-weight: 500;
+    }
+    tr.row-penetration:hover { background: #E6F9EE; }
+    .badge-penetration {
+      background: #CCFBF1;
+      color: #0F766E;
+      font-size: 10px;
+      font-weight: 600;
+      padding: 2px 6px;
+      border-radius: 4px;
+      margin-right: 6px;
+    }
+    tr.row-covered-sub {
+      background: #F9FAFB;
+      border-bottom: 1px solid #E5E7EB;
+      font-weight: 400;
+    }
+    tr.row-covered-sub:hover { background: #F3F4F6; }
+
+    /* FILA TOTAL GENERAL (DESTACADA ARRIBA DE TODO EN PÁGINA 1) */
+    tr.row-total {
+      background: var(--row-total-bg);
+      font-weight: 600;
+      border-top: 2px solid var(--border);
+      border-bottom: 2px solid #CBD5E1;
+      user-select: none;
+    }
+    tr.row-total:hover { background: #DFE1E5; }
+    td.cell-total-title {
+      padding: 10px 14px;
+      color: #111827;
+      white-space: nowrap;
+      font-weight: 600;
+    }
+
+    /* FILA L1 */
+    tr.row-l1 {
+      background: var(--row-l1-bg);
+      font-weight: 600;
+      cursor: pointer;
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      user-select: none;
+    }
+    tr.row-l1:hover { background: var(--row-l1-hover); }
+    td.cell-l1-title {
+      padding: 9px 14px;
+      color: var(--text-main);
+      white-space: nowrap;
+      font-weight: 600;
+    }
+    .cell-l1-box {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .l1-title-text {
+      font-size: 12.5px;
+      font-weight: 600;
+      color: #202124;
+    }
+    .toggle-icon {
+      display: inline-block;
+      width: 17px;
+      height: 17px;
+      line-height: 15px;
+      text-align: center;
+      border-radius: 3px;
+      background: #FFFFFF;
+      border: 1px solid var(--border);
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-muted);
+    }
+
+    /* FILA L2 */
+    tr.row-l2 {
+      background: var(--row-l2-bg);
+      border-bottom: 1px solid #ECEFF1;
+      font-weight: 400;
+    }
+    tr.row-l2:nth-child(even) { background: #F8FAFC; }
+    tr.row-l2:hover { background: #F1F5F9; }
+    td.cell-l2-title {
+      padding: 7px 14px 7px 40px;
+      color: #475569;
+      white-space: nowrap;
+      font-size: 12px;
+      font-weight: 400;
+    }
+    .l2-subarrow { color: #94A3B8; margin-right: 6px; font-weight: 500; }
+
+    /* PÁGINA 2: TABLA POR PAÍS */
+    tr.row-country {
+      background: #FFFFFF;
+      border-bottom: 1px solid #ECEFF1;
+      font-weight: 400;
+    }
+    tr.row-country:nth-child(even) { background: #F8FAFC; }
+    tr.row-country:hover { background: #F1F5F9; }
+    tr.row-latam {
+      background: var(--row-latam-bg) !important;
+      font-weight: 600 !important;
+      border-top: 2px solid var(--border);
+      border-bottom: 2px solid var(--border);
+    }
+    td.cell-country-title {
+      padding: 8px 14px;
+      font-weight: 500;
+      color: var(--text-main);
+      white-space: nowrap;
+    }
+    .badge-mom {
+      display: inline-block;
+      padding: 2px 7px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      text-align: center !important;
+    }
+    .badge-mom.positive { background: var(--positive-bg); color: var(--positive); }
+    .badge-mom.negative { background: var(--negative-bg); color: var(--negative); }
+    .badge-mom.neutral  { background: #F1F3F4; color: var(--text-muted); }
+
+    td.cell-num {
+      padding: 8px 12px;
+      text-align: center !important;
+      white-space: nowrap;
+      font-variant-numeric: tabular-nums;
+      font-weight: 400;
+      vertical-align: middle;
+    }
+    td.cell-center {
+      padding: 8px 12px;
+      text-align: center !important;
+      white-space: nowrap;
+      font-weight: 400;
+      vertical-align: middle;
+    }
+
+    /* BADGES DE UNIDADES DE NEGOCIO */
+    .badge-business {
+      display: inline-block;
+      padding: 2px 7px;
+      border-radius: 4px;
+      font-size: 10.5px;
+      font-weight: 700;
+      margin-right: 6px;
+      letter-spacing: 0.2px;
+    }
+    .badge-market   { background: #FCE8E6; color: #C5221F; }
+    .badge-aaa      { background: #FEF7E0; color: #B06000; }
+    .badge-platform { background: #E6F4EA; color: #137333; }
+    .badge-total    { background: #E0E7FF; color: #3730A3; }
+
+    /* TOOLTIP / VENTANA EMERGENTE EN HOVER */
+    .has-tooltip {
+      position: relative;
+      cursor: help;
+      text-decoration: underline dotted #9AA0A6;
+    }
+    .has-tooltip:hover::after {
+      content: attr(data-tooltip);
+      position: absolute;
+      left: 100%;
+      top: 50%;
+      transform: translateY(-50%);
+      margin-left: 12px;
+      background: #1F2937;
+      color: #FFFFFF;
+      padding: 7px 12px;
+      border-radius: 6px;
+      font-size: 11.5px;
+      font-weight: 400;
+      line-height: 1.35;
+      white-space: normal;
+      width: max-content;
+      max-width: 330px;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.2);
+      z-index: 9999;
+      pointer-events: none;
+    }
+
+    /* PÁGINA 3: TABLA DE GLOSARIO */
+    .glossary-table th { background: #374151; color: #FFFFFF; font-weight: 600; padding: 10px 14px; font-size: 12px; }
+    .glossary-table td { padding: 11px 14px; border-bottom: 1px solid var(--border); font-size: 12.5px; vertical-align: top; }
+    .glossary-table tr:nth-child(even) { background: #F9FAFB; }
+    .l1-badge-tag { background: #E5E7EB; color: #1F2937; font-weight: 700; padding: 3px 8px; border-radius: 4px; display: inline-block; }
+    .top-badge-tag { background: #CCFBF1; color: #0F766E; font-weight: 700; padding: 3px 8px; border-radius: 4px; display: inline-block; }
+
+    /* LOADING SPINNER */
+    .loading-overlay {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(255,255,255,0.7);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 999;
+      display: none;
+    }
+    .spinner {
+      width: 38px; height: 38px;
+      border: 3px solid #E8EAED;
+      border-top-color: var(--primary);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+
+  <div class="loading-overlay" id="loading">
+    <div class="spinner"></div>
+  </div>
+
+  <header>
+    <div class="brand">
+      <div class="brand-title" style="font-size: 14.5px; font-weight: 800; letter-spacing: -0.2px; color: var(--text-main);">User 360 Report</div>
+    </div>
+
+    <!-- TABS PRINCIPALES -->
+    <nav class="nav-tabs">
+      <button class="nav-tab active" id="btnTab1" onclick="switchTab('tab1')">1. Matriz</button>
+      <button class="nav-tab" id="btnTab2" onclick="switchTab('tab2')">2. Desglose País</button>
+      <button class="nav-tab" id="btnTab3" onclick="switchTab('tab3')">Glosario</button>
+      <button class="nav-tab" id="btnTab4" onclick="switchTab('tab4')" style="display: none; background: #FEF3C7; color: #B45309; font-weight: 700;">Admin</button>
+    </nav>
+
+    <!-- ESTADO CON CÍRCULO VERDE ANIMADO Y CONTADOR DE BYTES -->
+    <div class="live-status" id="liveStatusContainer">
+      <span class="live-dot"></span>
+      <span id="statusInfo">BigQuery</span>
+      <span class="bytes-counter" id="lblBytesAcumulados" title="Datos escaneados por BigQuery este mes">0 MB este mes</span>
+    </div>
+  </header>
+
+  <div class="container">
+
+    <!-- BARRA DE FILTROS GLOBALES CON AUTO-REFRESH -->
+    <div class="filter-card" id="globalFiltersCard">
+      <div class="filter-group">
+        <label class="filter-label" for="selMes">Rango Temporal</label>
+        <select class="filter-select" id="selMes" onchange="aplicarFiltros()">
+          <option value="LAST_6" selected>Ultimos 6 Meses</option>
+          <option value="LAST_12">Ultimos 12 Meses</option>
+          <option value="ALL">Todo desde 2025</option>
+        </select>
+      </div>
+
+      <!-- Selector de País (Solo en Tab 1) -->
+      <div class="filter-group" id="grpFiltroPais">
+        <label class="filter-label" for="selPais">Pais (Matriz)</label>
+        <select class="filter-select" id="selPais" onchange="renderMatriz()"></select>
+      </div>
+
+      <!-- Selector de Unidades de Negocio con Nombres Oficiales -->
+      <div class="filter-group">
+        <label class="filter-label" for="selNegocio">Unidad de Negocio</label>
+        <select class="filter-select" id="selNegocio" onchange="onNegocioChange()">
+          <option value="Market" selected>Market (dMart)</option>
+          <option value="AAA">AAA</option>
+          <option value="Platform">Plataforma Food</option>
+          <option value="ALL">PeYa total</option>
+        </select>
+      </div>
+
+      <div class="filter-group">
+        <label class="filter-label" for="selDY">Double Ya</label>
+        <select class="filter-select" id="selDY" onchange="aplicarFiltros()">
+          <option value="ALL">Todos (DY)</option>
+        </select>
+      </div>
+
+      <div class="filter-group">
+        <label class="filter-label" for="selUF">Ultra Fresh</label>
+        <select class="filter-select" id="selUF" onchange="aplicarFiltros()">
+          <option value="ALL" selected>Todos</option>
+          <option value="UF">UF</option>
+          <option value="No UF">No UF</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- ========================================================================= -->
+    <!-- PÁGINA 1: MATRIZ CICLO DE VIDA (L1 ➔ L2 MES A MES) -->
+    <!-- ========================================================================= -->
+    <div id="viewTab1">
+      <!-- SELECTOR DE MÉTRICA EN PILLS -->
+      <div class="metric-ribbon-card">
+        <span class="metric-ribbon-label">Métrica Visualizada:</span>
+        <div class="metric-pills">
+          <button class="pill active" data-metrica="users_count" onclick="cambiarMetricaMatriz('users_count')">Usuarios Únicos</button>
+          <button class="pill" data-metrica="avg_actual_tenure" onclick="cambiarMetricaMatriz('avg_actual_tenure')">Avg. Actual Tenure (Racha)</button>
+          <button class="pill" data-metrica="avg_adoption_tenure" onclick="cambiarMetricaMatriz('avg_adoption_tenure')">Avg. Adoption Tenure (Antigüedad)</button>
+          <button class="pill" data-metrica="frequency" onclick="cambiarMetricaMatriz('frequency')">Frequency (Órdenes/User)</button>
+          <button class="pill" data-metrica="confirmed_orders" onclick="cambiarMetricaMatriz('confirmed_orders')">Confirmed Orders</button>
+          <button class="pill" data-metrica="units_sold" onclick="cambiarMetricaMatriz('units_sold')">Units Sold (Unidades)</button>
+          <button class="pill" data-metrica="basket_size" onclick="cambiarMetricaMatriz('basket_size')">Basket Size</button>
+          <button class="pill" data-metrica="net_sales_eur" onclick="cambiarMetricaMatriz('net_sales_eur')">Net Sales (EUR)</button>
+          <button class="pill" data-metrica="afv" onclick="cambiarMetricaMatriz('afv')">AFV (EUR Ticket)</button>
+          <button class="pill" data-metrica="customer_value" onclick="cambiarMetricaMatriz('customer_value')">Customer Value (AFV × Frec)</button>
+        </div>
+        <div id="channelFilterWarning" style="display: none; width: 100%; margin-top: 8px; padding: 7px 12px; background: #FEF3C7; border: 1px solid #FDE68A; border-radius: 6px; font-size: 11.5px; color: #92400E; align-items: center; gap: 8px;"></div>
+      </div>
+
+      <div class="content-card" style="margin-top: 14px;">
+        <div class="toolbar-bar">
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <div class="toolbar-title">Evolución Mes a Mes</div>
+            <span class="badge-indicator" id="lblMetricaMatrizActiva">Usuarios Únicos</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 4px;">
+            <button class="btn-ghost-mini" id="btnToggleSalesFmt" onclick="toggleCompactSales()" title="Alternar formato de ventas">€ K/M</button>
+            <span style="color: #E2E8F0; font-size: 11px;">|</span>
+            <button class="btn-ghost-mini" onclick="toggleAllL1(true)">Expandir Todo</button>
+            <button class="btn-ghost-mini" onclick="toggleAllL1(false)">Colapsar Todo</button>
+            <span style="color: #E2E8F0; font-size: 11px;">|</span>
+            <button class="btn-ghost-mini" onclick="exportarCSVMatriz()" title="Descargar CSV">CSV ↓</button>
+          </div>
+        </div>
+
+        <div class="table-container">
+          <table class="data-table" id="tblMatriz">
+            <thead id="tblHeaderMatriz">
+              <tr><th class="tbl-th" style="min-width: 320px;">Ciclo de Vida (L1 ➔ L2)</th></tr>
+            </thead>
+            <tbody id="tblMatrizBody">
+              <tr><td style="padding: 40px; text-align: center; color: var(--text-muted);">Cargando matriz...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========================================================================= -->
+    <!-- PÁGINA 2: DESGLOSE POR PAÍS (SELECTOR DUAL PROLIJO L1 / L2 Y TOP MÉTRICAS) -->
+    <!-- ========================================================================= -->
+    <div id="viewTab2" style="display: none;">
+      <!-- SELECTOR DUAL PROLIJO: TOP MÉTRICAS ARRIBA, L1 AL MEDIO Y L2 DEBAJO -->
+      <div class="dual-selector-card">
+        <!-- Fila 1: Métricas Top de Penetración y Cobertura (ARRIBA DE TODO) -->
+        <div class="selector-row">
+          <span class="selector-title-tag">Métricas de Penetración:</span>
+          <div class="pills-group" id="pillsGroupTop"></div>
+        </div>
+
+        <!-- Fila 2: Nivel Macro L1 -->
+        <div class="selector-row" style="border-top: 1px dashed var(--border); padding-top: 10px;">
+          <span class="selector-title-tag">Ciclo de Vida (L1):</span>
+          <div class="pills-group" id="pillsGroupL1"></div>
+        </div>
+
+        <!-- Fila 3: Subtipo L2 correspondiente -->
+        <div class="selector-row" style="border-top: 1px dashed var(--border); padding-top: 10px;" id="rowSelectorL2">
+          <span class="selector-title-tag">Subtipo (L2):</span>
+          <div class="pills-group" id="pillsGroupL2"></div>
+        </div>
+      </div>
+
+      <div class="content-card" style="margin-top: 14px;">
+        <div class="toolbar-bar">
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <div class="toolbar-title" id="lblTituloTablaPais">Platform Maus penetration %</div>
+            <span class="badge-indicator" id="lblSubtituloTablaPais">Desglose por País</span>
+          </div>
+          <button class="btn-ghost-mini" onclick="exportarCSVPais()" title="Descargar CSV">CSV ↓</button>
+        </div>
+
+        <div class="table-container">
+          <table class="data-table" id="tblPais">
+            <thead id="tblHeaderPais">
+              <tr>
+                <th class="tbl-th" style="min-width: 220px;">Metrica / Fecha</th>
+                <th class="tbl-th col-right">MoM %</th>
+                <th class="tbl-th col-right">Target</th>
+                <th class="tbl-th col-right">vs Target</th>
+              </tr>
+            </thead>
+            <tbody id="tblPaisBody">
+              <tr><td colspan="8" style="padding: 40px; text-align: center; color: var(--text-muted);">Cargando países...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========================================================================= -->
+    <!-- PÁGINA 3: GLOSARIO DE TAXONOMÍA (L1, L2 MARKET, L2 AAA, REGLAS) -->
+    <!-- ========================================================================= -->
+    <div id="viewTab3" style="display: none;">
+      <div class="content-card">
+        <div class="toolbar-bar">
+          <div>
+            <div class="toolbar-title">Glosario Oficial de Taxonomía y Métricas de Penetración</div>
+            <div style="font-size: 11.5px; color: var(--text-muted); margin-top: 2px;">
+              Reglas oficiales de clasificación para Market (dMart), AAA, Plataforma Food y PeYa total
+            </div>
+          </div>
+        </div>
+
+        <div class="table-container">
+          <table class="data-table glossary-table">
+            <thead>
+              <tr>
+                <th style="min-width: 170px;">Métrica / Nivel</th>
+                <th style="min-width: 210px;">L2 Market (dMart) / Fórmula</th>
+                <th style="min-width: 210px;">L2 AAA / Tipo</th>
+                <th>Regla Oficial de Clasificación</th>
+              </tr>
+            </thead>
+            <tbody>
+              <!-- TOP MÉTRICAS DE COBERTURA Y PENETRACIÓN -->
+              <tr style="background: #F0FDF4;">
+                <td><span class="top-badge-tag">Platform Maus penetration %</span></td>
+                <td><strong>Dmart MAUs / PeYa MAUs</strong></td>
+                <td>Ratio Calculado</td>
+                <td>Penetración de clientes activos de Market (dMart) sobre el universo total de clientes activos de la aplicación (Plataforma Food / PeYa total).</td>
+              </tr>
+              <tr style="background: #F0FDF4;">
+                <td><span class="top-badge-tag">Covered MAUs %</span></td>
+                <td><strong>Covered MAUs / PeYa MAUs</strong></td>
+                <td>Ratio Calculado</td>
+                <td>Porcentaje de usuarios de la plataforma que se encuentran cubiertos por el polígono de tiendas Market (dMart) (Footprint coverage).</td>
+              </tr>
+              <tr style="background: #F0FDF4;">
+                <td><span class="top-badge-tag">Covered MAUs</span></td>
+                <td><strong>COUNT(DISTINCT customer_id)</strong></td>
+                <td>Volumen Base</td>
+                <td>Cantidad total de usuarios activos de la plataforma que viven en zonas geográficas con cobertura de entrega de tiendas Market (dMart).</td>
+              </tr>
+              <tr style="background: #F0FDF4;">
+                <td><span class="top-badge-tag">Covered MAUs penetration %</span></td>
+                <td><strong>Dmart MAUs / Covered MAUs</strong></td>
+                <td>Ratio Calculado</td>
+                <td>Penetración de Market (dMart) sobre los usuarios que efectivamente tienen cobertura de entrega de darkstores.</td>
+              </tr>
+
+              <!-- NEVER ACTIVE -->
+              <tr>
+                <td><span class="l1-badge-tag">Never Active</span></td>
+                <td>-</td>
+                <td>-</td>
+                <td>Usuario registrado en la app que jamás realizó una compra en el negocio.</td>
+              </tr>
+
+              <!-- NEW USER -->
+              <tr>
+                <td rowspan="4"><span class="l1-badge-tag">New User</span></td>
+                <td><strong>App Adoption</strong></td>
+                <td><strong>App Adoption</strong></td>
+                <td>Es su primera orden en la unidad de negocio y en la aplicación.</td>
+              </tr>
+              <tr>
+                <td><strong>DY Adoption</strong></td>
+                <td><strong>DY Adoption</strong></td>
+                <td>Es su primera orden en la unidad de negocio y la orden fue realizada mediante DY.</td>
+              </tr>
+              <tr>
+                <td><strong>Dmart Adoption</strong></td>
+                <td><strong>AAA Adoption</strong></td>
+                <td>Es su primera orden en la unidad de negocio, pero no en AAA / Market (dMart) respectivamente.</td>
+              </tr>
+              <tr>
+                <td><strong>AAA Adoption</strong></td>
+                <td><strong>Dmart Adoption</strong></td>
+                <td>Es su primera orden en la unidad de negocio, pero ya tenía órdenes en AAA / Market (dMart).</td>
+              </tr>
+
+              <!-- M1 RETURN -->
+              <tr>
+                <td rowspan="3"><span class="l1-badge-tag">M1 Return</span></td>
+                <td><strong>M1 Return Users - Dmart</strong></td>
+                <td><strong>M1 Return Users - AAA</strong></td>
+                <td>En el mes 0 compró en la unidad de negocio y en el mes 1 vuelve a comprar en la misma vertical.</td>
+              </tr>
+              <tr>
+                <td><strong>M1 Dmart DY</strong></td>
+                <td><strong>M1 AAA DY</strong></td>
+                <td>En el mes 0 compró por primera vez en la vertical mediante una orden DY y en el mes 1 volvió a comprar en la vertical con DY.</td>
+              </tr>
+              <tr>
+                <td><strong>M1 Dmart DY Converted</strong></td>
+                <td><strong>M1 AAA DY Converted</strong></td>
+                <td>En el mes 0 compró por primera vez en la vertical mediante una orden DY y en el mes 1 volvió a comprar sin DY.</td>
+              </tr>
+
+              <!-- REACTIVATION -->
+              <tr>
+                <td rowspan="4"><span class="l1-badge-tag">Reactivation</span></td>
+                <td><strong>Occasional Reactivation</strong></td>
+                <td><strong>Occasional Reactivation</strong></td>
+                <td>Compró este mes, estuvo inactivo solo el mes pasado (compró hace 2 meses).</td>
+              </tr>
+              <tr>
+                <td><strong>Warm Reactivation</strong></td>
+                <td><strong>Warm Reactivation</strong></td>
+                <td>Estuvo inactivo de 2 a 4 meses (su última compra fue hace 3 a 5 meses).</td>
+              </tr>
+              <tr>
+                <td><strong>True Reactivation</strong></td>
+                <td><strong>True Reactivation</strong></td>
+                <td>Estuvo inactivo 5 meses o más (su última compra fue hace 6 meses o más).</td>
+              </tr>
+              <tr>
+                <td><strong>DY Reactivation</strong></td>
+                <td><strong>DY Reactivation</strong></td>
+                <td>Reactivado en Market (dMart) únicamente con compras Double Ya.</td>
+              </tr>
+
+              <!-- RE-ORDER -->
+              <tr>
+                <td rowspan="5"><span class="l1-badge-tag">Re-Order</span></td>
+                <td><strong>Re-Order Occasional</strong></td>
+                <td><strong>Re-Order Occasional</strong></td>
+                <td>Reactivado ocasional que volvió a comprar (lleva 2 meses seguidos comprando).</td>
+              </tr>
+              <tr>
+                <td><strong>Re-Order Warm</strong></td>
+                <td><strong>Re-Order Warm</strong></td>
+                <td>Reactivado tibio (2 a 4 meses inactivo) que volvió a comprar en su segundo mes.</td>
+              </tr>
+              <tr>
+                <td><strong>Re-Order True</strong></td>
+                <td><strong>Re-Order True</strong></td>
+                <td>Reactivado profundo (5+ meses inactivo) que volvió a comprar en su segundo mes.</td>
+              </tr>
+              <tr>
+                <td><strong>Re-Order DY</strong></td>
+                <td><strong>Re-Order DY</strong></td>
+                <td>Se reactivó por Double Ya y en su segundo mes volvió a comprar solo con Double Ya.</td>
+              </tr>
+              <tr>
+                <td><strong>Re-Order DY Converted</strong></td>
+                <td><strong>Re-Order DY Converted</strong></td>
+                <td>Se reactivó por Double Ya y en su segundo mes compró canasta completa (sin Double Ya).</td>
+              </tr>
+
+              <!-- RECURRING RETURN -->
+              <tr>
+                <td rowspan="3"><span class="l1-badge-tag">Recurring Return</span></td>
+                <td><strong>Recent Recurring Return</strong></td>
+                <td><strong>Recent Recurring Return</strong></td>
+                <td>Lleva 3 meses seguidos comprando sin parar (hábito recién consolidado).</td>
+              </tr>
+              <tr>
+                <td><strong>Old Recurring Return</strong></td>
+                <td><strong>Old Recurring Return</strong></td>
+                <td>Lleva de 4 a 12 meses seguidos comprando sin parar (hábito sólido).</td>
+              </tr>
+              <tr>
+                <td><strong>Royal Recurring Return</strong></td>
+                <td><strong>Royal Recurring Return</strong></td>
+                <td>Lleva 13 meses o más seguidos comprando sin parar (cliente VIP / Heavy User).</td>
+              </tr>
+
+              <!-- CHURNED -->
+              <tr>
+                <td rowspan="3"><span class="l1-badge-tag">Churned</span></td>
+                <td><strong>Recently Churn</strong></td>
+                <td><strong>Recently Churn</strong></td>
+                <td>Lleva 1 o 2 meses sin comprar (riesgo temprano).</td>
+              </tr>
+              <tr>
+                <td><strong>Churn > 3 Months</strong></td>
+                <td><strong>Churn > 3 Months</strong></td>
+                <td>Lleva 3 a 5 meses sin comprar (riesgo medio).</td>
+              </tr>
+              <tr>
+                <td><strong>Churn > 6 Months</strong></td>
+                <td><strong>Churn > 6 Months</strong></td>
+                <td>Lleva 6 meses o más sin comprar (usuario dormido).</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========================================================================= -->
+    <!-- PÁGINA 4: ANALYTICS Y AUDITORÍA DE USO (SOLO VISIBLE PARA ADMINISTRADOR) -->
+    <!-- Apalancado en la arquitectura oficial de 3_Analytics.html -->
+    <!-- ========================================================================= -->
+    <div id="viewTab4" style="display: none;">
+      <!-- CABECERA DE ANALYTICS -->
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+        <div>
+          <div style="font-size: 18px; font-weight: 800; color: var(--text-main);">
+            Analytics &bull; <span style="font-size: 13px; font-weight: 600; color: var(--text-muted);">Auditoría de Consultas y Datos BQ por Usuario</span>
+          </div>
+          <div style="font-size: 11px; color: var(--text-muted);" id="anAsOf">Actualizado: -</div>
+        </div>
+        <div style="display: flex; gap: 8px;">
+          <button class="btn btn-outline" onclick="cargarAnalytics()">↻ Recargar Métricas</button>
+        </div>
+      </div>
+
+      <!-- KPI CARDS APALANCADAS EN 3_ANALYTICS -->
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 16px;">
+        <div style="background: #FFFFFF; border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px;">
+          <div style="font-size: 10.5px; font-weight: 800; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.4px;">Total Consultas</div>
+          <div style="font-size: 26px; font-weight: 900; color: #111827; margin-top: 2px;" id="anKpiQueries">—</div>
+          <div style="font-size: 11px; color: #10B981; font-weight: 600;" id="anKpiTodayQueries">0 hoy</div>
+        </div>
+        <div style="background: #FFFFFF; border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px;">
+          <div style="font-size: 10.5px; font-weight: 800; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.4px;">Usuarios Únicos</div>
+          <div style="font-size: 26px; font-weight: 900; color: #7C3AED; margin-top: 2px;" id="anKpiUsers">—</div>
+          <div style="font-size: 11px; color: var(--text-muted);">con actividad registrada</div>
+        </div>
+        <div style="background: #FFFFFF; border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px;">
+          <div style="font-size: 10.5px; font-weight: 800; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.4px;">Datos BQ Consumidos</div>
+          <div style="font-size: 26px; font-weight: 900; color: #EA1D2C; margin-top: 2px;" id="anKpiBytes">—</div>
+          <div style="font-size: 11px; color: var(--text-muted);">escaneados en total</div>
+        </div>
+        <div style="background: #FFFFFF; border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px;">
+          <div style="font-size: 10.5px; font-weight: 800; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.4px;">Promedio por Usuario</div>
+          <div style="font-size: 26px; font-weight: 900; color: #2563EB; margin-top: 2px;" id="anKpiAvgBytes">—</div>
+          <div style="font-size: 11px; color: var(--text-muted);">datos / usuario activo</div>
+        </div>
+      </div>
+
+      <!-- CARD 1: MATRIZ USUARIOS × PERÍODO (DÍA / SEMANA / MES) -->
+      <div class="content-card" style="margin-bottom: 16px;">
+        <div class="toolbar-bar">
+          <div style="font-size: 13.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.3px;">
+            Consultas y Consumo por Usuario × Período
+          </div>
+          <div style="display: flex; align-items: center; gap: 10px; margin-left: auto; flex-wrap: wrap;">
+            <input type="text" id="anUserSearch" oninput="renderAnalyticsPeriod()" placeholder="Filtrar usuario..." class="filter-select" style="width: 170px; height: 30px;" />
+            <select id="anPeriodMode" onchange="renderAnalyticsPeriod()" class="filter-select" style="width: 160px; height: 30px;">
+              <option value="queries" selected>Ver: Consultas</option>
+              <option value="bytes">Ver: Datos BQ (MB)</option>
+            </select>
+            <div class="seg" id="anSegGran" style="display: flex; gap: 2px; background: #E8EAED; border-radius: 6px; padding: 2px;">
+              <button data-g="day" id="btnGranDay" class="pill-sub active" style="height: 26px; padding: 0 10px;" onclick="cambiarGranAnalytics('day')">Día</button>
+              <button data-g="week" id="btnGranWeek" class="pill-sub" style="height: 26px; padding: 0 10px;" onclick="cambiarGranAnalytics('week')">Semana</button>
+              <button data-g="month" id="btnGranMonth" class="pill-sub" style="height: 26px; padding: 0 10px;" onclick="cambiarGranAnalytics('month')">Mes</button>
+            </div>
+          </div>
+        </div>
+        <div class="table-container" id="anPeriodContainer">
+          <div style="padding: 30px; text-align: center; color: var(--text-muted);">Cargando telemetría...</div>
+        </div>
+        <div id="anPeriodPager" style="display: flex; justify-content: flex-end; align-items: center; gap: 10px; padding: 10px 16px; border-top: 1px solid var(--border);"></div>
+      </div>
+
+      <!-- CARD 2: RESUMEN TOTAL DE USUARIOS Y CONSUMO DE DATOS -->
+      <div class="content-card" style="margin-bottom: 16px;">
+        <div class="toolbar-bar">
+          <div style="font-size: 13.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.3px;">
+            Resumen General de Usuarios y Consumo de Datos (Nivel Total)
+          </div>
+        </div>
+        <div class="table-container">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th class="tbl-th" style="width: 32%;">Usuario (Email)</th>
+                <th class="tbl-th col-right">Total Consultas</th>
+                <th class="tbl-th col-right">Datos BQ Consumidos</th>
+                <th class="tbl-th col-right">% del Total BQ</th>
+                <th class="tbl-th" style="width: 22%;">Métrica Más Buscada</th>
+                <th class="tbl-th col-right">Último Acceso</th>
+              </tr>
+            </thead>
+            <tbody id="anUsersBody">
+              <tr><td colspan="6" style="padding: 20px; text-align: center; color: var(--text-muted);">Cargando usuarios...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- CARD 3: LO MÁS CONSULTADO (MÉTRICAS, PAÍSES, NEGOCIOS) -->
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 14px; margin-bottom: 16px;">
+        <!-- Top Métricas -->
+        <div class="content-card">
+          <div class="toolbar-bar">
+            <div style="font-size: 12.5px; font-weight: 800; text-transform: uppercase;">Top 10 Métricas Más Consultadas</div>
+          </div>
+          <div class="table-container">
+            <table class="data-table">
+              <thead><tr><th class="tbl-th">Métrica / Segmento</th><th class="tbl-th col-right">Consultas</th></tr></thead>
+              <tbody id="anTopMetricsBody"></tbody>
+            </table>
+          </div>
+        </div>
+        <!-- Top Países -->
+        <div class="content-card">
+          <div class="toolbar-bar">
+            <div style="font-size: 12.5px; font-weight: 800; text-transform: uppercase;">Top Países Más Consultados</div>
+          </div>
+          <div class="table-container">
+            <table class="data-table">
+              <thead><tr><th class="tbl-th">País</th><th class="tbl-th col-right">Consultas</th></tr></thead>
+              <tbody id="anTopCountriesBody"></tbody>
+            </table>
+          </div>
+        </div>
+        <!-- Consultas por Negocio -->
+        <div class="content-card">
+          <div class="toolbar-bar">
+            <div style="font-size: 12.5px; font-weight: 800; text-transform: uppercase;">Consultas por Negocio</div>
+          </div>
+          <div class="table-container">
+            <table class="data-table">
+              <thead><tr><th class="tbl-th">Unidad de Negocio</th><th class="tbl-th col-right">Consultas</th></tr></thead>
+              <tbody id="anTopBusinessesBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- CARD 4: REGISTRO DE AUDITORÍA EN TIEMPO REAL -->
+      <div class="content-card">
+        <div class="toolbar-bar">
+          <div style="font-size: 13.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.3px;">
+            Auditoría en Vivo &bull; Últimas Consultas Registradas
+          </div>
+        </div>
+        <div class="table-container">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th class="tbl-th" style="width: 140px;">Fecha / Hora</th>
+                <th class="tbl-th" style="width: 220px;">Usuario</th>
+                <th class="tbl-th">Acción</th>
+                <th class="tbl-th">Pestaña</th>
+                <th class="tbl-th">País</th>
+                <th class="tbl-th">Negocio</th>
+                <th class="tbl-th">Métrica</th>
+                <th class="tbl-th col-right">Datos BQ</th>
+              </tr>
+            </thead>
+            <tbody id="anRecentLogsBody">
+              <tr><td colspan="8" style="padding: 20px; text-align: center; color: var(--text-muted);">Cargando logs...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    let globalResponse = null;
+    let expandedL1Set = new Set();
+    let metricaMatrizActual = 'users_count';
+    let currentTab = 'tab1';
+    let totalBytesAcumulados = 0;
+    let lastQueryBytes = 0;
+    let showCoveredAbsolutoMatriz = false; // Por defecto escondido debajo de Covered MAUs %
+
+    function toggleCoveredAbsolutoMatriz() {
+      showCoveredAbsolutoMatriz = !showCoveredAbsolutoMatriz;
+      renderMatriz();
+    }
+
+    // Estado del selector de Página 2
+    let selectedMetricaTopPais = 'TOP_PLATFORM_MAUS_PEN'; 
+    let selectedL1Pais = null;
+    let selectedL2Pais = 'TOTAL';
+
+    // Mapeo oficial de nombres de unidades de negocio
+    function getBusinessDisplayName(b) {
+      if (b === 'Market') return 'Market (dMart)';
+      if (b === 'AAA') return 'AAA';
+      if (b === 'Platform') return 'Plataforma Food';
+      if (b === 'ALL') return 'PeYa total';
+      return b;
+    }
+
+    function getBusinessBadgeClass(b) {
+      if (b === 'Market') return 'badge-market';
+      if (b === 'AAA') return 'badge-aaa';
+      if (b === 'Platform') return 'badge-platform';
+      return 'badge-total';
+    }
+
+    // DICCIONARIO DE DEFINICIONES PARA TOOLTIP EN HOVER
+    const GLOSARIO_DEFINICIONES = {
+      'CUSTOMER VALUE': 'Valor monetario promedio generado por cada usuario activo en el mes (Net Sales / Usuarios = AFV × Frecuencia).',
+      'UNITS SOLD': 'Cantidad total de unidades físicas de producto vendidas en órdenes confirmadas.',
+      'BASKET SIZE': 'Cantidad promedio de unidades vendidas por orden confirmada (Units Sold / Confirmed Orders).',
+      'AFV': 'Ticket promedio neto en EUR (Net Sales EUR / Confirmed Orders).',
+
+      'PLATFORM MAUS PENETRATION %': 'Penetración de Market (dMart) sobre el total de MAUs de la Plataforma (Dmart MAUs / PeYa MAUs).',
+      'COVERED MAUS %': 'Porcentaje de usuarios de la plataforma cubiertos por tiendas Market (dMart) (Covered MAUs / PeYa MAUs).',
+      'COVERED MAUS': 'Usuarios activos mensuales de la plataforma que viven en zonas con cobertura de entrega de tiendas Market (dMart).',
+      'COVERED MAUS PENETRATION %': 'Penetración de Market (dMart) sobre los usuarios que efectivamente tienen cobertura (Dmart MAUs / Covered MAUs).',
+
+      'NEW USER': 'Usuarios que realizaron su primera orden histórica en la unidad de negocio.',
+      'M1 RETURN': 'Usuarios que compraron en el mes 0 y vuelven a comprar en el mes inmediatamente posterior (M1).',
+      'REACTIVATION': 'Usuarios que volvieron a comprar tras al menos 1 mes de inactividad.',
+      'RE-ORDER': 'Usuarios reactivados que volvieron a comprar en su segundo mes consecutivo.',
+      'RECURRING RETURN': 'Usuarios recurrentes habituales con 3 o más meses seguidos comprando.',
+      'CHURNED': 'Usuarios que compraron en el pasado pero no realizaron ninguna orden en el mes analizado.',
+      'NEVER ACTIVE': 'Usuario registrado en la app que jamás realizó una compra en el negocio.',
+      'DMART MAUS': 'Monthly Active Users: Total de clientes con al menos 1 orden confirmada en el mes en Market (dMart).',
+      'PEYA MAUS': 'Monthly Active Users: Total de clientes con al menos 1 orden confirmada en el mes en AAA.',
+      'PLATAFORMA FOOD MAUS': 'Monthly Active Users: Total de clientes con al menos 1 orden confirmada en el mes en Plataforma Food.',
+      'PEYA TOTAL MAUS': 'Monthly Active Users: Total de clientes únicos con al menos 1 orden confirmada en PeYa total.',
+
+      'APP ADOPTION': 'Es su primera orden en la unidad de negocio y en la aplicación.',
+      'DY ADOPTION': 'Es su primera orden en la unidad de negocio y la orden fue realizada mediante DY.',
+      'DMART ADOPTION': 'Es su primera orden en la unidad de negocio, pero ya tenía órdenes previas en la app.',
+      'AAA ADOPTION': 'Es su primera orden en la unidad de negocio, pero ya tenía órdenes en AAA / Market (dMart).',
+      'M1 RETURN USERS - DMART': 'En el mes 0 compró en Market (dMart) y en el mes 1 vuelve a comprar en Market (dMart).',
+      'M1 RETURN USERS - AAA': 'En el mes 0 compró en AAA y en el mes 1 vuelve a comprar en AAA.',
+      'M1 DMART DY': 'En el mes 0 compró por primera vez en Market (dMart) con DY y en el mes 1 volvió a comprar con DY.',
+      'M1 DMART DY CONVERTED': 'En el mes 0 compró por primera vez en Market (dMart) con DY y en el mes 1 volvió a comprar sin DY.',
+      'M1 AAA DY': 'En el mes 0 compró en AAA con DY y en el mes 1 volvió a comprar con DY.',
+      'M1 AAA DY CONVERTED': 'En el mes 0 compró en AAA con DY y en el mes 1 volvió a comprar sin DY.',
+      'OCCASIONAL REACTIVATION': 'Compró este mes, estuvo inactivo solo el mes pasado (su última compra fue hace 2 meses).',
+      'WARM REACTIVATION': 'Estuvo inactivo de 2 a 4 meses (su última compra fue hace 3 a 5 meses).',
+      'TRUE REACTIVATION': 'Estuvo inactivo 5 meses o más (su última compra fue hace 6 meses o más).',
+      'DY REACTIVATION': 'Reactivado en Market (dMart) únicamente con compras Double Ya.',
+      'RE-ORDER OCCASIONAL': 'Reactivado ocasional que volvió a comprar (lleva 2 meses seguidos comprando).',
+      'RE-ORDER WARM': 'Reactivado tibio (2 a 4 meses inactivo) que volvió a comprar en su segundo mes.',
+      'RE-ORDER TRUE': 'Reactivado profundo (5+ meses inactivo) que volvió a comprar en su segundo mes.',
+      'RE-ORDER DY': 'Se reactivó por Double Ya y en su segundo mes volvió a comprar solo con Double Ya.',
+      'RE-ORDER DY CONVERTED': 'Se reactivó por Double Ya y en su segundo mes compró canasta completa (sin Double Ya).',
+      'RECENT RECURRING RETURN': 'Lleva 3 meses seguidos comprando sin parar (hábito recién consolidado).',
+      'OLD RECURRING RETURN': 'Lleva de 4 a 12 meses seguidos comprando sin parar (hábito sólido).',
+      'ROYAL RECURRING RETURN': 'Lleva 13 meses o más seguidos comprando sin parar (cliente VIP / Heavy User).',
+      'RECENTLY CHURN': 'Lleva 1 o 2 meses sin comprar (riesgo temprano).',
+      'CHURN > 3 MONTHS': 'Lleva 3 a 5 meses sin comprar (riesgo medio).',
+      'CHURN > 6 MONTHS': 'Lleva 6 meses o más sin comprar (usuario dormido).'
+    };
+
+    function obtenerTooltip(texto) {
+      if (!texto) return '';
+      const clean = texto.toUpperCase().replace(/\s*-\s*(DMART|AAA|PLATAFORMA FOOD|PEYA TOTAL)\s*$/i, '').trim();
+      return GLOSARIO_DEFINICIONES[clean] || GLOSARIO_DEFINICIONES[texto.toUpperCase().trim()] || '';
+    }
+
+    // ORDEN ESTRICTO DE L1
+    const L1_ORDER = [
+      'NEW USER',
+      'M1 RETURN',
+      'REACTIVATION',
+      'RE-ORDER',
+      'RECURRING RETURN',
+      'CHURNED',
+      'NEVER ACTIVE'
+    ];
+
+    // ORDEN ESTRICTO DE L2 (De menor a mayor tiempo)
+    const L2_ORDER_WEIGHTS = {
+      'APP ADOPTION': 1, 'DY ADOPTION': 2, 'DMART ADOPTION': 3, 'AAA ADOPTION': 4,
+      'M1 RETURN USERS - DMART': 1, 'M1 RETURN USERS - AAA': 1,
+      'M1 DMART DY': 2, 'M1 DMART DY CONVERTED': 3,
+      'M1 AAA DY': 2, 'M1 AAA DY CONVERTED': 3,
+      'OCCASIONAL REACTIVATION': 1, 'WARM REACTIVATION': 2, 'TRUE REACTIVATION': 3, 'DY REACTIVATION': 4,
+      'RE-ORDER OCCASIONAL': 1, 'RE-ORDER WARM': 2, 'RE-ORDER TRUE': 3, 'RE-ORDER DY': 4, 'RE-ORDER DY CONVERTED': 5,
+      'RECENT RECURRING RETURN': 1, 'OLD RECURRING RETURN': 2, 'ROYAL RECURRING RETURN': 3,
+      'RECENTLY CHURN': 1, 'CHURN > 3 MONTHS': 2, 'CHURN > 6 MONTHS': 3,
+      '-': 1, 'NEVER ACTIVE': 1, 'OTROS': 99
+    };
+
+    const L2_BY_L1 = {
+      'NEW USER': ['APP ADOPTION', 'DY ADOPTION', 'DMART ADOPTION', 'AAA ADOPTION'],
+      'M1 RETURN': ['M1 RETURN USERS - DMART', 'M1 DMART DY', 'M1 DMART DY CONVERTED'],
+      'REACTIVATION': ['OCCASIONAL REACTIVATION', 'WARM REACTIVATION', 'TRUE REACTIVATION', 'DY REACTIVATION'],
+      'RE-ORDER': ['RE-ORDER OCCASIONAL', 'RE-ORDER WARM', 'RE-ORDER TRUE', 'RE-ORDER DY', 'RE-ORDER DY CONVERTED'],
+      'RECURRING RETURN': ['RECENT RECURRING RETURN', 'OLD RECURRING RETURN', 'ROYAL RECURRING RETURN'],
+      'CHURNED': ['RECENTLY CHURN', 'CHURN > 3 MONTHS', 'CHURN > 6 MONTHS'],
+      'NEVER ACTIVE': ['-']
+    };
+
+    const ORDEN_PAISES_OFICIAL = [
+      "Argentina",
+      "Bolivia",
+      "Chile",
+      "Republica Dominicana",
+      "Dominican Republic",
+      "Ecuador",
+      "El Salvador",
+      "Guatemala",
+      "Honduras",
+      "Nicaragua",
+      "Panama",
+      "Paraguay",
+      "Peru",
+      "Uruguay",
+      "LATAM"
+    ];
+
+    window.onload = function() {
+      cargarFiltrosIniciales();
+    };
+
+    function showLoading(show) {
+      document.getElementById('loading').style.display = show ? 'flex' : 'none';
+    }
+
+    let monthBytesTotal = 0;
+
+    function fmtBytes(bytes) {
+      if (!bytes || bytes === 0) return '0 KB';
+      if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(0) + ' KB';
+      return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+    }
+
+    function fmtBytesMes(bytes) {
+      if (!bytes || bytes === 0) return '0 MB este mes';
+      const mb = bytes / (1024 * 1024);
+      if (mb >= 1024) {
+        return (mb / 1024).toFixed(1) + ' GB este mes';
+      }
+      if (mb >= 1) {
+        return mb.toFixed(1) + ' MB este mes';
+      }
+      return (bytes / 1024).toFixed(0) + ' KB este mes';
+    }
+
+    function actualizarContadorBytes() {
+      const el = document.getElementById('lblBytesAcumulados');
+      if (el) el.textContent = fmtBytesMes(monthBytesTotal);
+    }
+
+    function switchTab(tabId) {
+      currentTab = tabId;
+      document.getElementById('btnTab1').classList.toggle('active', tabId === 'tab1');
+      document.getElementById('btnTab2').classList.toggle('active', tabId === 'tab2');
+      document.getElementById('btnTab3').classList.toggle('active', tabId === 'tab3');
+      const btn4 = document.getElementById('btnTab4');
+      if (btn4) btn4.classList.toggle('active', tabId === 'tab4');
+
+      document.getElementById('viewTab1').style.display = (tabId === 'tab1') ? 'block' : 'none';
+      document.getElementById('viewTab2').style.display = (tabId === 'tab2') ? 'block' : 'none';
+      document.getElementById('viewTab3').style.display = (tabId === 'tab3') ? 'block' : 'none';
+      const view4 = document.getElementById('viewTab4');
+      if (view4) view4.style.display = (tabId === 'tab4') ? 'block' : 'none';
+
+      document.getElementById('grpFiltroPais').style.display = (tabId === 'tab1') ? 'flex' : 'none';
+      document.getElementById('globalFiltersCard').style.display = (tabId === 'tab3' || tabId === 'tab4') ? 'none' : 'flex';
+
+      if (tabId === 'tab4') {
+        cargarAnalytics();
+      } else {
+        enviarTelemetria("Cambio Pestaña", (tabId === 'tab1' ? '1. Matriz' : (tabId === 'tab2' ? '2. Desglose País' : '3. Glosario')));
+      }
+
+      if (tabId === 'tab2') {
+        renderDualSelectorPills();
+        renderDesglosePais();
+      } else if (tabId === 'tab1') {
+        renderMatriz();
+      }
+    }
+
+    function onNegocioChange() {
+      aplicarFiltros();
+    }
+
+    function actualizarDisponibilidadMetricas() {
+      const dy = document.getElementById('selDY') ? document.getElementById('selDY').value : 'ALL';
+      const uf = document.getElementById('selUF') ? document.getElementById('selUF').value : 'ALL';
+      const negocio = document.getElementById('selNegocio') ? document.getElementById('selNegocio').value : 'Market';
+
+      const hasChannelFilter = (dy !== 'ALL' || uf !== 'ALL');
+      const isNotMarket = (negocio !== 'Market');
+
+      // 1. Métricas transaccionales que NO aplican a DY/UF puro porque reflejan compras globales
+      const metricasCanalIncompatibles = [
+        'confirmed_orders',
+        'units_sold',
+        'basket_size',
+        'net_sales_eur',
+        'afv',
+        'customer_value',
+        'frequency'
+      ];
+
+      // 2. Métricas exclusivas de Market (dMart)
+      const metricasSoloMarket = [
+        'units_sold',
+        'basket_size',
+        'net_sales_eur',
+        'afv',
+        'customer_value'
+      ];
+
+      let bloqueadas = new Set();
+
+      if (hasChannelFilter) {
+        metricasCanalIncompatibles.forEach(m => bloqueadas.add(m));
+      } else if (isNotMarket) {
+        metricasSoloMarket.forEach(m => bloqueadas.add(m));
+        if (negocio === 'AAA') {
+          bloqueadas.add('confirmed_orders');
+          bloqueadas.add('frequency');
+        }
+      }
+
+      // Si la métrica seleccionada quedó bloqueada, forzar regreso seguro a 'users_count'
+      if (bloqueadas.has(metricaMatrizActual)) {
+        metricaMatrizActual = 'users_count';
+        const lbl = document.getElementById('lblMetricaMatrizActiva');
+        if (lbl) lbl.textContent = 'Usuarios Únicos';
+      }
+
+      // Actualizar estado visual de las pills
+      document.querySelectorAll('.metric-pills .pill').forEach(btn => {
+        const m = btn.getAttribute('data-metrica');
+        const isBlocked = bloqueadas.has(m);
+        btn.classList.toggle('disabled-pill', isBlocked);
+        btn.classList.toggle('active', !isBlocked && m === metricaMatrizActual);
+
+        if (isBlocked) {
+          if (hasChannelFilter) {
+            btn.title = 'Bloqueado: Al filtrar por ' + (dy !== 'ALL' ? 'DY' : 'UF') + ' las órdenes y ventas no reflejan compras puras del canal. Métrica deshabilitada para evitar datos incorrectos.';
+          } else {
+            btn.title = 'Bloqueado: Métrica transaccional exclusiva de Market (dMart).';
+          }
+        } else {
+          btn.title = '';
+        }
+      });
+
+      // Banner informativo debajo de las pills
+      const banner = document.getElementById('channelFilterWarning');
+      if (banner) {
+        if (hasChannelFilter) {
+          banner.style.display = 'flex';
+          const canalTxt = (dy !== 'ALL' ? 'Double Ya: ' + dy : '') + (dy !== 'ALL' && uf !== 'ALL' ? ' | ' : '') + (uf !== 'ALL' ? 'Ultra Fresh: ' + uf : '');
+          banner.innerHTML = '🔒 <strong>Filtro de comportamiento activo (' + canalTxt + '):</strong> Las métricas de órdenes, canasta y ventas han sido bloqueadas porque reflejan compras globales de Market y no transacciones aisladas del canal. Se permite analizar la cohorte en <strong>Usuarios Únicos</strong> y <strong>Tenures</strong>.';
+        } else {
+          banner.style.display = 'none';
+        }
+      }
+    }
+
+    function cambiarMetricaMatriz(idMetrica) {
+      const btnTarget = document.querySelector(`.metric-pills .pill[data-metrica="${idMetrica}"]`);
+      if (btnTarget && btnTarget.classList.contains('disabled-pill')) {
+        return; // BLOQUEADO: No permite seleccionar datos incorrectos
+      }
+      metricaMatrizActual = idMetrica;
+      document.querySelectorAll('.metric-pills .pill').forEach(btn => {
+        if (btn.getAttribute('data-metrica') === idMetrica) {
+          btn.classList.add('active');
+          document.getElementById('lblMetricaMatrizActiva').textContent = btn.textContent;
+        } else {
+          btn.classList.remove('active');
+        }
+      });
+      enviarTelemetria("Cambio Métrica Matriz", "1. Matriz");
+      renderMatriz();
+    }
+
+    function formatMonthHeader(mesStr) {
+      if (!mesStr) return '';
+      const parts = String(mesStr).split('-');
+      if (parts.length >= 2) {
+        const year = parts[0].slice(2);
+        const monthNum = parseInt(parts[1], 10);
+        const monthNames = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+        if (monthNum >= 1 && monthNum <= 12) {
+          return `${monthNames[monthNum - 1]} '${year}`;
+        }
+      }
+      return mesStr;
+    }
+
+    function cargarFiltrosIniciales() {
+      showLoading(true);
+      google.script.run
+        .withSuccessHandler(function(res) {
+          if (res.isAdmin) {
+            const btn4 = document.getElementById('btnTab4');
+            if (btn4) btn4.style.display = 'inline-block';
+          }
+
+          if (res.monthBytesProcessed) {
+            monthBytesTotal = res.monthBytesProcessed;
+          } else if (res.todayBytesProcessed) {
+            monthBytesTotal = res.todayBytesProcessed;
+          } else if (res.bytesProcessed) {
+            monthBytesTotal += res.bytesProcessed;
+          }
+          actualizarContadorBytes();
+
+          const selMes = document.getElementById('selMes');
+          if (res.meses && res.meses.length > 0) {
+            const grp = document.createElement('optgroup');
+            grp.label = "Meses Individuales (2025-2026)";
+            res.meses.forEach(m => {
+              const opt = document.createElement('option');
+              opt.value = m;
+              opt.textContent = formatMonthHeader(m);
+              grp.appendChild(opt);
+            });
+            selMes.appendChild(grp);
+          }
+
+          const PAISES_VALIDOS_SET = new Set([
+            "LATAM", "Argentina", "Bolivia", "Chile", "Dominican Republic",
+            "Ecuador", "El Salvador", "Guatemala", "Honduras",
+            "Nicaragua", "Panama", "Paraguay", "Peru", "Uruguay"
+          ]);
+
+          const selPais = document.getElementById('selPais');
+          selPais.innerHTML = '';
+          res.paises.forEach(p => {
+            if (!PAISES_VALIDOS_SET.has(p)) return;
+            const opt = document.createElement('option');
+            opt.value = p;
+            opt.textContent = (p === 'Dominican Republic') ? 'Republica Dominicana' : p;
+            if (p === 'LATAM') opt.selected = true;
+            selPais.appendChild(opt);
+          });
+
+          const selDY = document.getElementById('selDY');
+          selDY.innerHTML = '';
+          const dySetSeen = new Set();
+          res.dy.forEach(d => {
+            const dClean = (d === 'Sin compras') ? 'No DY' : d;
+            if (dySetSeen.has(dClean)) return;
+            dySetSeen.add(dClean);
+            const opt = document.createElement('option');
+            opt.value = dClean;
+            opt.textContent = (dClean === 'ALL') ? 'Todos (DY)' : dClean;
+            selDY.appendChild(opt);
+          });
+
+          const selUF = document.getElementById('selUF');
+          selUF.innerHTML = '';
+          const ufOptions = [
+            { val: 'ALL', text: 'Todos' },
+            { val: 'UF', text: 'UF' },
+            { val: 'No UF', text: 'No UF' }
+          ];
+          ufOptions.forEach(optData => {
+            const opt = document.createElement('option');
+            opt.value = optData.val;
+            opt.textContent = optData.text;
+            if (optData.val === 'ALL') opt.selected = true;
+            selUF.appendChild(opt);
+          });
+
+          aplicarFiltros();
+        })
+        .withFailureHandler(function(err) {
+          showLoading(false);
+          alert('Error cargando filtros iniciales: ' + err.message);
+        })
+        .getFiltrosIniciales();
+    }
+
+    function aplicarFiltros() {
+      showLoading(true);
+      const filtros = {
+        mes: document.getElementById('selMes').value,
+        business: document.getElementById('selNegocio').value,
+        dy: document.getElementById('selDY').value,
+        uf: document.getElementById('selUF').value
+      };
+
+      google.script.run
+        .withSuccessHandler(function(res) {
+          showLoading(false);
+          globalResponse = res;
+
+          if (res.bytesProcessed) {
+            lastQueryBytes = res.bytesProcessed;
+            monthBytesTotal += res.bytesProcessed;
+            actualizarContadorBytes();
+          }
+
+          expandedL1Set.clear(); // Por defecto todo colapsado
+
+          renderDualSelectorPills();
+
+          if (currentTab === 'tab1') {
+            renderMatriz();
+          } else if (currentTab === 'tab2') {
+            renderDesglosePais();
+          }
+
+          enviarTelemetria("Consulta", (currentTab === 'tab1' ? '1. Matriz' : '2. Desglose País'));
+        })
+        .withFailureHandler(function(err) {
+          showLoading(false);
+          alert('Error consultando BigQuery: ' + err.message);
+        })
+        .getDataUser360(filtros);
+    }
+
+    function enviarTelemetria(accion, tab) {
+      try {
+        let metricaNom = metricaMatrizActual;
+        if (currentTab === 'tab2') {
+          metricaNom = selectedMetricaTopPais || (selectedL1Pais + (selectedL2Pais !== 'TOTAL' ? ' > ' + selectedL2Pais : ''));
+        }
+        const bVal = document.getElementById('selNegocio') ? document.getElementById('selNegocio').value : 'Market';
+        const isQuery = (accion === "Consulta");
+        const payload = {
+          accion: accion || "Consulta",
+          tab: tab || "1. Matriz",
+          pais: document.getElementById('selPais') ? document.getElementById('selPais').value : 'LATAM',
+          negocio: getBusinessDisplayName(bVal),
+          metrica: metricaNom,
+          mes: document.getElementById('selMes') ? document.getElementById('selMes').value : 'LAST_6',
+          dy: document.getElementById('selDY') ? document.getElementById('selDY').value : 'ALL',
+          uf: document.getElementById('selUF') ? document.getElementById('selUF').value : 'ALL',
+          bytes: isQuery ? (lastQueryBytes || 0) : 0
+        };
+        google.script.run.registrarTelemetriaUser360(payload);
+      } catch (_) {}
+    }
+
+    let compactSalesMode = true;
+
+    function toggleCompactSales() {
+      compactSalesMode = !compactSalesMode;
+      const btn = document.getElementById('btnToggleSalesFmt');
+      if (btn) btn.textContent = compactSalesMode ? '€ K/M' : '€ Completo';
+      renderMatriz();
+    }
+
+    function fmtNum(n) { return (n || 0).toLocaleString('es-AR'); }
+    function fmtCurr(n) {
+      if (!n || n === 0) return '€0';
+      const num = Math.round(n);
+      if (compactSalesMode) {
+        if (Math.abs(num) >= 1000000) {
+          const m = (num / 1000000).toFixed(1);
+          return '€' + (m.endsWith('.0') ? m.slice(0, -2) : m) + 'M';
+        }
+        if (Math.abs(num) >= 1000) {
+          return '€' + Math.round(num / 1000) + 'K';
+        }
+        return '€' + num.toLocaleString('es-AR');
+      }
+      return '€' + num.toLocaleString('es-AR');
+    }
+    function fmtPct(n) { return (n || 0).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '%'; }
+
+    function fmtTenure(val) {
+      if (val === null || val === undefined || isNaN(val) || val === 0) return '-';
+      const rounded = Math.round(val * 10) / 10;
+      if (rounded === 1) return '1 mes';
+      if (Number.isInteger(rounded)) return rounded + ' m';
+      return rounded.toFixed(1) + ' m';
+    }
+
+    function getL1Rank(l1) {
+      const l1Up = String(l1 || '').toUpperCase().trim();
+      for (let i = 0; i < L1_ORDER.length; i++) {
+        if (L1_ORDER[i] === l1Up) return i;
+      }
+      return 99;
+    }
+
+    function getL2Rank(l2) {
+      const l2Up = String(l2 || '').toUpperCase().trim();
+      if (L2_ORDER_WEIGHTS[l2Up] !== undefined) return L2_ORDER_WEIGHTS[l2Up];
+      for (const k in L2_ORDER_WEIGHTS) {
+        if (l2Up.includes(k)) return L2_ORDER_WEIGHTS[k];
+      }
+      return 99;
+    }
+
+    // ==============================================================================
+    // PÁGINA 1: MATRIZ L1 ➔ L2 MES A MES (CON FILA TOTAL USUARIOS ARRIBA DE TODO)
+    // ==============================================================================
+    function renderMatriz() {
+      if (!globalResponse || !globalResponse.rows) return;
+
+      actualizarDisponibilidadMetricas();
+
+      const paisFiltro = document.getElementById('selPais').value;
+      const negocioFiltro = document.getElementById('selNegocio').value;
+      const meses = globalResponse.meses || [];
+      const rows = globalResponse.rows;
+
+      const thead = document.getElementById('tblHeaderMatriz');
+      let thHtml = '<tr><th class="tbl-th" style="min-width: 320px;">Ciclo de Vida (L1 ➔ L2)</th>';
+      meses.forEach(m => {
+        thHtml += `<th class="tbl-th col-right">${formatMonthHeader(m)}</th>`;
+      });
+      thHtml += '</tr>';
+      thead.innerHTML = thHtml;
+
+      const activeStates = ['NEW USER', 'M1 RETURN', 'REACTIVATION', 'RE-ACTIVATION', 'RE-ORDER', 'REORDER', 'RECURRING RETURN'];
+
+      // 1. Acumulador de TOTAL GENERAL para toda la matriz por mes
+      const totalMeses = {};
+      meses.forEach(m => {
+        totalMeses[m] = { users: 0, orders: 0, sales: 0, units: 0, actTenure: 0, adoptTenure: 0, activeUsers: 0 };
+      });
+
+      const tree = {};
+
+      rows.forEach(r => {
+        if (paisFiltro !== 'LATAM' && r.country !== paisFiltro) return;
+        if (negocioFiltro !== 'ALL' && r.business !== negocioFiltro) return;
+
+        const l1Up = String(r.l1 || '').toUpperCase().trim();
+        const isActive = activeStates.includes(l1Up);
+
+        // Acumular Total General ÚNICAMENTE si el usuario es ACTIVO (excluyendo Churned y Never Active)
+        if (isActive && totalMeses[r.mes]) {
+          const tm = totalMeses[r.mes];
+          tm.users += r.users_count;
+          tm.orders += r.confirmed_orders;
+          tm.sales += r.net_sales_eur;
+          tm.units += r.units_sold;
+          tm.actTenure += r.total_actual_tenure;
+          tm.adoptTenure += r.total_adoption_tenure;
+          tm.activeUsers += r.users_count;
+        }
+
+        const l1Key = `${r.business}|${r.l1}`;
+        if (!tree[l1Key]) {
+          tree[l1Key] = {
+            id: l1Key,
+            business: r.business,
+            l1: r.l1,
+            mesesData: {},
+            l2Map: {}
+          };
+        }
+
+        const node = tree[l1Key];
+
+        if (!node.mesesData[r.mes]) {
+          node.mesesData[r.mes] = { users: 0, orders: 0, sales: 0, units: 0, actTenure: 0, adoptTenure: 0 };
+        }
+        const mObj = node.mesesData[r.mes];
+        mObj.users += r.users_count;
+        mObj.orders += r.confirmed_orders;
+        mObj.sales += r.net_sales_eur;
+        mObj.units += r.units_sold;
+        mObj.actTenure += r.total_actual_tenure;
+        mObj.adoptTenure += r.total_adoption_tenure;
+
+        const l2Name = r.l2 || 'Otros';
+        if (!node.l2Map[l2Name]) {
+          node.l2Map[l2Name] = {};
+        }
+        if (!node.l2Map[l2Name][r.mes]) {
+          node.l2Map[l2Name][r.mes] = { users: 0, orders: 0, sales: 0, units: 0, actTenure: 0, adoptTenure: 0 };
+        }
+        const l2MObj = node.l2Map[l2Name][r.mes];
+        l2MObj.users += r.users_count;
+        l2MObj.orders += r.confirmed_orders;
+        l2MObj.sales += r.net_sales_eur;
+        l2MObj.units += r.units_sold;
+        l2MObj.actTenure += r.total_actual_tenure;
+        l2MObj.adoptTenure += r.total_adoption_tenure;
+      });
+
+      function getFormattedMetric(obj) {
+        if (!obj || obj.users === 0) return '-';
+        if (metricaMatrizActual === 'users_count') return obj.users > 0 ? fmtNum(obj.users) : '-';
+        if (metricaMatrizActual === 'confirmed_orders') return obj.orders > 0 ? fmtNum(obj.orders) : '-';
+        if (metricaMatrizActual === 'units_sold') return obj.units > 0 ? fmtNum(obj.units) : '-';
+        if (metricaMatrizActual === 'net_sales_eur') return obj.sales > 0 ? fmtCurr(obj.sales) : '-';
+        if (metricaMatrizActual === 'frequency') return (obj.users > 0 && obj.orders > 0) ? (obj.orders / obj.users).toFixed(2) : '-';
+        if (metricaMatrizActual === 'basket_size') return (obj.orders > 0 && obj.units > 0) ? (obj.units / obj.orders).toFixed(2) : '-';
+        if (metricaMatrizActual === 'afv') return (obj.orders > 0 && obj.sales > 0) ? '€' + (obj.sales / obj.orders).toFixed(2) : '-';
+        if (metricaMatrizActual === 'customer_value') return (obj.users > 0 && obj.sales > 0) ? '€' + (obj.sales / obj.users).toFixed(2) : '-';
+        if (metricaMatrizActual === 'avg_actual_tenure') return obj.users > 0 ? fmtTenure(obj.actTenure / obj.users) : '-';
+        if (metricaMatrizActual === 'avg_adoption_tenure') return obj.users > 0 ? fmtTenure(obj.adoptTenure / obj.users) : '-';
+        return '-';
+      }
+
+      const sortedTreeList = Object.values(tree).sort((a, b) => {
+        if (a.business !== b.business) return a.business.localeCompare(b.business);
+        return getL1Rank(a.l1) - getL1Rank(b.l1);
+      });
+
+      const tbody = document.getElementById('tblMatrizBody');
+      let bodyHtml = '';
+
+      const negocioEtiqueta = getBusinessDisplayName(negocioFiltro);
+      const negocioClase = getBusinessBadgeClass(negocioFiltro);
+
+      // =========================================================================
+      // CÁLCULO DE MÉTRICAS TOP DE PENETRACIÓN Y COBERTURA (PARA LA MATRIZ)
+      // =========================================================================
+      const covRows = globalResponse.coverageRows || [];
+      const penData = {};
+      meses.forEach(m => {
+        penData[m] = { dmart: 0, peya: 0, covered: 0, platformCov: 0 };
+      });
+
+      rows.forEach(r => {
+        const c = (r.country === 'Dominican Republic') ? 'Republica Dominicana' : r.country;
+        if (paisFiltro !== 'LATAM' && c !== paisFiltro) return;
+        const isActive = activeStates.includes(String(r.l1 || '').toUpperCase().trim());
+        if (r.business === 'Market' && isActive && penData[r.mes]) {
+          penData[r.mes].dmart += r.users_count;
+        }
+        if (r.business === 'Platform' && isActive && penData[r.mes]) {
+          penData[r.mes].peya += r.users_count;
+        }
+      });
+
+      covRows.forEach(cr => {
+        const c = (cr.country === 'Dominican Republic') ? 'Republica Dominicana' : cr.country;
+        if (paisFiltro !== 'LATAM' && c !== paisFiltro) return;
+        if (penData[cr.mes]) {
+          penData[cr.mes].covered += (cr.dmart_maus_cubiertos || 0);
+          penData[cr.mes].platformCov += (cr.platform_maus_coverage || 0);
+        }
+      });
+
+      // 1. Platform Maus penetration %
+      bodyHtml += `<tr class="row-penetration">`;
+      bodyHtml += `<td class="cell-l1-title" style="padding: 9px 14px;">
+        <div class="cell-l1-box">
+          <span class="badge-penetration">PENETRACIÓN</span>
+          <span class="l1-title-text has-tooltip" data-tooltip="${obtenerTooltip('PLATFORM MAUS PENETRATION %')}">Platform Maus penetration %</span>
+        </div>
+      </td>`;
+      meses.forEach(m => {
+        const p = penData[m];
+        const val = p.peya > 0 ? (p.dmart / p.peya) * 100 : 0;
+        bodyHtml += `<td class="cell-num" style="font-weight: 500; color: #0F766E;">${val > 0 ? fmtPct(val) : '-'}</td>`;
+      });
+      bodyHtml += `</tr>`;
+
+      // 2. Covered MAUs % (con botón [+] para ver Covered MAUs absoluto escondido debajo)
+      bodyHtml += `<tr class="row-penetration" onclick="toggleCoveredAbsolutoMatriz()" style="cursor: pointer;">`;
+      bodyHtml += `<td class="cell-l1-title" style="padding: 9px 14px;">
+        <div class="cell-l1-box">
+          <span class="toggle-icon">${showCoveredAbsolutoMatriz ? '&minus;' : '&#43;'}</span>
+          <span class="badge-penetration">COBERTURA</span>
+          <span class="l1-title-text has-tooltip" data-tooltip="${obtenerTooltip('COVERED MAUS %')}">Covered MAUs %</span>
+        </div>
+      </td>`;
+      meses.forEach(m => {
+        const p = penData[m];
+        const val = p.platformCov > 0 ? (p.covered / p.platformCov) * 100 : 0;
+        bodyHtml += `<td class="cell-num" style="font-weight: 500; color: #0F766E;">${val > 0 ? fmtPct(val) : '-'}</td>`;
+      });
+      bodyHtml += `</tr>`;
+
+      // 2.1 Covered MAUs (Absoluto) - ESCONDIDO DEBAJO DE COVERED %
+      if (showCoveredAbsolutoMatriz) {
+        bodyHtml += `<tr class="row-covered-sub">`;
+        bodyHtml += `<td class="cell-l2-title" style="padding: 8px 14px 8px 42px;">
+          <span class="l2-subarrow">&#8627;</span>
+          <span class="has-tooltip" data-tooltip="${obtenerTooltip('COVERED MAUS')}">Covered MAUs (Absoluto)</span>
+        </td>`;
+        meses.forEach(m => {
+          const val = penData[m].covered;
+          bodyHtml += `<td class="cell-num" style="font-weight: 400; color: #374151;">${val > 0 ? fmtNum(val) : '-'}</td>`;
+        });
+        bodyHtml += `</tr>`;
+      }
+
+      // 3. Covered MAUs penetration %
+      bodyHtml += `<tr class="row-penetration">`;
+      bodyHtml += `<td class="cell-l1-title" style="padding: 9px 14px;">
+        <div class="cell-l1-box">
+          <span class="badge-penetration">PENETRACIÓN</span>
+          <span class="l1-title-text has-tooltip" data-tooltip="${obtenerTooltip('COVERED MAUS PENETRATION %')}">Covered MAUs penetration %</span>
+        </div>
+      </td>`;
+      meses.forEach(m => {
+        const p = penData[m];
+        const val = p.covered > 0 ? (p.dmart / p.covered) * 100 : 0;
+        bodyHtml += `<td class="cell-num" style="font-weight: 500; color: #0F766E;">${val > 0 ? fmtPct(val) : '-'}</td>`;
+      });
+      bodyHtml += `</tr>`;
+
+      // =========================================================================
+      // FILA TOTAL GENERAL (MAUs ACTIVOS: EXCLUYE CHURNED Y NEVER ACTIVE)
+      // =========================================================================
+      let totalTitle = "TOTAL MAUs";
+      if (negocioFiltro === 'Market') totalTitle = "TOTAL DMART MAUs";
+      else if (negocioFiltro === 'AAA') totalTitle = "TOTAL AAA MAUs";
+      else if (negocioFiltro === 'Platform') totalTitle = "TOTAL PLATAFORMA FOOD MAUs";
+      else if (negocioFiltro === 'ALL') totalTitle = "TOTAL PEYA MAUs";
+
+      bodyHtml += `<tr class="row-total">`;
+      bodyHtml += `<td class="cell-total-title">
+        <div class="cell-l1-box">
+          <span class="badge-business ${negocioClase}">${negocioEtiqueta}</span>
+          <span style="font-size: 13px; font-weight: 600; color: #111827;">${totalTitle}</span>
+        </div>
+      </td>`;
+      meses.forEach(m => {
+        bodyHtml += `<td class="cell-num" style="font-weight: 600; font-size: 12.5px; color: #111827;">${getFormattedMetric(totalMeses[m])}</td>`;
+      });
+      bodyHtml += `</tr>`;
+
+      // =========================================================================
+      // FILAS L1 CON SUS L2
+      // =========================================================================
+      sortedTreeList.forEach(item => {
+        const isExpanded = expandedL1Set.has(item.id);
+        const icon = isExpanded ? '&minus;' : '&#43;';
+
+        const bDisplay = getBusinessDisplayName(item.business);
+        const bBadgeClass = getBusinessBadgeClass(item.business);
+
+        const tooltipL1 = obtenerTooltip(item.l1);
+
+        bodyHtml += `<tr class="row-l1" onclick="toggleL1('${item.id}')">`;
+        bodyHtml += `<td class="cell-l1-title">
+          <div class="cell-l1-box">
+            <span class="toggle-icon">${icon}</span>
+            <span class="badge-business ${bBadgeClass}">${bDisplay}</span>
+            <span class="l1-title-text has-tooltip" data-tooltip="${tooltipL1}">${item.l1}</span>
+          </div>
+        </td>`;
+
+        meses.forEach(m => {
+          bodyHtml += `<td class="cell-num">${getFormattedMetric(item.mesesData[m])}</td>`;
+        });
+        bodyHtml += `</tr>`;
+
+        if (isExpanded) {
+          const sortedL2Names = Object.keys(item.l2Map).sort((a, b) => getL2Rank(a) - getL2Rank(b));
+          sortedL2Names.forEach(l2Name => {
+            const tooltipL2 = obtenerTooltip(l2Name);
+            bodyHtml += `<tr class="row-l2">`;
+            bodyHtml += `<td class="cell-l2-title">
+              <span class="l2-subarrow">&#8627;</span>
+              <span class="has-tooltip" data-tooltip="${tooltipL2}">${l2Name}</span>
+            </td>`;
+            meses.forEach(m => {
+              bodyHtml += `<td class="cell-num">${getFormattedMetric(item.l2Map[l2Name][m])}</td>`;
+            });
+            bodyHtml += `</tr>`;
+          });
+        }
+      });
+
+      tbody.innerHTML = bodyHtml || '<tr><td colspan="10" style="padding: 40px; text-align: center; color: var(--text-muted);">Sin datos para los filtros seleccionados.</td></tr>';
+    }
+
+    function toggleL1(id) {
+      if (expandedL1Set.has(id)) expandedL1Set.delete(id);
+      else expandedL1Set.add(id);
+      renderMatriz();
+    }
+
+    function toggleAllL1(expand) {
+      if (!globalResponse || !globalResponse.rows) return;
+      if (expand) {
+        globalResponse.rows.forEach(r => expandedL1Set.add(`${r.business}|${r.l1}`));
+      } else {
+        expandedL1Set.clear();
+      }
+      renderMatriz();
+    }
+
+    function exportarCSVMatriz() {
+      if (!globalResponse || !globalResponse.rows) return;
+      const meses = globalResponse.meses || [];
+      let csv = "Negocio;Macro L1;Subtipo L2;" + meses.map(formatMonthHeader).join(";") + "\n";
+      const tree = {};
+      globalResponse.rows.forEach(r => {
+        const k = `${r.business}|${r.l1}|${r.l2}`;
+        if (!tree[k]) tree[k] = { business: r.business, l1: r.l1, l2: r.l2, meses: {} };
+        tree[k].meses[r.mes] = r[metricaMatrizActual] || 0;
+      });
+
+      for (const k in tree) {
+        const item = tree[k];
+        let row = [getBusinessDisplayName(item.business), item.l1, item.l2];
+        meses.forEach(m => row.push(item.meses[m] || 0));
+        csv += row.join(";") + "\n";
+      }
+
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `Matriz_User360_${metricaMatrizActual}.csv`;
+      a.click();
+    }
+
+    function formatL1PillName(l1) {
+      const s = String(l1 || '').toUpperCase().trim();
+      if (s === 'NEW USER') return 'New Users';
+      if (s === 'M1 RETURN') return 'M1 Return';
+      if (s === 'REACTIVATION') return 'Reactivation';
+      if (s === 'RE-ORDER') return 'Re-Order';
+      if (s === 'RECURRING RETURN') return 'Recurring Return';
+      if (s === 'CHURNED') return 'Churned';
+      if (s === 'NEVER ACTIVE') return 'Never Active';
+      return l1;
+    }
+
+    function formatL2PillName(l2) {
+      if (!l2 || l2 === 'TOTAL') return 'Total';
+      const s = String(l2).toUpperCase().trim();
+      const clean = s.replace(/\s*-\s*(DMART|AAA|PEYA FOOD|PLATAFORMA FOOD|PEYA TOTAL)\s*$/i, '')
+                     .replace(/\s*(DMART|AAA|PEYA FOOD|PLATAFORMA FOOD|PEYA TOTAL)\s*$/i, '')
+                     .trim();
+
+      if (clean === 'APP ADOPTION') return 'App Adoption';
+      if (clean === 'DY ADOPTION') return 'DY Adoption';
+      if (clean === 'DMART ADOPTION') return 'dMart Adoption';
+      if (clean === 'AAA ADOPTION') return 'AAA Adoption';
+
+      if (clean.includes('M1 RETURN USERS')) return 'M1 Regular';
+      if (clean === 'M1 DMART DY' || clean === 'M1 AAA DY' || clean === 'M1 DY') return 'M1 DY';
+      if (clean.includes('CONVERTED')) return 'M1 DY Converted';
+
+      if (clean.includes('OCCASIONAL')) return 'Occasional (1m)';
+      if (clean.includes('WARM')) return 'Warm (2-4m)';
+      if (clean.includes('TRUE')) return 'True (5m+)';
+      if (clean === 'DY REACTIVATION' || clean === 'RE-ORDER DY') return 'DY';
+      if (clean === 'RE-ORDER DY CONVERTED') return 'DY Converted';
+
+      if (clean.includes('RECENT RECURRING')) return 'Recent (3m)';
+      if (clean.includes('OLD RECURRING')) return 'Old (4-12m)';
+      if (clean.includes('ROYAL RECURRING')) return 'Royal (13m+)';
+
+      if (clean.includes('RECENTLY CHURN')) return 'Recent (1-2m)';
+      if (clean.includes('CHURN > 3')) return '> 3 Meses';
+      if (clean.includes('CHURN > 6')) return '> 6 Meses';
+
+      return l2;
+    }
+
+    // ==============================================================================
+    // PÁGINA 2: DESGLOSE POR PAÍS CON LAS 4 MÉTRICAS TOP ARRIBA DE TODO
+    // ==============================================================================
+    function renderDualSelectorPills() {
+      const negocio = document.getElementById('selNegocio').value;
+      const tag = getBusinessDisplayName(negocio);
+      const mausName = (negocio === 'Market') ? 'Dmart MAUs' : (negocio === 'AAA' ? 'PeYa MAUs' : (negocio === 'Platform' ? 'Plataforma Food MAUs' : 'PeYa total MAUs'));
+
+      // 1. Render Fila 1: Métricas Top de Penetración y Cobertura (ARRIBA DE TODO)
+      const containerTop = document.getElementById('pillsGroupTop');
+      containerTop.innerHTML = '';
+
+      const topMetrics = [
+        { id: 'TOP_PLATFORM_MAUS_PEN', label: 'Platform Maus penetration %' },
+        { id: 'TOP_COVERED_MAUS_PCT',   label: 'Covered MAUs %' },
+        { id: 'TOP_COVERED_MAUS_PEN',   label: 'Covered MAUs penetration %' }
+      ];
+
+      topMetrics.forEach(tm => {
+        const btn = document.createElement('button');
+        const isSelected = (selectedMetricaTopPais === tm.id || (tm.id === 'TOP_COVERED_MAUS_PCT' && selectedMetricaTopPais === 'TOP_COVERED_MAUS'));
+        btn.className = `pill-sub ${isSelected ? 'active-top' : ''}`;
+        btn.textContent = tm.label;
+        btn.title = obtenerTooltip(tm.label);
+        btn.onclick = () => selectTopMetricaPais(tm.id);
+        containerTop.appendChild(btn);
+      });
+
+      // 2. Render Fila 2: Nivel Macro L1 (Limpio, estético y sin sufijos repetidos)
+      const containerL1 = document.getElementById('pillsGroupL1');
+      containerL1.innerHTML = '';
+
+      // Botón MAUs
+      const btnMaus = document.createElement('button');
+      btnMaus.className = `pill-sub ${(!selectedMetricaTopPais && selectedL1Pais === 'MAUS') ? 'active' : ''}`;
+      btnMaus.textContent = mausName;
+      btnMaus.title = obtenerTooltip(mausName);
+      btnMaus.onclick = () => selectL1Pais('MAUS');
+      containerL1.appendChild(btnMaus);
+
+      // Botones L1 oficiales
+      L1_ORDER.forEach(l1 => {
+        const btn = document.createElement('button');
+        const isActive = (!selectedMetricaTopPais && selectedL1Pais === l1);
+        btn.className = `pill-sub ${isActive ? 'active' : ''}`;
+        btn.textContent = formatL1PillName(l1);
+        btn.title = obtenerTooltip(l1);
+        btn.onclick = () => selectL1Pais(l1);
+        containerL1.appendChild(btn);
+      });
+
+      // 3. Render Fila 3: Subtipos L2 correspondientes
+      const rowL2 = document.getElementById('rowSelectorL2');
+      const containerL2 = document.getElementById('pillsGroupL2');
+      containerL2.innerHTML = '';
+
+      if (selectedMetricaTopPais === 'TOP_COVERED_MAUS_PCT' || selectedMetricaTopPais === 'TOP_COVERED_MAUS') {
+        rowL2.style.display = 'flex';
+        const btnRatio = document.createElement('button');
+        btnRatio.className = `pill-sub ${selectedMetricaTopPais === 'TOP_COVERED_MAUS_PCT' ? 'active-top' : ''}`;
+        btnRatio.textContent = 'Covered MAUs % (Ratio)';
+        btnRatio.onclick = () => selectTopMetricaPais('TOP_COVERED_MAUS_PCT');
+        containerL2.appendChild(btnRatio);
+
+        const btnAbs = document.createElement('button');
+        btnAbs.className = `pill-sub ${selectedMetricaTopPais === 'TOP_COVERED_MAUS' ? 'active-top' : ''}`;
+        btnAbs.textContent = '↳ Covered MAUs (Absoluto)';
+        btnAbs.title = obtenerTooltip('COVERED MAUS');
+        btnAbs.onclick = () => selectTopMetricaPais('TOP_COVERED_MAUS');
+        containerL2.appendChild(btnAbs);
+      } else if (selectedMetricaTopPais) {
+        rowL2.style.display = 'none';
+      } else if (selectedL1Pais === 'MAUS') {
+        rowL2.style.display = 'flex';
+        containerL2.innerHTML = '<span style="font-size: 11.5px; color: var(--text-muted); padding: 4px 0;">(MAUs agrupa a todos los usuarios activos: New User, M1 Return, Reactivation, Re-Order y Recurring Return)</span>';
+      } else {
+        rowL2.style.display = 'flex';
+        const btnTotal = document.createElement('button');
+        btnTotal.className = `pill-sub ${selectedL2Pais === 'TOTAL' ? 'active' : ''}`;
+        btnTotal.textContent = `Total ${formatL1PillName(selectedL1Pais)}`;
+        btnTotal.onclick = () => selectL2Pais('TOTAL');
+        containerL2.appendChild(btnTotal);
+
+        const subtipos = L2_BY_L1[selectedL1Pais] || [];
+        subtipos.forEach(sub => {
+          if (sub === '-') return;
+          const btn = document.createElement('button');
+          btn.className = `pill-sub ${selectedL2Pais === sub ? 'active' : ''}`;
+          btn.textContent = `↳ ${formatL2PillName(sub)}`;
+          btn.title = obtenerTooltip(sub);
+          btn.onclick = () => selectL2Pais(sub);
+          containerL2.appendChild(btn);
+        });
+      }
+    }
+
+    function selectTopMetricaPais(idMetrica) {
+      selectedMetricaTopPais = idMetrica;
+      selectedL1Pais = null;
+      selectedL2Pais = 'TOTAL';
+      renderDualSelectorPills();
+      enviarTelemetria("Selección Top Métrica", "2. Desglose País");
+      renderDesglosePais();
+    }
+
+    function selectL1Pais(l1Name) {
+      selectedMetricaTopPais = null;
+      selectedL1Pais = l1Name;
+      selectedL2Pais = 'TOTAL';
+      renderDualSelectorPills();
+      enviarTelemetria("Selección L1 País", "2. Desglose País");
+      renderDesglosePais();
+    }
+
+    function selectL2Pais(l2Name) {
+      selectedMetricaTopPais = null;
+      selectedL2Pais = l2Name;
+      renderDualSelectorPills();
+      enviarTelemetria("Selección L2 País", "2. Desglose País");
+      renderDesglosePais();
+    }
+
+    function isUserActive(dbL1) {
+      if (!dbL1) return false;
+      const s = String(dbL1).toUpperCase().trim();
+      if (s.includes('CHURN') || s.includes('NEVER')) return false;
+      return true;
+    }
+
+    function matchL1(dbL1, targetL1) {
+      if (!dbL1 || !targetL1) return false;
+      const s1 = String(dbL1).toUpperCase().replace(/[-_]/g, ' ').replace(/\s+/g, ' ').trim();
+      const s2 = String(targetL1).toUpperCase().replace(/[-_]/g, ' ').replace(/\s+/g, ' ').trim();
+
+      if (s1 === s2) return true;
+
+      if ((s2.includes('NEW USER') || s2.includes('ADOPTION')) && (s1.includes('NEW USER') || s1.includes('ADOPTION'))) return true;
+      if (s2.includes('M1') && s1.includes('M1')) return true;
+      if (s2.includes('REACTIVAT') && s1.includes('REACTIVAT')) return true;
+      if ((s2.includes('REORDER') || s2.includes('RE ORDER')) && (s1.includes('REORDER') || s1.includes('RE ORDER'))) return true;
+      if (s2.includes('RECURRING') && s1.includes('RECURRING')) return true;
+      if (s2.includes('CHURN') && s1.includes('CHURN')) return true;
+      if (s2.includes('NEVER') && s1.includes('NEVER')) return true;
+
+      return s1.startsWith(s2) || s2.startsWith(s1);
+    }
+
+    function matchL2(dbL2, targetL2) {
+      if (!dbL2 || !targetL2) return false;
+      const s1 = String(dbL2).toUpperCase().replace(/[-_]/g, ' ').replace(/\s+/g, ' ').trim();
+      const s2 = String(targetL2).toUpperCase().replace(/[-_]/g, ' ').replace(/\s+/g, ' ').trim();
+
+      if (s1 === s2) return true;
+
+      const clean1 = s1.replace(/\s*(DMART|AAA|PEYA FOOD|PLATAFORMA FOOD|PEYA TOTAL)\s*$/i, '').trim();
+      const clean2 = s2.replace(/\s*(DMART|AAA|PEYA FOOD|PLATAFORMA FOOD|PEYA TOTAL)\s*$/i, '').trim();
+
+      if (clean1 === clean2) return true;
+      if (clean1.includes(clean2) || clean2.includes(clean1)) return true;
+
+      return false;
+    }
+
+    function renderDesglosePais() {
+      if (!globalResponse || !globalResponse.rows) return;
+
+      const negocio = document.getElementById('selNegocio').value;
+      const tag = getBusinessDisplayName(negocio);
+      const mausName = (negocio === 'Market') ? 'Dmart MAUs' : (negocio === 'AAA' ? 'PeYa MAUs' : (negocio === 'Platform' ? 'Plataforma Food MAUs' : 'PeYa total MAUs'));
+
+      let tituloActual = "";
+      let esPorcentaje = false;
+
+      if (selectedMetricaTopPais === 'TOP_PLATFORM_MAUS_PEN') {
+        tituloActual = "Platform Maus penetration %";
+        esPorcentaje = true;
+      } else if (selectedMetricaTopPais === 'TOP_COVERED_MAUS_PCT') {
+        tituloActual = "Covered MAUs %";
+        esPorcentaje = true;
+      } else if (selectedMetricaTopPais === 'TOP_COVERED_MAUS') {
+        tituloActual = "Covered MAUs";
+        esPorcentaje = false;
+      } else if (selectedMetricaTopPais === 'TOP_COVERED_MAUS_PEN') {
+        tituloActual = "Covered MAUs penetration %";
+        esPorcentaje = true;
+      } else if (selectedL1Pais === 'MAUS') {
+        tituloActual = mausName;
+      } else if (selectedL2Pais === 'TOTAL') {
+        let l1Title = selectedL1Pais;
+        if (l1Title === 'NEW USER') l1Title = 'New Users';
+        tituloActual = `${l1Title} - ${tag}`;
+      } else {
+        tituloActual = selectedL2Pais.includes(tag) ? selectedL2Pais : `${selectedL2Pais} - ${tag}`;
+      }
+
+      document.getElementById('lblTituloTablaPais').textContent = tituloActual;
+
+      const meses = globalResponse.meses || [];
+      const rows = globalResponse.rows;
+      const covRows = globalResponse.coverageRows || [];
+
+      const esChurn = tituloActual.toUpperCase().includes("CHURN");
+      const formatoColorTexto = esChurn ? "Verde si es negativo" : "Verde si es positivo";
+
+      const thead = document.getElementById('tblHeaderPais');
+      let thHtml = `<tr><th class="tbl-th" style="min-width: 220px;">Metrica / Fecha</th>`;
+      meses.forEach(m => {
+        thHtml += `<th class="tbl-th col-right">${formatMonthHeader(m)}</th>`;
+      });
+      const ultMesFormateado = meses.length > 0 ? formatMonthHeader(meses[meses.length - 1]) : '';
+      thHtml += `
+        <th class="tbl-th col-right">MoM %</th>
+        <th class="tbl-th col-right">Target: ${ultMesFormateado}</th>
+        <th class="tbl-th col-right">vs Target</th>
+      </tr>`;
+      thead.innerHTML = thHtml;
+
+      const dmartMausMap = {};
+      const platformMausMap = {};
+      const covMap = {};
+
+      rows.forEach(r => {
+        const c = (r.country === 'Dominican Republic') ? 'Republica Dominicana' : r.country;
+        const isActive = isUserActive(r.l1);
+
+        if (r.business === 'Market' && isActive) {
+          if (!dmartMausMap[c]) dmartMausMap[c] = {};
+          dmartMausMap[c][r.mes] = (dmartMausMap[c][r.mes] || 0) + r.users_count;
+        }
+
+        if (r.business === 'Platform' && isActive) {
+          if (!platformMausMap[c]) platformMausMap[c] = {};
+          platformMausMap[c][r.mes] = (platformMausMap[c][r.mes] || 0) + r.users_count;
+        }
+      });
+
+      covRows.forEach(cr => {
+        const c = (cr.country === 'Dominican Republic') ? 'Republica Dominicana' : cr.country;
+        if (!covMap[c]) covMap[c] = {};
+        covMap[c][cr.mes] = {
+          covered_maus: cr.dmart_maus_cubiertos || 0,
+          platform_maus_coverage: cr.platform_maus_coverage || 0,
+          qc_coverage: cr.qc_coverage || 0
+        };
+      });
+
+      const countryData = {};
+      const latamTotals = {};
+
+      if (selectedMetricaTopPais) {
+        // CÁLCULO DE LAS 4 MÉTRICAS TOP
+        ORDEN_PAISES_OFICIAL.forEach(cName => {
+          if (cName === 'LATAM') return;
+          const cClean = (cName === 'Dominican Republic') ? 'Republica Dominicana' : cName;
+          countryData[cClean] = {};
+
+          meses.forEach(m => {
+            const dmart = (dmartMausMap[cClean] && dmartMausMap[cClean][m]) || 0;
+            const peya = (platformMausMap[cClean] && platformMausMap[cClean][m]) || 0;
+            const cov = covMap[cClean] && covMap[cClean][m];
+
+            let val = 0;
+            if (selectedMetricaTopPais === 'TOP_PLATFORM_MAUS_PEN') {
+              val = peya > 0 ? (dmart / peya) * 100 : 0;
+            } else if (selectedMetricaTopPais === 'TOP_COVERED_MAUS_PCT') {
+              val = cov ? cov.qc_coverage : 0;
+            } else if (selectedMetricaTopPais === 'TOP_COVERED_MAUS') {
+              val = cov ? cov.covered_maus : 0;
+            } else if (selectedMetricaTopPais === 'TOP_COVERED_MAUS_PEN') {
+              val = (cov && cov.covered_maus > 0) ? (dmart / cov.covered_maus) * 100 : 0;
+            }
+            countryData[cClean][m] = val;
+          });
+        });
+
+        // LATAM para métricas top
+        countryData["LATAM"] = {};
+        meses.forEach(m => {
+          let sumDmart = 0;
+          let sumPeya = 0;
+          let sumCov = 0;
+          let sumPlatformCov = 0;
+
+          ORDEN_PAISES_OFICIAL.forEach(cName => {
+            if (cName === 'LATAM') return;
+            const cClean = (cName === 'Dominican Republic') ? 'Republica Dominicana' : cName;
+            sumDmart += (dmartMausMap[cClean] && dmartMausMap[cClean][m]) || 0;
+            sumPeya += (platformMausMap[cClean] && platformMausMap[cClean][m]) || 0;
+            if (covMap[cClean] && covMap[cClean][m]) {
+              sumCov += covMap[cClean][m].covered_maus;
+              sumPlatformCov += covMap[cClean][m].platform_maus_coverage;
+            }
+          });
+
+          let valLatam = 0;
+          if (selectedMetricaTopPais === 'TOP_PLATFORM_MAUS_PEN') {
+            valLatam = sumPeya > 0 ? (sumDmart / sumPeya) * 100 : 0;
+          } else if (selectedMetricaTopPais === 'TOP_COVERED_MAUS_PCT') {
+            valLatam = sumPlatformCov > 0 ? (sumCov / sumPlatformCov) * 100 : 0;
+          } else if (selectedMetricaTopPais === 'TOP_COVERED_MAUS') {
+            valLatam = sumCov;
+          } else if (selectedMetricaTopPais === 'TOP_COVERED_MAUS_PEN') {
+            valLatam = sumCov > 0 ? (sumDmart / sumCov) * 100 : 0;
+          }
+          countryData["LATAM"][m] = valLatam;
+        });
+
+      } else {
+        // CÁLCULO DE L1 Y L2 (CON MATCHING UNIVERSAL)
+        rows.forEach(r => {
+          if (negocio !== 'ALL' && r.business !== negocio) return;
+
+          let match = false;
+          if (selectedL1Pais === "MAUS") {
+            match = isUserActive(r.l1);
+          } else if (selectedL2Pais === "TOTAL") {
+            match = matchL1(r.l1, selectedL1Pais);
+          } else {
+            match = matchL2(r.l2, selectedL2Pais);
+          }
+
+          if (match) {
+            const c = (r.country === 'Dominican Republic') ? 'Republica Dominicana' : r.country;
+            if (!countryData[c]) countryData[c] = {};
+            countryData[c][r.mes] = (countryData[c][r.mes] || 0) + r.users_count;
+
+            latamTotals[r.mes] = (latamTotals[r.mes] || 0) + r.users_count;
+          }
+        });
+        countryData["LATAM"] = latamTotals;
+      }
+
+      // Renderizar Filas de Países
+      const tbody = document.getElementById('tblPaisBody');
+      let bodyHtml = '';
+
+      ORDEN_PAISES_OFICIAL.forEach(cName => {
+        const cClean = (cName === 'Dominican Republic') ? 'Republica Dominicana' : cName;
+        const valsObj = countryData[cClean] || {};
+        const isLatam = (cClean === 'LATAM');
+
+        const mValues = meses.map(m => valsObj[m] || 0);
+
+        let momStr = "-";
+        let momClass = "neutral";
+        if (mValues.length >= 2) {
+          const ult = mValues[mValues.length - 1];
+          const prev = mValues[mValues.length - 2];
+          if (prev > 0) {
+            const diff = ((ult - prev) / prev) * 100;
+            momStr = (diff >= 0 ? "+" : "") + diff.toFixed(1) + "%";
+
+            if (diff > 0) {
+              momClass = esChurn ? "negative" : "positive";
+            } else if (diff < 0) {
+              momClass = esChurn ? "positive" : "negative";
+            }
+          }
+        }
+
+        const trClass = isLatam ? "row-latam" : "row-country";
+
+        bodyHtml += `<tr class="${trClass}">`;
+        bodyHtml += `<td class="cell-country-title">${cClean}</td>`;
+
+        mValues.forEach(v => {
+          let str = '-';
+          if (v > 0) {
+            str = esPorcentaje ? fmtPct(v) : fmtNum(v);
+          }
+          bodyHtml += `<td class="cell-num">${str}</td>`;
+        });
+
+        bodyHtml += `<td class="cell-num"><span class="badge-mom ${momClass}">${momStr}</span></td>`;
+        bodyHtml += `<td class="cell-num" style="color: var(--text-muted);">Sin Target</td>`;
+        bodyHtml += `<td class="cell-center" style="color: var(--text-muted);">-</td>`;
+        bodyHtml += `</tr>`;
+      });
+
+      tbody.innerHTML = bodyHtml;
+    }
+
+    function exportarCSVPais() {
+      if (!globalResponse || !globalResponse.rows) return;
+      const titulo = document.getElementById('lblTituloTablaPais').textContent;
+      const meses = globalResponse.meses || [];
+
+      let csv = "Pais;" + meses.map(formatMonthHeader).join(";") + ";MoM Pct;Target;vs Target\n";
+
+      const rows = document.querySelectorAll("#tblPaisBody tr");
+      rows.forEach(tr => {
+        const tds = Array.from(tr.querySelectorAll("td")).map(td => td.textContent.trim().replace(/\./g, ''));
+        csv += tds.join(";") + "\n";
+      });
+
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `Desglose_Pais_${titulo.replace(/\s+/g, '_')}.csv`;
+      a.click();
+    }
+
+    // ==============================================================================
+    // PÁGINA 4: MÓDULO EXCLUSIVO DE ANALYTICS (ADMIN)
+    // Apalancado en la arquitectura de 3_Analytics.html
+    // ==============================================================================
+    let AN_DATA = null;
+    let AN_GRAN = 'day';
+    let AN_OFFSET = 0;
+    const AN_PAGE_SIZE = 7;
+
+    function cargarAnalytics() {
+      showLoading(true);
+      google.script.run
+        .withSuccessHandler(function(res) {
+          showLoading(false);
+          if (!res || res.error) {
+            alert('Error en Analytics: ' + ((res && res.error) || 'sin datos'));
+            return;
+          }
+          AN_DATA = res;
+          renderAnalyticsAll();
+        })
+        .withFailureHandler(function(err) {
+          showLoading(false);
+          alert('Error cargando Analytics: ' + err.message);
+        })
+        .fetchAnalyticsUser360();
+    }
+
+    function cambiarGranAnalytics(g) {
+      AN_GRAN = g;
+      AN_OFFSET = 0;
+      document.getElementById('btnGranDay').classList.toggle('active', g === 'day');
+      document.getElementById('btnGranWeek').classList.toggle('active', g === 'week');
+      document.getElementById('btnGranMonth').classList.toggle('active', g === 'month');
+      if (AN_DATA) renderAnalyticsPeriod();
+    }
+
+    function renderAnalyticsAll() {
+      if (!AN_DATA) return;
+      renderAnalyticsKpis();
+      renderAnalyticsPeriod();
+      renderAnalyticsUsersSummary();
+      renderAnalyticsTops();
+      renderAnalyticsRecentLogs();
+    }
+
+    function renderAnalyticsKpis() {
+      const t = AN_DATA.totals || { queries: 0, users: 0, totalBytes: 0, todayQueries: 0 };
+      document.getElementById('anKpiQueries').textContent = fmtNum(t.queries);
+      document.getElementById('anKpiTodayQueries').textContent = fmtNum(t.todayQueries) + ' hoy';
+      document.getElementById('anKpiUsers').textContent = fmtNum(t.users);
+      document.getElementById('anKpiBytes').textContent = fmtBytes(t.totalBytes);
+      const avg = t.users > 0 ? t.totalBytes / t.users : 0;
+      document.getElementById('anKpiAvgBytes').textContent = fmtBytes(avg);
+      document.getElementById('anAsOf').textContent = 'Actualizado: ' + (AN_DATA.asOf || '-');
+    }
+
+    function renderAnalyticsPeriod() {
+      const container = document.getElementById('anPeriodContainer');
+      const pager = document.getElementById('anPeriodPager');
+      if (!AN_DATA || !AN_DATA.byPeriod) {
+        container.innerHTML = '<div style="padding:30px;text-align:center;color:var(--text-muted);">Sin datos.</div>';
+        pager.innerHTML = '';
+        return;
+      }
+
+      const src = AN_DATA.byPeriod[AN_GRAN] || [];
+      if (!src.length) {
+        container.innerHTML = '<div style="padding:30px;text-align:center;color:var(--text-muted);">Sin datos en este período.</div>';
+        pager.innerHTML = '';
+        return;
+      }
+
+      const totalPeriods = src.length;
+      if (AN_OFFSET >= totalPeriods) AN_OFFSET = 0;
+      const win = src.slice(AN_OFFSET, AN_OFFSET + AN_PAGE_SIZE);
+      const cols = win.slice().reverse();
+
+      const mode = document.getElementById('anPeriodMode').value;
+      const search = (document.getElementById('anUserSearch').value || '').trim().toLowerCase();
+
+      const byUser = {};
+      src.forEach(p => {
+        (p.cells || []).forEach(c => {
+          if (!byUser[c.email]) byUser[c.email] = { email: c.email, total: 0, per: {} };
+          const val = (mode === 'queries') ? (c.queries || 0) : (c.bytes || 0);
+          byUser[c.email].total += val;
+          byUser[c.email].per[p.period] = (byUser[c.email].per[p.period] || 0) + val;
+        });
+      });
+
+      let users = Object.values(byUser).filter(u => u.total > 0);
+      if (search) {
+        users = users.filter(u => u.email.toLowerCase().includes(search));
+      }
+      users.sort((a,b) => b.total - a.total);
+
+      if (!users.length) {
+        container.innerHTML = '<div style="padding:30px;text-align:center;color:var(--text-muted);">Sin resultados para el filtro.</div>';
+        pager.innerHTML = '';
+        return;
+      }
+
+      const colTotals = {};
+      let grandTotal = 0;
+      cols.forEach(p => colTotals[p.period] = 0);
+      users.forEach(u => {
+        grandTotal += u.total;
+        cols.forEach(p => colTotals[p.period] += (u.per[p.period] || 0));
+      });
+
+      function fmtVal(v) {
+        if (!v || v === 0) return '—';
+        return mode === 'queries' ? fmtNum(v) : fmtBytes(v);
+      }
+
+      let tbl = '<table class="data-table"><thead><tr>';
+      tbl += '<th class="tbl-th" style="width: 28%;">Usuario</th>';
+      cols.forEach(p => {
+        let lbl = p.period;
+        if (AN_GRAN === 'month') lbl = p.period.slice(5,7) + '/' + p.period.slice(2,4);
+        else if (AN_GRAN === 'week') lbl = 'Sem. ' + p.period.slice(8,10) + '/' + p.period.slice(5,7);
+        else lbl = p.period.slice(8,10) + '/' + p.period.slice(5,7);
+        tbl += `<th class="tbl-th col-right">${lbl}</th>`;
+      });
+      tbl += '<th class="tbl-th col-right">Total</th></tr></thead><tbody>';
+
+      // Fila TOTAL superior destacada
+      tbl += '<tr class="row-total"><td style="padding:10px 14px;font-weight:900;">TOTAL</td>';
+      cols.forEach(p => {
+        const v = colTotals[p.period];
+        tbl += `<td class="cell-num" style="font-weight:900;color:var(--primary);">${fmtVal(v)}</td>`;
+      });
+      tbl += `<td class="cell-num" style="font-weight:900;color:var(--primary);">${fmtVal(grandTotal)}</td></tr>`;
+
+      users.forEach(u => {
+        tbl += `<tr><td style="padding:8px 14px;font-weight:600;font-family:monospace;font-size:12px;">${u.email}</td>`;
+        cols.forEach(p => {
+          const v = u.per[p.period] || 0;
+          tbl += `<td class="cell-num">${fmtVal(v)}</td>`;
+        });
+        tbl += `<td class="cell-num" style="font-weight:700;">${fmtVal(u.total)}</td></tr>`;
+      });
+      tbl += '</tbody></table>';
+
+      container.innerHTML = tbl;
+
+      if (totalPeriods > AN_PAGE_SIZE) {
+        const from = AN_OFFSET + 1;
+        const to = Math.min(AN_OFFSET + AN_PAGE_SIZE, totalPeriods);
+        const unit = AN_GRAN === 'day' ? 'días' : (AN_GRAN === 'week' ? 'semanas' : 'meses');
+        pager.innerHTML = `
+          <span style="font-size:11px;font-weight:600;color:var(--text-muted);">${from}–${to} de ${totalPeriods} ${unit}</span>
+          <button class="btn btn-outline" style="height:26px;padding:0 8px;" ${AN_OFFSET <= 0 ? 'disabled' : ''} onclick="periodPageAnalytics(-1)" title="Más recientes">‹</button>
+          <button class="btn btn-outline" style="height:26px;padding:0 8px;" ${AN_OFFSET + AN_PAGE_SIZE >= totalPeriods ? 'disabled' : ''} onclick="periodPageAnalytics(1)" title="Más antiguos">›</button>
+        `;
+      } else {
+        pager.innerHTML = '';
+      }
+    }
+
+    function periodPageAnalytics(dir) {
+      AN_OFFSET = Math.max(0, AN_OFFSET + dir * AN_PAGE_SIZE);
+      renderAnalyticsPeriod();
+    }
+
+    function renderAnalyticsUsersSummary() {
+      const tbody = document.getElementById('anUsersBody');
+      const users = AN_DATA.users || [];
+      const totalBytes = AN_DATA.totals.totalBytes || 0;
+      const totalQueries = AN_DATA.totals.queries || 0;
+
+      if (!users.length) {
+        tbody.innerHTML = '<tr><td colspan="6" style="padding:20px;text-align:center;color:var(--text-muted);">Sin usuarios registrados aún.</td></tr>';
+        return;
+      }
+
+      let html = '';
+      html += `<tr class="row-total">
+        <td style="padding:10px 14px;font-weight:900;">TOTAL (${users.length} USUARIOS)</td>
+        <td class="cell-num" style="font-weight:900;color:var(--primary);">${fmtNum(totalQueries)}</td>
+        <td class="cell-num" style="font-weight:900;color:var(--primary);">${fmtBytes(totalBytes)}</td>
+        <td class="cell-num" style="font-weight:900;">100.0%</td>
+        <td style="font-size:11.5px;color:var(--text-muted);">-</td>
+        <td class="cell-num" style="font-size:11.5px;color:var(--text-muted);">-</td>
+      </tr>`;
+
+      users.forEach(u => {
+        const pct = totalBytes > 0 ? ((u.bytes / totalBytes) * 100).toFixed(1) + '%' : '0.0%';
+        html += `<tr>
+          <td style="padding:9px 14px;font-weight:700;font-family:monospace;font-size:12px;color:var(--text-main);">${u.email}</td>
+          <td class="cell-num" style="font-weight:700;">${fmtNum(u.queries)}</td>
+          <td class="cell-num" style="font-weight:700;color:#EA1D2C;">${fmtBytes(u.bytes)}</td>
+          <td class="cell-num">${pct}</td>
+          <td style="font-size:12px;font-weight:600;color:var(--accent);">${u.topMetric}</td>
+          <td class="cell-num" style="font-size:11.5px;color:var(--text-muted);">${u.lastAccess}</td>
+        </tr>`;
+      });
+
+      tbody.innerHTML = html;
+    }
+
+    function renderAnalyticsTops() {
+      const bMetrics = document.getElementById('anTopMetricsBody');
+      bMetrics.innerHTML = (AN_DATA.topMetrics || []).map(m => `
+        <tr><td style="padding:7px 14px;font-weight:600;">${m.name}</td><td class="cell-num" style="font-weight:700;">${fmtNum(m.count)}</td></tr>
+      `).join('') || '<tr><td colspan="2" style="padding:15px;text-align:center;color:var(--text-muted);">Sin datos</td></tr>';
+
+      const bCountries = document.getElementById('anTopCountriesBody');
+      bCountries.innerHTML = (AN_DATA.topCountries || []).map(c => `
+        <tr><td style="padding:7px 14px;font-weight:600;">${c.name}</td><td class="cell-num" style="font-weight:700;">${fmtNum(c.count)}</td></tr>
+      `).join('') || '<tr><td colspan="2" style="padding:15px;text-align:center;color:var(--text-muted);">Sin datos</td></tr>';
+
+      const bBusinesses = document.getElementById('anTopBusinessesBody');
+      bBusinesses.innerHTML = (AN_DATA.topBusinesses || []).map(b => `
+        <tr><td style="padding:7px 14px;font-weight:600;">${b.name}</td><td class="cell-num" style="font-weight:700;">${fmtNum(b.count)}</td></tr>
+      `).join('') || '<tr><td colspan="2" style="padding:15px;text-align:center;color:var(--text-muted);">Sin datos</td></tr>';
+    }
+
+    function renderAnalyticsRecentLogs() {
+      const tbody = document.getElementById('anRecentLogsBody');
+      const logs = AN_DATA.recentLogs || [];
+      if (!logs.length) {
+        tbody.innerHTML = '<tr><td colspan="8" style="padding:20px;text-align:center;color:var(--text-muted);">No hay consultas registradas aún.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = logs.map(l => `
+        <tr>
+          <td style="padding:7px 14px;font-size:11.5px;color:var(--text-muted);">${l.fecha}</td>
+          <td style="padding:7px 14px;font-family:monospace;font-size:11.5px;font-weight:600;">${l.email}</td>
+          <td style="padding:7px 14px;"><span class="badge-business badge-total">${l.accion}</span></td>
+          <td style="padding:7px 14px;font-size:11.5px;">${l.tab}</td>
+          <td style="padding:7px 14px;font-weight:600;">${l.pais}</td>
+          <td style="padding:7px 14px;"><span class="badge-business ${getBusinessBadgeClass(l.negocio)}">${l.negocio}</span></td>
+          <td style="padding:7px 14px;font-weight:600;color:var(--accent);">${l.metrica}</td>
+          <td class="cell-num" style="font-size:11.5px;font-weight:600;">${fmtBytes(l.bytes)}</td>
+        </tr>
+      `).join('');
+    }
+  </script>
+</body>
+</html>

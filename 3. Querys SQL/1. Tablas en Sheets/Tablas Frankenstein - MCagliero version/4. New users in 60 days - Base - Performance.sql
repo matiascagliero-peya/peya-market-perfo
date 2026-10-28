@@ -1,5 +1,9 @@
 DECLARE query_name STRING DEFAULT '4. New users in 60 days - Base - Performance';
 
+-- Sheets Name: 1. ET - New user>60 (23 - New user>60)
+-- Sheets Link: https://docs.google.com/spreadsheets/d/1P3DswnPrt7VF3DM1jC-IhtoOKmI6CRWx_Hbf-5qYaDk
+
+
 -- 4. New users in 60 days - Base - Performance
 -- Fuente oficial: frank_user_type_monthly (Frank Matias)
 -- Mide cohortes de nuevos usuarios desde 2025 y su retención a 60 días (meses 2 y 3)

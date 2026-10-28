@@ -1,5 +1,9 @@
 DECLARE query_name STRING DEFAULT '2. NPS - Base - Customer Insights';
 
+-- Sheets Name: 1. ET - NPS (25 - NPS Score)
+-- Sheets Link: https://docs.google.com/spreadsheets/d/1O-diG9Qc9NqB5ydMwkCPlB9usIGg66s_nRl2uRAAlx4
+
+
 WITH country_names AS (
   -- OPTIMIZACIÓN GIGANTE: 
   -- Solo miramos los últimos 30 días de órdenes. Si un país opera hoy,

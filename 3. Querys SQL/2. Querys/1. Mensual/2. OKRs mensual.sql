@@ -6,6 +6,10 @@
 
 -- ── PASO 0: Variables de Fecha ─────────────────────────────────────────────
 DECLARE query_name            STRING DEFAULT '2. OKRs mensual.sql';
+
+-- Sheets Name: 1. TD - OKRs Mensual (0 - Orders)
+-- Sheets Link: https://docs.google.com/spreadsheets/d/13yTO_kFzIvISmbSz6p93BFUub1HODpuiGhB3yElZ2fw
+
 DECLARE from_date_historic    DATE DEFAULT '2020-01-01';
 DECLARE from_date_incremental DATE DEFAULT DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL 1 MONTH), MONTH);
 DECLARE to_date               DATE DEFAULT DATE_SUB(CURRENT_DATE(), INTERVAL 1 DAY);

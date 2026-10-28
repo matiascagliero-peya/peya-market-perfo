@@ -1,5 +1,9 @@
 DECLARE query_name STRING DEFAULT '9. Ultra Fresh Data - Base - Performance';
 
+-- Sheets Name: 1. ET - UF Data (14 - UF Data)
+-- Sheets Link: https://docs.google.com/spreadsheets/d/15-zHA4HDBopwhCBjwhIeHr-mLpVuYCe5I0G4bd8X-4s
+
+
 -- 9. Ultra Fresh Data - Base - Performance
 WITH config AS (
     SELECT ['Produce', 'Meat / Seafood', 'Ready To Consume'] AS uf_categories

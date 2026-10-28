@@ -1,5 +1,9 @@
 DECLARE query_name STRING DEFAULT '2. Planning - Base - Supply';
 
+-- Sheets Name: 1. ET - Planning (12 - Planning Data)
+-- Sheets Link: https://docs.google.com/spreadsheets/d/1RmOQIQNuIy_9UiBxz1M1TF4q03RkYOx-BEO2jK4kWKc
+
+
 with sku_lfc as (select
 mes,
 country_code as country_code,

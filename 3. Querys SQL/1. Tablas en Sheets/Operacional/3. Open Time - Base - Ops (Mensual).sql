@@ -1,5 +1,9 @@
 DECLARE query_name STRING DEFAULT '3. Open Time - Base - Ops (Mensual)';
 
+-- Sheets Name: 1. ET - Mensual (18 - Open Time)
+-- Sheets Link: https://docs.google.com/spreadsheets/d/1s91vz3ppIavr6dyXWHqRRqeYHSs-gWkoEaYBq8qkrBw
+
+
 -- Rango de fechas: desde 2026-01-01 hasta ayer (D-1)
 DECLARE inicio DATE DEFAULT DATE("2025-01-01");
 DECLARE fin    DATE DEFAULT DATE_SUB(CURRENT_DATE(), INTERVAL 1 DAY);

@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <base target="_top">
+    <title><?= reportName ?></title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;700;900&display=swap');
+
+    /* --- ESTILOS PARA LA BARRA DE NAVEGACIÓN SUPERIOR --- */
+    #menu {
+        display: flex;
+        justify-content: center;
+        background-color: #ffffff;
+        padding: 0 20px;
+        border-bottom: 1px solid #dee2e6;
+        flex-shrink: 0;
+        z-index: 110;
+        position: relative;
+    }
+
+    #menu button {
+        font-family: 'Inter', sans-serif;
+        background-color: transparent;
+        color: #495057;
+        border: none;
+        border-bottom: 3px solid transparent;
+        padding: 15px 20px;
+        margin: 0 5px;
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s ease-in-out;
+    }
+
+    #menu button:hover {
+        background-color: #f8f9fa;
+        color: #212529;
+    }
+
+    #menu button.active {
+        color: #000000;
+        border-bottom: 3px solid #000000;
+    }
+    /* --- FIN DE ESTILOS NUEVOS --- */
+
+    :root {
+        --pey-red: #e50044;
+        --light-grey: #f4f5f7;
+        --border-color: #e9e9f0;
+    }
+
+    html, body {
+        height: 100vh;
+        margin: 0;
+        overflow: hidden;
+    }
+
+    body {
+        font-family: 'Roboto', Arial, sans-serif;
+        background-color: var(--light-grey);
+        display: flex;
+        flex-direction: column;
+    }
+
+    .header-bar {
+        background-color: var(--pey-red);
+        padding: 10px 20px;
+        text-align: center;
+        height: 50px;
+        box-sizing: border-box;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+
+    .main-title { font-size: 22px; font-weight: 900; color: #fff; margin: 0; }
+
+    .main-layout {
+        display: flex;
+        flex-grow: 1;
+        height: 0; /* Changed from height: 100% to fill remaining space */
+    }
+
+    .sidebar {
+        flex: 0 0 350px;
+        background-color: #fff;
+        border-right: 1px solid var(--border-color);
+        display: flex;
+        flex-direction: column;
+        overflow-y: hidden; /* Prevent sidebar itself from scrolling */
+    }
+
+    .search-container {
+        padding: 10px 15px;
+        border-bottom: 1px solid var(--border-color);
+        flex-shrink: 0; /* Prevent search from shrinking */
+    }
+    #search-input {
+        width: 100%;
+        padding: 10px 15px;
+        border: 1px solid #ccc;
+        border-radius: 20px;
+        font-size: 14px;
+        box-sizing: border-box;
+    }
+
+    .sort-controls {
+        display: flex;
+        gap: 8px;
+        margin-top: 10px;
+    }
+    .sort-button {
+        flex-grow: 1;
+        padding: 8px 10px;
+        font-size: 13px;
+        font-weight: 700;
+        border: 1px solid #ccc;
+        background-color: #f8f9fa;
+        color: #555;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+    }
+    .sort-button:hover {
+        background-color: #e9ecef;
+        border-color: #bbb;
+    }
+    .sort-button.active {
+        background-color: var(--pey-red);
+        color: white;
+        border-color: var(--pey-red);
+    }
+
+    .metric-list {
+        flex-grow: 1; /* Allow list to take remaining space */
+        overflow-y: auto; /* Enable scrolling ONLY for the list */
+    }
+
+    .chapter-header {
+        position: sticky;
+        top: 0;
+        background-color: #f4f5f7;
+        padding: 10px 20px;
+        font-size: 12px;
+        font-weight: 900;
+        color: #555;
+        text-transform: uppercase;
+        border-top: 1px solid var(--border-color);
+        border-bottom: 1px solid var(--border-color);
+        z-index: 10;
+    }
+
+    .metric-list-item { padding: 15px 20px; border-bottom: 1px solid var(--border-color); cursor: pointer; transition: background-color 0.2s ease; }
+    .metric-list-item:hover { background-color: #fafafa; }
+    .metric-list-item.active { background-color: #fce8ee; border-left: 4px solid var(--pey-red); padding-left: 16px; }
+    .metric-list-item h4 { margin: 0 0 5px 0; font-size: 16px; color: #333; }
+    .metric-list-item p { margin: 0; font-size: 12px; color: #777; font-weight: 700; }
+    .content-pane { flex-grow: 1; padding: 30px; overflow-y: auto; }
+    .placeholder { text-align: center; color: #777; padding: 40px; }
+    .details-card { animation: fadeIn .4s ease-out; }
+    .details-header { display: flex; flex-wrap: wrap; gap: 10px; justify-content: space-between; align-items: flex-start; padding-bottom: 15px; border-bottom: 2px solid var(--pey-red); margin-bottom: 20px; }
+    .details-title-container { flex-grow: 1; display: flex; align-items: center; gap: 15px; }
+    .details-title-block { flex-shrink: 1; }
+    .details-title { font-size: 24px; font-weight: 900; color: #333; margin: 0; }
+    .details-subtitle { font-size: 14px; font-weight: 400; color: #777; margin: 4px 0 0 0; }
+    .details-chapter { background-color: #222; color: #fff; padding: 6px 12px; border-radius: 20px; font-size: 14px; font-weight: 700; flex-shrink: 0;}
+    .details-grid { display: grid; gap: 20px; }
+
+    .detail-item {
+        padding: 15px;
+        background-color: #f8f9fa;
+        border-radius: 8px;
+        border-left: 4px solid #e0e0e0;
+    }
+    .detail-item--available {
+        border-left-color: #28a745;
+    }
+    .detail-item--unavailable {
+        border-left-color: #c0392b;
+    }
+
+    .detail-label { font-size: 12px; font-weight: 900; color: #777; text-transform: uppercase; margin-bottom: 8px; display: block; }
+    .detail-value { font-size: 16px; color: #333; line-height: 1.5; word-break: break-word; }
+    .detail-value a { color: #005A9C; text-decoration: none; font-weight: 700; }
+    .detail-value a:hover { text-decoration: underline; }
+    .detail-value a .fa-slack { color: #E01E5A; margin-right: 5px; }
+    .detail-value code { background-color: #e9ecef; padding: 4px 8px; border-radius: 4px; font-size: 15px; color: #c7254e; }
+    .header-actions { display: flex; align-items: center; gap: 8px; margin-top: 5px; flex-shrink: 0; }
+    .share-button { background-color: #f0f0f0; color: #333; border: none; padding: 8px 12px; border-radius: 20px; cursor: pointer; font-size: 13px; font-weight: 700; transition: background-color 0.2s; }
+    .share-button:hover { background-color: #e0e0e0; }
+    .share-button i { margin-right: 6px; }
+    .datahub-button { background-color: transparent; border: 1px solid #888; color: #555; padding: 7px 12px; border-radius: 20px; text-decoration: none; font-size: 12px; font-weight: 700; transition: all 0.2s ease; }
+    .datahub-button:hover { background-color: #555; color: white; border-color: #555; }
+    .datahub-button i { margin-right: 6px; }
+    #toast-notification { position: fixed; bottom: -100px; left: 50%; transform: translateX(-50%); background-color: #28a745; color: white; padding: 15px 25px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); font-weight: 700; transition: bottom 0.5s ease-in-out; z-index: 1000; }
+    #toast-notification.show { bottom: 30px; }
+
+    .page-footer {
+        flex-shrink: 0;
+        height: 30px;
+        background-color: #333;
+        border-top: 1px solid #444;
+        color: #f0f0f0;
+        text-align: center;
+        font-size: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 100;
+    }
+    .page-footer a,
+    .page-footer strong {
+        color: #f2c94c;
+        text-decoration: none;
+        font-weight: 500;
+        margin: 0 4px;
+    }
+    .page-footer a:hover {
+        text-decoration: underline;
+    }
+
+    /* --- [NUEVOS ESTILOS PARA SQL] --- */
+    #sql-content-wrapper {
+        margin-top: 15px;
+    }
+
+    #sql-content-wrapper p.sql-loading,
+    #sql-content-wrapper p.sql-error {
+        font-style: italic;
+        color: #555;
+        font-size: 14px;
+        font-family: Arial, sans-serif;
+        white-space: pre-wrap; /* Para que los saltos de línea del error se respeten */
+    }
+
+    #sql-content-wrapper p.sql-error {
+        color: #c0392b;
+        font-weight: 500;
+    }
+
+    #sql-content-wrapper pre {
+        background-color: #2d2d2d; /* Fondo oscuro para el código */
+        color: #f1f1f1; /* Texto claro */
+        padding: 15px;
+        border-radius: 6px;
+        overflow-x: auto; /* Scroll horizontal si el código es muy largo */
+        white-space: pre; /* Mantiene espacios y saltos de línea */
+        font-family: 'Courier New', Courier, monospace;
+        font-size: 14px;
+        line-height: 1.4;
+    }
+    /* --- [FIN DE NUEVOS ESTILOS] --- */
+
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    @media (max-width: 800px) {
+        html, body { height: auto; overflow: auto; } /* Allow scrolling on small screens */
+        .main-layout { flex-direction: column; height: auto; }
+        .sidebar { flex-basis: auto; border-right: none; max-height: 40vh; overflow-y: hidden; /* Keep search bar visible */ }
+        .content-pane { padding: 20px; }
+        .details-title { font-size: 20px; }
+    }
+</style>
+</head>
+<body>
+    <div id="menu">
+        <button onclick="window.open('https://script.google.com/a/macros/pedidosya.com/s/AKfycbzSHNPWt6rfWMVIWI1XHd_z_2urkmcF8M_L2kP3Ohie-4wwDoAZrq6c7XluIu6dNeiq/exec', '_top')">
+            The Data Hub
+        </button>
+        <button class="active" onclick="return false;" style="cursor: default;">
+            Glosario de Métricas
+        </button>
+    </div>
+
+    <div class="header-bar">
+        <h1 class="main-title"><i class="fas fa-book-open"></i> <?= reportName ?></h1>
+    </div>
+    <div class="main-layout">
+        <div class="sidebar" id="sidebar-container">
+            <div class="search-container">
+                <input type="text" id="search-input" placeholder="🔎 Buscar por nombre, categoría o descripción...">
+
+                <div class="sort-controls">
+                    <button id="sort-alpha-btn" class="sort-button active" data-sort="alpha">
+                        <i class="fas fa-sort-alpha-down"></i> Alfabético
+                    </button>
+                    <button id="sort-chapter-btn" class="sort-button" data-sort="chapter">
+                        <i class="fas fa-layer-group"></i> Por Chapter
+                    </button>
+                </div>
+
+            </div>
+            <div class="metric-list" id="metric-list-container">
+                <div class="placeholder">Cargando métricas...</div>
+            </div>
+        </div>
+        <div class="content-pane" id="metric-details-container">
+            <div class="placeholder">Seleccioná una métrica de la lista.</div>
+        </div>
+    </div>
+
+    <div id="toast-notification">¡Enlace copiado!</div>
+
+    <footer class="page-footer">
+        Plataforma creada para PedidosYa por <a href="https://deliveryhero.enterprise.slack.com/team/U08MB3B38G1" target="_blank">Matias Cagliero</a> del equipo de Strategy & Performance
+    </footer>
+
+    <script>
+        const APP_BASE_URL = '<?= baseUrl ?>';
+        const START_METRIC_ID = '<?= startMetricId ?>';
+        const START_METRIC_NAME = '<?= startMetricName ?>';
+        const START_SEARCH_TERM = '<?= startSearchTerm ?>';
+
+        let allMetricsData = [];
+        let currentSort = 'alpha';
+
+        const listContainer = document.getElementById('metric-list-container');
+        const detailsContainer = document.getElementById('metric-details-container');
+        const searchInput = document.getElementById('search-input');
+        const sortAlphaBtn = document.getElementById('sort-alpha-btn');
+        const sortChapterBtn = document.getElementById('sort-chapter-btn');
+
+        // --- FUNCIONES DE LOGGING ---
+
+        function getDeviceType() {
+            return window.innerWidth > 800 ? 'Computadora' : 'Movil';
+        }
+
+        function logEvent(eventType, eventValue = '') {
+            const eventData = {
+                type: eventType,
+                value: eventValue.toString().substring(0, 100),
+                device: getDeviceType()
+            };
+            google.script.run
+                .withFailureHandler(e => console.error("Error logging event:", e))
+                .logUserEvent(eventData);
+        }
+
+        // --- INICIALIZACIÓN Y EVENT LISTENERS ---
+
+        document.addEventListener('DOMContentLoaded', () => {
+            google.script.run
+                .withSuccessHandler(initializeDashboard)
+                .withFailureHandler(showError)
+                .getMetricsData();
+
+            searchInput.addEventListener('input', applySortAndFilter);
+            sortAlphaBtn.addEventListener('click', () => setSortMode('alpha'));
+            sortChapterBtn.addEventListener('click', () => setSortMode('chapter'));
+        });
+
+        function initializeDashboard(dataString) {
+            try {
+                const result = JSON.parse(dataString);
+                if (result.error) {
+                    showError({ message: result.error });
+                    return;
+                }
+                allMetricsData = result;
+            } catch (e) {
+                showError({ message: "No se pudieron procesar los datos recibidos." });
+                return;
+            }
+
+            logEvent('visita_hub', 'home');
+            applySortAndFilter();
+
+            let initialMetric;
+            let searchAttempted = false;
+
+            if (START_METRIC_ID && START_METRIC_ID !== 'null') {
+                initialMetric = allMetricsData.find(m => String(m.Id).trim() === START_METRIC_ID.trim());
+            } else if (START_METRIC_NAME && START_METRIC_NAME !== 'null') {
+                const metricNameToFind = START_METRIC_NAME.trim().toLowerCase();
+                initialMetric = allMetricsData.find(m => m.Metrica.trim().toLowerCase() === metricNameToFind);
+                if (!initialMetric) {
+                    searchInput.value = START_METRIC_NAME;
+                    applySortAndFilter();
+                    searchAttempted = true;
+                    logEvent('busqueda_url_fallida', START_METRIC_NAME);
+                }
+            } else if (START_SEARCH_TERM && START_SEARCH_TERM !== 'null') {
+                searchInput.value = START_SEARCH_TERM;
+                applySortAndFilter();
+                searchAttempted = true;
+                logEvent('busqueda_url', START_SEARCH_TERM);
+            }
+
+            if (!initialMetric && !searchAttempted) {
+                initialMetric = allMetricsData.find(m => m.isRecommended);
+                if (!initialMetric && allMetricsData.length > 0) {
+                    allMetricsData.sort((a, b) => a.Metrica.localeCompare(b.Metrica));
+                    initialMetric = allMetricsData[0];
+                }
+            }
+
+            if (initialMetric) {
+                displayMetricDetails(initialMetric.Id);
+            } else if (allMetricsData.length === 0) {
+                detailsContainer.innerHTML = '<div class="placeholder">No hay métricas para mostrar.</div>';
+            }
+        }
+
+        function setSortMode(mode) {
+            currentSort = mode;
+            sortAlphaBtn.classList.toggle('active', mode === 'alpha');
+            sortChapterBtn.classList.toggle('active', mode === 'chapter');
+            logEvent('filtro_clic_hub', mode);
+            applySortAndFilter();
+        }
+
+        let lastLoggedSearchTerm = '';
+
+        function applySortAndFilter() {
+            const searchTerm = searchInput.value.toLowerCase().trim();
+
+            if (searchTerm && searchTerm !== lastLoggedSearchTerm) {
+                logEvent('busqueda_manual', searchTerm);
+                lastLoggedSearchTerm = searchTerm;
+            } else if (!searchTerm) {
+                lastLoggedSearchTerm = '';
+            }
+
+            let processedMetrics = allMetricsData.filter(metric => {
+                return metric.Metrica.toLowerCase().includes(searchTerm) ||
+                       (metric.Categoria && metric.Categoria.toLowerCase().includes(searchTerm)) ||
+                       (metric.Description && metric.Description.toLowerCase().includes(searchTerm));
+            });
+
+            if (currentSort === 'alpha') {
+                processedMetrics.sort((a, b) => a.Metrica.localeCompare(b.Metrica));
+            } else if (currentSort === 'chapter') {
+                processedMetrics.sort((a, b) => {
+                    const chapterA = a.Chapter || 'zzzz'; // Sort metrics without chapter last
+                    const chapterB = b.Chapter || 'zzzz';
+                    if (chapterA < chapterB) return -1;
+                    if (chapterA > chapterB) return 1;
+                    return a.Metrica.localeCompare(b.Metrica); // Sort alphabetically within chapter
+                });
+            }
+
+            buildMetricList(processedMetrics);
+        }
+
+        function buildMetricList(metricsToShow) {
+            listContainer.innerHTML = '';
+            if (metricsToShow.length === 0) {
+                listContainer.innerHTML = '<div class="placeholder">No se encontraron métricas.</div>';
+                return;
+            }
+
+            let lastChapter = null;
+
+            metricsToShow.forEach(metric => {
+                if (currentSort === 'chapter' && metric.Chapter !== lastChapter) {
+                    const chapterHeader = document.createElement('div');
+                    chapterHeader.className = 'chapter-header';
+                    chapterHeader.textContent = metric.Chapter || 'Otras Métricas';
+                    listContainer.appendChild(chapterHeader);
+                    lastChapter = metric.Chapter;
+                }
+
+                const item = document.createElement('div');
+                item.className = 'metric-list-item';
+                item.dataset.id = metric.Id;
+                item.innerHTML = `<h4>${metric.Metrica}</h4><p>${metric.Categoria || ''}</p>`;
+                item.addEventListener('click', () => displayMetricDetails(metric.Id));
+                listContainer.appendChild(item);
+            });
+
+            // Re-apply active state if the selected metric is still visible
+            const currentActiveId = detailsContainer.querySelector('.details-card')?.dataset.metricId;
+            if (currentActiveId) {
+                const activeListItem = listContainer.querySelector(`.metric-list-item[data-id="${currentActiveId}"]`);
+                if (activeListItem) {
+                    activeListItem.classList.add('active');
+                }
+            }
+        }
+
+        function displayMetricDetails(metricId) {
+            const metric = allMetricsData.find(m => String(m.Id) === String(metricId));
+            if (!metric) return;
+
+            logEvent('vista_detalle_metrica', metric.Metrica);
+
+            // Update active item in the list
+            document.querySelectorAll('.metric-list-item').forEach(el => {
+                el.classList.toggle('active', el.dataset.id === String(metricId));
+            });
+
+            let ownerHtml;
+            if (metric.OwnerSlackLink) {
+                ownerHtml = `<a href="${metric.OwnerSlackLink}" target="_blank" title="Abrir chat en Slack"><i class="fab fa-slack"></i> ${metric.Owner}</a>`;
+            } else {
+                ownerHtml = metric.Owner || 'No disponible';
+            }
+
+            const dataHubBaseUrl = "https://script.google.com/a/pedidosya.com/macros/s/AKfycbzSHNPWt6rfWMVIWI1XHd_z_2urkmcF8M_L2kP3Ohie-4wwDoAZrq6c7XluIu6dNeiq/exec?page=resultados&filterType=textQuery&view=compacta";
+            const encodedMetricName = encodeURIComponent(metric.Metrica);
+            const dataHubUrl = `${dataHubBaseUrl}&filter=${encodedMetricName}`;
+
+            // --- Lógica para el bloque de Ejemplo SQL ---
+            let exampleSqlHtml = 'No disponible';
+            if (metric.Example) {
+                try {
+                    // Ensure URL starts with http/https for URL constructor
+                    const urlString = metric.Example.startsWith('http') ? metric.Example : 'https://' + metric.Example;
+                    const safeUrl = new URL(urlString).href;
+                    exampleSqlHtml = `
+                        <a href="${safeUrl}" target="_blank" title="Abrir archivo SQL en Google Drive">
+                            <i class="fas fa-file-code"></i> Ver archivo en Drive
+                        </a>
+                        <div id="sql-content-wrapper"></div>
+                    `;
+                } catch (urlError) {
+                    console.error("Invalid URL provided for Example:", metric.Example, urlError);
+                    // Provide a user-friendly error message and the placeholder div
+                    exampleSqlHtml = '<span style="color:red; font-style:italic;">Link de Ejemplo inválido.</span><div id="sql-content-wrapper"></div>';
+                }
+            }
+            // --- FIN Lógica SQL ---
+
+            const cardHTML = `
+                <div class="details-card" data-metric-id="${metric.Id}">
+                    <div class="details-header">
+                        <div class="details-title-container">
+                            <div class="details-title-block">
+                                <h2 class="details-title">${metric.Metrica}</h2>
+                                <p class="details-subtitle">${metric.Categoria || ''}</p>
+                            </div>
+                            ${metric.Chapter ? `<span class="details-chapter">${metric.Chapter}</span>` : ''}
+                        </div>
+                        <div class="header-actions">
+                            <a href="${dataHubUrl}" target="_blank" class="datahub-button" id="dataHubButton">
+                                <i class="fas fa-search"></i> Buscar reporte en The Data Hub
+                            </a>
+                            <button class="share-button" id="shareButton">
+                                <i class="fas fa-share-alt"></i> Compartir
+                            </button>
+                        </div>
+                    </div>
+                    <div class="details-grid">
+                        <div class="detail-item ${metric.Description ? 'detail-item--available' : 'detail-item--unavailable'}">
+                            <span class="detail-label">Descripción</span><p class="detail-value">${metric.Description || 'No disponible'}</p>
+                        </div>
+                        <div class="detail-item ${metric.Formula ? 'detail-item--available' : 'detail-item--unavailable'}">
+                            <span class="detail-label">Fórmula</span><p class="detail-value"><code>${metric.Formula || 'No disponible'}</code></p>
+                        </div>
+                        <div class="detail-item ${metric.Fuente ? 'detail-item--available' : 'detail-item--unavailable'}">
+                            <span class="detail-label">Fuente</span><p class="detail-value">${metric.Fuente || 'No disponible'}</p>
+                        </div>
+                        <div class="detail-item ${metric.Owner ? 'detail-item--available' : 'detail-item--unavailable'}">
+                            <span class="detail-label">Owner</span><p class="detail-value">${ownerHtml}</p>
+                        </div>
+
+                        <div class="detail-item ${metric.Example ? 'detail-item--available' : 'detail-item--unavailable'}" id="example-sql-container">
+                            <span class="detail-label">Ejemplo SQL</span>
+                            <div class="detail-value">
+                                ${exampleSqlHtml}
+                            </div>
+                        </div>
+                        </div>
+                </div>`;
+
+            detailsContainer.innerHTML = cardHTML;
+
+            // --- Cargar el SQL automáticamente si hay link ---
+            // Check if exampleSqlHtml doesn't contain the error span before trying to load
+            if (metric.Example && exampleSqlHtml.indexOf('color:red') === -1) {
+                logEvent('intento_cargar_query', metric.Metrica);
+                showSqlLoading();
+                google.script.run
+                    .withSuccessHandler(showSqlContent)
+                    .withFailureHandler(showSqlError)
+                    .getSqlExample(metric.Example);
+            } else if (metric.Example && exampleSqlHtml.indexOf('color:red') !== -1){
+                // If URL was invalid, don't try to load, error is already shown
+                // No action needed here, the error message is part of exampleSqlHtml
+            }
+            // --- FIN Carga SQL ---
+
+            // Add event listeners AFTER innerHTML is set
+            document.getElementById('shareButton').addEventListener('click', () => {
+                const shareUrl = `${APP_BASE_URL}?metricId=${metric.Id}`;
+                navigator.clipboard.writeText(shareUrl).then(() => {
+                    logEvent('compartir_enlace', metric.Metrica);
+                    showToastNotification();
+                }).catch(err => {
+                    console.error('Error al copiar: ', err);
+                    alert('No se pudo copiar el enlace.');
+                });
+            });
+
+            document.getElementById('dataHubButton').addEventListener('click', () => {
+                logEvent('clic_datahub', metric.Metrica);
+            });
+
+            // Scroll to active item
+            setTimeout(() => {
+                const activeItem = listContainer.querySelector('.metric-list-item.active');
+                if (activeItem) {
+                    activeItem.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            }, 100); // Small delay to ensure rendering
+        }
+
+        // --- FUNCIONES PARA MOSTRAR SQL ---
+
+        function showSqlLoading() {
+            const sqlContentWrapper = document.getElementById('sql-content-wrapper');
+            if (sqlContentWrapper) {
+                sqlContentWrapper.innerHTML = `<p class="sql-loading">Cargando query...</p>`;
+            }
+        }
+
+        function showSqlContent(sqlContent) {
+            const sqlContentWrapper = document.getElementById('sql-content-wrapper');
+            if (sqlContentWrapper) {
+                // Escape HTML characters for security
+                const escapedContent = sqlContent
+                    .replace(/&/g, "&amp;")
+                    .replace(/</g, "&lt;")
+                    .replace(/>/g, "&gt;");
+                sqlContentWrapper.innerHTML = `<pre>${escapedContent}</pre>`;
+            }
+        }
+
+        function showSqlError(error) {
+            const sqlContentWrapper = document.getElementById('sql-content-wrapper');
+            if (sqlContentWrapper) {
+                // Display error message from Apps Script
+                sqlContentWrapper.innerHTML = `<p class="sql-error">${error.message || 'Error desconocido al cargar SQL.'}</p>`;
+            }
+        }
+        // --- FIN FUNCIONES SQL ---
+
+        function showToastNotification() {
+            const toast = document.getElementById('toast-notification');
+            toast.classList.add('show');
+            setTimeout(() => { toast.classList.remove('show'); }, 2500);
+        }
+
+        function showError(error) {
+            console.error("Error en showError:", error);
+            const errorMsg = error.message || "Error desconocido.";
+            detailsContainer.innerHTML = `<div class="placeholder" style="color:red; text-align:left;"><b>Error al cargar:</b><br>${errorMsg}</div>`;
+            listContainer.innerHTML = `<div class="placeholder" style="color:red;">Fallo la carga</div>`;
+        }
+    </script>
+</body>
+</html>

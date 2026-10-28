@@ -1,5 +1,9 @@
 DECLARE query_name STRING DEFAULT '2. PQS - Base - Comercial';
 
+-- Sheets Name: 1. ET - PQS v3 (17 - PQS)
+-- Sheets Link: https://docs.google.com/spreadsheets/d/1iYX7EcVJ6hl4G6Jw4SkPfEOX25uNvw6Kw1F2LNXCfMk
+
+
 SELECT
 
         date_month, 

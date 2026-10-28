@@ -1,5 +1,9 @@
 DECLARE query_name STRING DEFAULT '1. AQS - Base - Comercial';
 
+-- Sheets Name: 1. TE - AQS v7 (9 - AQS)
+-- Sheets Link: https://docs.google.com/spreadsheets/d/1J5vZqkDrxGRlEFE07W9BD-SquluwzoGhpu3z32tYFZM
+
+
 WITH base_data AS (
   SELECT
     DATE_TRUNC(DATE(date_month), MONTH) AS month, 

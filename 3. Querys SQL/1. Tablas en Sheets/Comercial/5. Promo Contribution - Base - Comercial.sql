@@ -1,5 +1,9 @@
 DECLARE query_name STRING DEFAULT '5. Promo Contribution - Base - Comercial';
 
+-- Sheets Name: 1. ET - Promo (19 - Promo)
+-- Sheets Link: https://docs.google.com/spreadsheets/d/10-Tj3b4ZkGnxQTEnrD9Vfw4Tj--vMTeScrtSLmo03bw
+
+
 SELECT 
   month,
  -- EXTRACT(MONTH FROM month) AS month_number,

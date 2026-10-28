@@ -1,5 +1,9 @@
 DECLARE query_name STRING DEFAULT '10. Double Ya Data - Base - Performance.sql';
 
+-- Sheets Name: 1. ET - DY Data (21 - Double Ya Data)
+-- Sheets Link: https://docs.google.com/spreadsheets/d/18cUpQbzQXxAMcDix675p1zscuc_SmvXS_bYaVtEkUUU
+
+
 DECLARE start_date DATE DEFAULT '2025-01-01';
 
 WITH
@@ -12,20 +16,28 @@ dy_orders AS (
   WHERE dy.order_type = 'DOUBLE_YA'
 ),
 
--- 2) Partners en scope para cruce con sesiones (usando country_code para blindar acentos)
+-- 2) Partners en scope oficiales (alineado a OKRs y Glosario Métrica 143)
 partners_scope AS (
   SELECT DISTINCT
-    CAST(vendor_id AS STRING) AS vendor_id,
-    UPPER(country_code)        AS country_code,
+    p.partner_id,
+    p.country_id,
     CASE
-      WHEN country_name IN ('República Dominicana', 'Republic Dominican', 'Dominican Republic') THEN 'Republica Dominicana'
-      ELSE country_name
+      WHEN c.country_name IN ('República Dominicana', 'Republic Dominican', 'Dominican Republic') THEN 'Republica Dominicana'
+      ELSE c.country_name
     END AS country
-  FROM `peya-datamarts-pro.dm_dmarts.customer_orders_sku_level`
-  WHERE order_date >= start_date
+  FROM `peya-bi-tools-pro.il_core.dim_partner` p
+  INNER JOIN `peya-datamarts-pro.dm_dmarts.dim_partner_darkstore` pd
+    ON p.partner_id = pd.partner_id
+  INNER JOIN `peya-bi-tools-pro.il_core.dim_country` c
+    ON p.country_id = c.country_id
+  WHERE p.partner_name NOT IN (
+    'RD_12_Torre OV', 'PA_9_Midtown', 'SV_6_Torre Futura',
+    'EC_17_TiendaPick-Up Oficina', 'PE_3_PuntaHermosa', 'BO_19_Truck',
+    'UY_15_Eventos', 'PE_24_FILO', 'EC_6_Oficina'
+  )
 ),
 
--- 3) Sesiones de navegación y transacciones desde perseus_fact_partner_funnel (Cruce por partner y country_code)
+-- 3) Sesiones de navegación y transacciones desde perseus_fact_partner_funnel (Cruce por partner y country_id)
 sessions_data AS (
   SELECT
     DATE_TRUNC(DATE(fp.date), MONTH) AS month,
@@ -43,12 +55,10 @@ sessions_data AS (
     SUM(IF(IFNULL(fp.funnel_shop_double_ya, 0) = 0, fp.funnel_shop_transaction, 0)) AS sessions_transaction_direct
 
   FROM `peya-bi-tools-pro.il_sessions.perseus_fact_partner_funnel` fp
-  LEFT JOIN `peya-bi-tools-pro.il_core.dim_country` dc
-    ON fp.country_id = dc.country_id
   INNER JOIN partners_scope ps
-    ON CAST(fp.partner_id AS STRING) = ps.vendor_id
+    ON fp.partner_id = ps.partner_id
    AND (
-     ps.country_code = UPPER(dc.country_code)
+     fp.country_id = ps.country_id
      OR fp.country_id IS NULL
      OR fp.country_id = 0
    )

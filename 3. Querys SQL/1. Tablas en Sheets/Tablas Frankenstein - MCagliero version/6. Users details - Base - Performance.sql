@@ -1,5 +1,9 @@
 DECLARE query_name STRING DEFAULT '6. Users details - Base - Performance';
 
+-- Sheets Name: 1. ET - Users details (24 - Users details)
+-- Sheets Link: https://docs.google.com/spreadsheets/d/1yoIkjCi3mwaXQOwpPpvbxcVE5IEFHXY7uRSytN9WaTo
+
+
 -- 6. Users details - Base - Performance
 SELECT
 

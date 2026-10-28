@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <base target="_top">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Resultados - Data Hub</title>
+
+    <link rel="icon" href="https://upload.wikimedia.org/wikipedia/commons/e/eb/PedidosYa_logo.png">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.0.0/dist/css/bootstrap.min.css" integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm" crossorigin="anonymous">
+    
+    <style>
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        html, body { height: 100%; margin: 0; font-family: 'Arial', sans-serif; font-size: 15px; overflow-x: hidden; position: relative; }
+        html { scrollbar-width: thin; scrollbar-color: #E91C4F #f1f1f1; }
+        ::-webkit-scrollbar { width: 10px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #E91C4F; border-radius: 5px; }
+        ::-webkit-scrollbar-thumb:hover { background: #c7123f; }
+        body { display: flex; flex-direction: column; background-color: #f8f9fa; }
+        #main-content { flex: 1 0 auto; }
+        .message-bar { background-color: #000; color: #fff; padding: 8px 20px; text-align: center; font-size: 0.8em; }
+        .main-container { max-width: 1200px; margin: 20px auto; padding: 15px; transition: max-width 0.4s ease; }
+        .back-link { display: inline-block; margin-bottom: 20px; color: #E91C4F; text-decoration: none; font-weight: bold; }
+        .results-title h2 { font-size: 1.75em; font-weight: 700; color: #212529; margin-bottom: 20px; }
+        .results-title .filter-context-display { font-weight: 700; color: #E91C4F; }
+        #filter-pills-area .filter-pills-container { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-bottom: 10px; }
+        .filter-pill { padding: 6px 12px; border-radius: 20px; border: 1px solid #ccc; background-color: #e9ecef; color: #495057; font-size: 0.8em; cursor: pointer; transition: all 0.2s ease; }
+        .filter-pill:hover { background-color: #dee2e6; }
+        .filter-pill.active { background-color: #343a40; color: white; border-color: #343a40; font-weight: normal; }
+        .filter-bar { display: flex; flex-wrap: wrap; gap: 15px; margin-bottom: 20px; margin-top: 20px; align-items: center; background-color: #f1f3f5; padding: 15px; border: 1px solid #dee2e6; border-radius: 8px; }
+        .filter-bar .form-control { width: auto; flex-grow: 1; min-width: 180px; font-size: 0.8em; padding: 6px 12px; height: auto; }
+        .results-grid { display: grid; grid-template-columns: 1fr; gap: 25px; }
+        @media (min-width: 1200px) { .results-grid { grid-template-columns: 1fr 1fr; } }
+        .result-card { background-color: #fff; border: 1px solid #e9ecef; border-radius: 8px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); display: flex; gap: 20px; }
+        .card-content { flex: 1; min-width: 0; }
+        .card-sidebar { flex-shrink: 0; flex-basis: 250px; }
+        .card-sidebar-inner { background-color: #f8f9fa; padding: 15px; border-radius: 6px; border: 1px solid #e9ecef; display: flex; flex-direction: column; height: 100%; box-sizing: border-box; }
+        .card-title { font-size: 1.1em; font-weight: bold; color: #E91C4F; display: block; }
+        .card-meta { font-size: 0.9em; color: #555; margin-bottom: 10px; word-wrap: break-word; }
+        .card-preview-placeholder { width: 100%; height: 80px; background-color: #e9ecef; border-radius: 4px; overflow: hidden; display: flex; align-items: center; justify-content: center; }
+        .card-preview-placeholder img { max-width: 80%; max-height: 80%; object-fit: contain; }
+        .loading-container { text-align: center; color: #6c757d; display: none; }
+        .loader-spinner { border: 6px solid #e0e0e0; border-top: 6px solid #E91C4F; border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; margin: 20px auto 15px auto; }
+        .status-message { grid-column: 1 / -1; text-align: center; padding: 40px 20px; font-weight: bold; color: #6c757d; }
+        .report-wrapper { margin-top: auto; padding-top: 8px; border-top: 1px solid #e9ecef; min-height: 38px; display: flex; align-items: center; justify-content: center; }
+        .report-link, .reported-text { font-size: 11px; font-weight: bold; width: 100%; text-align: center; cursor: pointer; }
+        .report-link { color: #6c757d; }
+        .reported-text { color: #28a745; }
+        .tag-container { display: flex; flex-wrap: wrap; gap: 5px; margin: 12px 0; }
+        .info-tag { padding: 3px 7px; border-radius: 5px; font-size: 0.7em; font-weight: bold; color: #fff; white-space: nowrap; display: inline-block; }
+        #view-toggle-buttons { display: flex; justify-content: center; gap: 10px; margin-bottom: 20px; }
+        .view-toggle-button { padding: 6px 12px; border-radius: 20px; border: 1px solid #ccc; background-color: #e9ecef; color: #495057; font-size: 0.8em; cursor: pointer; transition: all 0.2s ease; }
+        .view-toggle-button.active-view { background-color: #343a40; color: white; border-color: #343a40; }
+        .footer { flex-shrink: 0; background-color: #444; color: #eee; text-align: center; font-size: 0.75em; padding: 15px 10px; margin-top: 20px; }
+        .footer a { color: #FFF176; text-decoration: none; }
+        a.card-title, .results-table a { color: #E91C4F !important; font-weight: bold !important; text-decoration: none !important; }
+        
+        /* --- ESTILOS PARA GRUPOS DESPLEGABLES (VISTA AMPLIADA) --- */
+        .children-container {
+            display: none;
+            grid-column: 1 / -1; /* Ocupa todo el ancho de la grilla */
+            padding-left: 40px;
+            padding-top: 20px;
+        }
+        .children-container.expanded { display: block; }
+        .card-title-group { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+        .toggle-icon { transition: transform 0.2s ease; display: inline-block; }
+        .toggle-icon.expanded { transform: rotate(90deg); }
+
+        /* --- ESTILOS TABLA COMPACTA CON TOGGLE --- */
+        .results-table tr.group-row { cursor: pointer; }
+        .results-table tr.group-row > td:first-child { position: relative; }
+        .results-table .toggle-icon-table {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            width: 16px;
+            height: 16px;
+            border: 1px solid #adadad;
+            border-radius: 3px;
+            background-color: #f1f1f1;
+            user-select: none;
+            margin-right: 8px; /* Espacio entre el ícono y el texto */
+        }
+        .results-table .toggle-icon-table:hover { background-color: #e0e0e0; }
+        .results-table .child-row { background-color: #f0f8ff !important; /* Color diferenciador */ }
+        .results-table .child-row td:first-child { padding-left: 40px; }
+
+        .results-table { width: 100%; border-collapse: collapse; background-color: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+        .results-table th, .results-table td { border: 1px solid #dee2e6; padding: 12px 15px; text-align: left; vertical-align: middle; font-size: 0.85em; }
+        .results-table th { background-color: #e9ecef; font-weight: bold; color: #495057; white-space: nowrap; }
+        .results-table tr:nth-child(even):not(.child-row) { background-color: #f8f9fa; }
+        .results-table tr:not(.child-row):hover { background-color: #e2e6ea; }
+
+        @media (max-width: 768px) {
+            .result-card { flex-direction: column; }
+            .card-sidebar { flex-basis: auto; width: 100%; }
+            .filter-bar { flex-direction: column; align-items: stretch; }
+            .results-title h2 { font-size: 1.5em; }
+        }
+    </style>
+</head>
+<body>
+    <div id="main-content">
+        <div class="message-bar"><?= pageData.message ?></div>
+        <div class="main-container" id="main-container">
+            <a href="<?= pageData.baseUrl ?>" class="back-link">← Volver al Hub Principal</a>
+            <div class="results-title">
+                <h2>Resultados: <span class="filter-context-display" id="current-filter-display">Todos</span></h2>
+            </div>
+            <div id="filter-pills-area"></div>
+            <div class="filter-bar">
+                <input type="text" id="text-filter" class="form-control" placeholder="🔍 Filtrar por palabra clave...">
+                <select id="country-filter" class="form-control"><option value="">Todos los Países</option></select>
+                <select id="owner-filter" class="form-control"><option value="">Todos los Owners</option></select>
+                <select id="platform-filter" class="form-control"><option value="">Todas las Plataformas</option></select>
+            </div>
+            <div id="view-toggle-buttons">
+                <button id="view-ampliada-button" class="view-toggle-button">Vista Ampliada</button>
+                <button id="view-compacta-button" class="view-toggle-button">Vista Compacta</button>
+            </div>
+            <div class="loading-container" id="results-loader">
+                <div class="loader-spinner"></div><p>Cargando reportes...</p>
+            </div>
+            <div id="results-grid-container"></div>
+        </div>
+    </div>
+    <div class="footer">Plataforma creada para <strong>PedidosYa</strong> por <a href="https://deliveryhero.enterprise.slack.com/team/U08MB3B38G1" target="_blank" rel="noopener noreferrer">Matias Cagliero</a> del equipo de Strategy & Performance</div>
+
+<script>
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function() {
+            navigator.serviceWorker.register('<?= pageData.baseUrl ?>?file=service-worker.js');
+        });
+    }
+
+    const pageData = <?!= JSON.stringify(pageData) ?>;
+    const colorMappings = pageData.colorMap;
+    let allResultsData = [];
+    let currentResults = [];
+    let currentActiveFilter = "Todos";
+    let currentView;
+    let debounceTimer;
+    
+    function escapeHTML(str) { return (str || '').replace(/[&<>"']/g, match => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[match])); }
+    function showLoader() { document.getElementById('results-loader').style.display = 'block'; document.getElementById('results-grid-container').style.display = 'none'; }
+    function hideLoader() { document.getElementById('results-loader').style.display = 'none'; document.getElementById('results-grid-container').style.display = ''; }
+    
+    function getPlatformLogoUrl(platform) {
+        const pLower = (platform || '').toLowerCase();
+        if (pLower.includes('sheet')) return 'https://upload.wikimedia.org/wikipedia/commons/thumb/3/30/Google_Sheets_logo_%282014-2020%29.svg/1200px-Google_Sheets_logo_%282014-2020%29.svg.png';
+        if (pLower.includes('looker')) return 'https://upload.wikimedia.org/wikipedia/commons/thumb/4/4c/Looker.svg/2560px-Looker.svg.png';
+        if (pLower.includes('tableau')) return 'https://upload.wikimedia.org/wikipedia/en/0/06/Tableau_logo.svg';
+        if (pLower.includes('drive')) return 'https://upload.wikimedia.org/wikipedia/commons/thumb/1/12/Google_Drive_icon_%282020%29.svg/240px-Google_Drive_icon_%282020%29.svg.png';
+        if (pLower.includes('form')) return 'https://upload.wikimedia.org/wikipedia/commons/thumb/5/5B/Google_Forms_2020_Logo.svg/1200px-Google_Forms_2020_Logo.svg.png';
+        return 'https://cdn-icons-png.flaticon.com/512/3721/3721703.png';
+    }
+    
+    function renderResults(items) {
+        const resultsContainer = document.getElementById('results-grid-container');
+        resultsContainer.innerHTML = '';
+        const getTagHtml = (name, type) => name ? `<span class="info-tag" style="background-color: ${colorMappings[type][name] || colorMappings.default};">${escapeHTML(name)}</span>` : '';
+
+        if (!items || items.length === 0) {
+            resultsContainer.innerHTML = `<div class="results-grid"><p class="status-message">No se encontraron resultados.</p></div>`;
+            return;
+        }
+
+        if (currentView === 'compacta') {
+            resultsContainer.className = '';
+            let tableHtml = '<table class="results-table"><thead><tr><th>Nombre</th><th>Descripción</th><th>Área</th><th>Chapter</th><th>País</th><th>Owner</th><th>Plataforma</th><th>Acción</th></tr></thead><tbody>';
+            
+            items.forEach(item => {
+                const isGroup = item.children && item.children.length > 0;
+                const ownerHtml = (item.ownerLink && item.owner) ? `<a href="${item.ownerLink}" target="_blank" rel="noopener noreferrer">${escapeHTML(item.owner)}</a>` : escapeHTML(item.owner);
+                
+                let firstTdContent = '';
+                if (isGroup) {
+                    firstTdContent = `<span class="toggle-icon-table">+</span>`;
+                }
+                firstTdContent += isGroup 
+                    ? `<span>${escapeHTML(item.nombreArchivo)}</span>` 
+                    : `<a href="${item.link}" target="_blank" onclick="handleReportAccess('${item.id}')">${escapeHTML(item.nombreArchivo)}</a>`;
+
+                tableHtml += `<tr class="${isGroup ? 'group-row' : ''}" data-group-id="${item.id}">
+                    <td>${firstTdContent}</td>
+                    <td>${isGroup ? `Contiene ${item.children.length} reportes.` : escapeHTML(item.descripcion)}</td>
+                    <td>${getTagHtml(item.categoria, 'areas')}</td>
+                    <td>${getTagHtml(item.chapterPrincipal, 'chapters')}</td>
+                    <td>${escapeHTML(item.pais)}</td>
+                    <td>${ownerHtml}</td>
+                    <td>${escapeHTML(item.plataforma)}</td>
+                    <td>${!isGroup ? `<div class="report-wrapper" data-id="${item.id}">${item.yaReportado ? '<span class="reported-text" data-action="retirar">✔️ Reportado</span>' : '<span class="report-link" data-action="reportar">Reportar problemas</span>'}</div>` : ''}</td>
+                </tr>`;
+
+                if (isGroup) {
+                    item.children.forEach(child => {
+                        const childOwnerHtml = (child.ownerLink && child.owner) ? `<a href="${child.ownerLink}" target="_blank" rel="noopener noreferrer">${escapeHTML(child.owner)}</a>` : escapeHTML(child.owner);
+                        tableHtml += `<tr class="child-row" data-parent-id="${item.id}" style="display: none;">
+                            <td><a href="${child.link}" target="_blank" onclick="handleReportAccess('${child.id}')">${escapeHTML(child.nombreArchivo)}</a></td>
+                            <td>${escapeHTML(child.descripcion)}</td>
+                            <td>${getTagHtml(child.categoria, 'areas')}</td>
+                            <td>${getTagHtml(child.chapterPrincipal, 'chapters')}</td>
+                            <td>${escapeHTML(child.pais)}</td>
+                            <td>${childOwnerHtml}</td>
+                            <td>${escapeHTML(child.plataforma)}</td>
+                            <td><div class="report-wrapper" data-id="${child.id}">${child.yaReportado ? '<span class="reported-text" data-action="retirar">✔️ Reportado</span>' : '<span class="report-link" data-action="reportar">Reportar problemas</span>'}</div></td>
+                        </tr>`;
+                    });
+                }
+            });
+
+            tableHtml += '</tbody></table>';
+            resultsContainer.innerHTML = tableHtml;
+
+        } else { // Vista Ampliada
+            resultsContainer.className = 'results-grid';
+            const buildCardHtml = (item, isGroup = false) => {
+                const reportLinkHtml = `<div class="report-wrapper" data-id="${item.id}">${item.yaReportado ? '<span class="reported-text" data-action="retirar">✔️ Reportado</span>' : '<span class="report-link" data-action="reportar">Reportar problemas</span>'}</div>`;
+                const imageLink = isGroup ? '' : `<a href="${item.link}" target="_blank" onclick="handleReportAccess('${item.id}')" rel="noopener noreferrer" style="display:block;"><div class="card-preview-placeholder"><img src="${getPlatformLogoUrl(item.plataforma)}" alt="${escapeHTML(item.plataforma)}"></div></a>`;
+                const ownerHtml = (item.ownerLink && item.owner) ? `<a href="${item.ownerLink}" target="_blank" rel="noopener noreferrer">${escapeHTML(item.owner)}</a>` : escapeHTML(item.owner);
+                
+                let titleHtml;
+                if(isGroup) {
+                    titleHtml = `<div class="card-title-group" data-group-toggle-id="${item.id}"><span class="toggle-icon">▶</span><span class="card-title">${escapeHTML(item.nombreArchivo)}</span></div>`;
+                } else {
+                    titleHtml = `<a href="${item.link}" target="_blank" onclick="handleReportAccess('${item.id}')" class="card-title">${escapeHTML(item.nombreArchivo)}</a>`;
+                }
+
+                const cardContent = `<div class="card-content">${titleHtml}<p class="card-meta">${escapeHTML(item.descripcion)}</p></div>`;
+                const cardSidebar = `<div class="card-sidebar"><div class="card-sidebar-inner">${imageLink}<div class="tag-container">${getTagHtml(item.categoria, 'areas')}${getTagHtml(item.chapterPrincipal, 'chapters')}</div><p class="card-meta"><strong>País:</strong> ${escapeHTML(item.pais)}</p><p class="card-meta"><strong>Plataforma:</strong> ${escapeHTML(item.plataforma)}</p><p class="card-meta"><strong>Owner:</strong> ${ownerHtml}</p>${isGroup ? `(${item.children.length} reportes)` : reportLinkHtml}</div></div>`;
+                
+                return `<div class="result-card" data-id="${item.id}">${cardContent}${cardSidebar}</div>`;
+            };
+
+            let finalHtml = '';
+            items.forEach(item => {
+                const isGroup = item.children && item.children.length > 0;
+                finalHtml += buildCardHtml(item, isGroup);
+                if(isGroup) {
+                    let childrenHtml = '<div class="children-container">';
+                    item.children.forEach(child => {
+                        childrenHtml += buildCardHtml(child, false);
+                    });
+                    childrenHtml += '</div>';
+                    finalHtml += childrenHtml;
+                }
+            });
+            resultsContainer.innerHTML = finalHtml;
+        }
+    }
+    
+    function applyAllFilters() {
+        const textFilter = document.getElementById('text-filter').value.toLowerCase().trim();
+        const mainFilterLower = currentActiveFilter.toLowerCase().trim();
+        const countryFilter = document.getElementById('country-filter').value;
+        const ownerFilter = document.getElementById('owner-filter').value;
+        const platformFilter = document.getElementById('platform-filter').value;
+
+        const passesSubFilters = (item) => {
+            const countryMatch = !countryFilter || item.pais === countryFilter;
+            const ownerMatch = !ownerFilter || item.owner === ownerFilter;
+            const platformMatch = !platformFilter || item.plataforma === platformFilter;
+            return countryMatch && ownerMatch && platformMatch;
+        };
+        
+        const passesMainFilters = (item) => {
+            const textMatch = !textFilter || [item.nombreArchivo, item.descripcion, item.palabrasClave].some(field => (field || '').toLowerCase().includes(textFilter));
+            const pillMatch = (mainFilterLower === "todos") || [item.categoria, item.chapterPrincipal].some(field => (field || '').toLowerCase().trim() === mainFilterLower);
+            return textMatch && pillMatch;
+        };
+
+        const filteredResults = allResultsData.map(item => {
+            if (item.children && item.children.length > 0) {
+                const filteredChildren = item.children.filter(child => passesMainFilters(child) && passesSubFilters(child));
+                if (passesMainFilters(item) && passesSubFilters(item) || filteredChildren.length > 0) {
+                     return { ...item, children: filteredChildren };
+                }
+                return null;
+            } else {
+                return (passesMainFilters(item) && passesSubFilters(item)) ? item : null;
+            }
+        }).filter(Boolean);
+
+        currentResults = filteredResults;
+        renderResults(currentResults);
+    }
+    
+    function populateFilterDropdowns(data) {
+        const flatItems = data.flatMap(item => [item, ...(item.children || [])]);
+        const createOptions = (items, key) => [...new Set(items.map(item => item[key]).filter(Boolean))].sort();
+        const populateSelect = (elementId, options) => {
+            const select = document.getElementById(elementId);
+            let optionsHtml = `<option value="">${select.firstElementChild.textContent}</option>`;
+            options.forEach(option => { optionsHtml += `<option value="${escapeHTML(option)}">${escapeHTML(option)}</option>`; });
+            select.innerHTML = optionsHtml;
+        };
+        populateSelect('country-filter', createOptions(flatItems, 'pais'));
+        populateSelect('owner-filter', createOptions(flatItems, 'owner'));
+        populateSelect('platform-filter', createOptions(flatItems, 'plataforma'));
+    }
+
+    function setMainFilter(newFilter) {
+        document.getElementById('text-filter').value = '';
+        currentActiveFilter = newFilter;
+        applyAllFilters();
+    }
+
+    function renderFilterPills() {
+        const container = document.getElementById('filter-pills-area');
+        container.innerHTML = ''; 
+        const flatItems = allResultsData.flatMap(item => [item, ...(item.children || [])]);
+        const uniqueAreas = [...new Set(flatItems.map(item => item.categoria).filter(Boolean))].sort();
+        const uniqueChapters = [...new Set(flatItems.map(item => item.chapterPrincipal).filter(Boolean))].sort();
+        const createPillGroup = (title, options) => {
+            let pillsHtml = `<div class="filter-pills-container">`;
+            pillsHtml += `<button class="filter-pill ${(currentActiveFilter === 'Todos') ? 'active' : ''}" data-filter="Todos">${title}</button>`;
+            options.forEach(opt => {
+                const isActive = currentActiveFilter.toLowerCase() === opt.toLowerCase();
+                pillsHtml += `<button class="filter-pill ${isActive ? 'active' : ''}" data-filter="${escapeHTML(opt)}">${escapeHTML(opt)}</button>`;
+            });
+            pillsHtml += `</div>`;
+            return pillsHtml;
+        };
+        if (uniqueAreas.length > 0) container.innerHTML += createPillGroup('Todas las Áreas', uniqueAreas);
+        if (uniqueChapters.length > 0) container.innerHTML += createPillGroup('Todos los Chapters', uniqueChapters);
+    }
+
+    function handleReportAction(event) { /* ... sin cambios ... */ }
+    function handleReportAccess(archivoId) { google.script.run.registrarAcceso(archivoId); }
+
+    function switchView(view) {
+        currentView = view;
+        document.getElementById('view-ampliada-button').classList.toggle('active-view', view === 'ampliada');
+        document.getElementById('view-compacta-button').classList.toggle('active-view', view === 'compacta');
+        renderResults(currentResults);
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        showLoader();
+        currentView = pageData.defaultView || 'ampliada';
+        if (pageData.filterType === 'textQuery') {
+            document.getElementById('text-filter').value = pageData.filterContext;
+        } else if (pageData.filterContext) {
+            currentActiveFilter = pageData.filterContext;
+        }
+        
+        google.script.run
+            .withSuccessHandler(serverData => {
+                hideLoader();
+                if (serverData.error) { 
+                    document.getElementById('results-grid-container').innerHTML = `<p class="status-message">Error: ${serverData.error}</p>`; 
+                    return; 
+                }
+                allResultsData = serverData;
+                currentResults = allResultsData;
+                document.getElementById('view-ampliada-button').classList.toggle('active-view', currentView === 'ampliada');
+                document.getElementById('view-compacta-button').classList.toggle('active-view', currentView === 'compacta');
+                
+                populateFilterDropdowns(allResultsData);
+                renderFilterPills();
+                applyAllFilters();
+            })
+            .withFailureHandler(error => {
+                hideLoader();
+                document.getElementById('results-grid-container').innerHTML = `<p class="status-message">Fallo crítico: ${error.message}</p>`;
+            })
+            .obtenerDatosParaResultados();
+        
+        document.getElementById('view-ampliada-button').addEventListener('click', () => switchView('ampliada'));
+        document.getElementById('view-compacta-button').addEventListener('click', () => switchView('compacta'));
+        document.getElementById('text-filter').addEventListener('input', () => { clearTimeout(debounceTimer); debounceTimer = setTimeout(applyAllFilters, 300); });
+        ['country-filter', 'owner-filter', 'platform-filter'].forEach(id => document.getElementById(id).addEventListener('change', applyAllFilters));
+        document.getElementById('filter-pills-area').addEventListener('click', (event) => { if (event.target.matches('.filter-pill')) setMainFilter(event.target.dataset.filter); });
+
+        document.getElementById('results-grid-container').addEventListener('click', function(event) {
+            const groupCardToggle = event.target.closest('.card-title-group');
+            if (groupCardToggle) {
+                const groupId = groupCardToggle.dataset.groupToggleId;
+                const childrenContainer = document.querySelector(`.children-container[data-parent-id="${groupId}"]`);
+                if (childrenContainer) {
+                    childrenContainer.classList.toggle('expanded');
+                    groupCardToggle.querySelector('.toggle-icon').classList.toggle('expanded');
+                }
+                return;
+            }
+
+            const groupRow = event.target.closest('tr.group-row');
+            if (groupRow) {
+                const groupId = groupRow.dataset.groupId;
+                const icon = groupRow.querySelector('.toggle-icon-table');
+                const childrenRows = document.querySelectorAll(`tr[data-parent-id="${groupId}"]`);
+                const isExpanding = icon && icon.textContent === '+';
+                
+                if (icon) icon.textContent = isExpanding ? '–' : '+';
+                childrenRows.forEach(row => { row.style.display = isExpanding ? 'table-row' : 'none'; });
+                return;
+            }
+
+            if (event.target.closest('.report-wrapper')) {
+                handleReportAction(event);
+            }
+        });
+    });
+</script>
+</body>
+</html>

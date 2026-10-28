@@ -1,4 +1,8 @@
 DECLARE query_name STRING DEFAULT '15. Small Order Fee - Performance (Monthly)';
+
+-- Sheets Name: 1. ET - Mensual (26 - Small Order Fee)
+-- Sheets Link: https://docs.google.com/spreadsheets/d/1jrU8gZPV_nGQCea7cHw85fo9HNZT37uuBfGY9AqjAiY
+
 DECLARE start_date DATE DEFAULT '2025-01-01';
 
 -- =============================================================================

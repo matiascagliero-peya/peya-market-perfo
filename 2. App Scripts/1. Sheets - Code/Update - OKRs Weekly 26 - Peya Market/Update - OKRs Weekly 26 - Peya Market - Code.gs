@@ -92,9 +92,9 @@ const CONFIG_GD_METRICAS = [
        { name: 'Net Sales ndy_nsof',   index: 23, colorFormating: 1, latam: false },
        { name: 'Sessions',             index: 31, colorFormating: 1, latam: false },
        { name: 'transactions',         index: 32, colorFormating: 1, latam: false },
-       { name: 'sessions_non_dy',      index: 33, colorFormating: 1, latam: false },
+       { name: 'Sessions - non Double Ya', index: 33, colorFormating: 1, latam: false },
        { name: 'transactions_non_dy',  index: 34, colorFormating: 1, latam: false },
-       { name: 'sessions_dy',          index: 35, colorFormating: 1, latam: false },
+       { name: 'Sessions - Double Ya', index: 35, colorFormating: 1, latam: false },
        { name: 'transactions_dy',      index: 36, colorFormating: 1, latam: false },
        { name: 'instant_need',         index: 24, colorFormating: 1, latam: false },
        { name: 'fill_in',              index: 25, colorFormating: 1, latam: false },
@@ -106,14 +106,11 @@ const CONFIG_GD_METRICAS = [
        { name: 'Daily GMV User Dmarts',         colorFormating: 1 },
        { name: 'Daily Orders per Store',        colorFormating: 1 },
        { name: 'Order share Dmarts %',          colorFormating: 1 },
-       { name: 'Ordenes DY',                    colorFormating: 1 },
        { name: '% Orders DY',                   colorFormating: 1 },
        { name: '% Orders SOF',                  colorFormating: 0 },
        { name: '% Orders Plus',                 colorFormating: 1 },
        { name: '% Plus Users',                  colorFormating: 1 },
        { name: 'Platform Maus penetration %',   colorFormating: 1 },
-       { name: 'Sessions - Double Ya',          colorFormating: 1 },
-       { name: 'Sessions - non Double Ya',      colorFormating: 1 },
        { name: 'CVR3 %',                        colorFormating: 1 },
        { name: 'CVR3 % - Double Ya',            colorFormating: 1 },
        { name: 'CVR3 % - non Double Ya',        colorFormating: 1 },
@@ -465,6 +462,70 @@ function GeneralData_Helper_QuitarFiltros(sheet) {
    }
 }
 
+function GeneralData_Helper_RecortarFilasSeguro(sheet, keepRows) {
+   if (!sheet) return;
+   try {
+     const maxRows = sheet.getMaxRows();
+     const exceso = maxRows - keepRows;
+     if (exceso > 100) {
+       const LOTE = 25000;
+       let restantes = exceso;
+       while (restantes > 0) {
+         const aBorrar = Math.min(restantes, LOTE);
+         sheet.deleteRows(keepRows + 1, aBorrar);
+         restantes -= aBorrar;
+         if (restantes > 0) SpreadsheetApp.flush();
+       }
+     }
+   } catch (e) {
+     Logger.log(`   [WARN] No se pudieron recortar filas excedentes: ${e.message}`);
+   }
+}
+
+function GeneralData_Helper_OrdenarFilasConsolidado(filas) {
+   if (!filas || filas.length <= 1) return filas;
+   const encabezado = filas[0];
+   const resto = filas.slice(1);
+
+   const filasVacias = [];
+   const filasDatos = [];
+
+   resto.forEach(row => {
+     const fechaVal = row[2];
+     const esVacia = (fechaVal === "" || fechaVal == null || String(fechaVal).trim() === "");
+     if (esVacia) {
+       filasVacias.push(row);
+     } else {
+       filasDatos.push(row);
+     }
+   });
+
+   // Filas vacías ordenadas alfabéticamente por métrica
+   filasVacias.sort((a, b) => String(a[0]).localeCompare(String(b[0])));
+
+   // Filas con datos: ordenadas de la última semana disponible hacia las primeras (Week Number DESC)
+   filasDatos.sort((a, b) => {
+     // 1. Semana descendente (b[3] vs a[3]): de la última semana disponible hacia las primeras
+     const weekA = Number(a[3]) || 0;
+     const weekB = Number(b[3]) || 0;
+     if (weekB !== weekA) return weekB - weekA;
+
+     // 2. Fecha / Timestamp descendente: año más nuevo antes, días más recientes antes
+     const timeA = a[2] instanceof Date ? a[2].getTime() : new Date(String(a[2]).replace(/-/g, '/')).getTime() || 0;
+     const timeB = b[2] instanceof Date ? b[2].getTime() : new Date(String(b[2]).replace(/-/g, '/')).getTime() || 0;
+     if (timeB !== timeA) return timeB - timeA;
+
+     // 3. País alfabético
+     const countryComp = String(a[1]).localeCompare(String(b[1]));
+     if (countryComp !== 0) return countryComp;
+
+     // 4. Métrica alfabética
+     return String(a[0]).localeCompare(String(b[0]));
+   });
+
+   return [encabezado].concat(filasVacias).concat(filasDatos);
+}
+
 function GeneralData_Helper_Importar(conf, ssDestino, reintentos = 2) {
    for (let intento = 1; intento <= reintentos; intento++) {
      try {
@@ -661,6 +722,10 @@ function GeneralData_ConsolidarMetricas() {
        config.metricas.forEach(metrica => {
          if (esExcepcionEBITDA && metrica.name !== "EBITDA") return;
 
+         // Las métricas vacías (calculadas en Sheet) se insertan una única vez al final del consolidado
+         const esVacia = (metrica.index === undefined && !metrica.calculo);
+         if (esVacia) return;
+
          const key = `${metrica.name}|${countryClean}|${dateStr}`;
 
          if (metrica.usarComponentes && metrica.indicesLatam) {
@@ -672,19 +737,14 @@ function GeneralData_ConsolidarMetricas() {
              MAPA_COMPONENTES_PAIS[key][k] += (val || 0);
            });
          } else {
-           const esVacia = (metrica.index === undefined && !metrica.calculo);
-           if (esVacia) {
-             MAPA_RESULTADOS[key] = "";
-           } else {
-             let valor = 0;
-             if (metrica.calculo) {
-               try { valor = metrica.calculo(fila); } catch (_) { valor = 0; }
-             } else if (metrica.index !== undefined) {
-               valor = parseFloat(fila[metrica.index]) || 0;
-             }
-             if (MAPA_RESULTADOS[key] === undefined) MAPA_RESULTADOS[key] = 0;
-             MAPA_RESULTADOS[key] += valor;
+           let valor = 0;
+           if (metrica.calculo) {
+             try { valor = metrica.calculo(fila); } catch (_) { valor = 0; }
+           } else if (metrica.index !== undefined) {
+             valor = parseFloat(fila[metrica.index]) || 0;
            }
+           if (MAPA_RESULTADOS[key] === undefined) MAPA_RESULTADOS[key] = 0;
+           MAPA_RESULTADOS[key] += valor;
          }
        });
 
@@ -693,6 +753,7 @@ function GeneralData_ConsolidarMetricas() {
 
          config.metricas.forEach(m => {
            if (esExcepcionEBITDA && m.name !== "EBITDA") return;
+           if (m.index === undefined && !m.calculo) return; // Vacías no se acumulan
            if (!m.latam) return;          // solo acumula LATAM si la métrica lo pide
 
            if (m.indicesLatam && Array.isArray(m.indicesLatam)) {
@@ -728,12 +789,10 @@ function GeneralData_ConsolidarMetricas() {
      if (config.calcularLatam) {
        for (const fecha in acumuladorLatam) {
          config.metricas.forEach(m => {
-           const esVacia = (m.index === undefined && !m.calculo);
-           if (!m.latam && !esVacia) return;          // solo escribe fila LATAM si la métrica lo pide o es vacía
+           if (m.index === undefined && !m.calculo) return; // Vacías no generan filas en LATAM diario
+           if (!m.latam) return;          // solo escribe fila LATAM si la métrica lo pide
            let valLatam = 0;
-           if (esVacia) {
-             valLatam = "";
-           } else if (m.calculoLatam && m.indicesLatam && !m.averageLatam) {
+           if (m.calculoLatam && m.indicesLatam && !m.averageLatam) {
              const comps = acumuladorLatam[fecha][m.name + '_components'];
              if (comps) {
                try { valLatam = m.calculoLatam(comps, fecha); } catch (_) { valLatam = 0; }
@@ -805,8 +864,36 @@ function GeneralData_ConsolidarMetricas() {
      });
    }
 
-   const datosFinales    = [];
-   const formatosFinales = [];
+   // ====================================================================================
+   // 1. MÉTRICAS VACÍAS (Calculadas en Sheet): Van PRIMERO en el consolidado
+   // ====================================================================================
+   const filasVacias = [];
+   const metricasVaciasProcesadas = new Set();
+   CONFIG_GD_METRICAS.forEach(cfg => {
+     cfg.metricas.forEach(metrica => {
+       const esVacia = (metrica.index === undefined && !metrica.calculo);
+       if (esVacia && !metricasVaciasProcesadas.has(metrica.name)) {
+         metricasVaciasProcesadas.add(metrica.name);
+         const colorVal = MAPA_COLOR_CONFIG[metrica.name] ?? (metrica.colorFormating ?? 1);
+         filasVacias.push([metrica.name, "", "", "", "", colorVal]);
+       }
+     });
+   });
+
+   if (typeof CONFIG_COLOR_METRICAS_EXTRA !== 'undefined') {
+     Object.keys(CONFIG_COLOR_METRICAS_EXTRA).forEach(nombreExtra => {
+       if (!metricasVaciasProcesadas.has(nombreExtra)) {
+         metricasVaciasProcesadas.add(nombreExtra);
+         const colorVal = CONFIG_COLOR_METRICAS_EXTRA[nombreExtra] ?? 1;
+         filasVacias.push([nombreExtra, "", "", "", "", colorVal]);
+       }
+     });
+   }
+
+   // ====================================================================================
+   // 2. FILAS CON DATOS: Se extraen y se ordenan de la fecha más reciente a la más vieja
+   // ====================================================================================
+   const filasDatos = [];
 
    for (const key in MAPA_RESULTADOS) {
      const [nombreMetrica, pais, dateStr] = key.split('|');
@@ -825,56 +912,89 @@ function GeneralData_ConsolidarMetricas() {
        }
      }
 
-     datosFinales.push([nombreMetrica, pais, dateStr, weekNumber, MAPA_RESULTADOS[key], colorVal]);
-     formatosFinales.push([MAPA_FORMATOS[nombreMetrica] || "General"]);
+     filasDatos.push([nombreMetrica, pais, dateStr, weekNumber, MAPA_RESULTADOS[key], colorVal]);
    }
+
+   // ====================================================================================
+   // 3. UNIÓN Y ORDENAMIENTO FINAL: Vacías primero, seguidas de semanas DESC (última a primera)
+   // ====================================================================================
+   const encabezado = ["Metric", "Country", "Date", "Week Number", "Value", "formato de color"];
+   const todosLosDatos = [encabezado].concat(filasVacias).concat(filasDatos);
+   const datosOrdenados = GeneralData_Helper_OrdenarFilasConsolidado(todosLosDatos);
+   const datosFinales = datosOrdenados.slice(1);
 
    let hojaDest = ss.getSheetByName(nombreHojaDestino);
    if (!hojaDest) hojaDest = ss.insertSheet(nombreHojaDestino);
    else hojaDest.clearContents(); // clearContents rinde 5x más rápido que clear() para celdas cargadas
 
    if (datosFinales.length > 0) {
+     const maxRows = hojaDest.getMaxRows();
+     const requiredRows = datosFinales.length + 1;
+     if (maxRows < requiredRows) {
+       hojaDest.insertRowsAfter(maxRows, requiredRows - maxRows);
+     }
+     const maxCols = hojaDest.getMaxColumns();
+     if (maxCols < 6) {
+       hojaDest.insertColumnsAfter(maxCols, 6 - maxCols);
+     }
+
      hojaDest.getRange(1, 1, 1, 6)
-             .setValues([["Metric", "Country", "Date", "Week Number", "Value", "formato de color"]])
+             .setValues([encabezado])
              .setFontWeight("bold");
-     hojaDest.getRange(2, 1, datosFinales.length, 6).setValues(datosFinales);
-     hojaDest.getRange(2, 5, datosFinales.length, 1).setNumberFormats(formatosFinales);
+
+     // Escritura por lotes para evitar sobrecarga o congelamientos
+     const BATCH_SIZE_LOCAL = 20000;
+     for (let startRow = 0; startRow < datosFinales.length; startRow += BATCH_SIZE_LOCAL) {
+       const batch = datosFinales.slice(startRow, Math.min(startRow + BATCH_SIZE_LOCAL, datosFinales.length));
+       hojaDest.getRange(startRow + 2, 1, batch.length, 6).setValues(batch);
+     }
+
+     // Optimización 3: Formatear solo columnas con tipos específicos (evita setNumberFormats masivo de 350k celdas)
      hojaDest.getRange(2, 3, datosFinales.length, 1).setNumberFormat("dd-MMM-yyyy");
      hojaDest.getRange(2, 4, datosFinales.length, 1).setNumberFormat("0");
 
-     // ELIMINAR FILAS EN EXCESO PARA REDUCIR EL USO DE CELDAS DEL LIBRO (Evita exceder el límite de 10M)
-     const maxRows = hojaDest.getMaxRows();
-     const requiredRows = datosFinales.length + 1;
-     if (maxRows > requiredRows) {
-       hojaDest.deleteRows(requiredRows + 1, maxRows - requiredRows);
-     }
+     // Optimización 4: Recorte seguro de filas sobrantes por lotes
+     GeneralData_Helper_RecortarFilasSeguro(hojaDest, requiredRows);
 
      Logger.log(`✅ Consolidado creado con ${datosFinales.length} filas.`);
    } else {
      Logger.log("⚠️ Sin datos para escribir.");
    }
+
+   // Optimización 1: Retornar los datos ordenados en memoria con encabezados incluidos para reutilizar sin releer de red
+   return datosOrdenados;
 }
 
 // ====================================================================================
-// 3. ENVIAR DATOS A LA HOJA DESTINO FINAL (Optimizado con copyTo)
+// 3. ENVIAR DATOS A LA HOJA DESTINO FINAL (Optimizado en Memoria y por Lotes)
 // ====================================================================================
-// ====================================================================================
-// 3. ENVIAR DATOS A LA HOJA DESTINO FINAL (Optimizado con copyTo)
-// ====================================================================================
-function enviar_consolidado() {
+function enviar_consolidado(datosEnMemoria) {
    try {
      Logger.log("--- 🚀 Iniciando envío de consolidado a PRODUCCIÓN...");
      const HOJA_ORIGEN  = "Consolidado General Data";
      const HOJA_DESTINO = "A. TI - Actuals OKRs";
 
-     Logger.log("   📂 [Paso 1/4] Abriendo archivo de origen...");
-     const ssOrigen = getSpreadsheet(ID_ARCHIVO_UNICO);
-     const sourceSheet = ssOrigen.getSheetByName(HOJA_ORIGEN);
-     if (!sourceSheet) throw new Error(`No existe la hoja '${HOJA_ORIGEN}'`);
+     let dataRaw = null;
+     if (datosEnMemoria && Array.isArray(datosEnMemoria) && datosEnMemoria.length > 1) {
+       Logger.log(`   ⚡ [Paso 1/4 y 2/4] Usando ${datosEnMemoria.length} filas directamente desde memoria RAM (sin releer de red)...`);
+       dataRaw = datosEnMemoria;
+     } else {
+       Logger.log("   📂 [Paso 1/4] Abriendo archivo de origen...");
+       const ssOrigen = getSpreadsheet(ID_ARCHIVO_UNICO);
+       const sourceSheet = ssOrigen.getSheetByName(HOJA_ORIGEN);
+       if (!sourceSheet) throw new Error(`No existe la hoja '${HOJA_ORIGEN}'`);
 
-     Logger.log("   📊 [Paso 2/4] Leyendo datos de origen...");
-     const data = sourceSheet.getDataRange().getValues().filter(row => row.join("").length > 0);
-     if (data.length < 2) throw new Error("Sin datos suficientes en el Consolidado.");
+       Logger.log("   📊 [Paso 2/4] Leyendo datos de origen...");
+       const rawValues = sourceSheet.getDataRange().getValues();
+       // Optimización 2: Filtro directo por celda sin row.join()
+       dataRaw = rawValues.filter(row => row[0] !== "" && row[0] != null);
+     }
+
+     if (!dataRaw || dataRaw.length < 2) throw new Error("Sin datos suficientes en el Consolidado.");
+
+     // Ordenar siempre: vacías primero, y semanas de la última a las primeras
+     Logger.log("   🔄 Asegurando ordenamiento (vacías primero, semanas de la última disponible hacia abajo)...");
+     const data = GeneralData_Helper_OrdenarFilasConsolidado(dataRaw);
 
      const monthIndex = data[0].findIndex(h => ["MONTH", "DATE"].includes(h.toString().trim().toUpperCase()));
      
@@ -896,14 +1016,16 @@ function enviar_consolidado() {
        targetSheet.insertColumnsAfter(maxCols, data[0].length - maxCols);
      }
 
-     Logger.log("   ⚡ [Paso 4/4] Escribiendo nuevos datos en destino (" + data.length + " filas)...");
-     targetSheet.getRange(1, 1, data.length, data[0].length).setValues(data);
-
-     // ELIMINAR FILAS EN EXCESO EN EL DESTINO (Súper importante para no sobrepasar el límite de 10M de celdas)
-     const finalMaxRows = targetSheet.getMaxRows();
-     if (finalMaxRows > data.length) {
-       targetSheet.deleteRows(data.length + 1, finalMaxRows - data.length);
+     Logger.log("   ⚡ [Paso 4/4] Escribiendo nuevos datos en destino (" + data.length + " filas en lotes)...");
+     const BATCH_SIZE = 15000;
+     for (let startRow = 0; startRow < data.length; startRow += BATCH_SIZE) {
+       const batch = data.slice(startRow, Math.min(startRow + BATCH_SIZE, data.length));
+       targetSheet.getRange(startRow + 1, 1, batch.length, data[0].length).setValues(batch);
+       SpreadsheetApp.flush();
      }
+
+     // Optimización 4: Recorte seguro de filas sobrantes por lotes
+     GeneralData_Helper_RecortarFilasSeguro(targetSheet, data.length);
 
      const colFecha = monthIndex > -1 ? monthIndex + 1 : 3;
      targetSheet.getRange(2, colFecha, data.length - 1, 1).setNumberFormat("dd-MMM-yyyy");
@@ -935,13 +1057,13 @@ function Importar_Consolidar_Y_Enviar() {
    delete _ssCache[ID_ARCHIVO_UNICO.trim()]; // Renovar conexión fresca
 
    Logger.log("👉 Paso 2/3: Calculando métricas y estructurando consolidado general...");
-   GeneralData_ConsolidarMetricas();
+   const datosConsolidados = GeneralData_ConsolidarMetricas();
 
    SpreadsheetApp.flush();
    Utilities.sleep(1000);
 
    Logger.log("👉 Paso 3/3: Enviando datos finales a la hoja de OKRs...");
-   enviar_consolidado();
+   enviar_consolidado(datosConsolidados);
 
    Logger.log("🏆 ¡PROCESO COMPLETO COMPLETADO CON ÉXITO!");
 }
@@ -970,10 +1092,10 @@ function Consolidar_Y_Enviar() {
    Logger.log("🔄 INICIANDO PROCESO ABREVIADO: CONSOLIDAR Y ENVIAR...");
 
    Logger.log("👉 Paso 1/2: Calculando métricas y estructurando consolidado general...");
-   GeneralData_ConsolidarMetricas();
+   const datosConsolidados = GeneralData_ConsolidarMetricas();
 
    Logger.log("👉 Paso 2/2: Enviando datos finales a la hoja de OKRs...");
-   enviar_consolidado();
+   enviar_consolidado(datosConsolidados);
 
    Logger.log("🏆 ¡CONSOLIDACIÓN Y ENVÍO COMPLETADOS CON ÉXITO!");
 }
@@ -989,20 +1111,33 @@ function GeneralData_ConsolidarYEnviar() {
 // ====================================================================================
 const ID_DESTINO_PRUEBAS = "1GO3jcGh8dSPz33A7KDyWASxPX8hYxWgIfbRuGgwqtC8";
 
-function enviar_consolidado_pruebas() {
+function enviar_consolidado_pruebas(datosEnMemoria) {
    try {
      Logger.log("--- 🧪 🚀 Iniciando envío de consolidado a PRUEBAS...");
      const HOJA_ORIGEN  = "Consolidado General Data";
      const HOJA_DESTINO = "A. TI - Actuals OKRs";
 
-     Logger.log("   📂 [Paso 1/4] Abriendo archivo de origen...");
-     const ssOrigen = getSpreadsheet(ID_ARCHIVO_UNICO);
-     const sourceSheet = ssOrigen.getSheetByName(HOJA_ORIGEN);
-     if (!sourceSheet) throw new Error(`No existe la hoja '${HOJA_ORIGEN}'`);
+     let dataRaw = null;
+     if (datosEnMemoria && Array.isArray(datosEnMemoria) && datosEnMemoria.length > 1) {
+       Logger.log(`   ⚡ [Paso 1/4 y 2/4] Usando ${datosEnMemoria.length} filas directamente desde memoria RAM (sin releer de red)...`);
+       dataRaw = datosEnMemoria;
+     } else {
+       Logger.log("   📂 [Paso 1/4] Abriendo archivo de origen...");
+       const ssOrigen = getSpreadsheet(ID_ARCHIVO_UNICO);
+       const sourceSheet = ssOrigen.getSheetByName(HOJA_ORIGEN);
+       if (!sourceSheet) throw new Error(`No existe la hoja '${HOJA_ORIGEN}'`);
 
-     Logger.log("   📊 [Paso 2/4] Leyendo datos de origen...");
-     const data = sourceSheet.getDataRange().getValues().filter(row => row.join("").length > 0);
-     if (data.length < 2) throw new Error("Sin datos suficientes en el Consolidado.");
+       Logger.log("   📊 [Paso 2/4] Leyendo datos de origen...");
+       const rawValues = sourceSheet.getDataRange().getValues();
+       // Optimización 2: Filtro directo por celda sin row.join()
+       dataRaw = rawValues.filter(row => row[0] !== "" && row[0] != null);
+     }
+
+     if (!dataRaw || dataRaw.length < 2) throw new Error("Sin datos suficientes en el Consolidado.");
+
+     // Ordenar siempre: vacías primero, y semanas de la última a las primeras
+     Logger.log("   🔄 Asegurando ordenamiento en PRUEBAS (vacías primero, semanas de la última disponible hacia abajo)...");
+     const data = GeneralData_Helper_OrdenarFilasConsolidado(dataRaw);
 
      const monthIndex = data[0].findIndex(h => ["MONTH", "DATE"].includes(h.toString().trim().toUpperCase()));
      
@@ -1024,14 +1159,16 @@ function enviar_consolidado_pruebas() {
        targetSheet.insertColumnsAfter(maxCols, data[0].length - maxCols);
      }
 
-     Logger.log("   ⚡ [Paso 4/4] Escribiendo nuevos datos en destino de PRUEBAS (" + data.length + " filas)...");
-     targetSheet.getRange(1, 1, data.length, data[0].length).setValues(data);
-
-     // ELIMINAR FILAS EN EXCESO EN EL DESTINO (Súper importante para no sobrepasar el límite de 10M de celdas)
-     const finalMaxRows = targetSheet.getMaxRows();
-     if (finalMaxRows > data.length) {
-       targetSheet.deleteRows(data.length + 1, finalMaxRows - data.length);
+     Logger.log("   ⚡ [Paso 4/4] Escribiendo nuevos datos en destino de PRUEBAS (" + data.length + " filas en lotes)...");
+     const BATCH_SIZE = 15000;
+     for (let startRow = 0; startRow < data.length; startRow += BATCH_SIZE) {
+       const batch = data.slice(startRow, Math.min(startRow + BATCH_SIZE, data.length));
+       targetSheet.getRange(startRow + 1, 1, batch.length, data[0].length).setValues(batch);
+       SpreadsheetApp.flush();
      }
+
+     // Optimización 4: Recorte seguro de filas sobrantes por lotes
+     GeneralData_Helper_RecortarFilasSeguro(targetSheet, data.length);
 
      const colFecha = monthIndex > -1 ? monthIndex + 1 : 3;
      targetSheet.getRange(2, colFecha, data.length - 1, 1).setNumberFormat("dd-MMM-yyyy");

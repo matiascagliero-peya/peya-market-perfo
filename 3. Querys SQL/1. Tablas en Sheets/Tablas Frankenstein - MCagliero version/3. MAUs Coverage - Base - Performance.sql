@@ -1,8 +1,12 @@
 DECLARE query_name STRING DEFAULT '3. MAUs Coverage - Base - Performance';
 
+-- Sheets Name: 1. ET - MAUs Coverage (15 - MAUs Coverage)
+-- Sheets Link: https://docs.google.com/spreadsheets/d/1MiQ6pB0Oc4TdiCGfXBR50mp-h22nBQt91g_QWOXO67k
+
+
 -- 3. MAUs Coverage - Base - Performance
 WITH coverage AS (
-    -- Lógica de Matías: Usuarios cubiertos por el polígono
+    -- Lógica de Matías: Usuarios cubiertos por el polígono (13 países PeYa Market)
     SELECT
         cm.month_date,
         cm.country_id, 
@@ -16,21 +20,25 @@ WITH coverage AS (
         AND cm.city_name_lz = dm.city_name_lz
     LEFT JOIN `peya-bi-tools-pro.il_core.dim_country` dc
         ON cm.country_id = dc.country_id
+    WHERE cm.country_id NOT IN (16, 8) -- Excluye Costa Rica y Venezuela (D-Mart no opera)
     GROUP BY 1, 2, 3
 ),
 
 penetration AS (
-    -- Lógica de Luciano: Usuarios que efectivamente compraron
+    -- Lógica de Luciano alineada a WBR: Usuarios que efectivamente compraron en Market
     SELECT 
         p.month_date,
         dc.country_id, -- Traemos el ID limpio desde la dimensión de países
-        COUNT(DISTINCT IF(p.category_partner="D-Mart", p.customer_id, NULL)) AS active_dmart_users,
+        -- Criterio WBR: category_partner = 'D-Mart' Y vertical_type = 'Market'
+        COUNT(DISTINCT IF(p.category_partner = "D-Mart" AND p.vertical_type = "Market", p.customer_id, NULL)) AS active_dmart_users,
         COUNT(DISTINCT p.customer_id) AS active_platform_users
     FROM `peya-food-and-groceries.automated_tables_reports.qc_performance_order_overall` p
     -- Sumamos este JOIN para traducir el country_code al country_id
     LEFT JOIN `peya-bi-tools-pro.il_core.dim_country` dc
         ON p.country_code = dc.country_code 
-    WHERE p.order_status="CONFIRMED"
+    WHERE p.order_status = "CONFIRMED"
+      AND p.registered_date >= DATE '2025-01-01' -- Optimización de partición alineada al inicio de qc_coverage_city_MAUs
+      AND dc.country_id NOT IN (16, 8) -- Excluye Costa Rica y Venezuela
     GROUP BY 1, 2
 )
 

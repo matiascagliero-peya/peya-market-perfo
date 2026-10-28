@@ -1,5 +1,9 @@
 DECLARE query_name STRING DEFAULT '1. Dmart Users Type (active users) - Base';
 
+-- Sheets Name: 1. TD - Users Type (6 - Active User Dmart - old)
+-- Sheets Link: https://docs.google.com/spreadsheets/d/1OKKkKQUF_n3FbBzOJLteOoRSIPxm3PZZKIgdeoPXB4E
+
+
 -- 1. Dmart Users Type (active users) - Base
 
 SELECT

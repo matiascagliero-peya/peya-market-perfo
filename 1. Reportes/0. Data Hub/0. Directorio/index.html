@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <base target="_top">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Data Hub</title>
+
+    <link rel="icon" href="https://live.pystatic.com/webassets/favicon-8f0ea2519d2575076b739999329af939.ico">
+    <link rel="prefetch" href="<?= pageData.baseUrl ?>?page=resultados" as="document">
+
+    <style>
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    html, body { height: 100%; margin: 0; overflow-x: hidden; }
+    body { display: flex; flex-direction: column; font-family: 'Arial', sans-serif; font-size: 15px; background-color: #f8f9fa; position: relative; }
+    #loader-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(255, 255, 255, 0.95); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 9999; transition: opacity 0.5s ease; opacity: 0; visibility: hidden; pointer-events: none; }
+    #loader-overlay.active { opacity: 1; visibility: visible; pointer-events: auto; }
+    .loader-spinner { border: 6px solid #e0e0e0; border-top: 6px solid #E91C4F; border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; }
+    .message-bar { background-color: #000; color: #fff; padding: 8px 20px; text-align: center; font-size: 0.8em; }
+    .branding { text-align: center; padding: 20px 20px 10px; }
+    .branding h1 { font-size: 2.2em; margin: 0; font-weight: normal; }
+    .branding strong { font-weight: bold; }
+    .branding .logo { color: #E91C4F; font-weight: bold; }
+    .branding .logo-market { background-color: #E91C4F; color: white; padding: 2px 6px; border-radius: 5px; font-weight: bold; }
+    .search-container { display: flex; justify-content: center; margin: 15px 0 60px 0; }
+    .search-container input { width: 80%; max-width: 500px; padding: 11px 20px; border-radius: 25px; border: 1px solid #ccc; font-size: 0.95em; }
+    .main-sections-wrapper { display: flex; justify-content: center; flex-wrap: wrap; gap: 30px; padding: 0 20px; }
+    .section-container { flex: 1; min-width: 300px; margin-bottom: 40px; padding: 30px; background-color: #fff; border-radius: 12px; border: 1px solid #e9ecef; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .section-title { text-align: center; margin: 0 0 10px 0; font-weight: bold; font-size: 1.2em; }
+    .section-subtitle { text-align: center; font-size: 0.9em; color: #444; margin-bottom: 25px; }
+    .area-buttons { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 8px; min-height: 50px; font-size: 0.87em;padding: 16px 10px;}
+    
+    .area-button { 
+        padding: 16px 18px; border-radius: 8px; font-weight: bold; cursor: pointer; border: none; font-size: 0.95em; 
+        transition: all 0.2s; text-align: center; flex: 1 1 calc(33.333% - 8px); box-sizing: border-box; 
+        max-width: calc(33.333% - 8px); text-decoration: none; 
+    }
+    .area-button:hover { opacity: 0.85; transform: translateY(-2px); text-decoration: none; }
+    .yellow { background-color: #FFF176; color: #333; } .pink { background-color: #F48FB1; color: white; }
+    .blue { background-color: #81D4FA; color: #333; } .green { background-color: #AED581; color: white; }
+    .violet { background-color: #CE93D8; color: white; } .gray { background-color: #B0BEC5; color: white; }
+    .orange { background-color: #FFB74D; color: #333; } .cyan { background-color: #4DD0E1; color: white; }
+    .red { background-color: #EF5350; color: white; } .lime { background-color: #D4E157; color: #333; }
+    
+    #main-content { 
+        flex: 1 0 auto; display: flex; flex-direction: column; justify-content: center; 
+    }
+
+    .footer { flex-shrink: 0; background-color: #444; color: #eee; text-align: center; font-size: 0.75em; padding: 15px 10px; margin-top: 5px; }
+    .footer a { color: #FFF176; text-decoration: none; }
+    .status-message { text-align: center; font-size: 0.9em; padding: 20px; color: #777; }
+    #quick-access-sidebar-toggle { position: fixed; top: 100px; right: 0; z-index: 1001; transition: transform 0.3s ease-out, opacity 0.3s ease, background-color 0.2s, border-radius 0.3s ease; opacity: 0; pointer-events: none; transform: translateY(-50%) translateX(100%); width: 50px; height: 38px; background-color: #E91C4F; color: white; border: none; border-radius: 8px 0 0 8px; cursor: pointer; font-size: 1.5em; display: flex; justify-content: center; align-items: center; box-shadow: -2px 0 5px rgba(0,0,0,0.2); }
+    #quick-access-sidebar-toggle:hover { background-color: #c91742; }
+    #quick-access-sidebar-toggle.visible { opacity: 1; pointer-events: auto; transform: translateY(-50%) translateX(0); border-radius: 8px 0 0 8px; }
+    #quick-access-sidebar-toggle.open { transform: translateY(-50%) translateX(-160px); border-radius: 0 8px 8px 0; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
+    #quick-access-sidebar-toggle .arrow-icon { transition: transform 0.3s ease-in-out; }
+    #quick-access-sidebar-toggle.open .arrow-icon { transform: rotate(180deg); }
+    #quick-access-sidebar { position: fixed; top: 100px; right: 0; width: 160px; height: auto; max-height: calc(100vh - 120px); background-color: #f8f9fa; box-shadow: 0 2px 8px rgba(0,0,0,0.1); border-radius: 12px 0 0 12px; z-index: 999; transform: translateX(100%); transition: transform 0.3s ease-in-out; padding: 15px 10px; box-sizing: border-box; display: flex; flex-direction: column; overflow-y: auto; padding-bottom: 15px; }
+    #quick-access-sidebar.open { transform: translateX(0); }
+    #quick-access-sidebar h3 { font-size: 1.1em; color: #212529; margin-top: 0; margin-bottom: 20px; text-align: center; font-weight: bold; }
+    #quick-access-sidebar .quick-access-item { padding: 6px; margin-bottom: 6px; background-color: #fff; border: 1px solid #e9ecef; border-radius: 8px; font-size: 0.75em; display: flex; flex-direction: row; align-items: center; text-decoration: none; color: #333; transition: background-color 0.2s ease; cursor: pointer; text-align: left; }
+    #quick-access-sidebar .quick-access-item:hover { background-color: #e9ecef; }
+    .quick-access-item .platform-icon { width: 20px; height: 20px; line-height: 1; font-size: 1.2em; color: #6c757d; margin-right: 5px; display: flex; justify-content: center; align-items: center; flex-shrink: 0; }
+    .quick-access-item .item-content-wrapper { flex-grow: 1; display: flex; flex-direction: column; align-items: flex-start; min-width: 0; }
+    #quick-access-sidebar .quick-access-item .item-title { font-weight: bold; color: #E91C4F; margin-bottom: 0; line-height: 1.2; word-break: break-word; width: 100%; font-size: 0.85em; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: normal; max-height: 2.4em; }
+    #quick-access-sidebar .quick-access-item .item-count { font-size: 0.6em; color: #6c757d; text-align: left; width: 100%; margin-top: 2px; padding-top: 0; border-top: none; }
+    #quick-access-sidebar .quick-access-list-empty { font-size: 0.75em; color: #6c757d; text-align: center; padding: 10px; }
+    
+    @media (min-width: 992px) { 
+        .section-container { margin-bottom: 20px; max-width: 485px; } 
+        .footer { margin-top: 15px; } 
+        .search-container { margin: 15px 0 60px 0; }
+    } 
+    @media (max-width: 767px) { 
+        .area-button { flex: 1 1 calc(50% - 8px); max-width: calc(50% - 8px); } 
+        #quick-access-sidebar { width: 60%; top: 80px; height: auto; max-height: calc(100vh - 100px); border-radius: 12px 0 0 12px; } 
+        #quick-access-sidebar-toggle { top: 80px; width: 40px; height: 32px; border-radius: 8px 0 0 8px; transform: translateY(-50%) translateX(0); opacity: 1; pointer-events: auto; } 
+        #quick-access-sidebar-toggle.open { transform: translateY(-50%) translateX(-60%); border-radius: 0 8px 8px 0; } 
+        .main-sections-wrapper { gap: 0px; }
+    } 
+    @media (max-width: 480px) { 
+        .area-button { flex: 1 1 100%; max-width: 100%; } 
+    }
+    </style>
+</head>
+<body>
+
+    <div id="menu" style="display: flex; justify-content: center; background-color: #ffffff; padding: 0 20px; border-bottom: 1px solid #dee2e6;">
+
+    <button onclick="return false;" style="font-family: 'Inter', sans-serif; background-color: transparent; border: none; padding: 15px 20px; margin: 0 5px; font-size: 14px; font-weight: 500; color: #000000; border-bottom: 3px solid #000000; cursor: default;">
+        The Data Hub
+    </button>
+    
+    <button onclick="window.open('https://script.google.com/a/macros/pedidosya.com/s/AKfycbx9NMVEunJ7Ye8M7PzBKUSi9RdN3GVeTB1oumshVcHiOYlsQsjGkl2N278-ESIfGqFJkQ/exec', '_top')" style="font-family: 'Inter', sans-serif; background-color: transparent; color: #495057; border: none; border-bottom: 3px solid transparent; padding: 15px 20px; margin: 0 5px; font-size: 14px; font-weight: 500; cursor: pointer;">
+        Glosario de Métricas
+    </button>
+
+</div>
+
+    <div id="loader-overlay"><div class="loader-spinner"></div><p>Cargando Data Hub...</p></div>
+
+    <div class="message-bar"><?= pageData.message ?></div>
+    
+    <div id="main-content">
+        <div class="branding"><h1><strong>DATA HUB</strong> <span class="logo">PedidosYa <span class="logo-market">Market</span></span></h1></div>
+        <div class="search-container"><input type="text" id="search-input" placeholder="🔍 Buscar reporte" /></div>
+        <div class="main-sections-wrapper">
+            <div class="section-container">
+                <div class="section-title">ENCONTRÁ SEGÚN EL ÁREA</div>
+                <div class="section-subtitle">Seleccioná alguna de las siguientes áreas para encontrar el reporte.</div>
+                <div class="area-buttons" id="dynamic-area-buttons"><p class="status-message">Cargando...</p></div>
+            </div>
+            <div class="section-container">
+                <div class="section-title">ENCONTRÁ SEGÚN EL CHAPTER</div>
+                <div class="section-subtitle">Seleccioná alguno de los siguientes chapters para encontrar el reporte.</div>
+                <div class="area-buttons" id="dynamic-report-chapter-buttons"><p class="status-message">Cargando...</p></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="footer">Plataforma creada para <strong>PedidosYa</strong> por <a href="https://deliveryhero.enterprise.slack.com/team/U08MB3B38G1" target="_blank" rel="noopener noreferrer">Matias Cagliero</a> del equipo de Strategy & Performance</div>
+
+    <button id="quick-access-sidebar-toggle" class="quick-access-sidebar-toggle"><span class="arrow-icon">▶</span></button>
+    <div id="quick-access-sidebar">
+        <h3>Tus archivos Favoritos</h3>
+        <div id="quick-access-list">
+            <p class="quick-access-list-empty">Cargando reportes...</p>
+        </div>
+    </div>
+
+<script>
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function() {
+            navigator.serviceWorker.register('<?= pageData.baseUrl ?>?file=service-worker.js');
+        });
+    }
+    
+    const pageData = <?!= JSON.stringify(pageData) ?>;
+    const WEB_APP_BASE_URL = pageData.baseUrl;
+    const colorMappings = pageData.colorMap;
+
+    function showLoader() { document.getElementById('loader-overlay').classList.add('active'); }
+    function hideLoader() { document.getElementById('loader-overlay').classList.remove('active'); }
+
+    function createFilterButton(name, type) {
+        const link = document.createElement('a');
+        const destinationUrl = `${WEB_APP_BASE_URL}?page=resultados&filter=${encodeURIComponent(name)}&view=compacta`;
+        link.href = destinationUrl;
+        link.textContent = name;
+        link.className = 'area-button';
+
+        const colorValue = (colorMappings[type] && colorMappings[type][name]) || colorMappings.default || 'gray';
+        link.style.backgroundColor = colorValue;
+
+        function getTextColor(bgColor) {
+            const lightColors = ['yellow', 'lime', '#f9e79f', '#d6eaf8', '#d7bde2'];
+            if (lightColors.includes(bgColor.toLowerCase())) {
+                return '#333';
+            }
+            return 'white';
+        }
+        link.style.color = getTextColor(colorValue);
+        return link;
+    }
+    
+    function populateButtons(containerId, names, type) {
+        const container = document.getElementById(containerId);
+        container.innerHTML = '';
+        if (names && names.length > 0) {
+            names.forEach(name => container.appendChild(createFilterButton(name, type)));
+        } else {
+            container.innerHTML = `<p class="status-message">No se encontraron elementos.</p>`;
+        }
+    }
+
+    function getPlatformIconHtml(platform) {
+        const pLower = (platform || '').toLowerCase();
+        if (pLower.includes('sheet')) return '📄';
+        if (pLower.includes('looker')) return '📊';
+        if (pLower.includes('tableau')) return '📈';
+        if (pLower.includes('drive')) return '🗂️';
+        if (pLower.includes('form')) return '📋';
+        return '🔗';
+    }
+
+    function populateQuickAccess(reports) {
+        const listContainer = document.getElementById('quick-access-list');
+        const toggleButton = document.getElementById('quick-access-sidebar-toggle');
+        if (!reports || reports.length === 0) {
+            listContainer.innerHTML = '<p class="quick-access-list-empty">No tienes favoritos recientes.</p>';
+            toggleButton.classList.remove('visible');
+            return;
+        }
+
+        let itemsHtml = '';
+        reports.forEach(report => {
+            itemsHtml += `
+                <a href="${report.link}" target="_blank" class="quick-access-item">
+                    <div class="platform-icon">${getPlatformIconHtml(report.plataforma)}</div>
+                    <div class="item-content-wrapper">
+                        <div class="item-title">${report.nombreArchivo}</div>
+                        <div class="item-count">${report.accessCount} accesos</div>
+                    </div>
+                </a>
+            `;
+        });
+        listContainer.innerHTML = itemsHtml;
+        toggleButton.classList.add('visible');
+    }
+    
+    function toggleSidebar() {
+        document.getElementById('quick-access-sidebar').classList.toggle('open');
+        document.getElementById('quick-access-sidebar-toggle').classList.toggle('open');
+    }
+
+    function handleSearch(event) {
+        if (event.key === 'Enter') {
+            const query = event.target.value.trim();
+            if (query) {
+                const destinationUrl = `${WEB_APP_BASE_URL}?page=resultados&filter=${encodeURIComponent(query)}&filterType=textQuery&view=compacta`;
+                window.top.location.href = destinationUrl;
+            }
+        }
+    }
+
+    // --- LÓGICA DE ACTUALIZACIÓN RETRASADA (NO CAMBIA) ---
+    function actualizarDatosEnSegundoPlano() {
+        console.log('Iniciando actualización de datos en segundo plano...');
+        google.script.run
+            .withSuccessHandler(() => console.log('Cache de datos actualizado en segundo plano.'))
+            .withFailureHandler(err => console.error('Fallo la actualización en segundo plano:', err))
+            .getHomePageInitialData();
+    }
+
+    // --- LÓGICA DE CARGA PRINCIPAL (ESTA ES LA PARTE QUE CAMBIÓ) ---
+    document.addEventListener('DOMContentLoaded', function() {
+        showLoader();
+
+        // 1. Carga inicial
+        google.script.run
+            .withSuccessHandler(function(response) {
+                // Si la respuesta fue exitosa, pinta los botones
+                if (response && response.success) {
+                    populateButtons('dynamic-area-buttons', response.uniqueAreas, 'areas');
+                    populateButtons('dynamic-report-chapter-buttons', response.uniqueChapters, 'chapters');
+                } else {
+                    // Si no, muestra el mensaje de error que envía el servidor
+                    const container = document.getElementById('dynamic-area-buttons');
+                    const errorMsg = response.error || 'No se pudieron cargar los datos. Intenta refrescar.';
+                    container.innerHTML = `<p class="status-message">${errorMsg}</p>`;
+                    document.getElementById('dynamic-report-chapter-buttons').innerHTML = ''; // Limpia el otro contenedor
+                }
+                hideLoader();
+            })
+            .withFailureHandler(err => {
+                // Maneja también los errores de conexión
+                const container = document.getElementById('dynamic-area-buttons');
+                container.innerHTML = `<p class="status-message">Error de conexión con el servidor.</p>`;
+                hideLoader();
+            })
+            .getHomePageInitialData();
+
+        document.getElementById('search-input').addEventListener('keypress', handleSearch);
+        document.getElementById('quick-access-sidebar-toggle').addEventListener('click', toggleSidebar);
+    });
+
+    // --- LÓGICAS POST-CARGA (NO CAMBIA) ---
+    window.addEventListener('load', function() {
+        // 2. Carga de Favoritos
+        google.script.run
+            .withSuccessHandler(populateQuickAccess)
+            .getFavoriteReports();
+
+        // 3. Actualización de datos en segundo plano
+        setTimeout(actualizarDatosEnSegundoPlano, 10000); 
+    });
+</script>
+</body>
+</html>

@@ -1,5 +1,9 @@
 DECLARE query_name STRING DEFAULT '1. OPS Data - Base - OPS (Mensual)';
 
+-- Sheets Name: 1. ET - OPS Data - Mensual (1 - OPS Data)
+-- Sheets Link: https://docs.google.com/spreadsheets/d/1fM2MeakbnkvynjM6JRX0twsjw2FNt3_RxoNh9GAdQJo
+
+
 DECLARE fecha_inicio DATE DEFAULT '2025-01-01';
 DECLARE to_date      DATE DEFAULT DATE_SUB(CURRENT_DATE(), INTERVAL 1 DAY);
 

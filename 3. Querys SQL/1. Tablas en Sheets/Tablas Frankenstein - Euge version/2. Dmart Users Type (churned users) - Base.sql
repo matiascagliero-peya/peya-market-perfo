@@ -1,5 +1,9 @@
 DECLARE query_name STRING DEFAULT '2. Dmart Users Type (churned users) - Base';
 
+-- Sheets Name: 1. TD - Churned Users (22 - Churned Users)
+-- Sheets Link: https://docs.google.com/spreadsheets/d/1MqB23kt7VUaunpVheYPi-Yef2u_jtnW7FPtxN6ILj34
+
+
 -- 2. Dmart Users Type (churned users) - Base
 SELECT 
   month,

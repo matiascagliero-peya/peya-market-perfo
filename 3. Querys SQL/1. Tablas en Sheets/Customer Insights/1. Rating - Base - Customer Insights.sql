@@ -1,5 +1,9 @@
 DECLARE query_name STRING DEFAULT '1. Rating - Base - Customer Insights';
 
+-- Sheets Name: 1. ET - Rating (11 - Rating)
+-- Sheets Link: https://docs.google.com/spreadsheets/d/11QqrvD_M--OnZZWvGt-MNi17ixPqIToIe5ca-wrRn3k
+
+
 WITH orders AS (
   SELECT 
     o.country.country_code,

@@ -103,10 +103,11 @@ const CONFIG_GD_IMPORT = [
   { id_origen: '1fM2MeakbnkvynjM6JRX0twsjw2FNt3_RxoNh9GAdQJo', nombre_hoja_conexion: 'Connection - Mensual', nombre_hoja_origen: '1. ET - OPS Data - Mensual', nombre_hoja_destino: '1 - OPS Data' },
   { id_origen: '1uHtKswKM8TkGATjcP7IcNkQxUhIYyzhJ0HeseJk3RpA', nombre_hoja_conexion: 'Connection - Principal', nombre_hoja_origen: '1. TD - Sessions Latam', nombre_hoja_destino: '2 - Sessions Type' },
   { id_origen: '1F4SltNDW-xuEoRzIeWkxjtBH91GzQoz8KrqW0aGQyrQ', nombre_hoja_conexion: 'Connection - Principal', nombre_hoja_origen: '1. ET - Sessions Resume', nombre_hoja_destino: '3 - Sessions & CVR' },
-  { id_origen: '1X0bnsCoDszeSlq5TT1uw20GWtcfu1iBpshXXI1QIv7M', nombre_hoja_conexion: 'Connection - Principal', nombre_hoja_origen: '1. ET - Users Type Count', nombre_hoja_destino: '4 - Users' },
+  { id_origen: '1X0bnsCoDszeSlq5TT1uw20GWtcfu1iBpshXXI1QIv7M', nombre_hoja_conexion: 'Connection - Principal', nombre_hoja_origen: '2. ET - User Metrics L1', nombre_hoja_destino: '4 - Users' },
   { id_origen: '1aCrgEjh6qT5T8ayT2H22r3iNc55nAR1O9vaOCW6pRBs', nombre_hoja_origen: 'A. TI - SC Data - Monthly', nombre_hoja_destino: '5 - Supply Chain' },
 
-  { id_origen: '1OKKkKQUF_n3FbBzOJLteOoRSIPxm3PZZKIgdeoPXB4E', nombre_hoja_conexion: 'Connection - Principal', nombre_hoja_origen: '1. TD - Users Type', nombre_hoja_destino: '6 - Active User Dmart - old' },
+  // [DEPRECADO - Reemplazado por nueva base Frank L1 en '4 - Users']
+  // { id_origen: '1OKKkKQUF_n3FbBzOJLteOoRSIPxm3PZZKIgdeoPXB4E', nombre_hoja_conexion: 'Connection - Principal', nombre_hoja_origen: '1. TD - Users Type', nombre_hoja_destino: '6 - Active User Dmart - old' },
   { id_origen: '1k1CC8AkfWwnI4aRQATtBQ2t3bYu8RbDYU6Vwxk5qW9o', nombre_hoja_conexion: 'Connection - Principal', nombre_hoja_origen: '1. ET - Market Coverage', nombre_hoja_destino: '7 - Market Coverage' },
   { id_origen: '1v5Ch2HIK3MJTX1aR9iWiNbxbtMUjYLROCiQz4DqzjNk', nombre_hoja_conexion: 'Connection - Principal', nombre_hoja_origen: '1. ET - Stacked deliveries', nombre_hoja_destino: '8 - Stacked deliveries' },
   { id_origen: '1J5vZqkDrxGRlEFE07W9BD-SquluwzoGhpu3z32tYFZM', nombre_hoja_conexion: 'Connection - Mensual', nombre_hoja_origen: '1. TE - AQS v7', nombre_hoja_destino: '9 - AQS' },
@@ -523,25 +524,145 @@ const CONFIG_GD_METRICAS = [
         colorFormating: 1 
       }
     ]
-  }, { // 4 - Users 
+  }, { // 4 - Users (NUEVA BASE FRANK L1: Usuarios y Tenures)
     nombreHoja: "4 - Users", 
     indices: { month: 0, country: 1 },
     calcularLatam: true, 
     metricas: [
+      // ==========================================
+      // 1. DMART ACTIVE USERS (Nueva Base Frank L1)
+      // ==========================================
+      { name: 'New Users - Dmart',           calculo: (f) => (String(f[2]).trim() === 'Dmart' && ['New User', 'Adoption'].includes(String(f[3]).trim())) ? (parseFloat(f[4])||0) : 0, colorFormating: 1 },
+      { name: 'M1 Return Users - Dmart',     calculo: (f) => (String(f[2]).trim() === 'Dmart' && String(f[3]).trim() === 'M1 Return') ? (parseFloat(f[4])||0) : 0, colorFormating: 1 },
+      { name: 'Reorder Users - Dmart',       calculo: (f) => (String(f[2]).trim() === 'Dmart' && String(f[3]).trim() === 'Reorder') ? (parseFloat(f[4])||0) : 0, colorFormating: 1 },
+      { name: 'Recurring Return - Dmart',    calculo: (f) => (String(f[2]).trim() === 'Dmart' && String(f[3]).trim() === 'Recurring Return') ? (parseFloat(f[4])||0) : 0, colorFormating: 1 },
+      { name: 'Re-Activation Users - Dmart', calculo: (f) => (String(f[2]).trim() === 'Dmart' && ['Re-Activation', 'Reactivated', 'Reactivation'].includes(String(f[3]).trim())) ? (parseFloat(f[4])||0) : 0, colorFormating: 1 },
+
+      // ==========================================
+      // 2. DMART AVG TENURES (Nueva Base Frank L1 - Ponderados para LATAM)
+      // ==========================================
+      { 
+        name: 'AVG Ternure - New Users - Dmart', 
+        calculo: (f) => (String(f[2]).trim() === 'Dmart' && ['New User', 'Adoption'].includes(String(f[3]).trim())) ? (parseFloat(f[5])||0) : 0,
+        usarComponentes: true, 
+        indicesLatam: [
+          (f) => (String(f[2]).trim() === 'Dmart' && ['New User', 'Adoption'].includes(String(f[3]).trim())) ? ((parseFloat(f[5])||0) * (parseFloat(f[4])||0)) : 0, 
+          (f) => (String(f[2]).trim() === 'Dmart' && ['New User', 'Adoption'].includes(String(f[3]).trim())) ? (parseFloat(f[4])||0) : 0  
+        ],
+        calculoLatam: (c) => safeDiv(c[0], c[1]), format: '0.00', colorFormating: 1 
+      },
+      { 
+        name: 'AVG Ternure - M1 Return Users - Dmart', 
+        calculo: (f) => (String(f[2]).trim() === 'Dmart' && String(f[3]).trim() === 'M1 Return') ? (parseFloat(f[5])||0) : 0, 
+        usarComponentes: true, 
+        indicesLatam: [
+          (f) => (String(f[2]).trim() === 'Dmart' && String(f[3]).trim() === 'M1 Return') ? ((parseFloat(f[5])||0) * (parseFloat(f[4])||0)) : 0, 
+          (f) => (String(f[2]).trim() === 'Dmart' && String(f[3]).trim() === 'M1 Return') ? (parseFloat(f[4])||0) : 0  
+        ],
+        calculoLatam: (c) => safeDiv(c[0], c[1]), format: '0.00', colorFormating: 1 
+      },
+      { 
+        name: 'AVG Ternure - Reorder Users - Dmart', 
+        calculo: (f) => (String(f[2]).trim() === 'Dmart' && String(f[3]).trim() === 'Reorder') ? (parseFloat(f[5])||0) : 0, 
+        usarComponentes: true, 
+        indicesLatam: [
+          (f) => (String(f[2]).trim() === 'Dmart' && String(f[3]).trim() === 'Reorder') ? ((parseFloat(f[5])||0) * (parseFloat(f[4])||0)) : 0, 
+          (f) => (String(f[2]).trim() === 'Dmart' && String(f[3]).trim() === 'Reorder') ? (parseFloat(f[4])||0) : 0  
+        ],
+        calculoLatam: (c) => safeDiv(c[0], c[1]), format: '0.00', colorFormating: 1 
+      },
+      { 
+        name: 'AVG Ternure - Recurring Return - Dmart', 
+        calculo: (f) => (String(f[2]).trim() === 'Dmart' && String(f[3]).trim() === 'Recurring Return') ? (parseFloat(f[5])||0) : 0, 
+        usarComponentes: true, 
+        indicesLatam: [
+          (f) => (String(f[2]).trim() === 'Dmart' && String(f[3]).trim() === 'Recurring Return') ? ((parseFloat(f[5])||0) * (parseFloat(f[4])||0)) : 0, 
+          (f) => (String(f[2]).trim() === 'Dmart' && String(f[3]).trim() === 'Recurring Return') ? (parseFloat(f[4])||0) : 0  
+        ],
+        calculoLatam: (c) => safeDiv(c[0], c[1]), format: '0.00', colorFormating: 1 
+      },
+      { 
+        name: 'AVG Ternure - Re-Activation Users - Dmart', 
+        calculo: (f) => (String(f[2]).trim() === 'Dmart' && ['Re-Activation', 'Reactivated', 'Reactivation'].includes(String(f[3]).trim())) ? (parseFloat(f[5])||0) : 0, 
+        usarComponentes: true, 
+        indicesLatam: [
+          (f) => (String(f[2]).trim() === 'Dmart' && ['Re-Activation', 'Reactivated', 'Reactivation'].includes(String(f[3]).trim())) ? ((parseFloat(f[5])||0) * (parseFloat(f[4])||0)) : 0, 
+          (f) => (String(f[2]).trim() === 'Dmart' && ['Re-Activation', 'Reactivated', 'Reactivation'].includes(String(f[3]).trim())) ? (parseFloat(f[4])||0) : 0  
+        ],
+        calculoLatam: (c) => safeDiv(c[0], c[1]), format: '0.00', colorFormating: 1 
+      },
+
+      // ==========================================
+      // 3. DMART AVG ADOPTION TENURES (Antigüedad histórica - Ponderados para LATAM)
+      // ==========================================
+      { 
+        name: 'AVG Adoption Ternure - New Users - Dmart', 
+        calculo: (f) => (String(f[2]).trim() === 'Dmart' && ['New User', 'Adoption'].includes(String(f[3]).trim())) ? (parseFloat(f[6])||0) : 0,
+        usarComponentes: true, 
+        indicesLatam: [
+          (f) => (String(f[2]).trim() === 'Dmart' && ['New User', 'Adoption'].includes(String(f[3]).trim())) ? ((parseFloat(f[6])||0) * (parseFloat(f[4])||0)) : 0, 
+          (f) => (String(f[2]).trim() === 'Dmart' && ['New User', 'Adoption'].includes(String(f[3]).trim())) ? (parseFloat(f[4])||0) : 0  
+        ],
+        calculoLatam: (c) => safeDiv(c[0], c[1]), format: '0.00', colorFormating: 1 
+      },
+      { 
+        name: 'AVG Adoption Ternure - M1 Return Users - Dmart', 
+        calculo: (f) => (String(f[2]).trim() === 'Dmart' && String(f[3]).trim() === 'M1 Return') ? (parseFloat(f[6])||0) : 0, 
+        usarComponentes: true, 
+        indicesLatam: [
+          (f) => (String(f[2]).trim() === 'Dmart' && String(f[3]).trim() === 'M1 Return') ? ((parseFloat(f[6])||0) * (parseFloat(f[4])||0)) : 0, 
+          (f) => (String(f[2]).trim() === 'Dmart' && String(f[3]).trim() === 'M1 Return') ? (parseFloat(f[4])||0) : 0  
+        ],
+        calculoLatam: (c) => safeDiv(c[0], c[1]), format: '0.00', colorFormating: 1 
+      },
+      { 
+        name: 'AVG Adoption Ternure - Reorder Users - Dmart', 
+        calculo: (f) => (String(f[2]).trim() === 'Dmart' && String(f[3]).trim() === 'Reorder') ? (parseFloat(f[6])||0) : 0, 
+        usarComponentes: true, 
+        indicesLatam: [
+          (f) => (String(f[2]).trim() === 'Dmart' && String(f[3]).trim() === 'Reorder') ? ((parseFloat(f[6])||0) * (parseFloat(f[4])||0)) : 0, 
+          (f) => (String(f[2]).trim() === 'Dmart' && String(f[3]).trim() === 'Reorder') ? (parseFloat(f[4])||0) : 0  
+        ],
+        calculoLatam: (c) => safeDiv(c[0], c[1]), format: '0.00', colorFormating: 1 
+      },
+      { 
+        name: 'AVG Adoption Ternure - Recurring Return - Dmart', 
+        calculo: (f) => (String(f[2]).trim() === 'Dmart' && String(f[3]).trim() === 'Recurring Return') ? (parseFloat(f[6])||0) : 0, 
+        usarComponentes: true, 
+        indicesLatam: [
+          (f) => (String(f[2]).trim() === 'Dmart' && String(f[3]).trim() === 'Recurring Return') ? ((parseFloat(f[6])||0) * (parseFloat(f[4])||0)) : 0, 
+          (f) => (String(f[2]).trim() === 'Dmart' && String(f[3]).trim() === 'Recurring Return') ? (parseFloat(f[4])||0) : 0  
+        ],
+        calculoLatam: (c) => safeDiv(c[0], c[1]), format: '0.00', colorFormating: 1 
+      },
+      { 
+        name: 'AVG Adoption Ternure - Re-Activation Users - Dmart', 
+        calculo: (f) => (String(f[2]).trim() === 'Dmart' && ['Re-Activation', 'Reactivated', 'Reactivation'].includes(String(f[3]).trim())) ? (parseFloat(f[6])||0) : 0, 
+        usarComponentes: true, 
+        indicesLatam: [
+          (f) => (String(f[2]).trim() === 'Dmart' && ['Re-Activation', 'Reactivated', 'Reactivation'].includes(String(f[3]).trim())) ? ((parseFloat(f[6])||0) * (parseFloat(f[4])||0)) : 0, 
+          (f) => (String(f[2]).trim() === 'Dmart' && ['Re-Activation', 'Reactivated', 'Reactivation'].includes(String(f[3]).trim())) ? (parseFloat(f[4])||0) : 0  
+        ],
+        calculoLatam: (c) => safeDiv(c[0], c[1]), format: '0.00', colorFormating: 1 
+      },
+
+      // ==========================================
+      // 4. DMART INACTIVE & CHURNED USERS
+      // ==========================================
       { name: 'Churned Users - Dmart',      calculo: (f) => (String(f[2]).trim() === 'Dmart' && String(f[3]).trim() === 'Churned') ? (parseFloat(f[4])||0) : 0, colorFormating: 0 },
       { name: 'Inactive < 6m - Dmart',      calculo: (f) => (String(f[2]).trim() === 'Dmart' && String(f[3]).trim() === 'Inactive < 6 month') ? (parseFloat(f[4])||0) : 0, colorFormating: 0 },
       { name: 'Inactive > 6m - Dmart',      calculo: (f) => (String(f[2]).trim() === 'Dmart' && String(f[3]).trim() === 'Inactive > 6 month') ? (parseFloat(f[4])||0) : 0, colorFormating: 0 },
       { name: 'Never Active - Dmart',       calculo: (f) => (String(f[2]).trim() === 'Dmart' && String(f[3]).trim() === 'Never Active') ? (parseFloat(f[4])||0) : 0, colorFormating: 0 },
 
       // ==========================================
-      // 2. PEYA METRICS
+      // 4. PEYA PLATFORM METRICS
       // ==========================================
       { name: 'New Users - PeYa',           calculo: (f) => (String(f[2]).trim() === 'PeYa' && String(f[3]).trim() === 'New User') ? (parseFloat(f[4])||0) : 0, colorFormating: 1 },
       { name: 'M1 Return Users - PeYa',     calculo: (f) => (String(f[2]).trim() === 'PeYa' && String(f[3]).trim() === 'M1 Return') ? (parseFloat(f[4])||0) : 0, colorFormating: 1 },
       { name: 'Reorder Users - PeYa',       calculo: (f) => (String(f[2]).trim() === 'PeYa' && String(f[3]).trim() === 'Reorder') ? (parseFloat(f[4])||0) : 0, colorFormating: 1 },
       { name: 'Recurring Return - PeYa',    calculo: (f) => (String(f[2]).trim() === 'PeYa' && String(f[3]).trim() === 'Recurring Return') ? (parseFloat(f[4])||0) : 0, colorFormating: 1 },
       { name: 'Re-Activation Users - PeYa', calculo: (f) => (String(f[2]).trim() === 'PeYa' && String(f[3]).trim() === 'Re-Activation') ? (parseFloat(f[4])||0) : 0, colorFormating: 1 },
-      
+
       { name: 'Churned Users - PeYa',       calculo: (f) => (String(f[2]).trim() === 'PeYa' && String(f[3]).trim() === 'Churned') ? (parseFloat(f[4])||0) : 0, colorFormating: 0 },
       { name: 'Inactive < 6m - PeYa',       calculo: (f) => (String(f[2]).trim() === 'PeYa' && String(f[3]).trim() === 'Inactive < 6 month') ? (parseFloat(f[4])||0) : 0, colorFormating: 0 },
       { name: 'Inactive > 6m - PeYa',       calculo: (f) => (String(f[2]).trim() === 'PeYa' && String(f[3]).trim() === 'Inactive > 6 month') ? (parseFloat(f[4])||0) : 0, colorFormating: 0 },
@@ -601,37 +722,39 @@ const CONFIG_GD_METRICAS = [
       // --- 6. Otros Scores ---
       { name: 'Assortment Score',        calculo: (f) => _scMatch(f[1], 'Assortment Score') ? _scNum(f[5]) : 0, format: '0.00', colorFormating: 1 }
     ]
-  }, { // 6 - Active User Dmart - old
+  /*
+  }, { // 6 - Active User Dmart - old [DEPRECADO: Ahora se calcula directamente desde la nueva base Frank L1 en '4 - Users']
     nombreHoja: "6 - Active User Dmart - old", 
     indices: { month: 0, country: 1 },
     calcularLatam: true, 
     metricas: [
       { 
         name: 'New Users - Dmart',          
-        calculo: (f) => String(f[2]).trim() === 'Adoption' ? (parseFloat(f[3])||0) : 0,
+        calculo: (f) => String(f[2]).trim() === 'Adoption' ? (parseFloat(f[3])||0) : 0, 
         colorFormating: 1 
       },
       { 
         name: 'M1 Return Users - Dmart',    
-        calculo: (f) => String(f[2]).trim() === 'M1 Return' ? (parseFloat(f[3])||0) : 0,
-        colorFormating: 1
+        calculo: (f) => String(f[2]).trim() === 'M1 Return' ? (parseFloat(f[3])||0) : 0, 
+        colorFormating: 1 
       },
       { 
         name: 'Reorder Users - Dmart',      
-        calculo: (f) => String(f[2]).trim() === 'Reorder' ? (parseFloat(f[3])||0) : 0,
+        calculo: (f) => String(f[2]).trim() === 'Reorder' ? (parseFloat(f[3])||0) : 0, 
         colorFormating: 1 
       },
       { 
         name: 'Recurring Return - Dmart',   
-        calculo: (f) => String(f[2]).trim() === 'Recurring Return' ? (parseFloat(f[3])||0) : 0,
+        calculo: (f) => String(f[2]).trim() === 'Recurring Return' ? (parseFloat(f[3])||0) : 0, 
         colorFormating: 1 
       },
       { 
-        name: 'Re-Activation Users - Dmart',
-        calculo: (f) => String(f[2]).trim() === 'Reactivated' ? (parseFloat(f[3])||0) : 0,
-        colorFormating: 1
+        name: 'Re-Activation Users - Dmart', 
+        calculo: (f) => String(f[2]).trim() === 'Reactivated' ? (parseFloat(f[3])||0) : 0, 
+        colorFormating: 1 
       },
     ]
+  */
   }, { // 7 - Market Coverage (Nielsen)
     nombreHoja: "7 - Market Coverage",
     indices: { month: 0, country: 1 }, 
@@ -1935,6 +2058,7 @@ const CONFIG_GD_METRICAS = [
         ],
         calculoLatam: (c) => safeDiv(c[0], c[1]), format: '0.00%', colorFormating: 1 
       },
+      /* [DEPRECADO: Ahora se calcula desde la nueva base Frank L1 en '4 - Users']
       { 
         name: 'AVG Ternure - New Users - Dmart', 
         calculo: (f) => ['New User', 'Adoption'].includes(String(f[2]).trim()) ? (parseFloat(f[12]) || 0) : 0, 
@@ -1945,6 +2069,7 @@ const CONFIG_GD_METRICAS = [
         ],
         calculoLatam: (c) => safeDiv(c[0], c[1]), format: '0.00', colorFormating: 1 
       },
+      */
 
       // ==========================================
       // 2. M1 RETURN USERS
@@ -2019,6 +2144,7 @@ const CONFIG_GD_METRICAS = [
         ],
         calculoLatam: (c) => safeDiv(c[0], c[1]), format: '0.00%', colorFormating: 1 
       },
+      /* [DEPRECADO: Ahora se calcula desde la nueva base Frank L1 en '4 - Users']
       { 
         name: 'AVG Ternure - M1 Return Users - Dmart', 
         calculo: (f) => String(f[2]).trim() === 'M1 Return' ? (parseFloat(f[12]) || 0) : 0, 
@@ -2029,6 +2155,7 @@ const CONFIG_GD_METRICAS = [
         ],
         calculoLatam: (c) => safeDiv(c[0], c[1]), format: '0.00', colorFormating: 1 
       },
+      */
 
       // ==========================================
       // 3. REORDER USERS
@@ -2103,6 +2230,7 @@ const CONFIG_GD_METRICAS = [
         ],
         calculoLatam: (c) => safeDiv(c[0], c[1]), format: '0.00%', colorFormating: 1 
       },
+      /* [DEPRECADO: Ahora se calcula desde la nueva base Frank L1 en '4 - Users']
       { 
         name: 'AVG Ternure - Reorder Users - Dmart', 
         calculo: (f) => String(f[2]).trim() === 'Reorder' ? (parseFloat(f[12]) || 0) : 0, 
@@ -2113,6 +2241,7 @@ const CONFIG_GD_METRICAS = [
         ],
         calculoLatam: (c) => safeDiv(c[0], c[1]), format: '0.00', colorFormating: 1 
       },
+      */
 
       // ==========================================
       // 4. RECURRING RETURN
@@ -2187,6 +2316,7 @@ const CONFIG_GD_METRICAS = [
         ],
         calculoLatam: (c) => safeDiv(c[0], c[1]), format: '0.00%', colorFormating: 1 
       },
+      /* [DEPRECADO: Ahora se calcula desde la nueva base Frank L1 en '4 - Users']
       { 
         name: 'AVG Ternure - Recurring Return - Dmart', 
         calculo: (f) => String(f[2]).trim() === 'Recurring Return' ? (parseFloat(f[12]) || 0) : 0, 
@@ -2197,6 +2327,7 @@ const CONFIG_GD_METRICAS = [
         ],
         calculoLatam: (c) => safeDiv(c[0], c[1]), format: '0.00', colorFormating: 1 
       },
+      */
 
       // ==========================================
       // 5. RE-ACTIVATION USERS
@@ -2271,6 +2402,7 @@ const CONFIG_GD_METRICAS = [
         ],
         calculoLatam: (c) => safeDiv(c[0], c[1]), format: '0.00%', colorFormating: 1 
       },
+      /* [DEPRECADO: Ahora se calcula desde la nueva base Frank L1 en '4 - Users']
       { 
         name: 'AVG Ternure - Re-Activation Users - Dmart', 
         calculo: (f) => ['Reactivated', 'Re-Activation'].includes(String(f[2]).trim()) ? (parseFloat(f[12]) || 0) : 0, 
@@ -2281,6 +2413,7 @@ const CONFIG_GD_METRICAS = [
         ],
         calculoLatam: (c) => safeDiv(c[0], c[1]), format: '0.00', colorFormating: 1 
       }
+      */
     ]
   }, { // 25 - NPS Score
     nombreHoja: "25 - NPS Score",

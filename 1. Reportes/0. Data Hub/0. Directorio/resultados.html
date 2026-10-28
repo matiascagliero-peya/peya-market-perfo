@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <base target="_top">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Resultados - Data Hub</title>
+
+    <link rel="icon" href="https://upload.wikimedia.org/wikipedia/commons/e/eb/PedidosYa_logo.png">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.0.0/dist/css/bootstrap.min.css" integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm" crossorigin="anonymous">
+    
+<style>
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    html, body { height: 100%; margin: 0; font-family: 'Arial', sans-serif; font-size: 15px; overflow-x: hidden; position: relative; }
+    html { scrollbar-width: thin; scrollbar-color: #E91C4F #f1f1f1; }
+    ::-webkit-scrollbar { width: 10px; }
+    ::-webkit-scrollbar-track { background: #f1f1f1; }
+    ::-webkit-scrollbar-thumb { background: #E91C4F; border-radius: 5px; }
+    body { display: flex; flex-direction: column; background-color: #f8f9fa; }
+    #main-content { flex: 1 0 auto; }
+    .message-bar { background-color: #000; color: #fff; padding: 8px 20px; text-align: center; font-size: 0.8em; }
+    .main-container { max-width: 1200px; margin: 20px auto; padding: 15px; }
+    .back-link { display: inline-block; margin-bottom: 20px; color: #E91C4F; text-decoration: none; font-weight: bold; }
+    .results-title h2 { font-size: 1.75em; font-weight: 700; color: #212529; margin-bottom: 20px; }
+    .results-title .filter-context-display { color: #E91C4F; font-weight: bold; }
+    .filter-bar { display: flex; flex-wrap: wrap; gap: 15px; margin: 20px 0; align-items: center; background-color: #f1f3f5; padding: 15px; border: 1px solid #dee2e6; border-radius: 8px; }
+    .filter-bar .form-control { width: auto; flex-grow: 1; min-width: 180px; font-size: 0.8em; padding: 6px 12px; height: auto; }
+    .results-grid { display: grid; grid-template-columns: 1fr; gap: 25px; }
+    @media (min-width: 1200px) { .results-grid { grid-template-columns: 1fr 1fr; } }
+    .result-card { background-color: #fff; border: 1px solid #e9ecef; border-radius: 8px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); display: flex; gap: 20px; }
+    .card-content { flex: 1; min-width: 0; }
+    .card-sidebar { flex-shrink: 0; flex-basis: 250px; }
+    .card-sidebar-inner { background-color: #f8f9fa; padding: 15px; border-radius: 6px; border: 1px solid #e9ecef; display: flex; flex-direction: column; height: 100%; box-sizing: border-box; }
+
+    /* ----- MODIFICACIÓN CLAVE AQUÍ ----- */
+    .card-title, .report-title {
+        font-size: 1.1em; /* <-- Tamaño de fuente restaurado al original */
+        white-space: normal;
+        word-break: break-word;
+        max-width: 25em; /* <-- Aumenta el ancho del contenedor del título */
+        display: block;
+    }
+    
+    .card-meta { font-size: 0.9em; color: #555; margin-bottom: 10px; word-wrap: break-word; }
+    .card-preview-placeholder { width: 100%; height: 80px; background-color: #e9ecef; border-radius: 4px; display: flex; align-items: center; justify-content: center; }
+    .card-preview-placeholder img { max-width: 80%; max-height: 80%; object-fit: contain; }
+    .loading-container { text-align: center; color: #6c757d; display: none; }
+    .loader-spinner { border: 6px solid #e0e0e0; border-top: 6px solid #E91C4F; border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; margin: 20px auto 15px auto; }
+    .status-message { grid-column: 1 / -1; text-align: center; padding: 40px 20px; font-weight: bold; color: #6c757d; }
+    .report-wrapper { margin-top: auto; padding-top: 8px; border-top: 1px solid #e9ecef; min-height: 38px; display: flex; align-items: center; justify-content: center; }
+    .report-link { font-size: 11px; font-weight: bold; width: 100%; text-align: center; cursor: pointer; color: #6c757d; }
+    .reported-text { font-size: 11px; font-weight: bold; width: 100%; text-align: center; cursor: pointer; color: #28a745; }
+    .view-toggle-button { padding: 6px 12px; border-radius: 20px; border: 1px solid #ccc; background-color: #e9ecef; font-size: 0.8em; cursor: pointer; }
+    .view-toggle-button.active-view { background-color: #343a40; color: white; }
+    .footer { flex-shrink: 0; background-color: #444; color: #eee; text-align: center; font-size: 0.75em; padding: 15px 10px; margin-top: 20px; }
+    .footer a { color: #FFF176; text-decoration: none; }
+    
+    .report-title, .owner-link { 
+        color: #E91C4F !important; 
+        font-weight: bold !important; 
+        text-decoration: none !important; 
+    }
+    .results-table th:first-child, .results-table td:first-child {
+      width: 20%; 
+    }
+    #filter-pills-area .filter-pills-container { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-bottom: 10px; }
+    .filter-pill { padding: 6px 12px; border-radius: 20px; border: 1px solid #ccc; background-color: #e9ecef; color: #495057; font-size: 0.8em; cursor: pointer; }
+    .filter-pill.active { background-color: #343a40; color: white; }
+    .tag-container { display: flex; flex-wrap: wrap; gap: 5px; margin: 12px 0; }
+    .info-tag { padding: 3px 7px; border-radius: 5px; font-size: 0.7em; font-weight: bold; }
+
+    .group-header-ampliada { grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; padding: 12px 15px; background-color: #e9ecef; border-radius: 8px; cursor: pointer; border: 1px solid #dee2e6; }
+    .group-header-ampliada:hover { background-color: #dee2e6; }
+    .toggle-icon { transition: transform 0.2s ease; }
+    .toggle-icon.expanded { transform: rotate(90deg); }
+    .group-title { font-weight: bold; font-size: 1.1em; color: #343a40; }
+    .group-count { font-size: 0.9em; color: #6c757d; }
+    .children-container {
+        display: none;
+        grid-column: 1 / -1;
+        padding: 20px;
+        margin-top: -15px;
+        background-color: #fafafa;
+        border-radius: 0 0 8px 8px;
+        border: 1px solid #e9ecef;
+        border-top: none;
+    }
+    .children-container .results-grid { gap: 15px; }
+    .children-container.expanded { display: block; }
+
+    .results-table-wrapper { position: relative; margin-left: 25px; }
+    .results-table tr.group-row { cursor: pointer; }
+    .results-table tr.group-row > td:first-child { position: relative; }
+    .results-table .toggle-icon-table {
+        position: absolute;
+        left: -22px;
+        top: 50%;
+        transform: translateY(-50%);
+        display: inline-flex; align-items: center; justify-content: center;
+        font-weight: bold; width: 16px; height: 16px; border: 1px solid #adadad;
+        border-radius: 3px; background-color: #f1f1f1; user-select: none;
+    }
+    .results-table .child-row { background-color: #f0f8ff !important; }
+    .results-table .child-row td:first-child { padding-left: 30px; }
+    .results-table { width: 100%; border-collapse: collapse; background-color: #fff; border-radius: 8px; overflow: visible; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+    .results-table th, .results-table td { border: 1px solid #dee2e6; padding: 12px 15px; text-align: left; vertical-align: middle; font-size: 0.85em; }
+    .results-table th { background-color: #e9ecef; }
+    .results-table tr:nth-child(even):not(.child-row) { background-color: #f8f9fa; }
+    .results-table tr:not(.child-row):hover { background-color: #e2e6ea; }
+
+    .results-table th:nth-child(3), .results-table td:nth-child(3),
+    .results-table th:nth-child(4), .results-table td:nth-child(4) {
+        white-space: nowrap;
+    }
+
+    .card-meta a[target="_blank"], .results-table td a[target="_blank"] { position: relative; }
+    .card-meta a[target="_blank"]::after, .results-table td a[target="_blank"]::after {
+        content: ''; display: inline-block; width: 13px; height: 13px; margin-left: 5px;
+        background-color: #555;
+        mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cline x1='5' y1='12' x2='19' y2='12'/%3E%3Cpolyline points='12 5 19 12 12 19'/%3E%3C/svg%3E");
+        mask-size: contain; mask-repeat: no-repeat; vertical-align: middle; transition: background-color 0.2s ease;
+    }
+    .card-meta a[target="_blank"]:hover::after, .results-table td a[target="_blank"]:hover::after { background-color: #E91C4F; }
+
+    @media (max-width: 768px) { .result-card { flex-direction: column; } .card-sidebar { flex-basis: auto; width: 100%; } }
+</style>
+
+</head>
+<body>
+
+    <div id="menu" style="display: flex; justify-content: center; background-color: #ffffff; padding: 0 20px; border-bottom: 1px solid #dee2e6;">
+
+    <button onclick="return false;" style="font-family: 'Inter', sans-serif; background-color: transparent; border: none; padding: 15px 20px; margin: 0 5px; font-size: 14px; font-weight: 500; color: #000000; border-bottom: 3px solid #000000; cursor: default;">
+        The Data Hub
+    </button>
+    
+    
+    <button onclick="window.open('https://script.google.com/a/macros/pedidosya.com/s/AKfycbx9NMVEunJ7Ye8M7PzBKUSi9RdN3GVeTB1oumshVcHiOYlsQsjGkl2N278-ESIfGqFJkQ/exec', '_top')" style="font-family: 'Inter', sans-serif; background-color: transparent; color: #495057; border: none; border-bottom: 3px solid transparent; padding: 15px 20px; margin: 0 5px; font-size: 14px; font-weight: 500; cursor: pointer;">
+        Glosario de Métricas
+    </button>
+
+</div>
+
+    <div id="main-content">
+        <div class="message-bar"><?= pageData.message ?></div>
+        <div class="main-container">
+            <a href="<?= pageData.baseUrl ?>" class="back-link">← Volver al Hub Principal</a>
+            <div class="results-title"><h2>Resultados: <span class="filter-context-display" id="current-filter-display">Todos</span></h2></div>
+            <div id="filter-pills-area"></div>
+            <div class="filter-bar">
+                <input type="text" id="text-filter" class="form-control" placeholder="🔍 Filtrar por palabra clave...">
+                <select id="country-filter" class="form-control"><option value="">Todos los Países</option></select>
+                <select id="owner-filter" class="form-control"><option value="">Todos los Owners</option></select>
+                <select id="platform-filter" class="form-control"><option value="">Todas las Plataformas</option></select>
+            </div>
+            <div id="view-toggle-buttons" style="display: flex; justify-content: center; gap: 10px; margin-bottom: 20px;">
+                <button id="view-ampliada-button" class="view-toggle-button">Vista Ampliada</button>
+                <button id="view-compacta-button" class="view-toggle-button">Vista Compacta</button>
+            </div>
+            <div class="loading-container" id="results-loader">
+                <div class="loader-spinner"></div><p>Cargando reportes...</p>
+            </div>
+            <div id="results-grid-container"></div>
+        </div>
+    </div>
+    <div class="footer">Plataforma creada para <strong>PedidosYa</strong> por <a href="https://deliveryhero.enterprise.slack.com/team/U08MB3B38G1" target="_blank" rel="noopener noreferrer">Matias Cagliero</a> del equipo de Strategy & Performance</div>
+
+<script>
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => navigator.serviceWorker.register('<?= pageData.baseUrl ?>?file=service-worker.js'));
+    }
+
+    const pageData = <?!= JSON.stringify(pageData) ?>;
+    const colorMappings = pageData.colorMap;
+    let allResultsData = [], currentResults = [], currentActiveFilter = "Todos", currentView, debounceTimer;
+    
+    function escapeHTML(str) { return (str || '').replace(/[&<>"']/g, match => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[match])); }
+    function showLoader() { document.getElementById('results-loader').style.display = 'block'; document.getElementById('results-grid-container').style.display = 'none'; }
+    function hideLoader() { document.getElementById('results-loader').style.display = 'none'; document.getElementById('results-grid-container').style.display = ''; }
+    
+    function getPlatformLogoUrl(platform) {
+        const pLower = (platform || '').toLowerCase();
+        if (pLower.includes('sheet')) return 'https://upload.wikimedia.org/wikipedia/commons/thumb/3/30/Google_Sheets_logo_%282014-2020%29.svg/1200px-Google_Sheets_logo_%282014-2020%29.svg.png';
+        if (pLower.includes('looker')) return 'https://upload.wikimedia.org/wikipedia/commons/thumb/4/4c/Looker.svg/2560px-Looker.svg.png';
+        if (pLower.includes('tableau')) return 'https://upload.wikimedia.org/wikipedia/en/0/06/Tableau_logo.svg';
+        if (pLower.includes('form')) return 'https://upload.wikimedia.org/wikipedia/commons/thumb/5/5B/Google_Forms_2020_Logo.svg/1200px-Google_Forms_2020_Logo.svg.png';
+        return 'https://cdn-icons-png.flaticon.com/512/3721/3721703.png';
+    }
+
+    function getTagHtml(name, type) {
+        if (!name || !colorMappings || !colorMappings[type]) return '';
+        const bgColor = colorMappings[type][name] || '#B0BEC5';
+        let textColor = '#ffffff';
+        if (bgColor.startsWith('#')) {
+            const r = parseInt(bgColor.substr(1, 2), 16);
+            const g = parseInt(bgColor.substr(3, 2), 16);
+            const b = parseInt(bgColor.substr(5, 2), 16);
+            const brightness = ((r * 299) + (g * 587) + (b * 114)) / 1000;
+            if (brightness > 150) { textColor = '#333333'; }
+        }
+        return `<span class="info-tag" style="background-color: ${bgColor}; color: ${textColor};">${escapeHTML(name)}</span>`;
+    }
+    
+    function renderResults(items) {
+        const resultsContainer = document.getElementById('results-grid-container');
+        resultsContainer.innerHTML = '';
+        if (!items || items.length === 0) {
+            resultsContainer.innerHTML = `<div class="results-grid"><p class="status-message">No se encontraron resultados.</p></div>`;
+            return;
+        }
+
+        if (currentView === 'compacta') {
+            resultsContainer.className = 'results-table-wrapper';
+            let tableHtml = '<table class="results-table"><thead><tr><th>Nombre</th><th>Descripción</th><th>Área</th><th>Chapter</th><th>País</th><th>Owner</th><th>Plataforma</th><th>Acción</th></tr></thead><tbody>';
+            items.forEach(item => {
+                const isGroup = item.children && item.children.length > 0;
+                const ownerHtml = (item.ownerLink && item.owner) ? `<a href="${item.ownerLink}" target="_blank" class="owner-link">${escapeHTML(item.owner)}</a>` : escapeHTML(item.owner);
+                let firstTdContent = isGroup ? `<span class="toggle-icon-table">+</span>` : '';
+                firstTdContent += isGroup ? `<span class="report-title">${escapeHTML(item.nombreArchivo)}</span>` : `<a href="${item.link}" target="_blank" class="report-title" onclick="handleReportAccess('${item.id}')">${escapeHTML(item.nombreArchivo)}</a>`;
+                tableHtml += `<tr class="${isGroup ? 'group-row' : ''}" data-group-id="${item.id}"><td>${firstTdContent}</td><td>${isGroup ? `Contiene ${item.children.length} reportes.` : escapeHTML(item.descripcion)}</td><td>${getTagHtml(item.categoria, 'areas')}</td><td>${getTagHtml(item.chapterPrincipal, 'chapters')}</td><td>${escapeHTML(item.pais)}</td><td>${ownerHtml}</td><td>${escapeHTML(item.plataforma)}</td><td>${!isGroup ? `<div class="report-wrapper" data-id="${item.id}">${item.yaReportado ? '<span class="reported-text" data-action="retirar">✔️ Reportado</span>' : '<span class="report-link" data-action="reportar">Reportar problemas</span>'}</div>` : ''}</td></tr>`;
+                if (isGroup) {
+                    item.children.forEach(child => {
+                        const childOwnerHtml = (child.ownerLink && child.owner) ? `<a href="${child.ownerLink}" target="_blank" class="owner-link">${escapeHTML(child.owner)}</a>` : escapeHTML(child.owner);
+                        tableHtml += `<tr class="child-row" data-parent-id="${item.id}" style="display: none;"><td><a href="${child.link}" target="_blank" class="report-title" onclick="handleReportAccess('${child.id}')">${escapeHTML(child.nombreArchivo)}</a></td><td>${escapeHTML(child.descripcion)}</td><td>${getTagHtml(child.categoria, 'areas')}</td><td>${getTagHtml(child.chapterPrincipal, 'chapters')}</td><td>${escapeHTML(child.pais)}</td><td>${childOwnerHtml}</td><td>${escapeHTML(child.plataforma)}</td><td><div class="report-wrapper" data-id="${child.id}">${child.yaReportado ? '<span class="reported-text" data-action="retirar">✔️ Reportado</span>' : '<span class="report-link" data-action="reportar">Reportar problemas</span>'}</div></td></tr>`;
+                    });
+                }
+            });
+            resultsContainer.innerHTML = tableHtml + '</tbody></table>';
+        } else {
+            resultsContainer.className = 'results-grid';
+            const buildCardHtml = (item) => {
+                const reportLinkHtml = `<div class="report-wrapper" data-id="${item.id}">${item.yaReportado ? '<span class="reported-text" data-action="retirar">✔️ Reportado</span>' : '<span class="report-link" data-action="reportar">Reportar problemas</span>'}</div>`;
+                const imageLink = `<a href="${item.link}" target="_blank" onclick="handleReportAccess('${item.id}')"><div class="card-preview-placeholder"><img src="${getPlatformLogoUrl(item.plataforma)}" alt="${escapeHTML(item.plataforma)}"></div></a>`;
+                const ownerHtml = (item.ownerLink && item.owner) ? `<a href="${item.ownerLink}" target="_blank" class="owner-link">${escapeHTML(item.owner)}</a>` : escapeHTML(item.owner);
+                const titleHtml = `<a href="${item.link}" target="_blank" onclick="handleReportAccess('${item.id}')" class="report-title card-title">${escapeHTML(item.nombreArchivo)}</a>`;
+                const cardContent = `<div class="card-content">${titleHtml}<p class="card-meta">${escapeHTML(item.descripcion)}</p></div>`;
+                const cardSidebar = `<div class="card-sidebar"><div class="card-sidebar-inner">${imageLink}<div class="tag-container">${getTagHtml(item.categoria, 'areas')}${getTagHtml(item.chapterPrincipal, 'chapters')}</div><p class="card-meta"><strong>País:</strong> ${escapeHTML(item.pais)}</p><p class="card-meta"><strong>Plataforma:</strong> ${escapeHTML(item.plataforma)}</p><p class="card-meta"><strong>Owner:</strong> ${ownerHtml}</p>${reportLinkHtml}</div></div>`;
+                return `<div class="result-card">${cardContent}${cardSidebar}</div>`;
+            };
+
+            let finalHtml = '';
+            items.forEach(item => {
+                const isGroup = item.children && item.children.length > 0;
+                if(isGroup) {
+                    finalHtml += `<div class="group-header-ampliada" data-group-toggle-id="${item.id}"><span class="toggle-icon">▶</span><span class="group-title report-title">${escapeHTML(item.nombreArchivo)}</span><span class="group-count">(${item.children.length} reportes)</span></div><div class="children-container" data-parent-id="${item.id}"><div class="results-grid">`;
+                    item.children.forEach(child => { finalHtml += buildCardHtml(child); });
+                    finalHtml += '</div></div>';
+                } else {
+                    finalHtml += buildCardHtml(item);
+                }
+            });
+            resultsContainer.innerHTML = finalHtml;
+        }
+    }
+    
+    function applyAllFilters() {
+        const textFilter = document.getElementById('text-filter').value.toLowerCase().trim();
+        const mainFilterLower = currentActiveFilter.toLowerCase().trim();
+        const countryFilter = document.getElementById('country-filter').value;
+        const ownerFilter = document.getElementById('owner-filter').value;
+        const platformFilter = document.getElementById('platform-filter').value;
+        const passesSubFilters = (item) => (!countryFilter || item.pais === countryFilter) && (!ownerFilter || item.owner === ownerFilter) && (!platformFilter || item.plataforma === platformFilter);
+        const passesMainFilters = (item) => (!textFilter || [item.nombreArchivo, item.descripcion, item.palabrasClave].some(f => (f||'').toLowerCase().includes(textFilter))) && (mainFilterLower==="todos" || [item.categoria, item.chapterPrincipal].some(f=>(f||'').toLowerCase().trim()===mainFilterLower));
+        currentResults = allResultsData.map(item => {
+            if (item.children?.length > 0) {
+                const filteredChildren = item.children.filter(child => passesMainFilters(child) && passesSubFilters(child));
+                if ((!textFilter && !countryFilter && !ownerFilter && !platformFilter && mainFilterLower === "todos") || (passesMainFilters(item) && passesSubFilters(item)) || filteredChildren.length > 0) {
+                     return { ...item, children: filteredChildren };
+                }
+                return null;
+            }
+            return (passesMainFilters(item) && passesSubFilters(item)) ? item : null;
+        }).filter(Boolean);
+        document.getElementById('current-filter-display').innerHTML = textFilter ? `"${escapeHTML(textFilter)}"` : escapeHTML(currentActiveFilter);
+        renderResults(currentResults);
+    }
+    
+    function populateFilterDropdowns(data) {
+        const flatItems = data.flatMap(item => [item, ...(item.children || [])]);
+        const createOptions = (items, key) => [...new Set(items.map(item => item[key]).filter(Boolean))].sort();
+        const populateSelect = (elementId, options) => {
+            const select = document.getElementById(elementId);
+            let optionsHtml = `<option value="">${select.firstElementChild.textContent}</option>`;
+            options.forEach(option => { optionsHtml += `<option value="${escapeHTML(option)}">${escapeHTML(option)}</option>`; });
+            select.innerHTML = optionsHtml;
+        };
+        populateSelect('country-filter', createOptions(flatItems, 'pais'));
+        populateSelect('owner-filter', createOptions(flatItems, 'owner'));
+        populateSelect('platform-filter', createOptions(flatItems, 'plataforma'));
+    }
+
+    function setMainFilter(newFilter) {
+        document.getElementById('text-filter').value = '';
+        currentActiveFilter = newFilter;
+        document.querySelectorAll('#filter-pills-area .filter-pill').forEach(pill => {
+            pill.classList.toggle('active', pill.dataset.filter === newFilter);
+        });
+        applyAllFilters();
+    }
+
+   function renderFilterPills() {
+    const container = document.getElementById('filter-pills-area');
+    container.innerHTML = '';
+    const flatItems = allResultsData.flatMap(item => [item, ...(item.children || [])]);
+    const uniqueAreas = [...new Set(flatItems.map(item => item.categoria).filter(Boolean))].sort();
+    const uniqueChapters = [...new Set(flatItems.map(item => item.chapterPrincipal).filter(Boolean))].sort();
+
+    // Esta función interna ahora aplicará los colores
+    const createPillGroup = (title, options) => {
+        let pillsHtml = `<div class="filter-pills-container">`;
+        pillsHtml += `<button class="filter-pill ${(currentActiveFilter === 'Todos') ? 'active' : ''}" data-filter="Todos">${title}</button>`;
+
+        options.forEach(opt => {
+            const isActive = currentActiveFilter.toLowerCase() === opt.toLowerCase();
+            let styleAttribute = '';
+
+            // --- INICIO DE LA MODIFICACIÓN ---
+            // Solo aplicamos el color si el botón NO está activo
+            if (!isActive) {
+                const bgColor = (colorMappings.areas[opt] || colorMappings.chapters[opt]) || '#e9ecef';
+                let textColor = 'white';
+                
+                // Lógica para determinar si el texto debe ser blanco o negro
+                if (bgColor.startsWith('#')) {
+                    const r = parseInt(bgColor.substr(1, 2), 16);
+                    const g = parseInt(bgColor.substr(3, 2), 16);
+                    const b = parseInt(bgColor.substr(5, 2), 16);
+                    const brightness = ((r * 299) + (g * 587) + (b * 114)) / 1000;
+                    if (brightness > 150) {
+                        textColor = '#333333';
+                    }
+                }
+                // Creamos el atributo de estilo
+                styleAttribute = `style="background-color: ${bgColor}; color: ${textColor}; border-color: transparent;"`;
+            }
+            // --- FIN DE LA MODIFICACIÓN ---
+
+            pillsHtml += `<button class="filter-pill ${isActive ? 'active' : ''}" data-filter="${escapeHTML(opt)}" ${styleAttribute}>${escapeHTML(opt)}</button>`;
+        });
+        return pillsHtml + `</div>`;
+    };
+
+    // No se necesita cambiar nada a partir de aquí
+    if (uniqueAreas.length > 0) container.innerHTML += createPillGroup('Todas las Áreas', uniqueAreas);
+    if (uniqueChapters.length > 0) container.innerHTML += createPillGroup('Todos los Chapters', uniqueChapters);
+}
+
+    function handleReportAction(event) {
+        const target = event.target;
+        if (!target) return;
+        const action = target.dataset.action;
+        const wrapper = target.closest('.report-wrapper');
+        if (!action || !wrapper || wrapper.querySelector('.progress')) return;
+        const reporteId = wrapper.dataset.id;
+        if (!reporteId) return;
+        const originalContent = wrapper.innerHTML;
+        const isReporting = action === 'reportar';
+        const finalHtml = isReporting ? `<span class="reported-text" data-action="retirar">✔️ Reportado</span>` : `<span class="report-link" data-action="reportar">Reportar problemas</span>`;
+        const serverCallName = isReporting ? 'reportarEnlaceCaido' : 'retirarReporte';
+        wrapper.innerHTML = `<div style="height: 16px; font-size: 10px; width: 90%; margin: 0 auto;" class="progress"><div class="progress-bar bg-warning progress-bar-striped progress-bar-animated" style="width: 100%"></div></div>`;
+        google.script.run
+            .withSuccessHandler(response => {
+                if (response.success) { 
+                    setTimeout(() => {
+                        const itemInAllData = allResultsData.flatMap(i => [i, ...(i.children||[])]).find(i => i.id == reporteId);
+                        if(itemInAllData) itemInAllData.yaReportado = isReporting;
+                        wrapper.innerHTML = finalHtml;
+                    }, 200);
+                } 
+                else { alert(response.message || 'No se pudo completar la acción.'); wrapper.innerHTML = originalContent; }
+            })
+            .withFailureHandler(error => { alert(`Error de comunicación: ${error.message}`); wrapper.innerHTML = originalContent; })
+            [serverCallName](reporteId);
+    }
+    
+    function handleReportAccess(archivoId) { google.script.run.registrarAcceso(archivoId); }
+
+    function switchView(view) {
+        currentView = view;
+        document.getElementById('view-ampliada-button').classList.toggle('active-view', view === 'ampliada');
+        document.getElementById('view-compacta-button').classList.toggle('active-view', view === 'compacta');
+        renderResults(currentResults);
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        showLoader();
+        currentView = pageData.defaultView || 'ampliada';
+        if (pageData.filterType === 'textQuery') {
+            document.getElementById('text-filter').value = pageData.filterContext;
+        } else if (pageData.filterContext) {
+            currentActiveFilter = pageData.filterContext;
+        }
+        
+        google.script.run
+            .withSuccessHandler(serverData => {
+                hideLoader();
+                if (serverData.error) { document.getElementById('results-grid-container').innerHTML = `<p class="status-message">Error: ${serverData.error}</p>`; return; }
+                allResultsData = serverData;
+                document.getElementById('view-ampliada-button').classList.toggle('active-view', currentView === 'ampliada');
+                document.getElementById('view-compacta-button').classList.toggle('active-view', currentView === 'compacta');
+                
+                populateFilterDropdowns(allResultsData);
+                renderFilterPills();
+                applyAllFilters();
+            })
+            .withFailureHandler(error => {
+                hideLoader();
+                document.getElementById('results-grid-container').innerHTML = `<p class="status-message">Fallo crítico: ${error.message}</p>`;
+            })
+            .obtenerDatosParaResultados();
+        
+        document.getElementById('view-ampliada-button').addEventListener('click', () => switchView('ampliada'));
+        document.getElementById('view-compacta-button').addEventListener('click', () => switchView('compacta'));
+        document.getElementById('text-filter').addEventListener('input', () => { clearTimeout(debounceTimer); debounceTimer = setTimeout(applyAllFilters, 300); });
+        ['country-filter', 'owner-filter', 'platform-filter'].forEach(id => document.getElementById(id).addEventListener('change', applyAllFilters));
+        document.getElementById('filter-pills-area').addEventListener('click', (event) => { if (event.target.matches('.filter-pill')) setMainFilter(event.target.dataset.filter); });
+
+        document.getElementById('results-grid-container').addEventListener('click', function(event) {
+            const groupHeader = event.target.closest('.group-header-ampliada');
+            if (groupHeader) {
+                const groupId = groupHeader.dataset.groupToggleId;
+                const childrenContainer = document.querySelector(`.children-container[data-parent-id="${groupId}"]`);
+                if (childrenContainer) {
+                    childrenContainer.classList.toggle('expanded');
+                    groupHeader.querySelector('.toggle-icon').classList.toggle('expanded');
+                }
+                return;
+            }
+
+            const groupRow = event.target.closest('tr.group-row');
+            if (groupRow) {
+                const groupId = groupRow.dataset.groupId;
+                const icon = groupRow.querySelector('.toggle-icon-table');
+                const childrenRows = document.querySelectorAll(`tr[data-parent-id="${groupId}"]`);
+                const isExpanding = icon && icon.textContent === '+';
+                if (icon) icon.textContent = isExpanding ? '–' : '+';
+                childrenRows.forEach(row => { row.style.display = isExpanding ? 'table-row' : 'none'; });
+                return;
+            }
+
+            if (event.target.closest('.report-wrapper')) {
+                handleReportAction(event);
+            }
+        });
+    });
+</script>
+</body>
+</html>

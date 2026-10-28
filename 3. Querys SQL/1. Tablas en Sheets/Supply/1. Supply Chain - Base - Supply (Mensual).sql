@@ -1,5 +1,9 @@
 DECLARE query_name STRING DEFAULT '1. Supply Chain - Base - Supply (Mensual)';
 
+-- Sheets Name: A. TI - SC Data - Monthly (5 - Supply Chain)
+-- Sheets Link: https://docs.google.com/spreadsheets/d/1aCrgEjh6qT5T8ayT2H22r3iNc55nAR1O9vaOCW6pRBs
+
+
 -- 1. Supply Chain - Base - Supply
 SELECT
     DATE_TRUNC(a.fecha, MONTH) AS mes,

@@ -1,5 +1,9 @@
 DECLARE query_name STRING DEFAULT '4. Sessions Resume - Base';
 
+-- Sheets Name: 1. ET - Sessions Resume (3 - Sessions & CVR)
+-- Sheets Link: https://docs.google.com/spreadsheets/d/1F4SltNDW-xuEoRzIeWkxjtBH91GzQoz8KrqW0aGQyrQ
+
+
 -- 4. Sessions Resume - Base
 WITH partners AS (
     SELECT DISTINCT

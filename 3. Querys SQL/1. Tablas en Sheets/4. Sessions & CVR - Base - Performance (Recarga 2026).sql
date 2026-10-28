@@ -6,6 +6,10 @@
 -- ====================================================================================
 
 DECLARE query_name STRING DEFAULT '4. Sessions & CVR - Base - Performance (Recarga 2026).sql';
+
+-- Sheets Name: 1. ET - Sessions Resume (3 - Sessions & CVR)
+-- Sheets Link: https://docs.google.com/spreadsheets/d/1F4SltNDW-xuEoRzIeWkxjtBH91GzQoz8KrqW0aGQyrQ
+
 DECLARE start_date DATE DEFAULT '2026-01-01';
 
 WITH

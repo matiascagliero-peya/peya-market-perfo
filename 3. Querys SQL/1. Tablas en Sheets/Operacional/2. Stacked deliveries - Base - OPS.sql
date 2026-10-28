@@ -1,5 +1,9 @@
 DECLARE query_name STRING DEFAULT '2. Stacked deliveries - Base - OPS';
 
+-- Sheets Name: 1. ET - Stacked deliveries (8 - Stacked deliveries)
+-- Sheets Link: https://docs.google.com/spreadsheets/d/1v5Ch2HIK3MJTX1aR9iWiNbxbtMUjYLROCiQz4DqzjNk
+
+
 DECLARE fecha_inicio DATE DEFAULT '2024-01-01';
 
 WITH base_deliveries AS (

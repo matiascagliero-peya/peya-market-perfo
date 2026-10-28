@@ -1,0 +1,1056 @@
+<script>
+    function getRunner() {
+      if (typeof window !== "undefined" && window.google?.script?.run) return window.google.script.run;
+      if (typeof google !== "undefined" && google?.script?.run) return google.script.run;
+      return null;
+    }
+
+    function debugLog(msg) {
+      console.log("[DEBUG]", msg);
+      const pre = document.getElementById("debugLogPre"), text = document.getElementById("debugText"), dot = document.getElementById("debugDot");
+      if (pre) { pre.textContent += `[${new Date().toLocaleTimeString()}] ${msg}\n`; pre.scrollTop = pre.scrollHeight; }
+      if (text) text.textContent = msg;
+      if (dot && String(msg).toLowerCase().includes("error")) {
+        dot.style.background = "#EF4444";
+        const box = document.getElementById("debugLogBox"); if (box) box.style.display = "block";
+      }
+      if (dot && (String(msg).toLowerCase().includes("conectado") || String(msg).toLowerCase().includes("listo"))) dot.style.background = "#22C55E";
+    }
+
+    function toggleDebugLogs() {
+      const box = document.getElementById("debugLogBox");
+      if (box) box.style.display = (box.style.display === "none") ? "block" : "none";
+    }
+
+    window.onerror = function(msg, url, line) {
+      debugLog(`ERROR JS L${line}: ${msg}`);
+      const dot = document.getElementById("debugDot"), box = document.getElementById("debugLogBox");
+      if (dot) dot.style.background = "#EF4444";
+      if (box) box.style.display = "block";
+    };
+
+    function calcularSemanaClienteActual(fechaRef) {
+      const d = fechaRef ? new Date(fechaRef) : new Date();
+      const diaSem = d.getDay();
+      const diffLunes = (diaSem === 0 ? -6 : 1) - diaSem;
+      const lunes = new Date(d); lunes.setDate(d.getDate() + diffLunes);
+      const domingo = new Date(lunes); domingo.setDate(lunes.getDate() + 6);
+      const dTarget = new Date(d.valueOf());
+      dTarget.setDate(dTarget.getDate() - ((d.getDay() + 6) % 7) + 3);
+      const primerJueves = dTarget.valueOf();
+      dTarget.setMonth(0, 1);
+      if (dTarget.getDay() !== 4) dTarget.setMonth(0, 1 + ((4 - dTarget.getDay()) + 7) % 7);
+      const numSem = 1 + Math.ceil((primerJueves - dTarget) / 604800000);
+      const meses = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+      const pad = n => String(n).padStart(2, "0");
+      return `Semana ${pad(numSem)} | ${pad(lunes.getDate())} ${meses[lunes.getMonth()]} - ${pad(domingo.getDate())} ${meses[domingo.getMonth()]}`;
+    }
+
+    function generarSemanasDisponiblesCliente(semanaActual) {
+      const lista = [], hoy = new Date();
+      for (let i = -8; i <= 8; i++) {
+        const d = new Date(hoy); d.setDate(hoy.getDate() + (i * 7));
+        const s = calcularSemanaClienteActual(d);
+        if (!lista.includes(s)) lista.push(s);
+      }
+      if (semanaActual && !lista.some(s => coincidenSemanasClient(s, semanaActual))) lista.push(semanaActual);
+      return lista;
+    }
+
+    const esEntornoLocal = typeof location !== "undefined" && (location.hostname === "localhost" || location.hostname === "127.0.0.1" || location.protocol === "file:" || !location.hostname);
+    if (esEntornoLocal && !getRunner()) {
+      window.google = { script: { run: new Proxy({}, {
+        get: (t, fn) => (...args) => {
+          const self = { withSuccessHandler: f => { self._s = f; return self; }, withFailureHandler: f => { self._f = f; return self; } };
+          self[fn] = () => { if (self._s) setTimeout(() => self._s({ success: true }), 30); };
+          return self;
+        }
+      }) } };
+    }
+
+    const AVATAR_COLORS = ["#EA1D2C", "#2563EB", "#7C3AED", "#059669", "#D97706", "#DB2777", "#0891B2", "#4F46E5"];
+
+    const STATE = {
+      usuario: null, esAdmin: false, semana: "", semanaActual: "",
+      semanas: [], equipo: [], semanal: [], recurrentes: [], futuros: [], reportes: [], bolsa: [],
+      timelineOffset: 0, ownerFiltro: "Todos", modoEdicionTodos: {}, colapsadoSemana: {}, colapsadoRecurrentes: {}, colapsadoProxima: {}
+    };
+
+    function persistirMemoriaLocal() {
+      try {
+        ["semanal", "recurrentes", "futuros", "bolsa", "reportes", "equipo"].forEach(k => {
+          localStorage.setItem(`peya_app_${k}`, JSON.stringify(STATE[k] || []));
+        });
+      } catch (e) {}
+    }
+
+    function cargarMemoriaLocal() {
+      try {
+        ["semanal", "recurrentes", "futuros", "bolsa", "equipo"].forEach(k => {
+          const s = localStorage.getItem(`peya_app_${k}`);
+          if (s) { const p = JSON.parse(s); if (Array.isArray(p) && p.length) STATE[k] = p; }
+        });
+      } catch (e) {}
+    }
+
+    function inicializarApp() {
+      cargarMemoriaLocal();
+      poblarOpcionesEquipo();
+      poblarOpcionesSemanas();
+      actualizarBotonesNavegacionSemana();
+      actualizarBadges();
+      renderizarTodo();
+
+      function conectarConServidor(intento = 1) {
+        const statusEl = document.getElementById("statusCargaDetalle");
+        const runner = getRunner();
+        if (!runner || typeof runner.obtenerConfiguracionInicial !== "function") {
+          if (intento <= 30) {
+            const msg = `Sincronizando con Google Sheets (intento ${intento}/30)...`;
+            debugLog(msg);
+            if (statusEl) statusEl.textContent = msg;
+            setTimeout(() => conectarConServidor(intento + 1), 150);
+            return;
+          }
+          if (statusEl) statusEl.textContent = "Aviso: No se detectó motor de Apps Script.";
+          actualizarPillConexion(false, "Modo local (sin Google Apps Script)");
+          return;
+        }
+
+        const msgCon = "Petición enviada a Google Sheets, esperando respuesta...";
+        debugLog(msgCon);
+        if (statusEl) statusEl.textContent = msgCon;
+
+        runner
+          .withSuccessHandler(config => {
+            if (statusEl) statusEl.textContent = "Datos recibidos. Dibujando tablero...";
+            debugLog(`Config recibida: ${config.semanaActual}. Miembros: ${(config.equipo || []).length}`);
+            if (config.usuarioActual) STATE.usuario = config.usuarioActual;
+            STATE.esAdmin = config.usuarioActual ? config.usuarioActual.esAdmin : true;
+            if (config.semanaActual) { STATE.semanaActual = config.semanaActual; STATE.semana = config.semanaActual; }
+            if (config.semanasDisponibles?.length) STATE.semanas = config.semanasDisponibles;
+            if (config.equipo?.length) STATE.equipo = config.equipo;
+            actualizarPillConexion(config.conexionSheets ? config.conexionSheets.conectado : true);
+
+            const email = config.usuarioActual?.email?.toLowerCase() || "";
+            if (STATE.esAdmin || email.includes("cagli") || email.includes("matias")) {
+              STATE.esAdmin = true;
+              const btn = document.getElementById("tabBtnAdmin"); if (btn) btn.style.display = "flex";
+            }
+
+            poblarOpcionesEquipo();
+            poblarOpcionesSemanas();
+            actualizarBotonesNavegacionSemana();
+
+            if (config.datos) {
+              const d = config.datos;
+              if (d.seguimientoSemanal) STATE.semanal = d.seguimientoSemanal;
+              if (d.recurrentes) STATE.recurrentes = d.recurrentes;
+              if (d.futuros) STATE.futuros = d.futuros;
+              if (d.reportes) STATE.reportes = d.reportes;
+              if (d.bolsa) STATE.bolsa = d.bolsa;
+              if (d.equipo?.length) STATE.equipo = d.equipo;
+              actualizarBadges();
+              renderizarTodo();
+              debugLog(`Listo - Datos cargados (${STATE.semanal.length} tareas semanales)`);
+            } else {
+              renderizarTodo();
+              cargarDatosCompletos(config.semanaActual || STATE.semana);
+            }
+          })
+          .withFailureHandler(err => {
+            const msg = err?.message || String(err);
+            debugLog(`Error Sheets: ${msg}`);
+            actualizarPillConexion(false, msg);
+            const box = document.getElementById("contenedorPersonas");
+            if (box) {
+              box.innerHTML = `
+                <div style="padding:24px;text-align:center;color:#DC2626;background:#FEE2E2;border-radius:8px;margin:16px 0;border:1px solid #FECACA;">
+                  <div style="font-weight:800;font-size:13px;margin-bottom:4px;">Error al conectar con Google Sheets</div>
+                  <div style="font-size:11px;margin-bottom:10px;color:#991B1B;">${escapeHtml(msg)}</div>
+                  <button class="btn btn-primary" onclick="inicializarApp()">Reintentar conexión</button>
+                </div>
+              `;
+            }
+          })
+          .obtenerConfiguracionInicial();
+      }
+      conectarConServidor(1);
+    }
+
+    function cargarDatosCompletos(semana) {
+      const runner = getRunner();
+      if (!runner) return;
+      runner
+        .withSuccessHandler(data => {
+          STATE.semanal = data.seguimientoSemanal || [];
+          STATE.recurrentes = data.recurrentes || [];
+          STATE.futuros = data.futuros || [];
+          STATE.reportes = data.reportes || [];
+          STATE.bolsa = data.bolsa || [];
+          STATE.semana = data.semanaSeleccionada || semana;
+          if (data.semanaActual) STATE.semanaActual = data.semanaActual;
+          if (data.equipo?.length) STATE.equipo = data.equipo;
+          poblarOpcionesEquipo();
+          poblarOpcionesSemanas();
+          actualizarBadges();
+          renderizarTodo();
+          actualizarBotonesNavegacionSemana();
+          notificar("Datos sincronizados");
+        })
+        .withFailureHandler(err => debugLog(`Error cargarDatosCompletos: ${err?.message || err}`))
+        .obtenerDatosCompletos(semana);
+    }
+
+    function coincidenSemanasClient(s1, s2) {
+      if (!s1 || !s2) return false;
+      const a = String(s1).trim().toLowerCase(), b = String(s2).trim().toLowerCase();
+      if (a === b) return true;
+      const m1 = a.match(/(?:w|semana\s*)(\d{1,2})/i), m2 = b.match(/(?:w|semana\s*)(\d{1,2})/i);
+      return !!(m1 && m2 && m1[1] === m2[1]);
+    }
+
+    function actualizarBadges() {
+      const cSem = document.getElementById("countSemanal");
+      if (cSem) cSem.innerText = (STATE.semanal || []).filter(s => coincidenSemanasClient(s.semana, STATE.semana)).length;
+      const cBol = document.getElementById("countBolsa");
+      if (cBol) cBol.innerText = (STATE.bolsa || []).filter(b => b.estado !== "Completado" && b.estado !== "Asignada").length;
+      poblarOpcionesSemanas();
+    }
+
+    function renderizarTodo() {
+      try { renderizarJerarquiaPersonas(); } catch (e) { console.error(e); }
+      try { renderizarTimeline(); } catch (e) { console.error(e); }
+      try { renderizarBolsa(); } catch (e) { console.error(e); }
+    }
+
+    function cambiarSemanaDirecta() {
+      const el = document.getElementById("selectSemanaActual");
+      if (!el || !el.value || el.value === STATE.semana) return;
+      STATE.semana = el.value;
+      actualizarBadges();
+      renderizarJerarquiaPersonas();
+      actualizarBotonesNavegacionSemana();
+      notificar(`Mostrando ${STATE.semana}`);
+    }
+
+    function desplazarSemana(delta) {
+      const idx = (STATE.semanas || []).findIndex(s => coincidenSemanasClient(s, STATE.semana));
+      if (idx === -1) return;
+      const nuevo = idx + delta;
+      if (nuevo >= 0 && nuevo < STATE.semanas.length) {
+        STATE.semana = STATE.semanas[nuevo];
+        const el = document.getElementById("selectSemanaActual");
+        if (el) el.value = STATE.semana;
+        actualizarBadges();
+        renderizarJerarquiaPersonas();
+        actualizarBotonesNavegacionSemana();
+        notificar(`Mostrando ${STATE.semana}`);
+      }
+    }
+
+    function actualizarBotonesNavegacionSemana() {
+      const idx = (STATE.semanas || []).findIndex(s => coincidenSemanasClient(s, STATE.semana));
+      const btnNext = document.getElementById("btnSemanaNext"), btnPrev = document.getElementById("btnSemanaPrev");
+      if (btnNext) btnNext.disabled = (idx >= STATE.semanas.length - 1);
+      if (btnPrev) btnPrev.disabled = (idx <= 0);
+    }
+
+    // =========================================================================
+    // PARSER & SERIALIZADOR DE TO-DOS
+    // =========================================================================
+    const RGX_LINK_TAG = /\[link:(https?:\/\/[^|\]]+)(?:\|([^\]]+))?\]/i;
+    const RGX_IMG_TAG = /\[img:(https?:\/\/[^\]]+)\]/i;
+    const RGX_IMG_URL = /^(https?:\/\/[^\s]+\.(?:png|jpg|jpeg|gif|webp|svg))(?:\?[^\s]*)?$/i;
+
+    function parsearTodos(rawText) {
+      if (!rawText) return { items: [], images: [] };
+      const items = [], images = [];
+      String(rawText).split("\n").forEach(line => {
+        const trimmed = line.trim();
+        if (!trimmed) return;
+        const img = trimmed.match(RGX_IMG_TAG) || trimmed.match(RGX_IMG_URL);
+        if (img) { images.push(img[1]); return; }
+
+        const isSubpoint = /^(?:\s{2,}|\t+|↳)/.test(line) || /^↳/.test(trimmed);
+        let checked = false, text = trimmed.replace(/^↳\s*/, "");
+        if (/^[-*•]?\s*\[x\]\s*/i.test(text)) { checked = true; text = text.replace(/^[-*•]?\s*\[x\]\s*/i, ""); }
+        else if (/^[-*•]?\s*\[\s*\]\s*/i.test(text)) { text = text.replace(/^[-*•]?\s*\[\s*\]\s*/i, ""); }
+        else if (/^[-*•]\s+/.test(text)) { text = text.replace(/^[-*•]\s+/, ""); }
+
+        let itemLink = null;
+        const lk = text.match(RGX_LINK_TAG);
+        if (lk) { itemLink = { url: lk[1], label: lk[2] || "Link" }; text = text.replace(lk[0], "").trim(); }
+        else {
+          const u = text.match(/(https?:\/\/[^\s]+)$/i);
+          if (u) { itemLink = { url: u[1], label: "Link" }; text = text.replace(u[0], "").trim(); }
+        }
+        items.push({ text: text, checked: checked, isSubpoint: isSubpoint, link: itemLink });
+      });
+      return { items, images };
+    }
+
+    function serializarTodos(items, images) {
+      const lines = [];
+      (items || []).forEach((it, idx) => {
+        if (idx !== items.length - 1 && !(it.text || "").trim() && !it.link) return;
+        const prefix = it.isSubpoint ? "  ↳ " : "";
+        let line = `${prefix}- [${it.checked ? 'x' : ' '}] ${it.text || ''}`;
+        if (it.link?.url) line += ` [link:${it.link.url}|${it.link.label || 'Link'}]`;
+        lines.push(line);
+      });
+      (images || []).forEach(img => lines.push(`[img:${img}]`));
+      return lines.join("\n");
+    }
+
+    // =========================================================================
+    // VISTA PRINCIPAL: SEGUIMIENTO JERÁRQUICO POR PERSONA
+    // =========================================================================
+    function renderizarJerarquiaPersonas() {
+      const contenedor = document.getElementById("contenedorPersonas");
+      if (!contenedor) return;
+      let miembros = STATE.equipo;
+      if (STATE.ownerFiltro !== "Todos") miembros = miembros.filter(m => m.nombre === STATE.ownerFiltro);
+
+      if (!miembros?.length) {
+        const unicos = [...new Set((STATE.semanal || []).map(s => s.owner).filter(Boolean))];
+        if (unicos.length) miembros = unicos.map(o => ({ nombre: o, rol: "Analyst" }));
+        else {
+          contenedor.innerHTML = `<div style="padding:40px;text-align:center;color:var(--text-muted);font-size:13px;">Cargando tareas del equipo desde Google Sheets...</div>`;
+          return;
+        }
+      }
+
+      let html = "";
+      miembros.forEach(m => {
+        const color = obtenerColorAvatar(m.nombre), iniciales = obtenerIniciales(m.nombre);
+        const tSem = STATE.semanal.filter(s => s.owner === m.nombre && coincidenSemanasClient(s.semana, STATE.semana));
+        const itemSem = tSem[0] || null;
+        const parsed = parsearTodos(itemSem?.todos || "");
+        const modo = STATE.modoEdicionTodos[m.nombre] || "checklist";
+
+        const recs = STATE.recurrentes.filter(r => r.owner === m.nombre);
+        const diarias = recs.filter(r => r.frecuencia === "Diario");
+        const semanales = recs.filter(r => !r.frecuencia || r.frecuencia === "Semanal" || r.frecuencia === "Quincenal");
+        const mensuales = recs.filter(r => r.frecuencia === "Mensual" || r.frecuencia === "Cierre de Mes");
+        const futuros = STATE.futuros.filter(f => f.owner === m.nombre && f.estado !== "Promovido");
+
+        const cSem = !!STATE.colapsadoSemana[m.nombre], cRec = !!STATE.colapsadoRecurrentes[m.nombre], cProx = STATE.colapsadoProxima[m.nombre] ?? true;
+
+        let todosHtml = "";
+        if (modo === "raw") {
+          todosHtml = `<textarea class="todos-raw-textarea" onchange="guardarTodosRaw('${escapeHtml(m.nombre)}', this.value)">${escapeHtml(itemSem?.todos || '')}</textarea>`;
+        } else {
+          const rows = parsed.items.map((it, idx) => `
+            <div class="checklist-row ${it.isSubpoint ? 'is-subpoint' : ''}" draggable="true"
+                 ondragstart="handleTodoDragStart(event, '${escapeHtml(m.nombre)}', ${idx})"
+                 ondragover="e => e.preventDefault()"
+                 ondrop="handleTodoDrop(event, '${escapeHtml(m.nombre)}', ${idx})">
+              <span class="drag-handle">&#8942;&#8942;</span>
+              ${it.isSubpoint ? `<span style="color:var(--accent-blue);font-weight:800;">&#8627;</span>` : ''}
+              <input type="checkbox" class="checklist-checkbox" ${it.checked ? 'checked' : ''} onchange="toggleCheckItem('${escapeHtml(m.nombre)}', ${idx}, this.checked)">
+              <input type="text" class="checklist-input ${it.checked ? 'checked-text' : ''}" value="${escapeHtml(it.text)}" placeholder="Escribir prioridad..."
+                     onkeydown="handleChecklistKeydown(event, '${escapeHtml(m.nombre)}', ${idx}, ${it.isSubpoint})"
+                     oninput="editarTextoItem('${escapeHtml(m.nombre)}', ${idx}, this.value)"
+                     onblur="handleChecklistBlur('${escapeHtml(m.nombre)}', ${idx})">
+              <div class="row-tail-actions">
+                ${it.link ? `<a href="${escapeHtml(it.link.url)}" target="_blank" class="link-chip">${escapeHtml(it.link.label || 'Link')} &nearr;</a><button class="btn-del-mini" onclick="quitarLinkItem('${escapeHtml(m.nombre)}', ${idx})">&times;</button>` : `<button class="btn-add-row-link" onclick="adjuntarLinkItem('${escapeHtml(m.nombre)}', ${idx})">+ link</button>`}
+                <button class="btn-del-mini" onclick="eliminarCheckItem('${escapeHtml(m.nombre)}', ${idx})">&times;</button>
+              </div>
+            </div>
+          `).join("");
+
+          let imgsHtml = "";
+          if (parsed.images.length) {
+            imgsHtml = `<div class="todo-attachments">` + parsed.images.map((img, iIdx) => `
+              <div class="todo-image-preview"><img src="${img}" onclick="window.open('${img}', '_blank')"><button class="btn-remove-attachment" onclick="eliminarImagenItem('${escapeHtml(m.nombre)}', ${iIdx})">&times;</button></div>
+            `).join("") + `</div>`;
+          }
+
+          todosHtml = `
+            <div class="checklist-container" id="checklist_box_${escapeHtml(m.nombre)}" ondragover="e => e.preventDefault()" ondrop="handleTodoContainerDrop(event, '${escapeHtml(m.nombre)}')">
+              ${rows}
+              <div class="notion-ghost-row" onclick="agregarCheckItemNuevo('${escapeHtml(m.nombre)}', null, false)">
+                <span class="ghost-checkbox"></span><span class="ghost-text">Escribir tarea...</span>
+              </div>
+            </div>
+            ${imgsHtml}
+          `;
+        }
+
+        function renderSubRecGroup(items, frec) {
+          return items.map(r => {
+            const chk = !!r.semanasCompletadas?.[STATE.semana];
+            const lk = obtenerLinkData(r.links);
+            return `
+              <div class="checklist-row ${r.isSubpoint ? 'is-subpoint' : ''}" draggable="true"
+                   ondragstart="handleRecDragStart(event, '${escapeHtml(m.nombre)}', '${r.id}')"
+                   ondragover="e => e.preventDefault()"
+                   ondrop="handleRecDrop(event, '${escapeHtml(m.nombre)}', '${frec}', '${r.id}')">
+                <span class="drag-handle">&#8942;&#8942;</span>
+                ${r.isSubpoint ? `<span style="color:var(--accent-emerald);font-weight:800;">&#8627;</span>` : ''}
+                <input type="checkbox" class="checklist-checkbox" ${chk ? 'checked' : ''} onchange="toggleCheckRecurrente('${r.id}', this.checked)">
+                <input type="text" class="checklist-input ${chk ? 'checked-text' : ''}" value="${escapeHtml(r.tarea || '')}" placeholder="Escribir tarea..."
+                       onkeydown="handleRecKeydown(event, '${escapeHtml(m.nombre)}', '${frec}', '${r.id}')"
+                       oninput="editarTextoRecurrente('${r.id}', this.value)">
+                <div class="row-tail-actions">
+                  ${lk ? `<a href="${escapeHtml(lk.url)}" target="_blank" class="link-chip">${escapeHtml(lk.label)} &nearr;</a><button class="btn-del-mini" onclick="quitarLinkRecurrente('${r.id}')">&times;</button>` : `<button class="btn-add-row-link" onclick="adjuntarLinkRecurrente('${r.id}')">+ link</button>`}
+                  <button class="btn-del-mini" onclick="eliminarRecurrenteDirecto('${r.id}')">&times;</button>
+                </div>
+              </div>
+            `;
+          }).join("");
+        }
+
+        const recurrentesHtml = `
+          <div class="recurrentes-rows-container">
+            ${[ { t: 'Diario', c: 'frec-diario', items: diarias }, { t: 'Semanal', c: 'frec-semanal', items: semanales }, { t: 'Mensual / Cierre', c: 'frec-mensual', items: mensuales } ].map(g => `
+              <div class="rec-group-section">
+                <div class="rec-group-header"><span class="badge-frec-pill ${g.c}">${g.t}</span><span class="rec-group-count">${g.items.length} tareas</span></div>
+                <div class="rec-group-rows" ondragover="e => e.preventDefault()" ondrop="handleRecContainerDrop(event, '${escapeHtml(m.nombre)}', '${g.t.split(' ')[0]}')">
+                  ${renderSubRecGroup(g.items, g.t.split(' ')[0])}
+                  <div class="notion-ghost-row" onclick="agregarRecurrenteConFrecuencia('${escapeHtml(m.nombre)}', '${g.t.split(' ')[0]}')">
+                    <span class="ghost-checkbox"></span><span class="ghost-text">Escribir tarea...</span>
+                  </div>
+                </div>
+              </div>
+            `).join("")}
+          </div>
+        `;
+
+        const futurosHtml = `
+          <div class="backlog-subpoints-list">
+            ${futuros.map(f => `
+              <div class="subpoint-row">
+                <span class="subpoint-bullet">&#8627;</span>
+                <input type="text" class="subpoint-task-input" value="${escapeHtml(f.tema || '')}" onchange="guardarCampoFuturoInline('${f.id}', 'tema', this.value)">
+                <input type="text" style="width:110px;font-size:11px;font-weight:700;padding:2px 5px;border:1px solid var(--border);border-radius:4px;" value="${escapeHtml(f.target || 'A definir')}" onchange="guardarCampoFuturoInline('${f.id}', 'target', this.value)">
+                <button class="btn-promote-item" onclick="promoverFuturoDirecto('${f.id}')">Promover &rarr;</button>
+                <button class="btn-del-mini" onclick="eliminarFuturoDirecto('${f.id}')">&times;</button>
+              </div>
+            `).join("")}
+          </div>
+          <div class="notion-ghost-row" onclick="agregarFilaFuturoPara('${escapeHtml(m.nombre)}')">
+            <span class="ghost-checkbox"></span><span class="ghost-text">Escribir proyecto o tarea...</span>
+          </div>
+        `;
+
+        html += `
+          <div class="person-card" id="card_persona_${escapeHtml(m.nombre)}">
+            <div class="person-banner">
+              <div class="person-info"><div class="avatar-badge" style="background:${color};">${iniciales}</div><span class="person-name">${escapeHtml(m.nombre)}</span></div>
+            </div>
+            <div class="spine-section ${cSem ? 'is-collapsed' : ''}">
+              <div class="spine-bar spine-semana" onclick="toggleColapsarSemana('${escapeHtml(m.nombre)}')"><span class="spine-text">${cSem ? 'SEM.' : 'TAREA DE LA SEMANA'}</span></div>
+              <div class="spine-body project-section-body">
+                <div class="todos-interactive-box">
+                  <div class="todos-toolbar" onclick="toggleColapsarSemana('${escapeHtml(m.nombre)}')">
+                    <div class="todos-toolbar-title">Prioridades & Tareas de la Semana</div>
+                    <div class="collapse-btn-indicator"><span>${cSem ? 'Desplegar' : 'Colapsar'}</span></div>
+                  </div>
+                  <div style="${cSem ? 'display:none;' : ''}">${todosHtml}</div>
+                </div>
+              </div>
+            </div>
+            <div class="spine-section ${cRec ? 'is-collapsed' : ''}">
+              <div class="spine-bar spine-recurrente" onclick="toggleColapsarRecurrentes('${escapeHtml(m.nombre)}')"><span class="spine-text">${cRec ? 'REC.' : 'RECURRENTE'}</span></div>
+              <div class="spine-body subpoints-block">
+                <div class="subpoints-header-toggle" onclick="toggleColapsarRecurrentes('${escapeHtml(m.nombre)}')">
+                  <div class="subpoints-label"><span class="sub-tree-icon">&#8627;</span><span>Scope & Tareas Recurrentes</span></div>
+                  <div class="collapse-btn-indicator"><span>${cRec ? 'Desplegar' : 'Colapsar'}</span></div>
+                </div>
+                <div style="${cRec ? 'display:none;' : ''}">${recurrentesHtml}</div>
+              </div>
+            </div>
+            <div class="spine-section ${cProx ? 'is-collapsed' : ''}">
+              <div class="spine-bar spine-proxima" onclick="toggleColapsarProxima('${escapeHtml(m.nombre)}')"><span class="spine-text">${cProx ? 'PRÓX.' : 'PRÓXIMO'}</span></div>
+              <div class="spine-body backlog-block">
+                <div class="subpoints-header-toggle" onclick="toggleColapsarProxima('${escapeHtml(m.nombre)}')">
+                  <div class="subpoints-label"><span class="sub-tree-icon">&#8627;</span><span>Próximas tareas y proyectos</span></div>
+                  <div class="collapse-btn-indicator"><span>${cProx ? 'Desplegar' : 'Colapsar'}</span></div>
+                </div>
+                <div style="${cProx ? 'display:none;' : ''}">${futurosHtml}</div>
+              </div>
+            </div>
+          </div>
+        `;
+      });
+      contenedor.innerHTML = html;
+    }
+
+    // =========================================================================
+    // ACCIONES DE CHECKLIST, RECURRENTES Y LINKS
+    // =========================================================================
+    function toggleColapsarSemana(o) { STATE.colapsadoSemana[o] = !STATE.colapsadoSemana[o]; renderizarJerarquiaPersonas(); }
+    function toggleColapsarRecurrentes(o) { STATE.colapsadoRecurrentes[o] = !STATE.colapsadoRecurrentes[o]; renderizarJerarquiaPersonas(); }
+    function toggleColapsarProxima(o) { STATE.colapsadoProxima[o] = !STATE.colapsadoProxima[o]; renderizarJerarquiaPersonas(); }
+
+    function toggleExpandirColapsarTodo() {
+      const colapsar = document.getElementById("labelToggleTodo")?.innerText.includes("Colapsar");
+      STATE.equipo.forEach(m => {
+        STATE.colapsadoSemana[m.nombre] = colapsar;
+        STATE.colapsadoRecurrentes[m.nombre] = colapsar;
+        STATE.colapsadoProxima[m.nombre] = colapsar;
+      });
+      document.getElementById("labelToggleTodo").innerText = colapsar ? "Expandir todo" : "Colapsar todo";
+      renderizarJerarquiaPersonas();
+    }
+
+    function toggleExpandirColapsarProyectosActuales() {
+      const colapsar = document.getElementById("labelToggleProyectosActuales")?.innerText.includes("Colapsar");
+      STATE.equipo.forEach(m => { STATE.colapsadoSemana[m.nombre] = colapsar; });
+      document.getElementById("labelToggleProyectosActuales").innerText = colapsar ? "Expandir Proyectos" : "Colapsar Proyectos";
+      renderizarJerarquiaPersonas();
+    }
+
+    function toggleCheckItem(owner, idx, chk) {
+      const it = STATE.semanal.find(s => s.owner === owner && coincidenSemanasClient(s.semana, STATE.semana));
+      if (!it) return;
+      const p = parsearTodos(it.todos || "");
+      if (p.items[idx]) {
+        p.items[idx].checked = chk;
+        it.todos = serializarTodos(p.items, p.images);
+        guardarCampoPersonaSemana(owner, "todos", it.todos);
+        renderizarJerarquiaPersonas();
+      }
+    }
+
+    const _timers = {};
+    function debounce(key, fn, delay = 600) {
+      if (_timers[key]) clearTimeout(_timers[key]);
+      _timers[key] = setTimeout(fn, delay);
+    }
+
+    function editarTextoItem(owner, idx, val) {
+      const it = STATE.semanal.find(s => s.owner === owner && coincidenSemanasClient(s.semana, STATE.semana));
+      if (!it) return;
+      const p = parsearTodos(it.todos || "");
+      if (p.items[idx]) {
+        p.items[idx].text = val;
+        it.todos = serializarTodos(p.items, p.images);
+        debounce(`todo_${owner}`, () => guardarCampoPersonaSemana(owner, "todos", it.todos), 600);
+      }
+    }
+
+    function handleChecklistKeydown(e, owner, idx, isSub) {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        if (!e.target.value?.trim()) return;
+        agregarCheckItemNuevo(owner, idx + 1, isSub);
+      } else if (e.key === "Backspace" && e.target.value === "") {
+        e.preventDefault();
+        eliminarCheckItem(owner, idx, true);
+      }
+    }
+
+    function handleChecklistBlur(owner, idx) {
+      setTimeout(() => {
+        const it = STATE.semanal.find(s => s.owner === owner && coincidenSemanasClient(s.semana, STATE.semana));
+        if (!it) return;
+        const p = parsearTodos(it.todos || "");
+        if (p.items[idx] && !p.items[idx].text?.trim() && !p.items[idx].link) {
+          p.items.splice(idx, 1);
+          it.todos = serializarTodos(p.items, p.images);
+          guardarCampoPersonaSemana(owner, "todos", it.todos);
+          renderizarJerarquiaPersonas();
+        }
+      }, 180);
+    }
+
+    function agregarCheckItemNuevo(owner, atIdx, isSub) {
+      let it = STATE.semanal.find(s => s.owner === owner && coincidenSemanasClient(s.semana, STATE.semana));
+      if (!it) {
+        guardarCampoPersonaSemana(owner, "todos", "- [ ] \n");
+        it = STATE.semanal.find(s => s.owner === owner && coincidenSemanasClient(s.semana, STATE.semana));
+      }
+      const p = parsearTodos(it?.todos || "");
+      const newItem = { text: "", checked: false, isSubpoint: !!isSub, link: null };
+      if (typeof atIdx === "number") p.items.splice(atIdx, 0, newItem);
+      else p.items.push(newItem);
+      it.todos = serializarTodos(p.items, p.images);
+      guardarCampoPersonaSemana(owner, "todos", it.todos);
+      renderizarJerarquiaPersonas();
+      setTimeout(() => {
+        const inputs = document.querySelectorAll(`#checklist_box_${owner} .checklist-input`);
+        const target = typeof atIdx === "number" ? inputs[atIdx] : inputs[inputs.length - 1];
+        target?.focus();
+      }, 40);
+    }
+
+    function eliminarCheckItem(owner, idx, focusPrev) {
+      const it = STATE.semanal.find(s => s.owner === owner && coincidenSemanasClient(s.semana, STATE.semana));
+      if (!it) return;
+      const p = parsearTodos(it.todos || "");
+      p.items.splice(idx, 1);
+      it.todos = serializarTodos(p.items, p.images);
+      guardarCampoPersonaSemana(owner, "todos", it.todos);
+      renderizarJerarquiaPersonas();
+    }
+
+    function toggleCheckRecurrente(id, chk) {
+      const r = STATE.recurrentes.find(x => x.id === id);
+      if (!r) return;
+      if (!r.semanasCompletadas) r.semanasCompletadas = {};
+      r.semanasCompletadas[STATE.semana] = chk;
+      persistirMemoriaLocal();
+      callServer("guardarTareaRecurrente", r);
+    }
+
+    function editarTextoRecurrente(id, txt) {
+      const r = STATE.recurrentes.find(x => x.id === id);
+      if (!r) return;
+      r.tarea = txt;
+      debounce(`rec_${id}`, () => callServer("actualizarCampoRecurrente", id, "tarea", txt, r.owner, txt), 600);
+    }
+
+    function agregarRecurrenteConFrecuencia(owner, frec) {
+      const nuevo = { id: "REC-" + Date.now().toString(36).toUpperCase(), owner: owner, tarea: "", frecuencia: frec, links: "" };
+      STATE.recurrentes.push(nuevo);
+      renderizarJerarquiaPersonas();
+      setTimeout(() => {
+        const inp = document.querySelector(`#sub_rec_${nuevo.id} .checklist-input`);
+        inp?.focus();
+      }, 50);
+      callServer("guardarTareaRecurrente", nuevo);
+    }
+
+    function eliminarRecurrenteDirecto(id) {
+      STATE.recurrentes = STATE.recurrentes.filter(r => r.id !== id);
+      renderizarJerarquiaPersonas();
+      callServer("eliminarTareaRecurrente", id);
+      notificar("Tarea eliminada");
+    }
+
+    function agregarFilaFuturoPara(owner) {
+      const f = { id: "FUT-" + Date.now().toString(36).toUpperCase(), owner: owner, tema: "", target: "Noviembre 2026", estado: "Pendiente" };
+      STATE.futuros.push(f);
+      renderizarJerarquiaPersonas();
+      setTimeout(() => document.querySelector(`#sub_fut_${f.id} input`)?.focus(), 50);
+      callServer("guardarTemaFuturo", f);
+    }
+
+    function guardarCampoFuturoInline(id, campo, val) {
+      const f = STATE.futuros.find(x => x.id === id);
+      if (f) { f[campo] = val; callServer("actualizarCampoFuturo", id, campo, val); }
+    }
+
+    function promoverFuturoDirecto(id) {
+      const f = STATE.futuros.find(x => x.id === id);
+      if (!f) return;
+      f.estado = "Promovido";
+      renderizarJerarquiaPersonas();
+      notificar("Promoviendo a la semana actual...");
+      getRunner()?.withSuccessHandler(() => { cargarDatosCompletos(STATE.semana); notificar("Tema promovido"); })
+        .promoverTemaFuturoASemanal(id, STATE.semana);
+    }
+
+    function eliminarFuturoDirecto(id) {
+      STATE.futuros = STATE.futuros.filter(x => x.id !== id);
+      renderizarJerarquiaPersonas();
+      callServer("eliminarTemaFuturo", id);
+      notificar("Tema eliminado");
+    }
+
+    // =========================================================================
+    // MODAL DE ENLACES
+    // =========================================================================
+    let _modalCtx = null;
+    function abrirModalLink(ctx) {
+      _modalCtx = ctx;
+      document.getElementById("modalLinkUrl").value = ctx.initialUrl || "";
+      document.getElementById("modalLinkLabel").value = ctx.initialLabel || "";
+      document.getElementById("modalLinkOverlay").style.display = "flex";
+      setTimeout(() => document.getElementById("modalLinkUrl").focus(), 40);
+    }
+    function cerrarModalLink() { document.getElementById("modalLinkOverlay").style.display = "none"; _modalCtx = null; }
+
+    function confirmarGuardarLink() {
+      if (!_modalCtx) return;
+      const url = (document.getElementById("modalLinkUrl").value || "").trim();
+      const label = (document.getElementById("modalLinkLabel").value || "").trim() || "Link";
+      if (!url) { notificar("Ingresa una URL válida"); return; }
+
+      if (_modalCtx.type === "todo") {
+        const it = STATE.semanal.find(s => s.owner === _modalCtx.owner && coincidenSemanasClient(s.semana, STATE.semana));
+        if (it) {
+          const p = parsearTodos(it.todos || "");
+          if (p.items[_modalCtx.index]) {
+            p.items[_modalCtx.index].link = { url, label };
+            it.todos = serializarTodos(p.items, p.images);
+            guardarCampoPersonaSemana(_modalCtx.owner, "todos", it.todos);
+          }
+        }
+      } else if (_modalCtx.type === "rec") {
+        const r = STATE.recurrentes.find(x => x.id === _modalCtx.id);
+        if (r) {
+          r.links = `[link:${url}|${label}]`;
+          callServer("actualizarCampoRecurrente", r.id, "links", r.links, r.owner, r.tarea);
+        }
+      }
+      cerrarModalLink();
+      renderizarJerarquiaPersonas();
+      notificar("Enlace adjuntado");
+    }
+
+    function adjuntarLinkItem(owner, idx) {
+      const it = STATE.semanal.find(s => s.owner === owner && coincidenSemanasClient(s.semana, STATE.semana));
+      const p = parsearTodos(it?.todos || "");
+      abrirModalLink({ type: "todo", owner, index: idx, initialUrl: p.items[idx]?.link?.url, initialLabel: p.items[idx]?.link?.label });
+    }
+    function quitarLinkItem(owner, idx) {
+      const it = STATE.semanal.find(s => s.owner === owner && coincidenSemanasClient(s.semana, STATE.semana));
+      if (!it) return;
+      const p = parsearTodos(it.todos || "");
+      if (p.items[idx]) { p.items[idx].link = null; it.todos = serializarTodos(p.items, p.images); guardarCampoPersonaSemana(owner, "todos", it.todos); renderizarJerarquiaPersonas(); }
+    }
+    function adjuntarLinkRecurrente(id) {
+      const r = STATE.recurrentes.find(x => x.id === id);
+      const lk = obtenerLinkData(r?.links);
+      abrirModalLink({ type: "rec", id, initialUrl: lk?.url, initialLabel: lk?.label });
+    }
+    function quitarLinkRecurrente(id) {
+      const r = STATE.recurrentes.find(x => x.id === id);
+      if (r) { r.links = ""; callServer("actualizarCampoRecurrente", id, "links", "", r.owner, r.tarea); renderizarJerarquiaPersonas(); }
+    }
+    function obtenerLinkData(raw) {
+      if (!raw) return null;
+      if (typeof raw === "object" && raw.url) return raw;
+      const m = String(raw).trim().match(RGX_LINK_TAG);
+      return m ? { url: m[1], label: m[2] || "Link" } : { url: String(raw).trim(), label: "Link" };
+    }
+
+    // =========================================================================
+    // DRAG & DROP COMPACTO
+    // =========================================================================
+    let DRAG_ITEM = null;
+    function handleTodoDragStart(e, owner, idx) { DRAG_ITEM = { type: 'todo', owner, idx }; e.dataTransfer.setData("text/plain", JSON.stringify(DRAG_ITEM)); }
+    function handleRecDragStart(e, owner, id) { DRAG_ITEM = { type: 'rec', owner, id }; e.dataTransfer.setData("text/plain", JSON.stringify(DRAG_ITEM)); }
+    function handleBolsaDragStart(e, id) { DRAG_ITEM = { type: 'bolsa', id }; e.dataTransfer.setData("text/plain", JSON.stringify(DRAG_ITEM)); }
+
+    function handleTodoDrop(e, targetOwner, targetIdx) {
+      e.preventDefault();
+      if (!DRAG_ITEM) return;
+      const targetSem = STATE.semanal.find(s => s.owner === targetOwner && coincidenSemanasClient(s.semana, STATE.semana));
+      if (!targetSem) return;
+      const p = parsearTodos(targetSem.todos || "");
+
+      if (DRAG_ITEM.type === "todo" && DRAG_ITEM.owner === targetOwner) {
+        const moved = p.items.splice(DRAG_ITEM.idx, 1)[0];
+        p.items.splice(targetIdx, 0, moved);
+        targetSem.todos = serializarTodos(p.items, p.images);
+        guardarCampoPersonaSemana(targetOwner, "todos", targetSem.todos);
+      } else if (DRAG_ITEM.type === "rec") {
+        const rec = STATE.recurrentes.find(r => r.id === DRAG_ITEM.id);
+        if (rec) {
+          p.items.splice(targetIdx, 0, { text: rec.tarea, checked: false, isSubpoint: false, link: obtenerLinkData(rec.links) });
+          targetSem.todos = serializarTodos(p.items, p.images);
+          guardarCampoPersonaSemana(targetOwner, "todos", targetSem.todos);
+        }
+      } else if (DRAG_ITEM.type === "bolsa") {
+        const b = STATE.bolsa.find(x => String(x.id) === String(DRAG_ITEM.id));
+        if (b) {
+          p.items.splice(targetIdx, 0, { text: b.titulo, checked: false, isSubpoint: false, link: null });
+          targetSem.todos = serializarTodos(p.items, p.images);
+          guardarCampoPersonaSemana(targetOwner, "todos", targetSem.todos);
+          callServer("asignarTareaBolsaAMiembro", b.id, targetOwner, false, STATE.semana);
+        }
+      }
+      DRAG_ITEM = null;
+      renderizarJerarquiaPersonas();
+    }
+
+    function handleTodoContainerDrop(e, targetOwner) { handleTodoDrop(e, targetOwner, 0); }
+    function handleRecDrop(e, targetOwner, frec, targetId) { e.preventDefault(); DRAG_ITEM = null; }
+    function handleRecContainerDrop(e, targetOwner, frec) { e.preventDefault(); DRAG_ITEM = null; }
+
+    // =========================================================================
+    // LLAMADAS AL SERVIDOR Y PERSISTENCIA
+    // =========================================================================
+    function callServer(fn, ...args) {
+      persistirMemoriaLocal();
+      const runner = getRunner();
+      if (!runner?.[fn]) {
+        actualizarPillConexion(false, "Modo local: guardado en memoria");
+        notificar("Guardado localmente");
+        return;
+      }
+      try {
+        runner.withSuccessHandler(() => { actualizarPillConexion(true); notificar("Guardado en Google Sheets"); })
+          .withFailureHandler(err => { actualizarPillConexion(false, err?.message || err); notificar("Guardado localmente"); })
+          [fn](...args);
+      } catch (e) { actualizarPillConexion(false, e.message); }
+    }
+
+    function guardarCampoPersonaSemana(owner, campo, val) {
+      let it = STATE.semanal.find(s => s.owner === owner && coincidenSemanasClient(s.semana, STATE.semana));
+      if (!it) {
+        it = { id: "SEM-" + Date.now().toString(36).toUpperCase(), semana: STATE.semana, owner: owner, proyecto: "Iniciativa Principal", todos: "", estado: "En proceso" };
+        STATE.semanal.push(it);
+      }
+      it[campo] = val;
+      callServer("guardarSeguimientoSemanal", it);
+      notificar("Guardado");
+    }
+
+    function actualizarPillConexion(conectado, detalle) {
+      const pill = document.getElementById("sheetsConnectionBadge"), label = document.getElementById("connLabel"), dot = document.getElementById("connDot");
+      if (!pill || !label || !dot) return;
+      pill.className = `connection-status-pill ${conectado ? 'conn-ok' : 'conn-warn'}`;
+      dot.style.background = conectado ? "#10B981" : "#F59E0B";
+      label.textContent = conectado ? "Sheets Conectado" : "Modo Local / Desconectado";
+      pill.title = detalle || (conectado ? "Sincronizado en tiempo real con Google Sheets." : "Sin conexión.");
+    }
+
+    function mostrarDiagnosticoSheets() {
+      const modal = document.getElementById("modalDiagnosticoSheets"); if (!modal) return;
+      modal.style.display = "flex";
+      document.getElementById("diagBodyContent").innerHTML = `
+        <div style="font-size:12px;line-height:1.6;">
+          <strong>Estado:</strong> ${STATE.conexionSheets?.conectado ? 'Conectado a Google Sheets' : 'Desconectado / Local'}<br>
+          <strong>Planilla ID:</strong> <code>${CONFIG?.SPREADSHEET_ID || '1vBq5i_IRlAuhgos6awzl68j-tlKo-7vZAKtwp4do1dA'}</code><br>
+          <strong>Tareas cargadas:</strong> ${STATE.semanal.length} semanales, ${STATE.recurrentes.length} recurrentes, ${STATE.bolsa.length} en bolsa.
+        </div>
+      `;
+    }
+    function cerrarModalDiagnostico() { document.getElementById("modalDiagnosticoSheets").style.display = "none"; }
+    function forzarSincronizacionCompleta() { cerrarModalDiagnostico(); inicializarApp(); }
+
+    // =========================================================================
+    // VISTAS: TIMELINE, BOLSA Y ADMIN
+    // =========================================================================
+    function renderizarTimeline() {
+      const cont = document.getElementById("timelineContainer");
+      if (!cont) return;
+      const semanas = STATE.semanas || [];
+      if (!semanas.length || !STATE.equipo.length) {
+        cont.innerHTML = `<div style="padding:30px;text-align:center;color:var(--text-muted);">Cargando línea de tiempo desde Google Sheets...</div>`;
+        return;
+      }
+      let html = `<table class="timeline-table"><thead><tr><th class="timeline-th-person">Miembro</th>` +
+        semanas.map(s => `<th class="timeline-th-week ${coincidenSemanasClient(s, STATE.semanaActual) ? 'is-current-week' : ''}">${escapeHtml(s.split('|')[0])}<div style="font-size:9.5px;color:var(--text-muted);">${escapeHtml(s.split('|')[1] || '')}</div></th>`).join("") +
+        `</tr></thead><tbody>`;
+
+      STATE.equipo.forEach(m => {
+        html += `<tr><td class="timeline-td-person"><strong>${escapeHtml(m.nombre)}</strong></td>`;
+        semanas.forEach(s => {
+          const t = STATE.semanal.find(x => x.owner === m.nombre && coincidenSemanasClient(x.semana, s));
+          html += `<td class="timeline-td-week ${coincidenSemanasClient(s, STATE.semanaActual) ? 'is-current-week' : ''}">
+            ${t ? `<div class="timeline-card" onclick="seleccionarTab('semanal')"><strong>${escapeHtml(t.proyecto || 'Iniciativa')}</strong></div>` : `<div style="font-size:10px;color:var(--text-muted);cursor:pointer;" onclick="crearTareaParaPersonaSemana('${escapeHtml(m.nombre)}', '${escapeHtml(s)}')">+ Planificar</div>`}
+          </td>`;
+        });
+        html += `</tr>`;
+      });
+      cont.innerHTML = html + `</tbody></table>`;
+    }
+
+    function crearTareaParaPersonaSemana(owner, sem) {
+      const p = prompt(`Iniciativa para ${owner} en ${sem.split('|')[0]}:`);
+      if (!p?.trim()) return;
+      const n = { id: "SEM-" + Date.now().toString(36).toUpperCase(), semana: sem, owner: owner, proyecto: p.trim(), todos: "- [ ] Iniciar", estado: "En proceso" };
+      STATE.semanal.push(n);
+      callServer("guardarSeguimientoSemanal", n);
+      renderizarTimeline();
+    }
+    function desplazarVentanaTimeline(d) { STATE.timelineOffset += d; renderizarTimeline(); }
+    function centrarTimelineEnSemanaActual() { STATE.timelineOffset = 0; renderizarTimeline(); }
+
+    function renderizarBolsa() {
+      const cont = document.getElementById("contenedorBolsa"); if (!cont) return;
+      const pilar = document.getElementById("selectFiltroPilarBolsa")?.value || "Todos";
+      const prio = document.getElementById("selectFiltroPrioridadBolsa")?.value || "Todas";
+      const q = (document.getElementById("inputBuscarBolsa")?.value || "").toLowerCase();
+
+      const items = (STATE.bolsa || []).filter(b => {
+        if (b.estado === "Completado" || b.estado === "Asignada") return false;
+        if (pilar !== "Todos" && b.pilar !== pilar) return false;
+        if (prio !== "Todas" && b.prioridad !== prio) return false;
+        if (q && !b.titulo?.toLowerCase().includes(q) && !b.descripcion?.toLowerCase().includes(q)) return false;
+        return true;
+      });
+
+      if (!items.length) {
+        cont.innerHTML = `<div style="padding:40px;text-align:center;color:var(--text-muted);font-size:13px;">No hay tareas pendientes en la bolsa con esos filtros.</div>`;
+        return;
+      }
+
+      cont.innerHTML = `<div class="bolsa-grid">` + items.map(b => `
+        <div class="bolsa-card" draggable="true" ondragstart="handleBolsaDragStart(event, '${b.id}')">
+          <div class="bolsa-card-header">
+            <strong>${escapeHtml(b.titulo)}</strong>
+            <span class="bolsa-priority-pill priority-${(b.prioridad || 'media').toLowerCase()}">${escapeHtml(b.prioridad || 'Media')}</span>
+          </div>
+          <div style="font-size:11px;color:var(--text-secondary);flex:1;">${escapeHtml(b.descripcion || '')}</div>
+          <div style="display:flex;justify-content:space-between;align-items:center;border-top:1px solid var(--border);padding-top:8px;">
+            <select onchange="asignarTareaBolsaASelect('${b.id}', this.value)" style="font-size:10px;">
+              <option value="">Asignar a...</option>
+              ${STATE.equipo.map(m => `<option value="${escapeHtml(m.nombre)}">${escapeHtml(m.nombre)}</option>`).join("")}
+            </select>
+            <button class="btn btn-outline" style="font-size:10px;padding:2px 6px;" onclick="eliminarTareaBolsaDirecto('${b.id}')">&times;</button>
+          </div>
+        </div>
+      `).join("") + `</div>`;
+    }
+
+    function filtrarBolsa() { renderizarBolsa(); }
+    function toggleFormNuevaBolsaInline() {
+      const box = document.getElementById("boxNuevaBolsaInline");
+      if (box) box.style.display = box.style.display === "none" ? "block" : "none";
+    }
+
+    function guardarTareaBolsaInlineDirecto() {
+      const tit = document.getElementById("bolsa_in_titulo")?.value?.trim();
+      if (!tit) { notificar("Escribí el título de la tarea"); return; }
+      const b = {
+        id: "BOL-" + Date.now().toString(36).toUpperCase(), titulo: tit,
+        descripcion: document.getElementById("bolsa_in_desc")?.value?.trim() || "",
+        pilar: document.getElementById("bolsa_in_pilar")?.value || "Performance",
+        prioridad: document.getElementById("bolsa_in_prioridad")?.value || "Media",
+        creado_por: STATE.usuario?.nombre || "Analista", asignado_a: "Sin asignar", estado: "Pendiente"
+      };
+      STATE.bolsa.push(b);
+      toggleFormNuevaBolsaInline();
+      actualizarBadges();
+      renderizarBolsa();
+      callServer("guardarTareaBolsa", b);
+      notificar("Publicado en la bolsa");
+    }
+
+    function eliminarTareaBolsaDirecto(id) {
+      if (!confirm("¿Eliminar esta tarea de la bolsa?")) return;
+      STATE.bolsa = STATE.bolsa.filter(x => String(x.id) !== String(id));
+      actualizarBadges();
+      renderizarBolsa();
+      callServer("eliminarTareaBolsa", id);
+      notificar("Tarea eliminada");
+    }
+
+    function asignarTareaBolsaASelect(id, owner) {
+      if (!owner) return;
+      const b = STATE.bolsa.find(x => String(x.id) === String(id));
+      if (!b) return;
+      b.asignado_a = owner; b.estado = "Asignada";
+      const sem = STATE.semana || STATE.semanaActual;
+      let s = STATE.semanal.find(x => x.owner === owner && coincidenSemanasClient(x.semana, sem));
+      if (!s) {
+        s = { id: "SEM-" + Date.now().toString(36).toUpperCase(), semana: sem, owner: owner, proyecto: b.titulo, todos: `- [ ] ${b.titulo}`, estado: "En proceso" };
+        STATE.semanal.push(s);
+      } else {
+        const p = parsearTodos(s.todos || "");
+        p.items.push({ text: b.titulo, checked: false, isSubpoint: false, link: null });
+        s.todos = serializarTodos(p.items, p.images);
+      }
+      guardarCampoPersonaSemana(owner, "todos", s.todos);
+      callServer("asignarTareaBolsaAMiembro", id, owner, false, sem);
+      actualizarBadges();
+      renderizarBolsa();
+      notificar(`Tarea asignada a ${owner}`);
+    }
+
+    function cargarDatosAdmin() {
+      const runner = getRunner();
+      if (!runner) return;
+      runner.withSuccessHandler(res => {
+        if (res?.equipo) STATE.equipo = res.equipo;
+        renderizarTablaAdminEquipo();
+      }).obtenerDatosAdmin();
+    }
+
+    function renderizarTablaAdminEquipo() {
+      const tbody = document.getElementById("tbodyAdminEquipo");
+      if (!tbody) return;
+      tbody.innerHTML = (STATE.equipo || []).map(m => `
+        <tr style="border-bottom:1px solid var(--border);">
+          <td style="padding:8px;"><strong>${escapeHtml(m.nombre)}</strong></td>
+          <td style="padding:8px;font-family:monospace;font-size:11px;">${escapeHtml(m.email || '')}</td>
+          <td style="padding:8px;text-align:right;"><button class="btn-del-mini" onclick="eliminarMiembroDesdeAdmin('${escapeHtml(m.email)}')">&times;</button></td>
+        </tr>
+      `).join("");
+      document.getElementById("countAdminEquipo").innerText = STATE.equipo.length;
+    }
+
+    function toggleFormNuevoMiembro() {
+      const box = document.getElementById("boxNuevoMiembroInline");
+      if (box) box.style.display = box.style.display === "none" ? "block" : "none";
+    }
+
+    function guardarNuevoMiembroDesdeAdmin() {
+      const nom = document.getElementById("admin_in_nombre")?.value?.trim();
+      const em = document.getElementById("admin_in_email")?.value?.trim().toLowerCase();
+      if (!nom || !em?.includes("@")) { alert("Ingresa nombre y email corporativo válido"); return; }
+      const nuevo = { nombre: nom, email: em };
+      STATE.equipo.push(nuevo);
+      toggleFormNuevoMiembro();
+      poblarOpcionesEquipo();
+      renderizarJerarquiaPersonas();
+      renderizarTablaAdminEquipo();
+      getRunner()?.withSuccessHandler(res => { if (res?.equipo) STATE.equipo = res.equipo; }).guardarMiembroEquipo(nuevo);
+    }
+
+    function eliminarMiembroDesdeAdmin(email) {
+      if (!confirm(`¿Eliminar al miembro ${email}?`)) return;
+      STATE.equipo = STATE.equipo.filter(m => m.email !== email);
+      poblarOpcionesEquipo();
+      renderizarJerarquiaPersonas();
+      renderizarTablaAdminEquipo();
+      getRunner()?.withSuccessHandler(res => { if (res?.equipo) STATE.equipo = res.equipo; }).eliminarMiembroEquipo(email);
+    }
+
+    function seleccionarTab(key) {
+      ["semanal", "timeline", "bolsa", "admin"].forEach(t => {
+        const el = document.getElementById(`tab-${t}`); if (el) el.style.display = (t === key) ? "block" : "none";
+        const btn = document.getElementById(`tabBtn${t.charAt(0).toUpperCase() + t.slice(1)}`);
+        if (btn) btn.classList.toggle("active", t === key);
+      });
+      if (key === "admin") cargarDatosAdmin();
+    }
+
+    function poblarOpcionesEquipo() {
+      const sel = document.getElementById("selectFiltroOwner"); if (!sel) return;
+      const opts = `<option value="Todos">Todos los miembros</option>` + (STATE.equipo || []).map(m => `<option value="${escapeHtml(m.nombre)}">${escapeHtml(m.nombre)}</option>`).join("");
+      sel.innerHTML = opts;
+    }
+
+    function poblarOpcionesSemanas() {
+      const sel = document.getElementById("selectSemanaActual"); if (!sel) return;
+      const opts = (STATE.semanas || []).map(s => {
+        const selAttr = coincidenSemanasClient(s, STATE.semana) ? "selected" : "";
+        const suf = coincidenSemanasClient(s, STATE.semanaActual) ? " — Semana Actual" : "";
+        return `<option value="${escapeHtml(s)}" ${selAttr}>${escapeHtml(s)}${suf}</option>`;
+      }).join("");
+      sel.innerHTML = opts || `<option value="">Cargando semana desde Sheets...</option>`;
+    }
+
+    function aplicarFiltros() {
+      STATE.ownerFiltro = document.getElementById("selectFiltroOwner")?.value || "Todos";
+      renderizarTodo();
+    }
+
+    function notificar(msg) {
+      const t = document.getElementById("toast"), txt = document.getElementById("toastText");
+      if (!t || !txt) return;
+      txt.textContent = msg; t.style.display = "flex";
+      setTimeout(() => { t.style.display = "none"; }, 2200);
+    }
+
+    function escapeHtml(str) {
+      return String(str || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+    }
+
+    function obtenerColorAvatar(nombre) {
+      let hash = 0;
+      for (let i = 0; i < (nombre || "").length; i++) hash = nombre.charCodeAt(i) + ((hash << 5) - hash);
+      return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
+    }
+
+    function obtenerIniciales(nombre) {
+      if (!nombre) return "AN";
+      const parts = nombre.trim().split(/\s+/);
+      return (parts.length >= 2 ? parts[0][0] + parts[1][0] : parts[0].slice(0, 2)).toUpperCase();
+    }
+
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", () => { try { inicializarApp(); } catch (e) { console.error(e); } });
+    } else {
+      try { inicializarApp(); } catch (e) { console.error(e); }
+    }
+  </script>

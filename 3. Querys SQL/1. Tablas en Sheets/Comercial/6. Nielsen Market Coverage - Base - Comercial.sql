@@ -1,5 +1,9 @@
 DECLARE query_name STRING DEFAULT '6. Nielsen Market Coverage - Base - Comercial';
 
+-- Sheets Name: 1. ET - Market Coverage (7 - Market Coverage)
+-- Sheets Link: https://docs.google.com/spreadsheets/d/1k1CC8AkfWwnI4aRQATtBQ2t3bYu8RbDYU6Vwxk5qW9o
+
+
 WITH szm_stock AS (
   SELECT
     month,
