@@ -1,0 +1,935 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <!--
+    4. Analytics.html — Panel de Análisis y Auditoría de Mapster 2 (Exclusivo para matias.cagliero@pedidosya.com).
+    Auditoría de vistas, consumo BigQuery, telemetría y monitoreo de lluvias en red WHS.
+  -->
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Analytics & Auditoría — Mapster 2</title>
+
+  <!-- Google Fonts: Outfit (UI) + JetBrains Mono (Métricas y Datos) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&family=Outfit:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --bg: #f8fafc;
+      --panel-bg: #ffffff;
+      --text: #0f172a;
+      --sub: #475569;
+      --light: #94a3b8;
+      --border: #e2e8f0;
+      --border-light: #f1f5f9;
+      --primary: #ea044e;
+      --primary-hover: #c90343;
+      --violet: #7c3aed;
+      --blue: #0284c7;
+      --emerald: #10b981;
+      --amber: #f59e0b;
+      --shadow-sm: 0 1px 3px rgba(15,23,42,0.06);
+      --radius: 9px;
+      --radius-sm: 6px;
+      --font: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+      --mono: 'JetBrains Mono', monospace;
+    }
+
+    [data-theme="dark"], body.dark {
+      --bg: #0b0f19;
+      --panel-bg: #111827;
+      --text: #f8fafc;
+      --sub: #94a3b8;
+      --light: #64748b;
+      --border: #1f2937;
+      --border-light: #1e293b;
+      --shadow-sm: 0 1px 3px rgba(0,0,0,0.4);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--text);
+      font-size: 12.5px;
+      line-height: 1.4;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* Layout Fluido que ocupa el 100% del ancho de pantalla */
+    .analytics-page {
+      width: 100%;
+      max-width: 100%;
+      margin: 0;
+      padding: 14px 20px 40px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    /* Cabecera Principal */
+    .analytics-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 10px;
+      padding-bottom: 4px;
+    }
+    .analytics-title {
+      font-size: 19px;
+      font-weight: 900;
+      letter-spacing: -0.3px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .analytics-title b { color: var(--primary); }
+    .analytics-asof {
+      font-size: 11px;
+      color: var(--light);
+      font-weight: 600;
+      margin-top: 1px;
+    }
+    .head-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .btn-action {
+      height: 30px;
+      border: 1px solid var(--border);
+      background: var(--panel-bg);
+      border-radius: var(--radius-sm);
+      padding: 0 12px;
+      font-size: 11px;
+      font-weight: 700;
+      font-family: var(--font);
+      color: var(--sub);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.15s ease;
+      user-select: none;
+    }
+    .btn-action:hover {
+      border-color: var(--primary);
+      color: var(--primary);
+    }
+
+    /* Grid de KPIs Superiores (Fila Fluida de 5 Columnas) */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 10px;
+    }
+    .kpi-card {
+      background: var(--panel-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 11px 14px;
+      box-shadow: var(--shadow-sm);
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      transition: transform 0.15s ease, border-color 0.15s ease;
+    }
+    .kpi-card:hover {
+      transform: translateY(-1px);
+      border-color: var(--border-sheet-hover, var(--border));
+    }
+    .kpi-label {
+      font-size: 9.5px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--light);
+    }
+    .kpi-value {
+      font-size: 22px;
+      font-weight: 900;
+      letter-spacing: -0.4px;
+      font-family: var(--mono);
+      line-height: 1.1;
+      margin-top: 2px;
+    }
+    .kpi-sub {
+      font-size: 10.5px;
+      color: var(--sub);
+      font-weight: 600;
+      margin-top: 2px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .kpi-card.kpi-views .kpi-value { color: var(--text); }
+    .kpi-card.kpi-users .kpi-value { color: var(--violet); }
+    .kpi-card.kpi-queries .kpi-value { color: var(--blue); }
+    .kpi-card.kpi-bytes .kpi-value { color: var(--primary); }
+    .kpi-card.kpi-weather .kpi-value { color: #0284c7; }
+
+    /* Layout Prolijo de 2 Columnas para Tableros y Auditoría */
+    .dashboard-layout {
+      display: grid;
+      grid-template-columns: 1.18fr 0.82fr;
+      gap: 12px;
+      align-items: start;
+    }
+    .dashboard-col {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    /* Tarjetas de Contenido */
+    .card {
+      background: var(--panel-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      box-shadow: var(--shadow-sm);
+    }
+    .card-head {
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 8px;
+      background: var(--panel-bg);
+    }
+    .card-title {
+      font-size: 12px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+    }
+    .card-ctrls {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    /* Segmented Controls */
+    .seg-ctrl {
+      display: flex;
+      gap: 2px;
+      background: var(--border-light);
+      border-radius: var(--radius-sm);
+      padding: 2px;
+    }
+    .seg-ctrl button {
+      border: none;
+      background: transparent;
+      font-size: 10.5px;
+      font-weight: 700;
+      font-family: var(--font);
+      color: var(--sub);
+      padding: 3px 9px;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .seg-ctrl button.active {
+      background: var(--panel-bg);
+      color: var(--primary);
+      box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+    }
+
+    .input-filter {
+      height: 28px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 0 8px;
+      font-size: 11px;
+      font-family: var(--font);
+      color: var(--text);
+      background: var(--panel-bg);
+      outline: none;
+      transition: border-color 0.15s ease;
+    }
+    .input-filter:focus {
+      border-color: var(--primary);
+    }
+
+    /* Tablas con scrollbars finos y cabeceras pegajosas */
+    .table-wrap {
+      overflow-x: auto;
+      max-height: 480px;
+      scrollbar-width: thin;
+      scrollbar-color: var(--border) transparent;
+    }
+    .table-wrap::-webkit-scrollbar {
+      width: 5px;
+      height: 5px;
+    }
+    .table-wrap::-webkit-scrollbar-thumb {
+      background: var(--border);
+      border-radius: 4px;
+    }
+
+    table.data-table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+      font-size: 11.5px;
+    }
+    table.data-table th {
+      padding: 8px 12px;
+      font-size: 9.5px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      color: var(--light);
+      border-bottom: 1px solid var(--border);
+      background: var(--panel-bg);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      white-space: nowrap;
+      text-align: right;
+    }
+    table.data-table th:first-child { text-align: left; }
+    table.data-table td {
+      padding: 7px 12px;
+      border-bottom: 1px solid var(--border-light);
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+    table.data-table td:first-child {
+      text-align: left;
+      font-weight: 600;
+      color: var(--text);
+    }
+    table.data-table tbody tr:hover td {
+      background: var(--border-light);
+    }
+
+    tr.row-total td {
+      background: var(--border-light) !important;
+      font-weight: 800;
+      border-top: 2px solid var(--border);
+      border-bottom: 2px solid var(--border);
+    }
+    tr.row-total td:first-child {
+      color: var(--primary);
+      font-weight: 900;
+    }
+    .v-strong {
+      font-weight: 800;
+      color: var(--text);
+    }
+    .mono {
+      font-family: var(--mono);
+      font-size: 11px;
+    }
+
+    .badge-tag {
+      display: inline-block;
+      font-size: 9.5px;
+      font-weight: 700;
+      padding: 1.5px 6px;
+      border-radius: 99px;
+      background: var(--border-light);
+      color: var(--sub);
+    }
+    .badge-tag.primary { background: rgba(234,4,78,0.12); color: var(--primary); }
+    .badge-tag.blue    { background: rgba(2,132,199,0.12); color: var(--blue); }
+    .badge-tag.green   { background: rgba(16,185,129,0.12); color: var(--emerald); }
+
+    .pager {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 8px;
+      padding: 7px 12px;
+      border-top: 1px solid var(--border);
+      background: var(--panel-bg);
+    }
+    .pg-info {
+      font-size: 10.5px;
+      font-weight: 600;
+      color: var(--sub);
+      font-variant-numeric: tabular-nums;
+    }
+    .pg-btn {
+      width: 24px;
+      height: 24px;
+      border: 1px solid var(--border);
+      background: var(--panel-bg);
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: 800;
+      color: var(--sub);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.15s ease;
+    }
+    .pg-btn:hover:not(:disabled) {
+      background: var(--border-light);
+      color: var(--primary);
+    }
+    .pg-btn:disabled {
+      opacity: 0.35;
+      cursor: default;
+    }
+
+    .empty-state {
+      padding: 28px;
+      text-align: center;
+      color: var(--light);
+      font-style: italic;
+    }
+
+    /* Adaptación Responsiva */
+    @media (max-width: 1200px) {
+      .dashboard-layout {
+        grid-template-columns: 1fr;
+      }
+      .kpi-grid {
+        grid-template-columns: repeat(3, 1fr);
+      }
+    }
+    @media (max-width: 768px) {
+      .kpi-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+      .analytics-head {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+    }
+    @media (max-width: 480px) {
+      .kpi-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Navegación Compartida de Mapster 2 -->
+  <?!= include('_nav', { activePage: 'analytics', scriptUrl: scriptUrl, isAdmin: isAdmin }); ?>
+
+  <div class="analytics-page">
+    
+    <!-- Cabecera -->
+    <div class="analytics-head">
+      <div>
+        <div class="analytics-title">
+          <span>Mapster 2</span>
+          <b>Analytics & Auditoría</b>
+          <span class="badge-tag primary">Solo Admin</span>
+        </div>
+        <div class="analytics-asof" id="lbl-asof">Actualizado: —</div>
+      </div>
+      <div class="head-actions">
+        <button type="button" class="btn-action" onclick="loadAnalytics()">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+          <span>Recargar Datos</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- KPIs Principales (Fila Superior Fluida) -->
+    <div class="kpi-grid">
+      <div class="kpi-card kpi-views">
+        <span class="kpi-label">Vistas / Acciones</span>
+        <span class="kpi-value" id="kpi-views">—</span>
+        <span class="kpi-sub" id="kpi-today-views">0 hoy</span>
+      </div>
+      <div class="kpi-card kpi-users">
+        <span class="kpi-label">Usuarios Únicos</span>
+        <span class="kpi-value" id="kpi-users">—</span>
+        <span class="kpi-sub" id="kpi-today-users">0 hoy</span>
+      </div>
+      <div class="kpi-card kpi-queries">
+        <span class="kpi-label">Consultas BigQuery</span>
+        <span class="kpi-value" id="kpi-queries">—</span>
+        <span class="kpi-sub">cuadrantes y censos</span>
+      </div>
+      <div class="kpi-card kpi-bytes">
+        <span class="kpi-label">Datos BQ Escaneados</span>
+        <span class="kpi-value" id="kpi-bytes">—</span>
+        <span class="kpi-sub" id="kpi-bytes-sub">este mes</span>
+      </div>
+      <div class="kpi-card kpi-weather">
+        <span class="kpi-label">Lluvias en Red WHS</span>
+        <span class="kpi-value" id="kpi-rain-stores" style="color:#0284c7;">—</span>
+        <span class="kpi-sub" id="kpi-rain-max">Precipitación máx: —</span>
+      </div>
+    </div>
+
+    <!-- Layout Dividido y Prolijo (2 Columnas Fluidas) -->
+    <div class="dashboard-layout">
+      
+      <!-- Columna Principal (Izquierda) -->
+      <div class="dashboard-col">
+        
+        <!-- Card 1: Vistas por usuario y período (Día, Semana, Mes) -->
+        <div class="card">
+          <div class="card-head">
+            <div class="card-title">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+              <span>Vistas por usuario y período</span>
+            </div>
+            <div class="card-ctrls">
+              <input type="text" id="filter-user-search" class="input-filter" placeholder="Buscar usuario..." oninput="renderPeriodTable()" style="width:140px;" />
+              <select id="filter-page-sel" class="input-filter" onchange="renderPeriodTable()" style="width:130px;">
+                <option value="__all">Todas las páginas</option>
+                <option value="explorer">Store Explorer</option>
+                <option value="benchmark">Benchmark</option>
+                <option value="analytics">Analytics</option>
+              </select>
+              <div class="seg-ctrl" id="seg-period">
+                <button data-gran="day" class="active" onclick="switchGranularity('day', this)">Día</button>
+                <button data-gran="week" onclick="switchGranularity('week', this)">Semana</button>
+                <button data-gran="month" onclick="switchGranularity('month', this)">Mes</button>
+              </div>
+            </div>
+          </div>
+          <div class="table-wrap" id="period-table-wrap">
+            <div class="empty-state">Cargando métricas de auditoría...</div>
+          </div>
+          <div class="pager" id="period-pager"></div>
+        </div>
+
+        <!-- Card 2: Registro en Vivo · Últimas Consultas y Auditoría -->
+        <div class="card">
+          <div class="card-head">
+            <div class="card-title">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+              <span>Registro en Vivo · Últimas Consultas y Accesos</span>
+            </div>
+          </div>
+          <div class="table-wrap" style="max-height: 380px;">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th style="width:130px;">Fecha / Hora</th>
+                  <th style="width:200px;">Usuario</th>
+                  <th>Página</th>
+                  <th>Acción</th>
+                  <th>Tienda / País</th>
+                  <th>Mes</th>
+                  <th>Datos BQ</th>
+                </tr>
+              </thead>
+              <tbody id="recent-logs-tbody">
+                <tr><td colspan="7" class="empty-state">Cargando registros...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Columna Lateral (Derecha) -->
+      <div class="dashboard-col">
+        
+        <!-- Card 3: Consumo de BigQuery por Usuario -->
+        <div class="card">
+          <div class="card-head">
+            <div class="card-title">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#ea044e" stroke-width="2.5"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+              <span>Consumo BigQuery por Usuario</span>
+            </div>
+          </div>
+          <div class="table-wrap" style="max-height: 260px;">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th style="width:38%;">Usuario (Email)</th>
+                  <th style="width:18%;">Consultas</th>
+                  <th style="width:22%;">Datos BQ</th>
+                  <th style="width:22%;">Última Consulta</th>
+                </tr>
+              </thead>
+              <tbody id="bq-users-tbody">
+                <tr><td colspan="4" class="empty-state">Cargando usuarios BQ...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Card 4: Desgloses (Acciones y Top Tiendas) -->
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+          <!-- Acciones / Páginas -->
+          <div class="card">
+            <div class="card-head">
+              <div class="card-title"><span>Acciones & Páginas</span></div>
+            </div>
+            <div class="table-wrap" style="max-height: 220px;">
+              <table class="data-table">
+                <thead><tr><th>Acción</th><th>Vistas</th></tr></thead>
+                <tbody id="actions-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+          <!-- Tiendas Más Consultadas -->
+          <div class="card">
+            <div class="card-head">
+              <div class="card-title"><span>Top Tiendas / Países</span></div>
+            </div>
+            <div class="table-wrap" style="max-height: 220px;">
+              <table class="data-table">
+                <thead><tr><th>Tienda</th><th>Consultas</th></tr></thead>
+                <tbody id="stores-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Card 5: Alertas Meteorológicas y Lluvias en WHS (Open-Meteo) -->
+        <div class="card">
+          <div class="card-head">
+            <div class="card-title">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#0284c7" stroke-width="2.5"><path d="M20 16.58A5 5 0 0 0 18 7h-1.26A8 8 0 1 0 4 15.25"></path><line x1="8" y1="19" x2="8" y2="21"></line><line x1="8" y1="13" x2="8" y2="15"></line><line x1="16" y1="19" x2="16" y2="21"></line><line x1="16" y1="13" x2="16" y2="15"></line></svg>
+              <span>Monitoreo de Lluvias en WHS</span>
+            </div>
+            <div class="card-ctrls">
+              <span id="lbl-weather-status" class="badge-tag blue">Clima en tiempo real</span>
+            </div>
+          </div>
+          <div class="table-wrap" style="max-height: 260px;">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th style="width:34%;">Darkstore</th>
+                  <th style="width:18%;">País</th>
+                  <th style="width:24%;">Lluvia (mm)</th>
+                  <th style="width:24%;">Estado</th>
+                </tr>
+              </thead>
+              <tbody id="weather-tbody">
+                <tr><td colspan="4" class="empty-state">Consultando clima en tiempo real...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+
+  </div>
+
+  <script>
+    let ANALYTICS_DATA = null;
+    let currentGranularity = 'day';
+    let periodOffset = 0;
+    const PERIOD_PAGE_SIZE = 7;
+
+    function formatNumber(n) {
+      if (n === null || n === undefined || isNaN(n)) return '—';
+      return Number(n).toLocaleString('es-AR');
+    }
+
+    function formatBytes(bytes) {
+      if (!bytes || bytes === 0) return '0 KB';
+      const num = Number(bytes);
+      if (num < 1024 * 1024) return (num / 1024).toFixed(0) + ' KB';
+      if (num < 1024 * 1024 * 1024) return (num / (1024 * 1024)).toFixed(1) + ' MB';
+      return (num / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
+    }
+
+    function switchGranularity(gran, btn) {
+      currentGranularity = gran;
+      periodOffset = 0;
+      document.querySelectorAll('#seg-period button').forEach(b => b.classList.remove('active'));
+      if (btn) btn.classList.add('active');
+      renderPeriodTable();
+    }
+
+    function renderPeriodLabel(p, gran) {
+      if (gran === 'month') return p.slice(5, 7) + '/' + p.slice(0, 4);
+      const dm = p.slice(8, 10) + '/' + p.slice(5, 7);
+      return gran === 'week' ? ('Sem. ' + dm) : dm;
+    }
+
+    function renderPeriodTable() {
+      if (!ANALYTICS_DATA || !ANALYTICS_DATA.byPeriod) {
+        document.getElementById('period-table-wrap').innerHTML = '<div class="empty-state">Sin datos disponibles.</div>';
+        document.getElementById('period-pager').innerHTML = '';
+        return;
+      }
+
+      const src = ANALYTICS_DATA.byPeriod[currentGranularity] || [];
+      if (src.length === 0) {
+        document.getElementById('period-table-wrap').innerHTML = '<div class="empty-state">Sin datos para la granularidad seleccionada.</div>';
+        document.getElementById('period-pager').innerHTML = '';
+        return;
+      }
+
+      const totalPeriods = src.length;
+      if (periodOffset >= totalPeriods) periodOffset = 0;
+      const win = src.slice(periodOffset, periodOffset + PERIOD_PAGE_SIZE);
+      const cols = win.slice().reverse(); // De más antiguo a más reciente en pantalla
+
+      const filterPage = document.getElementById('filter-page-sel').value;
+      const userSearch = (document.getElementById('filter-user-search').value || '').trim().toLowerCase();
+
+      const byUser = {};
+      src.forEach(p => {
+        (p.cells || []).forEach(c => {
+          if (filterPage !== '__all' && c.page !== filterPage) return;
+          if (!byUser[c.email]) byUser[c.email] = { total: 0, per: {} };
+          byUser[c.email].total += (c.views || 0);
+          byUser[c.email].per[p.period] = (byUser[c.email].per[p.period] || 0) + (c.views || 0);
+        });
+      });
+
+      let users = Object.keys(byUser).map(e => ({
+        email: e,
+        total: byUser[e].total,
+        per: byUser[e].per
+      })).filter(u => u.total > 0);
+
+      if (userSearch) {
+        users = users.filter(u => u.email.toLowerCase().includes(userSearch));
+      }
+
+      if (users.length === 0) {
+        document.getElementById('period-table-wrap').innerHTML = '<div class="empty-state">Sin usuarios para los filtros seleccionados.</div>';
+        document.getElementById('period-pager').innerHTML = '';
+        return;
+      }
+
+      users.sort((a, b) => b.total - a.total);
+
+      // Calcular Fila TOTAL
+      const colTotals = {};
+      let grandTotal = 0;
+      cols.forEach(p => { colTotals[p.period] = 0; });
+      users.forEach(u => {
+        grandTotal += u.total;
+        cols.forEach(p => {
+          colTotals[p.period] += (u.per[p.period] || 0);
+        });
+      });
+
+      let html = '<table class="data-table"><thead><tr>';
+      html += '<th>Usuario (Email)</th>';
+      cols.forEach(p => {
+        html += `<th>${renderPeriodLabel(p.period, currentGranularity)}</th>`;
+      });
+      html += '<th style="color:var(--primary); font-weight:900;">Total Histórico</th>';
+      html += '</tr></thead><tbody>';
+
+      // Fila de Totales
+      html += '<tr class="row-total"><td>TOTAL GENERAL</td>';
+      cols.forEach(p => {
+        const v = colTotals[p.period] || 0;
+        html += `<td class="mono">${v > 0 ? formatNumber(v) : '—'}</td>`;
+      });
+      html += `<td class="mono v-strong" style="color:var(--primary);">${formatNumber(grandTotal)}</td></tr>`;
+
+      // Filas por Usuario
+      users.forEach(u => {
+        const cleanEmail = u.email.replace(/@.*$/, '');
+        html += `<tr><td title="${u.email}"><b>${cleanEmail}</b> <span style="color:var(--light); font-size:10px;">${u.email.includes('@') ? '@' + u.email.split('@')[1] : ''}</span></td>`;
+        cols.forEach(p => {
+          const v = u.per[p.period] || 0;
+          html += `<td class="mono">${v > 0 ? formatNumber(v) : '<span style="color:var(--border);">·</span>'}</td>`;
+        });
+        html += `<td class="mono v-strong">${formatNumber(u.total)}</td></tr>`;
+      });
+
+      html += '</tbody></table>';
+      document.getElementById('period-table-wrap').innerHTML = html;
+
+      // Paginador
+      const startIdx = periodOffset + 1;
+      const endIdx = Math.min(periodOffset + PERIOD_PAGE_SIZE, totalPeriods);
+      const pagerEl = document.getElementById('period-pager');
+      pagerEl.innerHTML = `
+        <span class="pg-info">${startIdx}–${endIdx} de ${totalPeriods} ${currentGranularity === 'day' ? 'días' : (currentGranularity === 'week' ? 'semanas' : 'meses')}</span>
+        <button class="pg-btn" onclick="navPeriod(-${PERIOD_PAGE_SIZE})" ${periodOffset === 0 ? 'disabled' : ''} title="Períodos más recientes">◀</button>
+        <button class="pg-btn" onclick="navPeriod(${PERIOD_PAGE_SIZE})" ${(periodOffset + PERIOD_PAGE_SIZE >= totalPeriods) ? 'disabled' : ''} title="Períodos anteriores">▶</button>
+      `;
+    }
+
+    function navPeriod(delta) {
+      const src = (ANALYTICS_DATA && ANALYTICS_DATA.byPeriod && ANALYTICS_DATA.byPeriod[currentGranularity]) || [];
+      const total = src.length;
+      periodOffset = Math.max(0, Math.min(periodOffset + delta, total - 1));
+      renderPeriodTable();
+    }
+
+    function renderBqUsersTable() {
+      const tbody = document.getElementById('bq-users-tbody');
+      if (!tbody) return;
+      tbody.innerHTML = '';
+
+      const users = (ANALYTICS_DATA && ANALYTICS_DATA.bqUsers) || [];
+      if (users.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" class="empty-state">No se registraron consultas BigQuery aún.</td></tr>';
+        return;
+      }
+
+      users.forEach(u => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td><b>${u.email}</b></td>
+          <td class="mono v-strong">${formatNumber(u.queries)}</td>
+          <td class="mono v-strong" style="color:var(--primary);">${formatBytes(u.bytes)}</td>
+          <td style="color:var(--sub); font-size:11px;">${u.lastQuery || '—'}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function renderActionsAndStores() {
+      const actBody = document.getElementById('actions-tbody');
+      if (actBody) {
+        actBody.innerHTML = '';
+        const acts = (ANALYTICS_DATA && ANALYTICS_DATA.actions) || [];
+        if (acts.length === 0) {
+          actBody.innerHTML = '<tr><td colspan="2" class="empty-state">Sin datos</td></tr>';
+        } else {
+          acts.forEach(a => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `<td>${a.name}</td><td class="mono v-strong">${formatNumber(a.count)}</td>`;
+            actBody.appendChild(tr);
+          });
+        }
+      }
+
+      const storeBody = document.getElementById('stores-tbody');
+      if (storeBody) {
+        storeBody.innerHTML = '';
+        const stores = (ANALYTICS_DATA && ANALYTICS_DATA.topStores) || [];
+        if (stores.length === 0) {
+          storeBody.innerHTML = '<tr><td colspan="2" class="empty-state">Sin datos</td></tr>';
+        } else {
+          stores.forEach(s => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `<td>${s.name}</td><td class="mono v-strong">${formatNumber(s.count)}</td>`;
+            storeBody.appendChild(tr);
+          });
+        }
+      }
+    }
+
+    function renderRecentLogs() {
+      const tbody = document.getElementById('recent-logs-tbody');
+      if (!tbody) return;
+      tbody.innerHTML = '';
+
+      const logs = (ANALYTICS_DATA && ANALYTICS_DATA.recentLogs) || [];
+      if (logs.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="empty-state">Sin registros recientes de auditoría.</td></tr>';
+        return;
+      }
+
+      logs.forEach(l => {
+        const tr = document.createElement('tr');
+        const bqText = l.bytes > 0 ? `<b style="color:var(--primary);">${formatBytes(l.bytes)}</b>` : '<span style="color:var(--light);">0 KB</span>';
+        const pageBadge = l.page === 'explorer' ? '<span class="badge-tag primary">Explorer</span>' : (l.page === 'benchmark' ? '<span class="badge-tag blue">Benchmark</span>' : `<span class="badge-tag">${l.page}</span>`);
+
+        tr.innerHTML = `
+          <td class="mono" style="font-size:10.5px; color:var(--light);">${l.timestamp}</td>
+          <td><b>${l.email}</b></td>
+          <td>${pageBadge}</td>
+          <td>${l.action}</td>
+          <td>${l.store || '—'}</td>
+          <td><span class="badge-tag">${l.month || '—'}</span></td>
+          <td class="mono">${bqText}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function renderAnalyticsUI() {
+      if (!ANALYTICS_DATA) return;
+
+      const t = ANALYTICS_DATA.totals || {};
+      document.getElementById('kpi-views').textContent = formatNumber(t.views);
+      document.getElementById('kpi-today-views').textContent = `${formatNumber(t.todayViews || 0)} hoy`;
+
+      document.getElementById('kpi-users').textContent = formatNumber(t.users);
+      document.getElementById('kpi-today-users').textContent = `${formatNumber(t.todayUsers || 0)} hoy`;
+
+      document.getElementById('kpi-queries').textContent = formatNumber(t.bqQueries);
+      document.getElementById('kpi-bytes').textContent = formatBytes(t.bqBytes);
+
+      document.getElementById('lbl-asof').textContent = `Actualizado: ${ANALYTICS_DATA.asOf || 'Reciente'}`;
+
+      if (ANALYTICS_DATA.weather) {
+        const w = ANALYTICS_DATA.weather;
+        const rainKpi = document.getElementById('kpi-rain-stores');
+        if (rainKpi) rainKpi.textContent = `${w.rainCount || 0} WHS`;
+        const rainMax = document.getElementById('kpi-rain-max');
+        if (rainMax) rainMax.textContent = (w.maxMm && w.maxMm > 0) ? `Máx: ${w.maxMm} mm (${w.maxStore})` : 'Sin lluvias hoy';
+
+        const tbody = document.getElementById('weather-tbody');
+        const statusLbl = document.getElementById('lbl-weather-status');
+        if (tbody) {
+          tbody.innerHTML = '';
+          if (!w.rainStores || w.rainStores.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" class="empty-state">Sin precipitaciones registradas en la red hoy (todas las tiendas despejadas).</td></tr>';
+            if (statusLbl) statusLbl.textContent = '0 alertas de lluvia';
+          } else {
+            if (statusLbl) statusLbl.textContent = `${w.rainStores.length} alertas activas`;
+            w.rainStores.forEach(s => {
+              const tr = document.createElement('tr');
+              const impactBadge = s.mm >= 10 
+                ? '<span class="badge-tag" style="background:rgba(239,68,68,0.12); color:#ef4444;">Alerta Lluvia Fuerte</span>'
+                : (s.mm >= 2 ? '<span class="badge-tag" style="background:rgba(245,158,11,0.12); color:#d97706;">Lluvia Moderada</span>' : '<span class="badge-tag blue">Lluvia Leve</span>');
+              
+              tr.innerHTML = `
+                <td style="font-weight:700;">${s.name}</td>
+                <td>${s.country}</td>
+                <td class="mono" style="font-weight:800; color:#0284c7;">${s.mm.toFixed(1)} mm</td>
+                <td>${impactBadge}</td>
+              `;
+              tbody.appendChild(tr);
+            });
+          }
+        }
+      }
+
+      renderPeriodTable();
+      renderBqUsersTable();
+      renderActionsAndStores();
+      renderRecentLogs();
+    }
+
+    function loadAnalytics() {
+      if (typeof showLoading === 'function') showLoading('Cargando métricas de auditoría...');
+      google.script.run
+        .withSuccessHandler(function(res) {
+          if (typeof hideLoading === 'function') hideLoading();
+          if (!res || res.error) {
+            alert('Error cargando analíticas: ' + (res ? res.error : 'Sin respuesta'));
+            return;
+          }
+          ANALYTICS_DATA = res;
+          renderAnalyticsUI();
+        })
+        .withFailureHandler(function(err) {
+          if (typeof hideLoading === 'function') hideLoading();
+          alert('Error de conexión: ' + err.message);
+        })
+        .fetchMapsterAnalytics();
+    }
+
+    window.onload = function() {
+      loadAnalytics();
+    };
+  </script>
+</body>
+</html>

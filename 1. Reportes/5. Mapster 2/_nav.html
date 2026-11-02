@@ -3,14 +3,14 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 
-<!-- Google Maps JavaScript API -->
-<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAlvfKkIkT-vh01-T9tCeZ6KV5mA3eiscM&libraries=geometry,drawing,visualization"></script>
-<!-- deck.gl para renderizado de Heatmaps de alto rendimiento con WebGL -->
-<script src="https://unpkg.com/deck.gl@latest/dist.min.js"></script>
+<!-- Google Maps JavaScript API (fijada en versión 3.58 para soporte de HeatmapLayer y DrawingManager) -->
+<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAlvfKkIkT-vh01-T9tCeZ6KV5mA3eiscM&libraries=geometry,drawing,visualization&v=3.58"></script>
 <!-- Chart.js para visualización analítica -->
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-<!-- Turf.js para operaciones geoespaciales avanzadas (intersección de anillos vs cobertura) -->
-<script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js" crossorigin="anonymous"></script>
+<!-- Turf.js para operaciones geoespaciales avanzadas -->
+<script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js" crossorigin="anonymous"></script>
+<!-- MarkerClusterer para agrupación inteligente de tiendas -->
+<script src="https://unpkg.com/@googlemaps/markerclusterer/dist/index.min.js" crossorigin="anonymous"></script>
 
 <style>
   :root {
@@ -61,8 +61,15 @@
     padding: 0;
   }
 
+  body, button, input, select, textarea {
+    font-family: 'Outfit', system-ui, -apple-system, sans-serif !important;
+  }
+
+  .mono, code, kbd, pre, [data-mono] {
+    font-family: 'JetBrains Mono', monospace !important;
+  }
+
   body {
-    font-family: 'Outfit', system-ui, -apple-system, sans-serif;
     background-color: var(--bg-page);
     color: var(--text-primary);
     min-height: 100vh;
@@ -171,10 +178,10 @@
   }
 
   .nav-item.active {
-    background: #990334 !important;
+    background: var(--brand-red) !important;
     color: #ffffff !important;
-    box-shadow: 0 2px 8px rgba(153, 3, 52, 0.35);
-    font-weight: 800;
+    box-shadow: 0 2px 8px var(--brand-red-glow);
+    font-weight: 700;
   }
 
   .nav-item.active .nav-item-icon svg {
@@ -339,6 +346,74 @@
     color: #f8fafc;
   }
 
+  /* ── Indicador en Vivo BigQuery (Círculo Verde Animado y Bytes) ── */
+  .live-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #137333;
+    background: #E6F4EA;
+    padding: 3px 8px;
+    border-radius: 20px;
+    border: 1px solid #CEEAD6;
+    flex-shrink: 0;
+    user-select: none;
+  }
+  [data-theme="dark"] .live-status {
+    background: rgba(16, 185, 129, 0.12);
+    color: #34d399;
+    border-color: rgba(16, 185, 129, 0.3);
+  }
+  .live-dot {
+    width: 7px;
+    height: 7px;
+    background-color: #1E8E3E;
+    border-radius: 50%;
+    position: relative;
+    display: inline-block;
+  }
+  [data-theme="dark"] .live-dot {
+    background-color: #10b981;
+  }
+  .live-dot::after {
+    content: '';
+    position: absolute;
+    top: -3px;
+    left: -3px;
+    width: 13px;
+    height: 13px;
+    border-radius: 50%;
+    border: 2px solid #1E8E3E;
+    animation: livePulse 1.8s infinite ease-out;
+    opacity: 0;
+  }
+  [data-theme="dark"] .live-dot::after {
+    border-color: #10b981;
+  }
+  @keyframes livePulse {
+    0% { transform: scale(0.6); opacity: 0.9; }
+    60% { transform: scale(1.4); opacity: 0; }
+    100% { transform: scale(1.6); opacity: 0; }
+  }
+  .bytes-counter {
+    font-size: 10px;
+    font-weight: 600;
+    color: #5F6368;
+    background: #FFFFFF;
+    padding: 1.5px 6px;
+    border-radius: 10px;
+    border: 1px solid #CEEAD6;
+    margin-left: 2px;
+    letter-spacing: 0.2px;
+  }
+  [data-theme="dark"] .bytes-counter {
+    background: #0f172a;
+    color: #94a3b8;
+    border-color: rgba(16, 185, 129, 0.3);
+  }
+
   /* ── Notificaciones Toast Centradas en Top (No tapan el panel inferior) ── */
   #toast-container {
     position: fixed;
@@ -437,24 +512,18 @@
     </div>
     <div class="nav-divider"></div>
     <nav class="main-nav">
-      <a href="<?= scriptUrl ?>?page=explorer" class="nav-item <?= activePage === 'explorer' ? 'active' : '' ?>">
+      <a href="<?= scriptUrl ?>?page=explorer" target="_top" class="nav-item <?= activePage === 'explorer' ? 'active' : '' ?>">
         <span class="nav-item-icon">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
         </span>
-        <span>Página 1: Store Explorer</span>
+        <span>Store Explorer</span>
       </a>
       <? if (typeof isAdmin !== 'undefined' && isAdmin) { ?>
-      <a href="<?= scriptUrl ?>?page=benchmark" class="nav-item <?= activePage === 'benchmark' ? 'active' : '' ?>">
+      <a href="<?= scriptUrl ?>?page=benchmark" target="_top" class="nav-item <?= activePage === 'benchmark' ? 'active' : '' ?>">
         <span class="nav-item-icon">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
         </span>
-        <span>Página 2: Benchmark Tiendas</span>
-      </a>
-      <a href="<?= scriptUrl ?>?page=city" class="nav-item <?= activePage === 'city' ? 'active' : '' ?>">
-        <span class="nav-item-icon">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
-        </span>
-        <span>Página 3: City Explorer</span>
+        <span>Benchmark Tiendas</span>
       </a>
       <? } ?>
     </nav>
@@ -472,14 +541,50 @@
       <span id="theme-text-label">Modo Día</span>
     </button>
 
+    <? if (typeof isAdmin !== 'undefined' && isAdmin) { ?>
+    <!-- Botón Exclusivo de Analytics para matias.cagliero@pedidosya.com al lado del Modo Día -->
+    <a href="<?= scriptUrl ?>?page=analytics" target="_top" class="theme-toggle-btn <?= (typeof activePage !== 'undefined' && activePage === 'analytics') ? 'active-admin-btn' : '' ?>" title="Panel de Analytics y Auditoría (Solo Admin)" style="text-decoration:none; display:inline-flex; align-items:center; gap:5px; background:rgba(234,4,78,0.08); border-color:rgba(234,4,78,0.25); color:var(--brand-red); font-weight:700;">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="18" y1="20" x2="18" y2="10"></line>
+        <line x1="12" y1="20" x2="12" y2="4"></line>
+        <line x1="6" y1="20" x2="6" y2="14"></line>
+      </svg>
+      <span>Analytics</span>
+    </a>
+    <? } ?>
+
     <div class="status-pill">
       <div class="status-indicator"></div>
       <span id="header-status-text">Sheets Conectado</span>
+    </div>
+
+    <!-- Indicador BigQuery en vivo con contador de bytes mensual (estilo User 360) -->
+    <div class="live-status" id="liveStatusContainer" title="Datos escaneados por BigQuery este mes">
+      <span class="live-dot"></span>
+      <span id="statusInfo">BigQuery</span>
+      <span class="bytes-counter" id="lblBytesAcumulados">0 MB este mes</span>
     </div>
   </div>
 </header>
 
 <script>
+  function fmtBytesMes(bytes) {
+    if (!bytes || bytes === 0) return '0 MB este mes';
+    const mb = bytes / (1024 * 1024);
+    if (mb >= 1024) {
+      return (mb / 1024).toFixed(1) + ' GB este mes';
+    }
+    if (mb >= 1) {
+      return mb.toFixed(1) + ' MB este mes';
+    }
+    return (bytes / 1024).toFixed(0) + ' KB este mes';
+  }
+
+  window.updateBigQueryBytesCounter = function(bytes) {
+    const el = document.getElementById('lblBytesAcumulados');
+    if (el) el.textContent = fmtBytesMes(bytes);
+  };
+
   // ── Gestión Global de Tema Día / Noche (Modo Día por Defecto) ──
   let currentTheme = localStorage.getItem('mapster_theme') || 'light';
 

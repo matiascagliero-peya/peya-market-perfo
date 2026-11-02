@@ -91,6 +91,8 @@
   .ph-date{font-size:10px;color:var(--t3);font-weight:500;white-space:nowrap}
   .copy-btn{height:22px;border:1px solid var(--border);background:#fff;border-radius:5px;padding:0 8px;font-size:10px;font-weight:600;color:var(--t3);cursor:pointer;display:inline-flex;align-items:center;gap:4px;transition:all .12s;font-family:'Inter',system-ui,sans-serif;white-space:nowrap}
   .copy-btn:hover{border-color:var(--t4);color:var(--t1);background:var(--bg)}
+  .copy-btn.active{border-color:#93c5fd;color:#2563eb;background:#eff6ff}
+  .copy-btn.active:hover{border-color:#60a5fa;color:#1d4ed8;background:#dbeafe}
   .copy-btn svg{width:10px;height:10px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round}
   .tw{overflow:auto;max-height:calc(100vh - 160px)}
   table{width:100%;border-collapse:collapse}
@@ -187,12 +189,15 @@ const CCN={AR:'Argentina',BO:'Bolivia',CL:'Chile',CO:'Colombia',EC:'Ecuador',SV:
 let ALL_ROWS=[], FECHA=null, sortDir='best', sortCol='d1', sortAsc=false;
 let metricsLoaded = new Set(['orders','gmv']);
 
+const SVG_NUM = `<svg viewBox="0 0 24 24"><line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="20" y2="15"/><line x1="10" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="14" y2="21"/></svg>`;
+let IS_FULL_NUM = false;
+
 // Formatters
-const fI=v=>{if(v==null||isNaN(v))return'—';const a=Math.abs(v);if(a>=1e6)return(v/1e6).toFixed(2)+'M';if(a>=1e3)return(v/1e3).toFixed(1)+'k';return Math.round(v).toLocaleString('es-AR');};
-const fE=v=>{if(v==null||isNaN(v))return'—';const a=Math.abs(v);if(a>=1e6)return(v/1e6).toFixed(2)+'M €';if(a>=1e3)return(v/1e3).toFixed(1)+'k €';return v.toFixed(0)+' €';};
+const fI=(v,full)=>{if(v==null||isNaN(v))return'—';if(full)return Math.round(v).toLocaleString('es-AR');const a=Math.abs(v);if(a>=1e6)return(v/1e6).toFixed(2)+'M';if(a>=1e3)return(v/1e3).toFixed(1)+'k';return Math.round(v).toLocaleString('es-AR');};
+const fE=(v,full)=>{if(v==null||isNaN(v))return'—';if(full)return Math.round(v).toLocaleString('es-AR')+' €';const a=Math.abs(v);if(a>=1e6)return(v/1e6).toFixed(2)+'M €';if(a>=1e3)return(v/1e3).toFixed(1)+'k €';return v.toFixed(0)+' €';};
 const fP=v=>v==null||isNaN(v)?'—':v.toFixed(1)+'%';
 const fM=v=>v==null||isNaN(v)?'—':v.toFixed(1)+' min';
-const fV=(v,f)=>f==='eur'?fE(v):f==='pct'?fP(v):f==='min'?fM(v):fI(v);
+const fV=(v,f,full)=>f==='eur'?fE(v,full):f==='pct'?fP(v):f==='min'?fM(v):fI(v,full);
 const nd=()=>'<span class="nd">—</span>';
 const sk=()=>'<span class="skel"></span>';
 
@@ -272,8 +277,8 @@ function renderTable(){
     const varLW=isLoaded&&d1!=null&&lw!=null?badge(calcVar(d1,m.lwIsRatio?lw:lw/3,m.varFmt),m):sk();
     return`<tr>
       <td><div class="wh-name">${row.warehouse_name}</div><div class="wh-cc">${CCN[row.country]||row.country}</div></td>
-      <td><span class="v">${isLoaded?fV(d1,m.fmt):sk()}</span></td>
-      <td><span class="v8">${isLoaded?fV(d8,m.fmt):sk()}</span></td>
+      <td><span class="v">${isLoaded?fV(d1,m.fmt,IS_FULL_NUM):sk()}</span></td>
+      <td><span class="v8">${isLoaded?fV(d8,m.fmt,IS_FULL_NUM):sk()}</span></td>
       <td>${varD8}</td>
       <td>${varLW}</td>
     </tr>`;
@@ -287,6 +292,7 @@ function renderTable(){
       <div class="ph-meta">
         <span class="ph-date">D-1: ${dl.d1} · D-8: ${dl.d8}</span>
         <span class="ph-count">${sorted.length} tiendas</span>
+        <button class="copy-btn btn-num-toggle ${IS_FULL_NUM?'active':''}" style="padding:0 6px" title="${IS_FULL_NUM?'Ver números abreviados':'Ver números completos'}" onclick="toggleNumFormat()">${SVG_NUM}</button>
         <button class="copy-btn" onclick="copyTable()"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/></svg> Tabla</button>
       </div>
     </div>
@@ -301,6 +307,11 @@ function renderTable(){
       <tbody>${tbody}</tbody>
     </table></div>
   </div>`;
+}
+
+function toggleNumFormat(){
+  IS_FULL_NUM = !IS_FULL_NUM;
+  renderTable();
 }
 
 function applyFilters(){renderTable();}

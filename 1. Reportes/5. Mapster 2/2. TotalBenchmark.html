@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Página 2: Benchmark Tiendas — Mapster 2</title>
+  <title>Benchmark Tiendas — Mapster 2</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
@@ -520,8 +520,19 @@
   <div class="page">
     <div class="panel">
       <div class="ph">
-        <div class="ph-bar"></div>
-        <span class="ph-title">Warehouses × Métricas Totales</span>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <div class="ph-bar"></div>
+          <span class="ph-title">Warehouses × Métricas Totales</span>
+          <!-- Selector Segmentado de Vista: Tienda Total vs Desglose por Anillos -->
+          <div style="display:inline-flex; background:var(--border2); border:1px solid var(--border); border-radius:8px; padding:2px; gap:2px; margin-left:8px;">
+            <button type="button" id="btn-view-total" onclick="switchBenchmarkView('total')" style="border:none; background:var(--red); color:#ffffff; padding:3px 10px; border-radius:6px; font-weight:700; font-size:11px; cursor:pointer;">
+              Tienda Total
+            </button>
+            <button type="button" id="btn-view-rings" onclick="switchBenchmarkView('rings')" style="border:none; background:transparent; color:var(--t2); padding:3px 10px; border-radius:6px; font-weight:700; font-size:11px; cursor:pointer;">
+              Desglose por Anillos (Rings)
+            </button>
+          </div>
+        </div>
         <div class="ph-meta">
           <span class="ph-sub" id="ph-date">Comparación vs Mes Anterior</span>
           <span class="ph-count" id="ph-count">0 warehouses</span>
@@ -536,6 +547,20 @@
         </div>
       </div>
 
+      <!-- Barra de Filtro de Radios (Solo visible en modo Desglose por Anillos) -->
+      <div id="rings-filter-bar" style="display:none; padding:6px 14px; background:var(--border2); border-bottom:1px solid var(--border); align-items:center; justify-content:space-between; gap:8px;">
+        <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+          <span style="font-size:10.5px; font-weight:800; text-transform:uppercase; color:var(--t2);">Filtrar por Radio:</span>
+          <button type="button" class="ring-filter-pill active" onclick="filterBenchmarkRings('ALL', this)" style="border:1px solid var(--red); background:var(--red); color:#fff; padding:2px 8px; border-radius:12px; font-size:10px; font-weight:700; cursor:pointer;">Todos los Radios</button>
+          <button type="button" class="ring-filter-pill" onclick="filterBenchmarkRings('< 1 KM', this)" style="border:1px solid var(--border); background:var(--card); color:var(--t2); padding:2px 8px; border-radius:12px; font-size:10px; font-weight:700; cursor:pointer;">&lt; 1 KM</button>
+          <button type="button" class="ring-filter-pill" onclick="filterBenchmarkRings('1 - 2 KM', this)" style="border:1px solid var(--border); background:var(--card); color:var(--t2); padding:2px 8px; border-radius:12px; font-size:10px; font-weight:700; cursor:pointer;">1 - 2 KM</button>
+          <button type="button" class="ring-filter-pill" onclick="filterBenchmarkRings('2 - 3 KM', this)" style="border:1px solid var(--border); background:var(--card); color:var(--t2); padding:2px 8px; border-radius:12px; font-size:10px; font-weight:700; cursor:pointer;">2 - 3 KM</button>
+          <button type="button" class="ring-filter-pill" onclick="filterBenchmarkRings('3 - 4 KM', this)" style="border:1px solid var(--border); background:var(--card); color:var(--t2); padding:2px 8px; border-radius:12px; font-size:10px; font-weight:700; cursor:pointer;">3 - 4 KM</button>
+          <button type="button" class="ring-filter-pill" onclick="filterBenchmarkRings('> 4 KM', this)" style="border:1px solid var(--border); background:var(--card); color:var(--t2); padding:2px 8px; border-radius:12px; font-size:10px; font-weight:700; cursor:pointer;">&gt; 4 KM</button>
+        </div>
+        <span id="rings-status-info" style="font-size:11px; font-weight:700; color:var(--t3);">0 registros de anillos</span>
+      </div>
+
       <div class="tw" id="table-wrap">
         <div style="padding:40px; text-align:center; color:var(--t3); font-size:12px;">Cargando datos desde la planilla...</div>
       </div>
@@ -544,34 +569,33 @@
 
   <script>
     // ============================================================
-    // CONFIGURACIÓN DE MÉTRICAS (CATEGORIZADAS ESTILO 3_WHS_all_Metrics)
+    // CONFIGURACIÓN DE MÉTRICAS (NOMBRES OFICIALES DEL GLOSARIO)
     // ============================================================
     let METRICS = [
-      // Transaccionales
-      { key: 'orders', label: 'Órdenes', shortLabel: 'Orders', fmt: 'int', varFmt: 'pct_rel', hi: true, bg: '#fff0f3', tc: '#ea044e' },
-      { key: 'net_sales', label: 'Net Sales ($)', shortLabel: 'Net Sales', fmt: 'curr', varFmt: 'pct_rel', hi: true, bg: '#eff6ff', tc: '#2563eb' },
-      { key: 'aov', label: 'Ticket AOV ($)', shortLabel: 'AOV', fmt: 'curr', varFmt: 'pct_rel', hi: true, bg: '#fff7ed', tc: '#ea580c' },
-      { key: 'units', label: 'Unidades Vendidas', shortLabel: 'Units', fmt: 'int', varFmt: 'pct_rel', hi: true, bg: '#fdf2f8', tc: '#be185d' },
+      // Demand Stimulation & Transaccionales
+      { key: 'orders', label: 'Confirmed Orders', shortLabel: 'Orders', fmt: 'int', varFmt: 'pct_rel', hi: true, bg: '#fff0f3', tc: '#ea044e' },
+      { key: 'net_sales', label: 'GMV Dmarts ($)', shortLabel: 'GMV', fmt: 'curr', varFmt: 'pct_rel', hi: true, bg: '#eff6ff', tc: '#2563eb' },
+      { key: 'aov', label: 'AFV (Ticket AOV)', shortLabel: 'AFV', fmt: 'curr', varFmt: 'pct_rel', hi: true, bg: '#fff7ed', tc: '#ea580c' },
+      { key: 'units', label: 'Units Sold', shortLabel: 'Units', fmt: 'int', varFmt: 'pct_rel', hi: true, bg: '#fdf2f8', tc: '#be185d' },
       { key: 'basket_size', label: 'Basket Size', shortLabel: 'Basket', fmt: 'float', varFmt: 'pct_rel', hi: true, bg: '#f8fafc', tc: '#475569' },
-      { key: 'discounts', label: 'Descuentos ($)', shortLabel: 'Descuentos', fmt: 'curr', varFmt: 'pct_rel', hi: false, bg: '#fff1f2', tc: '#e11d48' },
-      { key: 'discount_intensity', label: 'Intensidad Desc. %', shortLabel: 'Desc %', fmt: 'pct', varFmt: 'pp', hi: false, bg: '#f5f3ff', tc: '#7c3aed' },
-      { key: 'uf_share', label: 'Ultra Fresh Share %', shortLabel: 'UF Share', fmt: 'pct', varFmt: 'pp', hi: true, bg: '#ecfeff', tc: '#0891b2' },
+      { key: 'discounts', label: 'Discounts ($)', shortLabel: 'Discounts', fmt: 'curr', varFmt: 'pct_rel', hi: false, bg: '#fff1f2', tc: '#e11d48' },
+      { key: 'discount_intensity', label: 'Gross Basket Discount %', shortLabel: 'Disc %', fmt: 'pct', varFmt: 'pp', hi: false, bg: '#f5f3ff', tc: '#7c3aed' },
+      { key: 'uf_share', label: 'Confirmed Orders share % - UF', shortLabel: 'UF Share %', fmt: 'pct', varFmt: 'pp', hi: true, bg: '#ecfeff', tc: '#0891b2' },
 
-      // Usuarios & Penetración
-      { key: 'penetration', label: 'Penetración %', shortLabel: 'Penetr. %', fmt: 'pct', varFmt: 'pp', hi: true, bg: '#f0fdf4', tc: '#15803d' },
-      { key: 'dmart_users', label: 'DMart MAUs', shortLabel: 'DMart Users', fmt: 'int', varFmt: 'pct_rel', hi: true, bg: '#eff6ff', tc: '#1d4ed8' },
-      { key: 'peya_users', label: 'PeYa Users', shortLabel: 'PeYa Users', fmt: 'int', varFmt: 'pct_rel', hi: true, bg: '#f0f9ff', tc: '#0284c7' },
-      { key: 'frequency', label: 'Frecuencia Mensual', shortLabel: 'Frecuencia', fmt: 'float', varFmt: 'pct_rel', hi: true, bg: '#ecfeff', tc: '#0284c7' },
-      { key: 'core_pct', label: 'Clientes Core %', shortLabel: 'Core %', fmt: 'pct', varFmt: 'pp', hi: true, bg: '#faf5ff', tc: '#9333ea' },
+      // Demand Stimulation & Usuarios
+      { key: 'penetration', label: 'Platform MAUs penetration %', shortLabel: 'Penetr. %', fmt: 'pct', varFmt: 'pp', hi: true, bg: '#f0fdf4', tc: '#15803d' },
+      { key: 'dmart_users', label: 'Dmart MAUs', shortLabel: 'Dmart MAUs', fmt: 'int', varFmt: 'pct_rel', hi: true, bg: '#eff6ff', tc: '#1d4ed8' },
+      { key: 'peya_users', label: 'Platform MAUs', shortLabel: 'Platform MAUs', fmt: 'int', varFmt: 'pct_rel', hi: true, bg: '#f0f9ff', tc: '#0284c7' },
+      { key: 'frequency', label: 'Frequency', shortLabel: 'Freq', fmt: 'float', varFmt: 'pct_rel', hi: true, bg: '#ecfeff', tc: '#0284c7' },
+      { key: 'core_pct', label: 'Core Users %', shortLabel: 'Core %', fmt: 'pct', varFmt: 'pp', hi: true, bg: '#faf5ff', tc: '#9333ea' },
       { key: 'high_income_pct', label: 'High Income %', shortLabel: 'High Inc %', fmt: 'pct', varFmt: 'pp', hi: true, bg: '#fffbeb', tc: '#b45309' },
 
-      // Operaciones & Logística
+      // Operational Excellence
       { key: 'seamless', label: 'Seamless Delivery %', shortLabel: 'Seamless %', fmt: 'pct', varFmt: 'pp', hi: true, bg: '#f0fdf4', tc: '#16a34a' },
-      { key: 'fail_rate', label: 'Fail Rate (Rechazos) %', shortLabel: 'Fail Rate', fmt: 'pct', varFmt: 'pp', hi: false, bg: '#fff1f2', tc: '#dc2626' },
-      { key: 'order_late', label: 'Órdenes Tardías %', shortLabel: 'Late %', fmt: 'pct', varFmt: 'pp', hi: false, bg: '#fffbeb', tc: '#d97706' },
-      { key: 'delivery_time', label: 'Avg Delivery Time', shortLabel: 'Deliv. Time', fmt: 'min', varFmt: 'min_abs', hi: false, bg: '#fff7ed', tc: '#c2410c' },
-      { key: 'late_10', label: 'Demoras > 10m %', shortLabel: 'Late >10m', fmt: 'pct', varFmt: 'pp', hi: false, bg: '#fdf2f8', tc: '#f43f5e' },
-      { key: 'inaccuracy', label: 'Tasa Inexactitud %', shortLabel: 'Inexactitud', fmt: 'pct', varFmt: 'pp', hi: false, bg: '#f5f5f5', tc: '#525252' }
+      { key: 'fail_rate', label: 'Rejected orders %', shortLabel: 'Rejected %', fmt: 'pct', varFmt: 'pp', hi: false, bg: '#fff1f2', tc: '#dc2626' },
+      { key: 'order_late', label: 'Late Orders %', shortLabel: 'Late %', fmt: 'pct', varFmt: 'pp', hi: false, bg: '#fffbeb', tc: '#d97706' },
+      { key: 'late_10', label: 'Order late 10 min %', shortLabel: 'Late >10m', fmt: 'pct', varFmt: 'pp', hi: false, bg: '#fdf2f8', tc: '#f43f5e' },
+      { key: 'delivery_time', label: 'Avg. Delivery Time', shortLabel: 'Deliv. Time', fmt: 'min', varFmt: 'min_abs', hi: false, bg: '#fff7ed', tc: '#c2410c' }
     ];
 
     const ORIGINAL_METRICS_ORDER = [...METRICS];
@@ -753,8 +777,8 @@
         cells += `
           <td class="sticky sticky-2">
             <span class="cc-badge">
-              ${getCountryFlagImg(row.country)}
-              ${row.country.slice(0, 3).toUpperCase()}
+              ${getCountryFlagImg(row.country || '')}
+              ${(row.country || 'ARG').slice(0, 3).toUpperCase()}
             </span>
           </td>
         `;
@@ -915,7 +939,7 @@
         const btn = document.querySelector('.copy-btn');
         if (btn) {
           const orig = btn.innerHTML;
-          btn.innerHTML = '✓ Copiado';
+          btn.innerHTML = 'Copiado';
           setTimeout(() => btn.innerHTML = orig, 1800);
         }
       });
@@ -1006,20 +1030,186 @@
             });
           }
 
-          initMetricsDropdown();
-          buildTable();
-
-          if (splash) splash.classList.add('out');
+          try {
+            initMetricsDropdown();
+            buildTable();
+          } catch (renderErr) {
+            console.error('[Benchmark Render Error]:', renderErr);
+          } finally {
+            if (splash) splash.classList.add('out');
+          }
         })
         .withFailureHandler(err => {
           document.getElementById('sp-note').textContent = 'Error: ' + err.message;
           if (splash) splash.classList.add('out');
         })
-        .getBenchmarkData(targetMonth || currentSelectedMonth, country);
+        .getBenchmarkData(targetMonth || null, country);
+    }
+
+    // ============================================================
+    // VISTA: DESGLOSE POR ANILLOS (RINGS EXPLORER)
+    // ============================================================
+    let currentBenchmarkView = 'total';
+    let BENCHMARK_RINGS_DATA = [];
+    let selectedRingFilter = 'ALL';
+
+    function switchBenchmarkView(view) {
+      currentBenchmarkView = view;
+      const btnTotal = document.getElementById('btn-view-total');
+      const btnRings = document.getElementById('btn-view-rings');
+      const ringsBar = document.getElementById('rings-filter-bar');
+      const metricsToggle = document.getElementById('btn-metrics-toggle');
+
+      if (view === 'rings') {
+        if (btnTotal) { btnTotal.style.background = 'transparent'; btnTotal.style.color = 'var(--t2)'; }
+        if (btnRings) { btnRings.style.background = 'var(--red)'; btnRings.style.color = '#ffffff'; }
+        if (ringsBar) ringsBar.style.display = 'flex';
+        if (metricsToggle) metricsToggle.style.display = 'none';
+
+        loadBenchmarkRings();
+      } else {
+        if (btnTotal) { btnTotal.style.background = 'var(--red)'; btnTotal.style.color = '#ffffff'; }
+        if (btnRings) { btnRings.style.background = 'transparent'; btnRings.style.color = 'var(--t2)'; }
+        if (ringsBar) ringsBar.style.display = 'none';
+        if (metricsToggle) metricsToggle.style.display = 'inline-flex';
+
+        buildTable();
+      }
+    }
+
+    function loadBenchmarkRings() {
+      const country = document.getElementById('f-cc').value;
+      const tw = document.getElementById('table-wrap');
+      if (tw) tw.innerHTML = '<div style="padding:40px; text-align:center; color:var(--t3); font-size:12px;">Cargando métricas de anillos desde BigQuery (datamart_store_explorer_rings)...</div>';
+
+      google.script.run
+        .withSuccessHandler(res => {
+          BENCHMARK_RINGS_DATA = (res && res.rings) ? res.rings : [];
+          buildRingsTable();
+        })
+        .withFailureHandler(err => {
+          if (tw) tw.innerHTML = `<div style="padding:40px; text-align:center; color:#ef4444; font-size:12px;">Error cargando anillos: ${err.message}</div>`;
+        })
+        .getBenchmarkRingsData(currentSelectedMonth, country);
+    }
+
+    function filterBenchmarkRings(ringLabel, btn) {
+      selectedRingFilter = ringLabel;
+      document.querySelectorAll('.ring-filter-pill').forEach(b => {
+        b.style.background = 'var(--card)';
+        b.style.color = 'var(--t2)';
+        b.style.borderColor = 'var(--border)';
+      });
+      if (btn) {
+        btn.style.background = 'var(--red)';
+        btn.style.color = '#fff';
+        btn.style.borderColor = 'var(--red)';
+      }
+      buildRingsTable();
+    }
+
+    function buildRingsTable() {
+      const tw = document.getElementById('table-wrap');
+      if (!tw) return;
+
+      const srch = (document.getElementById('f-search').value || '').toLowerCase().trim();
+      const country = document.getElementById('f-cc').value;
+
+      let filtered = BENCHMARK_RINGS_DATA.filter(r => {
+        if (country && r.country !== country) return false;
+        if (srch) {
+          const matchName = (r.warehouse_name || '').toLowerCase().includes(srch);
+          if (!matchName) return false;
+        }
+        if (selectedRingFilter !== 'ALL' && r.anillo !== selectedRingFilter) return false;
+        return true;
+      });
+
+      const countSpan = document.getElementById('ph-count');
+      if (countSpan) countSpan.textContent = `${filtered.length} anillos`;
+      const statusInfo = document.getElementById('rings-status-info');
+      if (statusInfo) statusInfo.textContent = `${filtered.length} registros de anillos`;
+
+      if (filtered.length === 0) {
+        tw.innerHTML = '<div style="padding:40px; text-align:center; color:var(--t3); font-size:12px;">No se encontraron anillos para los filtros seleccionados.</div>';
+        return;
+      }
+
+      let html = `
+        <table class="tb" style="width:100%; border-collapse:collapse;">
+          <thead>
+            <tr>
+              <th class="sticky sticky-1" style="min-width:180px;">ALMACÉN</th>
+              <th class="sticky sticky-2" style="min-width:65px;">PAÍS</th>
+              <th style="min-width:95px; text-align:center;">RADIO / ANILLO</th>
+              <th style="min-width:90px; text-align:right;">PLATFORM MAUS</th>
+              <th style="min-width:90px; text-align:right;">DMART MAUS</th>
+              <th style="min-width:95px; text-align:right;">PENETRACIÓN %</th>
+              <th style="min-width:85px; text-align:right;">CONFIRMED ORDERS</th>
+              <th style="min-width:95px; text-align:right;">GMV DMARTS ($)</th>
+              <th style="min-width:75px; text-align:right;">AFV</th>
+              <th style="min-width:95px; text-align:right;">AVG DELIVERY TIME</th>
+              <th style="min-width:90px; text-align:right;">LATE ORDERS %</th>
+            </tr>
+          </thead>
+          <tbody>
+      `;
+
+      filtered.forEach(row => {
+        const penColor = row.penetration_pct > 25 ? '#15803d' : (row.penetration_pct > 15 ? '#0284c7' : 'var(--t1)');
+        const dtColor = row.avg_dt > 40 ? '#ef4444' : (row.avg_dt > 32 ? '#ea580c' : '#15803d');
+        const lateColor = row.pct_late > 25 ? '#ef4444' : (row.pct_late > 15 ? '#ea580c' : '#15803d');
+
+        html += `
+          <tr>
+            <td class="sticky sticky-1">
+              <div class="wh-name" title="${row.warehouse_name}">${row.warehouse_name}</div>
+            </td>
+            <td class="sticky sticky-2">
+              <span class="cc-badge">
+                ${getCountryFlagImg(row.country || '')}
+                ${(row.country || 'ARG').slice(0, 3).toUpperCase()}
+              </span>
+            </td>
+            <td style="text-align:center;">
+              <span style="display:inline-block; font-size:10px; font-weight:800; padding:2px 8px; border-radius:10px; background:rgba(2,132,199,0.12); color:#0284c7; border:1px solid rgba(2,132,199,0.3); font-family:'JetBrains Mono',monospace;">
+                ${row.anillo}
+              </span>
+            </td>
+            <td style="text-align:right; font-family:'JetBrains Mono',monospace; font-weight:600;">
+              ${row.covered_maus ? row.covered_maus.toLocaleString('es-AR') : '—'}
+            </td>
+            <td style="text-align:right; font-family:'JetBrains Mono',monospace; font-weight:700; color:#2563eb;">
+              ${row.dmart_maus ? row.dmart_maus.toLocaleString('es-AR') : '—'}
+            </td>
+            <td style="text-align:right; font-family:'JetBrains Mono',monospace; font-weight:800; color:${penColor};">
+              ${row.penetration_pct !== null ? row.penetration_pct.toFixed(1) + '%' : '—'}
+            </td>
+            <td style="text-align:right; font-family:'JetBrains Mono',monospace; font-weight:700; color:#ea044e;">
+              ${row.orders ? row.orders.toLocaleString('es-AR') : '—'}
+            </td>
+            <td style="text-align:right; font-family:'JetBrains Mono',monospace; font-weight:700;">
+              ${row.net_sales ? '$ ' + row.net_sales.toLocaleString('es-AR', {minimumFractionDigits:2, maximumFractionDigits:2}) : '—'}
+            </td>
+            <td style="text-align:right; font-family:'JetBrains Mono',monospace; font-weight:700; color:#ea580c;">
+              ${row.aov !== null ? '$ ' + row.aov.toFixed(2) : '—'}
+            </td>
+            <td style="text-align:right; font-family:'JetBrains Mono',monospace; font-weight:700; color:${dtColor};">
+              ${row.avg_dt !== null ? row.avg_dt.toFixed(1) + ' min' : '—'}
+            </td>
+            <td style="text-align:right; font-family:'JetBrains Mono',monospace; font-weight:700; color:${lateColor};">
+              ${row.pct_late !== null ? row.pct_late.toFixed(1) + '%' : '—'}
+            </td>
+          </tr>
+        `;
+      });
+
+      html += `</tbody></table>`;
+      tw.innerHTML = html;
     }
 
     window.addEventListener('load', () => {
-      loadBenchmarkData('2026-09-01');
+      loadBenchmarkData();
     });
   </script>
 </body>

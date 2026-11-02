@@ -89,6 +89,8 @@
   .btn-actions{display:flex;gap:6px;flex-shrink:0;align-items:center;}
   .btn-copy,.btn-copy-val{background:transparent;border:1px solid var(--border);border-radius:5px;padding:0 10px;height:26px;display:inline-flex;align-items:center;justify-content:center;gap:5px;cursor:pointer;transition:all 0.2s;font-size:11px;font-weight:600;color:var(--text-sub);white-space:nowrap;box-shadow:var(--shadow-sm);flex-shrink:0;}
   .btn-copy:hover,.btn-copy-val:hover{background:var(--bg-main);color:var(--text-main);border-color:var(--text-sub);}
+  .btn-copy-val.active{border-color:#93c5fd;color:#2563eb;background:#eff6ff}
+  .btn-copy-val.active:hover{border-color:#60a5fa;color:#1d4ed8;background:#dbeafe}
   .btn-actions svg{width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:2.2;flex-shrink:0;}
   .table-wrap{width:100%;overflow-x:auto;}
   table{width:100%;border-collapse:collapse;background:#fff;}
@@ -200,12 +202,20 @@
   // Para volver a mostrarlas, quitalas de este set.
   const IN_PREPARATION = new Set([]);
 
-  function fv(v, fmt) {
+  const SVG_NUM = `<svg viewBox="0 0 24 24"><line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="20" y2="15"/><line x1="10" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="14" y2="21"/></svg>`;
+  const PANEL_NUM_FULL = {};
+  function togglePanelNum(panelId) {
+    PANEL_NUM_FULL[panelId] = !PANEL_NUM_FULL[panelId];
+    if (CURRENT_DATA) renderPanels(CURRENT_DATA);
+  }
+
+  function fv(v, fmt, full) {
     if (v==null||isNaN(v)) return '—';
     if (v===0) return (fmt==='pct'||fmt==='pct_pre') ? '0.0%' : '0';
     if (fmt==='time')    return v.toFixed(1)+' min';
     if (fmt==='pct')     return (v*100).toFixed(1)+'%';
     if (fmt==='pct_pre') return v.toFixed(1)+'%';   // valor ya en %: 98.5 → "98.5%"
+    if (full) return Math.round(v).toLocaleString('es-AR');
     const a=Math.abs(v);
     if(a>=1e6) return (v/1e6).toFixed(2)+'M';
     if(a>=1e3) return (v/1e3).toFixed(1)+'k';
@@ -356,17 +366,20 @@
       return `<td class="tgt-cell"><span class="badge ${cls}">${p.toFixed(1)}%</span></td>`;
     }
 
+    const mid=m.replace(/[^a-zA-Z0-9]/g,'-');
+    const isFull=!!PANEL_NUM_FULL['panel-'+mid];
+
     ctries.forEach(c=>{
       const d=rows[c];
-      let tr=`<tr><td>${COUNTRY_NAMES[c]||c}</td><td><span class="number">${fv(d.current,fmt)}</span></td>`;
+      let tr=`<tr><td>${COUNTRY_NAMES[c]||c}</td><td><span class="number">${fv(d.current,fmt,isFull)}</span></td>`;
       if(isHero){
-        const tgtHtml = tgtPending ? `<span class="number dim">—<span class="tgt-loading-dot"></span></span>` : `<span class="number dim tgt-cell">${fv(d.target,fmt)}</span>`;
+        const tgtHtml = tgtPending ? `<span class="number dim">—<span class="tgt-loading-dot"></span></span>` : `<span class="number dim tgt-cell">${fv(d.target,fmt,isFull)}</span>`;
         const varHtml = tgtPending ? `<span class="badge badge-neu"><span class="tgt-loading-dot"></span></span>` : badge(d.current,d.target,fmt,tc);
         tr+=`<td class="sep-l tgt-cell">${tgtHtml}</td><td class="tgt-cell">${varHtml}</td>`;
       }
-      tr+=`<td class="sep-l"><span class="number dim">${fv(d.m1,fmt)}</span></td><td>${badge(d.current,d.m1,fmt,tc)}</td>`;
+      tr+=`<td class="sep-l"><span class="number dim">${fv(d.m1,fmt,isFull)}</span></td><td>${badge(d.current,d.m1,fmt,tc)}</td>`;
       tr+=`<td class="sep-l">${badge(d.current,d.y1,fmt,tc)}</td>`;
-      if(isHero&&rrMetricData){const e=rrMetricData[c];tr+=`<td class="sep-l" style="background:#fdfcff"><span class="number dim">${fv(e?.rr,fmt)}</span></td><td style="background:#fdfcff"><span class="number dim">${fv(e?.be,fmt)}</span></td><td style="background:#fdfcff">${badgePct(e?.varBe,tc)}</td><td class="sep-l" style="background:#fff7ed">${badgePct(e?.rrVsLm,tc)}</td><td style="background:#fff7ed">${badgePct(e?.rrVsLy,tc)}</td>`;}
+      if(isHero&&rrMetricData){const e=rrMetricData[c];tr+=`<td class="sep-l" style="background:#fdfcff"><span class="number dim">${fv(e?.rr,fmt,isFull)}</span></td><td style="background:#fdfcff"><span class="number dim">${fv(e?.be,fmt,isFull)}</span></td><td style="background:#fdfcff">${badgePct(e?.varBe,tc)}</td><td class="sep-l" style="background:#fff7ed">${badgePct(e?.rrVsLm,tc)}</td><td style="background:#fff7ed">${badgePct(e?.rrVsLy,tc)}</td>`;}
       tr+=`</tr>`;
       tbody+=tr;
     });
@@ -406,21 +419,20 @@
       };
     }
     if(L&&L.current!=null){
-      let tr=`<tr style="background:#f8fafc;font-weight:800;border-top:2px solid var(--border);"><td>LATAM</td><td><span class="number"${isHero?' style="color:var(--primary)"':''}>${fv(L.current,fmt)}</span></td>`;
+      let tr=`<tr style="background:#f8fafc;font-weight:800;border-top:2px solid var(--border);"><td>LATAM</td><td><span class="number"${isHero?' style="color:var(--primary)"':''}>${fv(L.current,fmt,isFull)}</span></td>`;
       if(isHero){
-        const tgtHtml = tgtPending ? `<span class="number dim">—<span class="tgt-loading-dot"></span></span>` : `<span class="number dim tgt-cell">${fv(L.target,fmt)}</span>`;
+        const tgtHtml = tgtPending ? `<span class="number dim">—<span class="tgt-loading-dot"></span></span>` : `<span class="number dim tgt-cell">${fv(L.target,fmt,isFull)}</span>`;
         const varHtml = tgtPending ? `<span class="badge badge-neu"><span class="tgt-loading-dot"></span></span>` : badge(L.current,L.target,fmt,tc);
         tr+=`<td class="sep-l tgt-cell">${tgtHtml}</td><td class="tgt-cell">${varHtml}</td>`;
       }
-      tr+=`<td class="sep-l"><span class="number dim">${fv(L.m1,fmt)}</span></td><td>${badge(L.current,L.m1,fmt,tc)}</td>`;
+      tr+=`<td class="sep-l"><span class="number dim">${fv(L.m1,fmt,isFull)}</span></td><td>${badge(L.current,L.m1,fmt,tc)}</td>`;
       tr+=`<td class="sep-l">${badge(L.current,L.y1,fmt,tc)}</td>`;
-      if(isHero&&rrMetricData){const e=latamRR;tr+=`<td class="sep-l" style="background:#fdfcff"><span class="number dim">${fv(e?.rr,fmt)}</span></td><td style="background:#fdfcff"><span class="number dim">${fv(e?.be,fmt)}</span></td><td style="background:#fdfcff">${badgePct(e?.varBe,tc)}</td><td class="sep-l" style="background:#fff7ed">${badgePct(e?.rrVsLm,tc)}</td><td style="background:#fff7ed">${badgePct(e?.rrVsLy,tc)}</td>`;}
+      if(isHero&&rrMetricData){const e=latamRR;tr+=`<td class="sep-l" style="background:#fdfcff"><span class="number dim">${fv(e?.rr,fmt,isFull)}</span></td><td style="background:#fdfcff"><span class="number dim">${fv(e?.be,fmt,isFull)}</span></td><td style="background:#fdfcff">${badgePct(e?.varBe,tc)}</td><td class="sep-l" style="background:#fff7ed">${badgePct(e?.rrVsLm,tc)}</td><td style="background:#fff7ed">${badgePct(e?.rrVsLy,tc)}</td>`;}
       tr+=`</tr>`;
       tbody+=tr;
     }
 
     const mq=m.replace(/'/g,"\\'");
-    const mid=m.replace(/[^a-zA-Z0-9]/g,'-');
     let thead=`<tr>
       <th style="text-align:left" onclick="localSort('${mq}','country')">PAÍS ${sortIcon(m,'country')}</th>
       <th onclick="localSort('${mq}','current')">ACTUAL ${sortIcon(m,'current')}</th>`;
@@ -444,7 +456,8 @@
           <div class="p-subtitle">${CURRENT_DATA.currentStart} al ${CURRENT_DATA.currentEnd} · ORDEN: ${orderLabel(m)}</div>
         </div>
         <div class="btn-actions">
-          <button class="btn-copy-val" onclick="copyTable('panel-${mid}',this)"><svg viewBox="0 0 24 24"><path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2"/></svg> Copiar</button>
+          <button class="btn-copy-val btn-num-toggle ${isFull?'active':''}" style="padding:0 6px" title="${isFull?'Ver números abreviados':'Ver números completos'}" onclick="togglePanelNum('panel-${mid}')">${SVG_NUM}</button>
+          <button class="btn-copy-val" onclick="copyTable('panel-${mid}',this)"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/></svg> Tabla</button>
         </div>
       </div>
       <div class="table-wrap"><table><thead>${thead}</thead><tbody>${tbody}</tbody></table></div>
@@ -476,13 +489,14 @@
       ctries.sort((a,b)=>(rows[b].current||0)-(rows[a].current||0));
     }
     let tbody='';
+    const isFull = !!PANEL_NUM_FULL['panel-' + mid];
     const L=rows['LATAM'];
     if(L&&L.current!=null){
-      tbody+=`<tr style="background:#f8fafc;font-weight:800;border-top:2px solid var(--border);"><td>LATAM</td><td><span class="number">${fv(L.current,fmt)}</span></td><td class="sep-l"><span class="number dim">${fv(L.prev,fmt)}</span></td><td>${badge(L.current,L.prev,fmt,tc)}</td></tr>`;
+      tbody+=`<tr style="background:#f8fafc;font-weight:800;border-top:2px solid var(--border);"><td>LATAM</td><td><span class="number">${fv(L.current,fmt,isFull)}</span></td><td class="sep-l"><span class="number dim">${fv(L.prev,fmt,isFull)}</span></td><td>${badge(L.current,L.prev,fmt,tc)}</td></tr>`;
     }
     ctries.forEach(c=>{
       const d=rows[c];
-      tbody+=`<tr><td>${COUNTRY_NAMES[c]||c}</td><td><span class="number">${fv(d.current,fmt)}</span></td><td class="sep-l"><span class="number dim">${fv(d.prev,fmt)}</span></td><td>${badge(d.current,d.prev,fmt,tc)}</td></tr>`;
+      tbody+=`<tr><td>${COUNTRY_NAMES[c]||c}</td><td><span class="number">${fv(d.current,fmt,isFull)}</span></td><td class="sep-l"><span class="number dim">${fv(d.prev,fmt,isFull)}</span></td><td>${badge(d.current,d.prev,fmt,tc)}</td></tr>`;
     });
     const wkTxt = cfg.week
       ? `${cfg.weekNum!=null?`Semana ${cfg.weekNum} · `:''}del ${cfg.week}${cfg.weekEnd?` al ${cfg.weekEnd}`:''} · fijo (no suma)`
@@ -501,7 +515,8 @@
           <div class="p-subtitle">${wkTxt}</div>
         </div>
         <div class="btn-actions">
-          <button class="btn-copy-val" onclick="copyTable('panel-${mid}',this)"><svg viewBox="0 0 24 24"><path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2"/></svg> Copiar</button>
+          <button class="btn-copy-val btn-num-toggle ${isFull?'active':''}" style="padding:0 6px" title="${isFull?'Ver números abreviados':'Ver números completos'}" onclick="togglePanelNum('panel-${mid}')">${SVG_NUM}</button>
+          <button class="btn-copy-val" onclick="copyTable('panel-${mid}',this)"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/></svg> Tabla</button>
         </div>
       </div>
       <div class="table-wrap"><table><thead>${thead}</thead><tbody>${tbody}</tbody></table></div>
@@ -526,13 +541,14 @@
       ctries.sort((a,b)=>{ let va,vb; if(s.col==='wow'){va=wowOf(rows[a]);vb=wowOf(rows[b]);} else {va=rows[a][s.col]||0;vb=rows[b][s.col]||0;} return s.dir==='asc'?va-vb:vb-va; });
     } else { ctries.sort((a,b)=>(rows[b].current||0)-(rows[a].current||0)); }
     let tbody='';
+    const isFull = !!PANEL_NUM_FULL['panel-' + mid];
     const L=rows['LATAM'];
     if(L&&L.current!=null){
-      tbody+=`<tr style="background:#f8fafc;font-weight:800;border-top:2px solid var(--border);"><td>LATAM</td><td><span class="number">${fv(L.current,fmt)}</span></td><td class="sep-l"><span class="number dim">${fv(L.prev,fmt)}</span></td><td>${badge(L.current,L.prev,fmt,tc)}</td></tr>`;
+      tbody+=`<tr style="background:#f8fafc;font-weight:800;border-top:2px solid var(--border);"><td>LATAM</td><td><span class="number">${fv(L.current,fmt,isFull)}</span></td><td class="sep-l"><span class="number dim">${fv(L.prev,fmt,isFull)}</span></td><td>${badge(L.current,L.prev,fmt,tc)}</td></tr>`;
     }
     ctries.forEach(c=>{
       const d=rows[c];
-      tbody+=`<tr><td>${COUNTRY_NAMES[c]||c}</td><td><span class="number">${fv(d.current,fmt)}</span></td><td class="sep-l"><span class="number dim">${fv(d.prev,fmt)}</span></td><td>${badge(d.current,d.prev,fmt,tc)}</td></tr>`;
+      tbody+=`<tr><td>${COUNTRY_NAMES[c]||c}</td><td><span class="number">${fv(d.current,fmt,isFull)}</span></td><td class="sep-l"><span class="number dim">${fv(d.prev,fmt,isFull)}</span></td><td>${badge(d.current,d.prev,fmt,tc)}</td></tr>`;
     });
     const pl = cfg.prevLabel ? ` (${cfg.prevLabel})` : '';
     const thead=`<tr>
@@ -549,7 +565,8 @@
           <div class="p-subtitle" style="white-space:normal;overflow:visible">${dataThroughBadge(m)} vs MTD del mes pasado, mismo día${pl}</div>
         </div>
         <div class="btn-actions">
-          <button class="btn-copy-val" onclick="copyTable('panel-${mid}',this)"><svg viewBox="0 0 24 24"><path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2"/></svg> Copiar</button>
+          <button class="btn-copy-val btn-num-toggle ${isFull?'active':''}" style="padding:0 6px" title="${isFull?'Ver números abreviados':'Ver números completos'}" onclick="togglePanelNum('panel-${mid}')">${SVG_NUM}</button>
+          <button class="btn-copy-val" onclick="copyTable('panel-${mid}',this)"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/></svg> Tabla</button>
         </div>
       </div>
       <div class="table-wrap"><table><thead>${thead}</thead><tbody>${tbody}</tbody></table></div>
@@ -895,17 +912,12 @@
     }
 
     const baseCfg={ locale:'es', dateFormat:'Y-m-d', disableMobile:'true' };
-    if(enableDates.length>0) baseCfg.enable=enableDates;
+    // Permitir ver datos desde 2025 en adelante (o la primera fecha con datos si es anterior)
+    const minAllowed = '2025-01-01';
+    let calcMinDate = (enableDates.length > 0 && enableDates[0] < minAllowed) ? enableDates[0] : minAllowed;
+    if(enableDates.length > 0 && enableDates[0] <= minAllowed) baseCfg.enable = enableDates;
     if(fpStart) fpStart.destroy();
     if(fpEnd)   fpEnd.destroy();
-
-    // Limitar al año actual de los datos (no ir más atrás de 1-Enero de ese año)
-    const currentYear = maxD ? maxD.slice(0, 4) : new Date().getFullYear().toString();
-    const yearStartStr = currentYear + '-01-01';
-    let calcMinDate = enableDates[0] || undefined;
-    if (calcMinDate && calcMinDate < yearStartStr) {
-      calcMinDate = yearStartStr;
-    }
 
     // El INICIO es el que manda: al cambiarlo, el FIN queda limitado al mismo mes
     fpStart=flatpickr(fStart,{...baseCfg,

@@ -18,7 +18,7 @@ const CONFIG = {
   SHEET_LOG_SESIONES: "Log_Sesiones",
   SHEET_LOG_AUDITORIA: "Log_Auditoria",
   ADMIN_EMAIL: "matias.cagliero@pedidosya.com",
-  TITULO_APP: "Project Tracker & Hub de Reportes | PeYa Market",
+  TITULO_APP: "Projects Tracker & Hub de Reportes | PeYa Market",
   VERSION: "2.2.0"
 };
 
@@ -108,9 +108,107 @@ function leerHoja(ss, sheetName) {
     if (obj.url_directa && !obj.url) obj.url = obj.url_directa;
     if (obj.creado_por && !obj.creadoPor) obj.creadoPor = obj.creado_por;
     if (obj.asignado_a && !obj.asignadoA) obj.asignadoA = obj.asignado_a;
+    if (!obj.todos) obj.todos = obj.to_dos || obj.tareas || obj.prioridades || obj.checklist || obj.tareas_de_la_semana || "";
     items.push(obj);
   }
   return items;
+}
+
+// ==============================================================================
+// MOTOR DE SINCRONIZACIÓN EN VIVO (CACHE SERVICE EN RAM)
+// ==============================================================================
+
+function _marcarCambioDeDatos() {
+  try {
+    const cache = CacheService.getScriptCache();
+    const ver = Date.now().toString();
+    cache.put("APP_DATA_VERSION", ver, 21600); // 6 horas de retención en RAM
+    return ver;
+  } catch (e) {
+    return Date.now().toString();
+  }
+}
+
+function obtenerVersionDatos() {
+  try {
+    const cache = CacheService.getScriptCache();
+    let ver = cache.get("APP_DATA_VERSION");
+    if (!ver) {
+      ver = Date.now().toString();
+      cache.put("APP_DATA_VERSION", ver, 21600);
+    }
+    return ver;
+  } catch (e) {
+    return Date.now().toString();
+  }
+}
+
+function verificarVersionDatos(clienteVersion, semanaFiltro, usuarioInfo) {
+  const cache = CacheService.getScriptCache();
+  const now = Date.now();
+  const serverVer = obtenerVersionDatos();
+
+  // 1. Registrar / refrescar presencia del usuario
+  let presencias = {};
+  try {
+    const raw = cache.get("PRESENCIA_USUARIOS");
+    if (raw) presencias = JSON.parse(raw);
+  } catch (_) {}
+
+  const email = (usuarioInfo?.email || _getUserEmail() || "").toLowerCase().trim();
+  let primerNombre = "";
+  if (usuarioInfo?.nombre) {
+    primerNombre = usuarioInfo.nombre.trim().split(" ")[0];
+  } else if (email) {
+    primerNombre = deducirNombreDeEmail(email).split(" ")[0];
+  } else {
+    primerNombre = "Analista";
+  }
+
+  if (primerNombre) {
+    primerNombre = primerNombre.charAt(0).toUpperCase() + primerNombre.slice(1);
+  }
+
+  if (email) {
+    presencias[email] = {
+      nombre: primerNombre,
+      email: email,
+      ts: now
+    };
+  }
+
+  // 2. Limpiar usuarios inactivos (>45 segundos)
+  const conectados = [];
+  const presenciasLimpias = {};
+  for (const em in presencias) {
+    const u = presencias[em];
+    if (now - (u.ts || 0) < 45000) {
+      presenciasLimpias[em] = u;
+      if (u.nombre && !conectados.includes(u.nombre)) {
+        conectados.push(u.nombre);
+      }
+    }
+  }
+
+  try {
+    cache.put("PRESENCIA_USUARIOS", JSON.stringify(presenciasLimpias), 21600);
+  } catch (_) {}
+
+  const resp = {
+    alDia: (clienteVersion && String(clienteVersion) === String(serverVer)),
+    version: serverVer,
+    conectados: conectados
+  };
+
+  if (!resp.alDia) {
+    resp.datos = _cargarPaqueteDatos(getDB(), semanaFiltro);
+  }
+
+  return resp;
+}
+
+function onEdit(e) {
+  _marcarCambioDeDatos();
 }
 
 function _actualizarCelda(sheetName, id, mapaCols, campo, valor, entidad) {
@@ -125,7 +223,8 @@ function _actualizarCelda(sheetName, id, mapaCols, campo, valor, entidad) {
   sheet.getRange(rowIndex, sheet.getLastColumn()).setValue(_getFechaHoy());
   SpreadsheetApp.flush();
   registrarAuditoria(ss, _getUserEmail(), entidad, "EDITAR_CAMPO", `Actualizo ${campo} en ${entidad} [ID: ${id}]`);
-  return { success: true };
+  const ver = _marcarCambioDeDatos();
+  return { success: true, version: ver };
 }
 
 function _eliminarFila(sheetName, id, colNombre, entidad) {
@@ -138,7 +237,8 @@ function _eliminarFila(sheetName, id, colNombre, entidad) {
   sheet.deleteRow(rowIndex);
   SpreadsheetApp.flush();
   registrarAuditoria(ss, _getUserEmail(), entidad, "ELIMINAR", `Elimino ${entidad}: ${nombre} [ID: ${id}]`);
-  return { success: true };
+  const ver = _marcarCambioDeDatos();
+  return { success: true, version: ver };
 }
 
 // ==============================================================================
@@ -176,9 +276,39 @@ function _cargarPaqueteDatos(ss, semanaFiltro) {
         const frecPilar = r.frecuencia_pilar || r.frecuencia___pilar || r.frecuencia || r.pilar || "";
         const prioTarget = r.prioridad_target || r.prioridad___target || r.prioridad || r.target || "";
         if (tipo.includes("rec")) {
-          recurrentes.push({ id: r.id, owner: r.owner || "", tarea: tit, frecuencia: frecPilar || "Semanal", links: r.links || "", descripcion: prioTarget || "" });
+          let checks = null;
+          if (r.estado && String(r.estado).trim().startsWith("{")) {
+            try { checks = JSON.parse(r.estado); } catch (_) {}
+          }
+          const isGroupRec = /^\s*#{1,3}\s+/.test(tit);
+          const isSubRec = !isGroupRec && (/\[(?:sub|subtarea)\]/i.test(r.links || "") || /^\s*(?:↳|&#8627;|\u21B3)/.test(tit) || !!checks?.isSubpoint);
+          recurrentes.push({
+            id: r.id,
+            owner: r.owner || "",
+            isGroupHeader: isGroupRec,
+            tarea: isGroupRec ? tit : tit.replace(/^\s*(?:↳|&#8627;|\u21B3)\s*/, ""),
+            isSubpoint: isSubRec,
+            frecuencia: frecPilar || "Semanal",
+            links: r.links || "",
+            descripcion: prioTarget || "",
+            estado: r.estado || "",
+            checksDiarios: checks?.diarios || {},
+            semanasCompletadas: checks?.semanas || {},
+            checksMensuales: checks?.meses || {},
+            historialVersiones: checks?.versiones || []
+          });
         } else if (tipo.includes("fut")) {
-          futuros.push({ id: r.id, owner: r.owner || "", tema: tit, pilar: frecPilar || "General", target: prioTarget || "A definir", notas: r.links || "", estado: r.estado || "Pendiente" });
+          const isGroupFut = /^\s*#{1,3}\s+/.test(tit);
+          futuros.push({
+            id: r.id,
+            owner: r.owner || "",
+            isGroupHeader: isGroupFut,
+            tema: tit,
+            pilar: frecPilar || "General",
+            target: prioTarget || "A definir",
+            notas: r.links || "",
+            estado: r.estado || "Pendiente"
+          });
         } else if (tipo.includes("bolsa") || tipo.includes("pend")) {
           bolsa.push({ id: r.id, titulo: tit, descripcion: r.links || "", pilar: frecPilar || "General", prioridad: prioTarget || "Media", creadoPor: r.creadopor || "Analista", asignadoA: r.owner || "Sin asignar", estado: r.estado || "Pendiente" });
         }
@@ -219,12 +349,43 @@ function obtenerConfiguracionInicial() {
   const email = _getUserEmail();
   const semanaActual = calcularSemanaActualISO();
   const datos = _cargarPaqueteDatos(ss, semanaActual);
+  const ver = obtenerVersionDatos();
+  const nombreCompleto = deducirNombreDeEmail(email, datos.equipo);
+
+  // Registrar presencia inicial
+  const conectados = [];
+  try {
+    const cache = CacheService.getScriptCache();
+    const now = Date.now();
+    let presencias = {};
+    const raw = cache.get("PRESENCIA_USUARIOS");
+    if (raw) presencias = JSON.parse(raw);
+    let primerNombre = nombreCompleto.trim().split(" ")[0];
+    if (primerNombre) primerNombre = primerNombre.charAt(0).toUpperCase() + primerNombre.slice(1);
+    if (email) {
+      presencias[email.toLowerCase().trim()] = {
+        nombre: primerNombre,
+        email: email,
+        ts: now
+      };
+    }
+    for (const em in presencias) {
+      const u = presencias[em];
+      if (now - (u.ts || 0) < 45000) {
+        if (u.nombre && !conectados.includes(u.nombre)) conectados.push(u.nombre);
+      }
+    }
+    cache.put("PRESENCIA_USUARIOS", JSON.stringify(presencias), 21600);
+  } catch (_) {}
+
   return {
+    version: ver,
     usuarioActual: {
       email: email,
-      nombre: deducirNombreDeEmail(email, datos.equipo),
+      nombre: nombreCompleto,
       esAdmin: verificarEsAdmin(email)
     },
+    conectados: conectados,
     spreadsheetUrl: ss ? ss.getUrl() : "",
     spreadsheetName: ss ? ss.getName() : "",
     semanaActual: semanaActual,
@@ -277,7 +438,8 @@ function guardarSeguimientoSemanal(item) {
   }
   SpreadsheetApp.flush();
   registrarAuditoria(ss, _getUserEmail(), "SEGUIMIENTO_SEMANAL", rowIndex > 0 ? "EDITAR" : "CREAR", `${item.proyecto} (${item.owner})`);
-  return { success: true, id: idFinal, accion: rowIndex > 0 ? "actualizado" : "creado" };
+  const ver = _marcarCambioDeDatos();
+  return { success: true, id: idFinal, accion: rowIndex > 0 ? "actualizado" : "creado", version: ver };
 }
 
 function actualizarCampoSemanal(id, campo, valor, owner, semana) {
@@ -299,7 +461,8 @@ function actualizarCampoSemanal(id, campo, valor, owner, semana) {
     sheet.getRange(rowIndex, col).setValue(valor);
     sheet.getRange(rowIndex, sheet.getLastColumn()).setValue(_getFechaHoy());
     SpreadsheetApp.flush();
-    return { success: true };
+    const ver = _marcarCambioDeDatos();
+    return { success: true, version: ver };
   }
   return guardarSeguimientoSemanal({ id: id, owner: owner || "", semana: semana || "", [campo]: valor });
 }
@@ -308,8 +471,30 @@ function actualizarEstadoSemanal(id, nuevoEstado, owner, semana) {
   return actualizarCampoSemanal(id, "estado", nuevoEstado, owner, semana);
 }
 
-function eliminarSeguimientoSemanal(id) {
-  return _eliminarFila(CONFIG.SHEET_SEMANAL, id, 4, "SEGUIMIENTO_SEMANAL");
+function eliminarSeguimientoSemanal(id, owner, semana) {
+  const ss = getDB();
+  const sheet = getHojaInteligente(ss, CONFIG.SHEET_SEMANAL);
+  if (!sheet) return { success: false, error: "Hoja no encontrada" };
+
+  let rowIndex = id ? buscarFilaPorId(sheet, id) : -1;
+  if (rowIndex <= 0 && owner && semana) {
+    const data = sheet.getDataRange().getValues();
+    for (let i = 1; i < data.length; i++) {
+      if (String(data[i][2] || "").trim().toLowerCase() === String(owner).trim().toLowerCase() && coincidenSemanas(data[i][1], semana)) {
+        rowIndex = i + 1; break;
+      }
+    }
+  }
+
+  if (rowIndex > 0) {
+    const nombre = String(sheet.getRange(rowIndex, 4).getValue() || id);
+    sheet.deleteRow(rowIndex);
+    SpreadsheetApp.flush();
+    registrarAuditoria(ss, _getUserEmail(), "SEGUIMIENTO_SEMANAL", "ELIMINAR", `Elimino iniciativa: ${nombre}`);
+    const ver = _marcarCambioDeDatos();
+    return { success: true, version: ver };
+  }
+  return { success: false, error: "Registro no encontrado" };
 }
 
 // ==============================================================================
@@ -335,7 +520,8 @@ function _upsertHojaTareasUnificada(ss, item, tipoDefecto) {
     sUnificada.appendRow(fila);
   }
   SpreadsheetApp.flush();
-  return { success: true, id: idFinal };
+  const ver = _marcarCambioDeDatos();
+  return { success: true, id: idFinal, version: ver };
 }
 
 function guardarTareaRecurrente(item) {
@@ -358,7 +544,7 @@ function actualizarCampoRecurrente(id, campo, valor, owner, tareaNombre) {
   const ss = getDB();
   const sUni = getHojaInteligente(ss, "tareas y pendientes") || getHojaInteligente(ss, CONFIG.SHEET_TAREAS_PENDIENTES);
   if (sUni) {
-    const col = { owner: 3, tarea: 4, frecuencia: 5, links: 7, descripcion: 6 }[campo.toLowerCase()] || 4;
+    const col = { owner: 3, tarea: 4, frecuencia: 5, links: 7, descripcion: 6, estado: 8 }[campo.toLowerCase()] || 4;
     return _actualizarCelda(sUni.getName(), id, { [campo]: col }, campo, valor, "TAREA_RECURRENTE");
   }
   return guardarTareaRecurrente({ id: id, owner: owner || "", tarea: tareaNombre || valor, [campo]: valor });
@@ -367,6 +553,48 @@ function actualizarCampoRecurrente(id, campo, valor, owner, tareaNombre) {
 function eliminarTareaRecurrente(id) {
   const sUni = getHojaInteligente(getDB(), "tareas y pendientes");
   return _eliminarFila(sUni ? sUni.getName() : CONFIG.SHEET_RECURRENTES, id, 3, "TAREA_RECURRENTE");
+}
+
+function guardarOrdenRecurrentes(listaIds) {
+  const ss = getDB();
+  const sUni = getHojaInteligente(ss, "tareas y pendientes") || getHojaInteligente(ss, CONFIG.SHEET_TAREAS_PENDIENTES);
+  if (!sUni) return { success: false };
+
+  const data = sUni.getDataRange().getValues();
+  if (data.length <= 2) return { success: true };
+
+  const header = data[0];
+  const rows = data.slice(1);
+
+  const mapaRec = {};
+  const otrasFilas = [];
+
+  rows.forEach(r => {
+    const tipo = String(r[1] || "").toLowerCase();
+    const id = String(r[0] || "").trim();
+    if (tipo.includes("rec")) {
+      mapaRec[id] = r;
+    } else {
+      otrasFilas.push(r);
+    }
+  });
+
+  const nuevasFilasRec = [];
+  (listaIds || []).forEach(id => {
+    const key = String(id).trim();
+    if (mapaRec[key]) {
+      nuevasFilasRec.push(mapaRec[key]);
+      delete mapaRec[key];
+    }
+  });
+  Object.values(mapaRec).forEach(r => nuevasFilasRec.push(r));
+
+  const todasFilas = nuevasFilasRec.concat(otrasFilas);
+  if (todasFilas.length > 0) {
+    sUni.getRange(2, 1, todasFilas.length, header.length).setValues(todasFilas);
+    SpreadsheetApp.flush();
+  }
+  return { success: true };
 }
 
 function guardarTemaFuturo(item) {
@@ -545,28 +773,135 @@ function eliminarMiembroEquipo(email) {
   return { success: false, error: "Miembro no encontrado" };
 }
 
+function guardarOrdenEquipo(listaEmails) {
+  const ss = getDB();
+  const sheet = getHojaInteligente(ss, CONFIG.SHEET_EQUIPO);
+  if (!sheet) return { success: false, error: "Hoja de equipo no encontrada" };
+
+  const data = sheet.getDataRange().getValues();
+  if (data.length <= 2) return { success: true, equipo: leerHoja(ss, CONFIG.SHEET_EQUIPO) };
+
+  const header = data[0];
+  const rows = data.slice(1);
+  const mapa = {};
+  rows.forEach(r => { mapa[String(r[1] || "").toLowerCase().trim()] = r; });
+
+  const nuevasFilas = [];
+  (listaEmails || []).forEach(em => {
+    const key = String(em || "").toLowerCase().trim();
+    if (mapa[key]) { nuevasFilas.push(mapa[key]); delete mapa[key]; }
+  });
+  Object.values(mapa).forEach(r => nuevasFilas.push(r));
+
+  if (nuevasFilas.length > 0) {
+    sheet.getRange(2, 1, nuevasFilas.length, header.length).setValues(nuevasFilas);
+    SpreadsheetApp.flush();
+    registrarAuditoria(ss, _getUserEmail(), "EQUIPO", "REORDENAR", "Reordeno orden de miembros del equipo");
+  }
+  return { success: true, equipo: leerHoja(ss, CONFIG.SHEET_EQUIPO) };
+}
+
+function actualizarNombreMiembro(email, nuevoNombre, viejoNombre) {
+  const ss = getDB();
+  const sheet = getHojaInteligente(ss, CONFIG.SHEET_EQUIPO);
+  if (!sheet) return { success: false, error: "Hoja de equipo no encontrada" };
+
+  const data = sheet.getDataRange().getValues();
+  const emailClean = String(email || "").toLowerCase().trim();
+  let rowIdx = -1;
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][1] || "").toLowerCase().trim() === emailClean) {
+      rowIdx = i + 1; break;
+    }
+  }
+
+  if (rowIdx > 0) {
+    sheet.getRange(rowIdx, 1).setValue(nuevoNombre);
+    SpreadsheetApp.flush();
+
+    if (viejoNombre && String(viejoNombre).trim() !== String(nuevoNombre).trim()) {
+      _actualizarOwnerEnCascada(ss, viejoNombre, nuevoNombre);
+    }
+    registrarAuditoria(ss, _getUserEmail(), "EQUIPO", "EDITAR_NOMBRE", `Cambio nombre de ${viejoNombre} a ${nuevoNombre}`);
+    return { success: true, equipo: leerHoja(ss, CONFIG.SHEET_EQUIPO) };
+  }
+  return { success: false, error: "Miembro no encontrado" };
+}
+
+function _actualizarOwnerEnCascada(ss, viejoNombre, nuevoNombre) {
+  const vClean = String(viejoNombre).toLowerCase().trim();
+  const sSem = getHojaInteligente(ss, CONFIG.SHEET_SEMANAL);
+  if (sSem) {
+    const data = sSem.getDataRange().getValues();
+    for (let i = 1; i < data.length; i++) {
+      if (String(data[i][2] || "").toLowerCase().trim() === vClean) {
+        sSem.getRange(i + 1, 3).setValue(nuevoNombre);
+      }
+    }
+  }
+  const sUni = getHojaInteligente(ss, "tareas y pendientes");
+  if (sUni) {
+    const data = sUni.getDataRange().getValues();
+    for (let i = 1; i < data.length; i++) {
+      if (String(data[i][2] || "").toLowerCase().trim() === vClean) {
+        sUni.getRange(i + 1, 3).setValue(nuevoNombre);
+      }
+    }
+  }
+  SpreadsheetApp.flush();
+}
+
+function _getHojaLogs(ss) {
+  if (!ss) return null;
+  return ss.getSheetByName("4. Logs") || ss.getSheetByName("Logs") || getHojaInteligente(ss, "logs") || getHojaInteligente(ss, CONFIG.SHEET_LOG_AUDITORIA) || getHojaInteligente(ss, CONFIG.SHEET_LOG_SESIONES);
+}
+
 function obtenerDatosAdmin() {
   const ss = getDB();
   if (!verificarEsAdmin(_getUserEmail())) return { success: false, error: "No autorizado" };
-  const sLogs = getHojaInteligente(ss, CONFIG.SHEET_LOGS) || getHojaInteligente(ss, CONFIG.SHEET_LOG_AUDITORIA);
+  const sLogs = _getHojaLogs(ss);
+  let rawLogs = sLogs ? leerHoja(ss, sLogs.getName()) : [];
+
+  const sViejasSes = ss.getSheetByName("Log_Sesiones");
+  if (sViejasSes && sViejasSes !== sLogs) rawLogs = rawLogs.concat(leerHoja(ss, "Log_Sesiones"));
+  const sViejasAud = ss.getSheetByName("Log_Auditoria");
+  if (sViejasAud && sViejasAud !== sLogs) rawLogs = rawLogs.concat(leerHoja(ss, "Log_Auditoria"));
+
+  const stats = {};
+  rawLogs.forEach(r => {
+    const u = String(r.usuario || "anonimo").toLowerCase().trim();
+    if (!stats[u]) stats[u] = { email: u, usuario: u, sesiones: 0, cambios: 0, clicsReportes: 0, ultimoAcceso: "" };
+    const accion = String(r.accion || "").toUpperCase();
+    const entidad = String(r.entidad || "").toUpperCase();
+    const detalle = String(r.detalle || "").toUpperCase();
+    const fecha = r.fecha_y_hora || r.fecha || "";
+
+    if (accion.includes("SESION") || accion.includes("APERTURA") || entidad.includes("SESION") || detalle.includes("INICIO DE SESION")) {
+      stats[u].sesiones++;
+    } else if (accion.includes("CLIC") || detalle.includes("REPORTE")) {
+      stats[u].clicsReportes++;
+    } else {
+      stats[u].cambios++;
+    }
+    if (fecha && (!stats[u].ultimoAcceso || String(fecha) > String(stats[u].ultimoAcceso))) {
+      stats[u].ultimoAcceso = fecha;
+    }
+  });
+
   return {
     success: true,
     autorizado: true,
-    resumenUsuarios: [],
-    ultimasAcciones: (leerHoja(ss, sLogs ? sLogs.getName() : CONFIG.SHEET_LOG_AUDITORIA) || []).slice(-15).reverse(),
+    resumenUsuarios: Object.values(stats),
+    ultimasAcciones: rawLogs.slice(-20).reverse(),
     equipo: leerHoja(ss, CONFIG.SHEET_EQUIPO)
   };
 }
 
 function registrarSesion(ss, email, accion, detalle) {
   try {
-    const sLogs = getHojaInteligente(ss, CONFIG.SHEET_LOGS) || getHojaInteligente(ss, CONFIG.SHEET_LOG_SESIONES);
+    const sLogs = _getHojaLogs(ss);
     if (sLogs) {
-      if (sLogs.getName().includes("4. Logs") || sLogs.getName().toLowerCase() === "logs") {
-        sLogs.appendRow([_getFechaHoy(), email, "SESION", accion, detalle]);
-      } else {
-        sLogs.appendRow([_getFechaHoy(), email, accion, detalle]);
-      }
+      sLogs.appendRow([_getFechaHoy(), email, "SESION", accion, detalle]);
       SpreadsheetApp.flush();
     }
   } catch (_) {}
@@ -574,13 +909,9 @@ function registrarSesion(ss, email, accion, detalle) {
 
 function registrarAuditoria(ss, email, entidad, accion, detalle) {
   try {
-    const sLogs = getHojaInteligente(ss, CONFIG.SHEET_LOGS) || getHojaInteligente(ss, CONFIG.SHEET_LOG_AUDITORIA);
+    const sLogs = _getHojaLogs(ss);
     if (sLogs) {
-      if (sLogs.getName().includes("4. Logs") || sLogs.getName().toLowerCase() === "logs") {
-        sLogs.appendRow([_getFechaHoy(), email, entidad, accion, detalle]);
-      } else {
-        sLogs.appendRow([_getFechaHoy(), email, entidad, accion, detalle]);
-      }
+      sLogs.appendRow([_getFechaHoy(), email, entidad, accion, detalle]);
       SpreadsheetApp.flush();
     }
   } catch (_) {}
@@ -646,19 +977,16 @@ function crearPestanasSiNoExisten() {
   const schemas = [
     {
       name: "1. Seguimiento Semanal",
-      keyword: "semanal",
       headers: ["ID", "Semana", "Owner", "Proyecto", "Todos", "Novedades", "Bloqueos", "Estado", "Ultima Actualizacion"],
       widths: [90, 200, 150, 220, 360, 260, 260, 110, 140]
     },
     {
       name: "2. Tareas y Pendientes",
-      keyword: "tareas y pendientes",
       headers: ["ID", "Tipo", "Owner", "Titulo / Tarea", "Frecuencia / Pilar", "Prioridad / Target", "Links", "Estado", "Ultima Actualizacion"],
       widths: [90, 110, 150, 280, 130, 130, 220, 110, 140]
     },
     {
       name: "3. Equipo",
-      keyword: "equipo",
       headers: ["Nombre", "Email", "Rol"],
       widths: [200, 260, 180],
       seed: [
@@ -669,7 +997,6 @@ function crearPestanasSiNoExisten() {
     },
     {
       name: "4. Logs",
-      keyword: "logs",
       headers: ["Fecha y Hora", "Usuario", "Entidad", "Accion", "Detalle"],
       widths: [160, 240, 160, 120, 320]
     }
@@ -678,7 +1005,8 @@ function crearPestanasSiNoExisten() {
   const creadas = [], existentes = [];
 
   schemas.forEach(s => {
-    let sheet = getHojaInteligente(ss, s.keyword);
+    // Buscamos EXACTAMENTE por nombre para forzar la numeración
+    let sheet = ss.getSheetByName(s.name);
     if (!sheet) {
       sheet = ss.insertSheet(s.name);
       sheet.appendRow(s.headers);

@@ -7,6 +7,7 @@ DECLARE query_name STRING DEFAULT '12. Mapster - Base - Performance (WHS data)';
 --           los partners secundarios, cuántos están activos en el mes, la lista
 --           completa de IDs/Nombres y el ARRAY estructurado con su detalle.
 --
+
 -- Grano por defecto: 1 fila por (month_date, warehouse_id) con ARRAY de partners
 -- (Al final se incluye la opción comentada para ver 1 fila por partner individual)
 --

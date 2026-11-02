@@ -153,6 +153,12 @@ if (typeof google === 'undefined' || !google.script) {
   </div>
   <div class="fsep"></div>
   <div class="fg">
+    <span class="fl">Mes</span>
+    <select class="fs" id="f-month" onchange="onMonthSelect(this.value)">
+    </select>
+  </div>
+  <div class="fsep"></div>
+  <div class="fg">
     <span class="fl">Rango</span>
     <input type="date" class="date-input" id="f-start" onchange="onDateChange()">
     <span class="date-arrow">→</span>
@@ -259,7 +265,7 @@ if(typeof Chart!=='undefined'){
 }
 
 // ── Cache localStorage ──────────────────────────────────────────
-const GRAFIC_CACHE_KEY='peya_grafic_v3', GRAFIC_CACHE_TTL=30*60*1000;
+const GRAFIC_CACHE_KEY='peya_grafic_v4', GRAFIC_CACHE_TTL=30*60*1000;
 function getGraficCache(){try{const c=localStorage.getItem(GRAFIC_CACHE_KEY);if(!c)return null;const p=JSON.parse(c);if(Date.now()>p.expiry){localStorage.removeItem(GRAFIC_CACHE_KEY);return null;}return p.data;}catch(e){return null;}}
 function setGraficCache(d){try{localStorage.setItem(GRAFIC_CACHE_KEY,JSON.stringify({data:d,expiry:Date.now()+GRAFIC_CACHE_TTL}));}catch(e){}}
 
@@ -269,6 +275,51 @@ function doRefresh() {
 }
 
 const CCN = {AR:'Argentina',BO:'Bolivia',CL:'Chile',CO:'Colombia',EC:'Ecuador',SV:'El Salvador',GT:'Guatemala',HN:'Honduras',NI:'Nicaragua',PA:'Panamá',PY:'Paraguay',PE:'Perú',UY:'Uruguay',DO:'Rep. Dominicana',MX:'México'};
+const MESES_ES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+
+function formatMonthKey(mKey) {
+  const parts = mKey.split('-');
+  const y = parts[0], m = parseInt(parts[1], 10);
+  return (MESES_ES[m - 1] || mKey) + ' ' + y;
+}
+
+function updateMonthSelect(availableMonths, activeMonthKey) {
+  const sel = document.getElementById('f-month');
+  if (!sel) return;
+  sel.innerHTML = '';
+  (availableMonths || []).forEach(mk => {
+    const opt = document.createElement('option');
+    opt.value = mk;
+    opt.textContent = formatMonthKey(mk);
+    sel.appendChild(opt);
+  });
+  if (activeMonthKey && sel.querySelector(`option[value="${activeMonthKey}"]`)) {
+    sel.value = activeMonthKey;
+  }
+}
+
+function onMonthSelect(mKey) {
+  if (!mKey) return;
+  const parts = mKey.split('-');
+  const y = parseInt(parts[0], 10), m = parseInt(parts[1], 10);
+  const firstDay = `${parts[0]}-${parts[1]}-01`;
+  const lastDayNum = new Date(y, m, 0).getDate();
+  const lastDay = `${parts[0]}-${parts[1]}-${('0' + lastDayNum).slice(-2)}`;
+
+  document.getElementById('f-start').value = firstDay;
+  document.getElementById('f-end').value   = lastDay;
+
+  const ref = dataMaxDate || new Date();
+  const currMk = ref.getFullYear() + '-' + ('0' + (ref.getMonth() + 1)).slice(-2);
+  isMTD = (mKey === currMk);
+  const mtdBtn = document.getElementById('btn-mtd');
+  if (mtdBtn) {
+    if (isMTD) mtdBtn.classList.add('active'); else mtdBtn.classList.remove('active');
+  }
+
+  enforceSingleMonth();
+  renderCharts();
+}
 
 let RAW = null, dataMaxDate = null, isMTD = true, RR_DATA = {orders:{},gmv:{}};
 let chOrders = null, chGmv = null;
@@ -349,11 +400,16 @@ function processData(res) {
   // Max date CON DATO REAL (actual de orders o gmv). Ignoramos días que solo tienen
   // TARGET (p. ej. los días futuros del mes en curso, que vienen con target cargado
   // pero sin actual): antes esos hacían que dataMaxDate apuntara a un mes futuro y el
-  // MTD saliera vacío. Así el MTD arranca en el ÚLTIMO MES CON DATOS (p. ej. junio
-  // completo si estamos a principios del mes siguiente).
+  // MTD saliera vacío. Así el MTD arranca en el ÚLTIMO MES CON DATOS.
   let maxMs = -Infinity;
   RAW.forEach(r => { if ((r.o != null || r.g != null) && r.d > maxMs) maxMs = r.d; });
   dataMaxDate = maxMs !== -Infinity ? new Date(maxMs) : new Date();
+
+  // Selector de meses disponibles (incluye meses pasados y futuros con targets)
+  const ref = dataMaxDate || new Date();
+  const currMonthKey = ref.getFullYear() + '-' + ('0' + (ref.getMonth() + 1)).slice(-2);
+  const allMonths = (res.months && res.months.length) ? res.months : [currMonthKey];
+  updateMonthSelect(allMonths, currMonthKey);
 
   setMTD();
   splashOut();
@@ -405,6 +461,9 @@ function setMTD() {
   const fmt = d => d.toISOString().slice(0,10);
   document.getElementById('f-start').value = fmt(new Date(y, m, 1));
   document.getElementById('f-end').value   = fmt(new Date(y, m+1, 0)); // último día del mes
+  const mKey = y + '-' + ('0' + (m + 1)).slice(-2);
+  const selM = document.getElementById('f-month');
+  if (selM && selM.querySelector(`option[value="${mKey}"]`)) selM.value = mKey;
   enforceSingleMonth();
   renderCharts();
 }
@@ -424,6 +483,12 @@ function onDateChange() {
   isMTD = false;
   document.getElementById('btn-mtd').classList.remove('active');
   enforceSingleMonth();
+  const s = document.getElementById('f-start').value;
+  if (s) {
+    const mKey = s.slice(0, 7);
+    const selM = document.getElementById('f-month');
+    if (selM && selM.querySelector(`option[value="${mKey}"]`)) selM.value = mKey;
+  }
   renderCharts();
 }
 
@@ -464,7 +529,16 @@ function renderCharts() {
 
   // Extender hasta endStr — días sin actuals muestran línea de target
   const lastPtTs = pts.length ? pts[pts.length-1].d : startTs;
-  if (endTs > lastPtTs) {
+  if (pts.length === 0 && startTs <= endTs) {
+    const dayMs = 86400000;
+    let cur = new Date(startTs);
+    while (cur.getTime() <= endTs) {
+      const dd = ('0'+cur.getDate()).slice(-2);
+      const mo = cur.toLocaleString('en-US', {month:'short'});
+      pts.push({ d:cur.getTime(), lbl:dd+'-'+mo, o:null, g:null, tarO:0, tarG:0 });
+      cur = new Date(cur.getTime() + dayMs);
+    }
+  } else if (endTs > lastPtTs) {
     let lastTarO = 0, lastTarG = 0;
     for (let i = pts.length-1; i >= 0; i--) {
       if (!lastTarO && pts[i].tarO > 0) lastTarO = pts[i].tarO;
@@ -498,15 +572,21 @@ function renderCharts() {
 
   const sumO = dataO.reduce((s,v)=>s+(v||0),0);
   const sumG = dataG.reduce((s,v)=>s+(v||0),0);
-  // Target solo para los días con datos reales (para comparar manzanas con manzanas)
-  // Target acumulado SOLO hasta donde hay actuals reales (>0). Un día con
-  // actual 0/null = "sin datos todavía" (GMV suele llegar más tarde) y no suma.
+
+  const hasActualsO = pts.some(r => r.o != null && r.o > 0);
+  const hasActualsG = pts.some(r => r.g != null && r.g > 0);
+
+  // Target acumulado SOLO hasta donde hay actuals reales (>0) para comparar manzanas con manzanas.
   const sumTarO = pts.filter(r => r.o != null && r.o > 0).reduce((s,r) => s + (r.tarO||0), 0);
   const sumTarG = pts.filter(r => r.g != null && r.g > 0).reduce((s,r) => s + (r.tarG||0), 0);
 
+  // Target total del período seleccionado (para cuando se consulta un mes futuro o sin actuals aún)
+  const totalTarO = pts.reduce((s,r) => s + (r.tarO||0), 0);
+  const totalTarG = pts.reduce((s,r) => s + (r.tarG||0), 0);
+
   // vs Target (%)
-  const vsO = sumTarO > 0 ? (sumO - sumTarO) / sumTarO * 100 : null;
-  const vsG = sumTarG > 0 ? (sumG - sumTarG) / sumTarG * 100 : null;
+  const vsO = (hasActualsO && sumTarO > 0) ? (sumO - sumTarO) / sumTarO * 100 : null;
+  const vsG = (hasActualsG && sumTarG > 0) ? (sumG - sumTarG) / sumTarG * 100 : null;
 
   const cName = country==='LATAM'?'LATAM':(CCN[country]||country);
   const pS = pts.length?pts[0].lbl:'—';
@@ -515,10 +595,11 @@ function renderCharts() {
 
   document.getElementById('orders-period').textContent = period;
   document.getElementById('gmv-period').textContent    = period;
-  document.getElementById('orders-total').textContent  = fmtK(sumO);
-  document.getElementById('orders-target').textContent = sumTarO > 0 ? fmtK(sumTarO) : '—';
-  document.getElementById('gmv-total').textContent     = fmtEur(sumG);
-  document.getElementById('gmv-target').textContent    = sumTarG > 0 ? fmtEur(sumTarG) : '—';
+
+  document.getElementById('orders-total').textContent  = hasActualsO ? fmtK(sumO) : '—';
+  document.getElementById('orders-target').textContent = hasActualsO ? (sumTarO > 0 ? fmtK(sumTarO) : '—') : (totalTarO > 0 ? fmtK(totalTarO) : '—');
+  document.getElementById('gmv-total').textContent     = hasActualsG ? fmtEur(sumG) : '—';
+  document.getElementById('gmv-target').textContent    = hasActualsG ? (sumTarG > 0 ? fmtEur(sumTarG) : '—') : (totalTarG > 0 ? fmtEur(totalTarG) : '—');
 
   // vs Target KPI
   setVsTarget('orders-vs-target', vsO);
@@ -713,6 +794,7 @@ function buildBarChart(canvasId, labels, actual, target, lineColor, barColor, ex
           }
         },
         y: {
+          beginAtZero: true,
           grid: { color:'#f1f5f9', lineWidth:1 },
           border: { display:false },
           ticks: {

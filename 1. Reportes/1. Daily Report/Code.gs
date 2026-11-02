@@ -3277,7 +3277,7 @@ function fetchTargetsOnly(startStr, endStr, capByMetric) {
 
 // ── fetchDailyCharts ────────────────────────────────────────────────
 function fetchDailyCharts() {
-  var cache=CacheService.getScriptCache(), cached=cache.get("cache_grafic_detallado");
+  var cache=CacheService.getScriptCache(), cached=cache.get("cache_grafic_detallado_v4");
   if(cached)return JSON.parse(cached);
   try {
     // Parseo de fecha RÁPIDO (sin Utilities.formatDate por fila) + label sin
@@ -3310,16 +3310,16 @@ function fetchDailyCharts() {
       if(rMetric==='Confirmed Orders')dailyAgg[key].o=(dailyAgg[key].o||0)+rVal;
       if(rMetric==='GMV User Dmarts') dailyAgg[key].g=(dailyAgg[key].g||0)+rVal;
     }
-    // Targets reales — para TODOS los meses con actuals (no solo el mes actual),
-    // así el gráfico muestra la línea de target también al navegar meses previos.
+    // Targets reales — para meses con actuals Y meses futuros proyectados (ej. nov/dic 2026),
+    // así el gráfico muestra la línea de target tanto para meses pasados como futuros.
     try {
       var tz=Session.getScriptTimeZone(), hoy=new Date();
-      // Rango = desde el primer día con actuals hasta fin del mes actual.
+      // Rango = desde el primer día con actuals hasta fin del año siguiente.
       var allMs=Object.keys(dailyAgg).map(function(k){return dailyAgg[k].d;});
       var minMs=allMs.length?Math.min.apply(null,allMs):hoy.getTime();
       var minD=new Date(minMs);
       var tStart=Utilities.formatDate(new Date(minD.getFullYear(),minD.getMonth(),1),tz,'yyyy-MM-dd');
-      var tEnd=Utilities.formatDate(new Date(hoy.getFullYear(),hoy.getMonth()+1,0),tz,'yyyy-MM-dd');
+      var tEnd=Utilities.formatDate(new Date(hoy.getFullYear()+1,11,31),tz,'yyyy-MM-dd');
       var tss=SpreadsheetApp.openById(SPREADSHEET_TARGETS_ID_MTD);
       var tsheet=tss.getSheets().find(function(s){ return TARGETS_SHEET_RE.test(s.getName()); });
       if(tsheet){
@@ -3327,9 +3327,16 @@ function fetchDailyCharts() {
         var th=td[0].map(function(h){ return String(h).trim().toLowerCase(); });
         var tiM=th.indexOf('metric'),tiC=th.indexOf('country'),tiD=th.indexOf('date'),tiV=th.indexOf('value');
         if(tiM>=0&&tiC>=0&&tiD>=0&&tiV>=0){
+          var orderTargetList = Array.isArray(METRIC_TARGET_MAP['Confirmed Orders']) ? METRIC_TARGET_MAP['Confirmed Orders'] : [TARGET_KEY_ORDERS];
+          var gmvTargetList   = Array.isArray(METRIC_TARGET_MAP['GMV User Dmarts']) ? METRIC_TARGET_MAP['GMV User Dmarts'] : [TARGET_KEY_GMV];
+          var rawTargetsO = {}, rawTargetsG = {};
+
           for(var j=1;j<td.length;j++){
             var tm=String(td[j][tiM]||'').trim();
-            if(tm!==TARGET_KEY_ORDERS&&tm!==TARGET_KEY_GMV)continue;
+            var isO = (orderTargetList.indexOf(tm) >= 0);
+            var isG = (gmvTargetList.indexOf(tm) >= 0);
+            if(!isO && !isG) continue;
+
             var traw=td[j][tiD];
             var tymd=fastYMD(traw);
             if(!tymd||tymd<tStart||tymd>tEnd)continue;
@@ -3345,9 +3352,36 @@ function fetchDailyCharts() {
               var fMk=fd.getFullYear()+'-'+("0"+(fd.getMonth()+1)).slice(-2);
               dailyAgg[tkey]={c:tcc,d:tdMs,lbl:fLbl,m:fMk,o:null,g:null};
               countriesSet[tcc]=true;
+              monthsSet[fMk]=true;
             }
-            if(tm===TARGET_KEY_ORDERS)dailyAgg[tkey].tarO=(dailyAgg[tkey].tarO||0)+tv;
-            if(tm===TARGET_KEY_GMV)   dailyAgg[tkey].tarG=(dailyAgg[tkey].tarG||0)+tv;
+            if(isO){
+              if(!rawTargetsO[tm]) rawTargetsO[tm] = {};
+              rawTargetsO[tm][tkey] = (rawTargetsO[tm][tkey] || 0) + tv;
+            }
+            if(isG){
+              if(!rawTargetsG[tm]) rawTargetsG[tm] = {};
+              rawTargetsG[tm][tkey] = (rawTargetsG[tm][tkey] || 0) + tv;
+            }
+          }
+
+          // Asignar respetando prioridad de METRIC_TARGET_MAP para evitar doble conteo
+          var aggKeys = Object.keys(dailyAgg);
+          for(var k=0; k<aggKeys.length; k++){
+            var tk = aggKeys[k];
+            for(var p=0; p<orderTargetList.length; p++){
+              var oMetric = orderTargetList[p];
+              if(rawTargetsO[oMetric] && rawTargetsO[oMetric][tk] !== undefined){
+                dailyAgg[tk].tarO = (dailyAgg[tk].tarO || 0) + rawTargetsO[oMetric][tk];
+                break;
+              }
+            }
+            for(var p=0; p<gmvTargetList.length; p++){
+              var gMetric = gmvTargetList[p];
+              if(rawTargetsG[gMetric] && rawTargetsG[gMetric][tk] !== undefined){
+                dailyAgg[tk].tarG = (dailyAgg[tk].tarG || 0) + rawTargetsG[gMetric][tk];
+                break;
+              }
+            }
           }
         }
       }
@@ -3366,12 +3400,13 @@ function fetchDailyCharts() {
     // lento al gráfico y a veces reventaba el límite de la caché. El daily y el
     // MTD tienen su propio RR; esta página no lo necesita.
     var resultData={records:recs,countries:Object.keys(countriesSet).sort(),months:Object.keys(monthsSet).sort().reverse(),rrData:{orders:{},gmv:{}}};
-    try{ cache.put("cache_grafic_detallado",JSON.stringify(resultData),1500); }catch(ec){ Logger.log('[fetchDailyCharts] cache skip (too large): '+ec.message); }
+    try{ cache.put("cache_grafic_detallado_v4",JSON.stringify(resultData),1500); }catch(ec){ Logger.log('[fetchDailyCharts] cache skip (too large): '+ec.message); }
     return resultData;
   } catch(err){ throw new Error("Error en gráfico: "+err.message); }
 }
 
 function forceRefreshDataFast() {
+  CacheService.getScriptCache().remove("cache_grafic_detallado_v4");
   CacheService.getScriptCache().remove("cache_grafic_detallado");
   return true;
 }

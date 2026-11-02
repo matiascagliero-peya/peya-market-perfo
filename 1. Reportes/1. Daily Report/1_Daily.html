@@ -111,6 +111,8 @@
   .copy-btn svg{width:10px;height:10px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
   .copy-btn.ok{border-color:#16a34a;color:#16a34a;background:var(--green-bg)}
   .copy-btn.err{border-color:#dc2626;color:#dc2626}
+  .copy-btn.active{border-color:#93c5fd;color:#2563eb;background:#eff6ff}
+  .copy-btn.active:hover{border-color:#60a5fa;color:#1d4ed8;background:#dbeafe}
   table.ov{width:100%;border-collapse:collapse}
   table.ov th{padding:4px 8px;font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;color:var(--t3);text-align:center;border-bottom:1px solid var(--border);white-space:nowrap}
   table.ov thead tr:first-child th:first-child{text-align:left;padding-left:14px}
@@ -317,11 +319,11 @@ const METRICS=[
   {key:'session_orders', label:'HC Sessions orders %', type:'ratio', fmt:'pct',varFmt:'pp',     hi:false, color:'#7c3aed',beKey:null,  expandedCols:false,lwIsRatio:true, columna_numerador:'session_orders', columna_denominador:'orders'}
 ];
   
-const fI=v=>{if(v==null||isNaN(v))return'—';const a=Math.abs(v);if(a>=1e6)return(v/1e6).toFixed(2)+'M';if(a>=1e3)return(v/1e3).toFixed(1)+'k';return v.toLocaleString('es-AR',{minimumFractionDigits:1,maximumFractionDigits:1});};
-const fE=v=>{if(v==null||isNaN(v))return'—';const a=Math.abs(v);if(a>=1e6)return(v/1e6).toFixed(2)+'M €';if(a>=1e3)return(v/1e3).toFixed(1)+'k €';return v.toFixed(2)+' €';};
+const fI=(v,full)=>{if(v==null||isNaN(v))return'—';if(full)return Math.round(v).toLocaleString('es-AR');const a=Math.abs(v);if(a>=1e6)return(v/1e6).toFixed(2)+'M';if(a>=1e3)return(v/1e3).toFixed(1)+'k';return v.toLocaleString('es-AR',{minimumFractionDigits:1,maximumFractionDigits:1});};
+const fE=(v,full)=>{if(v==null||isNaN(v))return'—';if(full)return Math.round(v).toLocaleString('es-AR')+' €';const a=Math.abs(v);if(a>=1e6)return(v/1e6).toFixed(2)+'M €';if(a>=1e3)return(v/1e3).toFixed(1)+'k €';return v.toFixed(2)+' €';};
 const fP=v=>v==null||isNaN(v)?'—':v.toFixed(1)+'%';
 const fM=v=>v==null||isNaN(v)?'—':v.toFixed(1)+' min';
-const fV=(v,f)=>f==='eur'?fE(v):f==='pct'?fP(v):f==='min'?fM(v):fI(v);
+const fV=(v,f,full)=>f==='eur'?fE(v,full):f==='pct'?fP(v):f==='min'?fM(v):fI(v,full);
 function calcVar(d1,ref,varFmt){if(d1==null||ref==null)return null;if(varFmt==='pp'||varFmt==='min_abs')return d1-ref;if(ref===0)return null;return((d1-ref)/Math.abs(ref))*100;}
 function fmtVar(val,varFmt){if(val==null||isNaN(val))return null;const s=val>0?'+':'';if(varFmt==='pp')return`${s}${val.toFixed(1)} pp`;if(varFmt==='min_abs')return`${s}${val.toFixed(1)} min`;return`${s}${val.toFixed(1)}%`;}
 function badge(d1,ref,m){
@@ -454,7 +456,8 @@ function attachColSortHandlers(panelEl, metricKey, grouped, m) {
       if (!tbody) return;
       const state = panelColSort[metricKey];
       ths.forEach(h => { h.classList.remove('sort-asc','sort-desc'); if (h.dataset.col === state.col) { h.classList.add(state.dir === 'asc' ? 'sort-asc' : 'sort-desc'); } });
-      tbody.innerHTML = sorted.map(r => buildRowHtml(r, m)).join('');
+      const isFull = !!PANEL_NUM_FULL[`panel-${metricKey}`];
+      tbody.innerHTML = sorted.map(r => buildRowHtml(r, m, isFull)).join('');
     });
   });
 }
@@ -480,7 +483,7 @@ function rrThroughBadge(kpiKey){
   return ` <span title="Último día con datos de esta métrica" style="font-size:9px;font-weight:700;padding:2px 7px;border-radius:20px;${st};vertical-align:middle;white-space:nowrap">datos hasta ${dm}${warnIco}</span>`;
 }
 
-function buildRowHtml(r, m) {
+function buildRowHtml(r, m, isFull) {
   const mv = r[m.key] || {};
   const bv = mv.be;
   const rrEntry = (window.RR_DATA && window.RR_DATA[m.key]) ? window.RR_DATA[m.key][r.country] : null;
@@ -491,9 +494,9 @@ function buildRowHtml(r, m) {
   const rrVsLmVal = rrEntry ? rrEntry.rrVsLm : null;
   const rowStyle = r.country === 'LATAM' ? ' style="background: var(--border2); font-weight: 700;"' : '';
   if (m.expandedCols) {
-    return `<tr${rowStyle}><td>${ccCell(r)}</td><td><span class="v">${fV(mv.d1,m.fmt)}</span></td><td>${bv!=null?`<span class="vbe">${fV(bv,m.fmt)}</span>`:nd()}</td><td>${bv!=null&&mv.d1!=null?badge(mv.d1,bv,m):nd()}</td><td class="sep-l"><span class="v8">${fV(mv.d8,m.fmt)}</span></td><td>${mv.d1!=null&&mv.d8!=null?badge(mv.d1,mv.d8,m):nd()}</td><td>${mv.d1!=null&&mv.lw!=null?badgeLW(mv.d1,mv.lw,m):nd()}</td><td class="sep-l"><span class="v8">${fV(rrMesVal,m.fmt)}</span></td><td><span class="v8">${fV(beMesVal,m.fmt)}</span></td><td>${badgeDirect(varBEMes,m)}</td><td class="sep-l">${badgeDirect(rrVsLmVal,m)}</td><td>${badgeDirect(rrVsLyVal,m)}</td></tr>`;
+    return `<tr${rowStyle}><td>${ccCell(r)}</td><td><span class="v">${fV(mv.d1,m.fmt,isFull)}</span></td><td>${bv!=null?`<span class="vbe">${fV(bv,m.fmt,isFull)}</span>`:nd()}</td><td>${bv!=null&&mv.d1!=null?badge(mv.d1,bv,m):nd()}</td><td class="sep-l"><span class="v8">${fV(mv.d8,m.fmt,isFull)}</span></td><td>${mv.d1!=null&&mv.d8!=null?badge(mv.d1,mv.d8,m):nd()}</td><td>${mv.d1!=null&&mv.lw!=null?badgeLW(mv.d1,mv.lw,m):nd()}</td><td class="sep-l"><span class="v8">${fV(rrMesVal,m.fmt,isFull)}</span></td><td><span class="v8">${fV(beMesVal,m.fmt,isFull)}</span></td><td>${badgeDirect(varBEMes,m)}</td><td class="sep-l">${badgeDirect(rrVsLmVal,m)}</td><td>${badgeDirect(rrVsLyVal,m)}</td></tr>`;
   } else {
-    return `<tr${rowStyle}><td>${ccCell(r)}</td><td><span class="v">${fV(mv.d1,m.fmt)}</span></td><td><span class="v8">${fV(mv.d8,m.fmt)}</span></td><td>${badge(mv.d1,mv.d8,m)}</td><td>${badgeLW(mv.d1,mv.lw,m)}</td></tr>`;
+    return `<tr${rowStyle}><td>${ccCell(r)}</td><td><span class="v">${fV(mv.d1,m.fmt,isFull)}</span></td><td><span class="v8">${fV(mv.d8,m.fmt,isFull)}</span></td><td>${badge(mv.d1,mv.d8,m)}</td><td>${badgeLW(mv.d1,mv.lw,m)}</td></tr>`;
   }
 }
 
@@ -553,15 +556,16 @@ function renderStores(){
   document.getElementById('fcount').textContent=`${sorted.length} tiendas · ${m.label}`;
   const el=document.getElementById('view-stores');
   if(!sorted.length){el.innerHTML='<div class="empty">Sin datos para los filtros seleccionados.</div>';return;}
-  const tbody=sorted.map(r=>{const mv=r[m.key];return`<tr><td><div class="cc"><div><div class="cc-wh">${r.warehouse_name}</div><div style="font-size:10px;color:var(--t3)">${FULL_COUNTRY_NAMES[r.country]||r.country}</div></div></div></td><td><span class="v">${fV(mv.d1,m.fmt)}</span></td><td><span class="v8">${fV(mv.d8,m.fmt)}</span></td><td>${badge(mv.d1,mv.d8,m)}</td><td>${badgeLW(mv.d1,mv.lw,m)}</td></tr>`;}).join('');
-  const dl2=getDateLabels();
   const stPanelId='panel-stores-'+metKey;
-  el.innerHTML=`<div class="ov-panel" id="${stPanelId}"><div class="ov-ph"><div class="ov-ph-bar" style="background:${m.color}"></div><span class="ov-ph-title">${m.label} — por Tienda</span><div class="ov-ph-meta"><span class="ov-ph-date">D-1: ${dl2.d1} · D-8: ${dl2.d8}</span><span class="ov-ph-count">${sorted.length} tiendas</span>${copyBtns(stPanelId,m.label+' tiendas')}</div></div><table class="ov"><thead><tr><th style="text-align:left">TIENDA</th><th class="sortable" data-col="d1">${dl2.d1}<span class="sort-arrow"></span></th><th class="sortable" data-col="d8">${dl2.d8}<span class="sort-arrow"></span></th><th class="sortable" data-col="var_d8">VAR D-8<br><span style="font-size:7.5px;font-weight:400;color:#cbd5e1;text-transform:none;letter-spacing:0">${u}</span><span class="sort-arrow"></span></th><th class="sortable" data-col="var_lw">VAR L3W<br><span style="font-size:7.5px;font-weight:400;color:#cbd5e1;text-transform:none;letter-spacing:0">${u}</span><span class="sort-arrow"></span></th></tr></thead><tbody>${tbody}</tbody></table></div>`;
+  const isFull=!!PANEL_NUM_FULL[stPanelId];
+  const tbody=sorted.map(r=>{const mv=r[m.key];return`<tr><td><div class="cc"><div><div class="cc-wh">${r.warehouse_name}</div><div style="font-size:10px;color:var(--t3)">${FULL_COUNTRY_NAMES[r.country]||r.country}</div></div></div></td><td><span class="v">${fV(mv.d1,m.fmt,isFull)}</span></td><td><span class="v8">${fV(mv.d8,m.fmt,isFull)}</span></td><td>${badge(mv.d1,mv.d8,m)}</td><td>${badgeLW(mv.d1,mv.lw,m)}</td></tr>`;}).join('');
+  const dl2=getDateLabels();
+  el.innerHTML=`<div class="ov-panel" id="${stPanelId}"><div class="ov-ph"><div class="ov-ph-bar" style="background:${m.color}"></div><span class="ov-ph-title">${m.label} — por Tienda</span><div class="ov-ph-meta"><span class="ov-ph-date">D-1: ${dl2.d1} · D-8: ${dl2.d8}</span><span class="ov-ph-count">${sorted.length} tiendas</span>${copyBtns(stPanelId,m.label+' tiendas',metKey)}</div></div><table class="ov"><thead><tr><th style="text-align:left">TIENDA</th><th class="sortable" data-col="d1">${dl2.d1}<span class="sort-arrow"></span></th><th class="sortable" data-col="d8">${dl2.d8}<span class="sort-arrow"></span></th><th class="sortable" data-col="var_d8">VAR D-8<br><span style="font-size:7.5px;font-weight:400;color:#cbd5e1;text-transform:none;letter-spacing:0">${u}</span><span class="sort-arrow"></span></th><th class="sortable" data-col="var_lw">VAR L3W<br><span style="font-size:7.5px;font-weight:400;color:#cbd5e1;text-transform:none;letter-spacing:0">${u}</span><span class="sort-arrow"></span></th></tr></thead><tbody>${tbody}</tbody></table></div>`;
   const panelEl=el.querySelector('.ov-panel');
   if(panelEl){
     const storeKey='stores_'+metKey;
     const ths=panelEl.querySelectorAll('th.sortable');
-    ths.forEach(th=>{th.addEventListener('click',()=>{const colId=th.dataset.col;const state=panelColSort[storeKey]||{};if(state.col===colId){state.dir=state.dir==='asc'?'desc':'asc';}else{state.col=colId;state.dir='desc';}panelColSort[storeKey]=state;ths.forEach(h=>{h.classList.remove('sort-asc','sort-desc');if(h.dataset.col===state.col)h.classList.add(state.dir==='asc'?'sort-asc':'sort-desc');});function getStoreVal(r){const mv=r[m.key]||{};switch(colId){case 'd1':return mv.d1;case 'd8':return mv.d8;case 'var_d8':return(mv.d1!=null&&mv.d8!=null)?calcVar(mv.d1,mv.d8,m.varFmt):null;case 'var_lw':return mv.lw!=null?calcVar(mv.d1,m.lwIsRatio?mv.lw:mv.lw/3,m.varFmt):null;default:return null;}}const reSort=[...sorted].sort((a,b)=>{const va=getStoreVal(a),vb=getStoreVal(b);if(va==null&&vb==null)return 0;if(va==null)return 1;if(vb==null)return -1;return state.dir==='asc'?va-vb:vb-va;});panelEl.querySelector('tbody').innerHTML=reSort.map(r=>{const mv=r[m.key];return`<tr><td><div class="cc"><div><div class="cc-wh">${r.warehouse_name}</div><div style="font-size:10px;color:var(--t3)">${FULL_COUNTRY_NAMES[r.country]||r.country}</div></div></div></td><td><span class="v">${fV(mv.d1,m.fmt)}</span></td><td><span class="v8">${fV(mv.d8,m.fmt)}</span></td><td>${badge(mv.d1,mv.d8,m)}</td><td>${badgeLW(mv.d1,mv.lw,m)}</td></tr>`;}).join('');});});
+    ths.forEach(th=>{th.addEventListener('click',()=>{const colId=th.dataset.col;const state=panelColSort[storeKey]||{};if(state.col===colId){state.dir=state.dir==='asc'?'desc':'asc';}else{state.col=colId;state.dir='desc';}panelColSort[storeKey]=state;ths.forEach(h=>{h.classList.remove('sort-asc','sort-desc');if(h.dataset.col===state.col)h.classList.add(state.dir==='asc'?'sort-asc':'sort-desc');});function getStoreVal(r){const mv=r[m.key]||{};switch(colId){case 'd1':return mv.d1;case 'd8':return mv.d8;case 'var_d8':return(mv.d1!=null&&mv.d8!=null)?calcVar(mv.d1,mv.d8,m.varFmt):null;case 'var_lw':return mv.lw!=null?calcVar(mv.d1,m.lwIsRatio?mv.lw:mv.lw/3,m.varFmt):null;default:return null;}}const reSort=[...sorted].sort((a,b)=>{const va=getStoreVal(a),vb=getStoreVal(b);if(va==null&&vb==null)return 0;if(va==null)return 1;if(vb==null)return -1;return state.dir==='asc'?va-vb:vb-va;});panelEl.querySelector('tbody').innerHTML=reSort.map(r=>{const mv=r[m.key];return`<tr><td><div class="cc"><div><div class="cc-wh">${r.warehouse_name}</div><div style="font-size:10px;color:var(--t3)">${FULL_COUNTRY_NAMES[r.country]||r.country}</div></div></div></td><td><span class="v">${fV(mv.d1,m.fmt,isFull)}</span></td><td><span class="v8">${fV(mv.d8,m.fmt,isFull)}</span></td><td>${badge(mv.d1,mv.d8,m)}</td><td>${badgeLW(mv.d1,mv.lw,m)}</td></tr>`;}).join('');});});
   }
 }
 
@@ -584,24 +588,25 @@ function copyAsTable(panelId, title) {
   navigator.clipboard.writeText(rows.join('\n')).then(() => showToast(`"${title}" copiado como tabla`)).catch(() => showToast('No se pudo copiar', true));
 }
 
-async function copyAsPng(panelId, btnEl, title) {
-  const panel = document.getElementById(panelId);
-  if (!panel || typeof html2canvas === 'undefined') { showToast('html2canvas no disponible', true); return; }
-  btnEl.classList.add('ok'); btnEl.innerHTML = `<svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg> generando...`;
-  try {
-    const canvas = await html2canvas(panel, { backgroundColor: '#ffffff', scale: 2, useCORS: true, logging: false });
-    canvas.toBlob(async blob => {
-      try { await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]); showToast(`"${title}" copiado como PNG`); }
-      catch(e) { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = title.replace(/\s+/g,'_') + '.png'; a.click(); showToast('PNG descargado (clipboard no disponible)'); }
-      btnEl.classList.remove('ok'); btnEl.innerHTML = `<svg viewBox="0 0 24 24"><rect x="3" y="3" width="13" height="13" rx="2"/><path d="M8 21h13v-13"/></svg> PNG`;
-    }, 'image/png');
-  } catch(e) { btnEl.classList.remove('ok'); btnEl.classList.add('err'); showToast('Error al generar PNG', true); setTimeout(()=>btnEl.classList.remove('err'), 2000); }
+const SVG_TABLE = `<svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/></svg>`;
+const SVG_NUM   = `<svg viewBox="0 0 24 24"><line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="20" y2="15"/><line x1="10" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="14" y2="21"/></svg>`;
+const PANEL_NUM_FULL = {};
+
+function copyBtns(panelId, label, metKey) {
+  const isFull = !!PANEL_NUM_FULL[panelId];
+  const mKey = metKey || '';
+  return `<button class="copy-btn btn-num-toggle ${isFull ? 'active' : ''}" style="padding:0 6px" title="${isFull ? 'Ver números abreviados' : 'Ver números completos'}" onclick="toggleNumFormat('${panelId}','${mKey}')">${SVG_NUM}</button><button class="copy-btn" title="Copiar como tabla" onclick="copyAsTable('${panelId}','${label}')">${SVG_TABLE} Tabla</button>`;
 }
 
-const SVG_TABLE = `<svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/></svg>`;
-const SVG_PNG   = `<svg viewBox="0 0 24 24"><rect x="3" y="3" width="13" height="13" rx="2"/><path d="M8 21h13v-13"/></svg>`;
-function copyBtns(panelId, label) {
-  return `<button class="copy-btn" title="Copiar como tabla" onclick="copyAsTable('${panelId}','${label}')">${SVG_TABLE} Tabla</button><button class="copy-btn" title="Copiar como PNG" onclick="copyAsPng('${panelId}',this,'${label}')">${SVG_PNG} PNG</button>`;
+function toggleNumFormat(panelId, metKey) {
+  PANEL_NUM_FULL[panelId] = !PANEL_NUM_FULL[panelId];
+  if (panelId.startsWith('panel-stores-')) {
+    renderStores();
+  } else if (metKey) {
+    updatePanel(metKey);
+  } else {
+    renderOverview();
+  }
 }
 
 function thSort(colId, metricKey){
@@ -661,14 +666,15 @@ function buildPanel(m, grouped){
       `</div></div>`;
   }
   const sorted=sortedRows(valid,m);
+  const isFull=!!PANEL_NUM_FULL[panelId];
   if(m.expandedCols){
-    const tbody=sorted.map(r=>buildRowHtml(r,m)).join('');
+    const tbody=sorted.map(r=>buildRowHtml(r,m,isFull)).join('');
     const mk=m.key;
-    return`<div class="ov-panel wide" id="${panelId}"><div class="ov-ph"><div class="ov-ph-bar" style="background:${m.color}"></div><span class="ov-ph-title">${m.label}${rrThroughBadge(m.key)}</span><div class="ov-ph-meta"><span class="ov-ph-date">D-1: ${dl.d1} · D-8: ${dl.d8}</span><span class="ov-ph-count">${sorted.length} países</span>${copyBtns(panelId,m.label)}</div></div><table class="ov"><thead><tr style="background:var(--bg)"><th style="text-align:left;border-bottom:none" rowspan="2">PAÍS</th><th ${thSort('d1',mk)} style="border-bottom:none;text-align:center" rowspan="2">${dl.d1}<span class="sort-arrow"></span></th><th colspan="2" style="text-align:center;background:#f5f3ff;color:#7c3aed;border-bottom:2px solid #ddd6fe;font-size:8px;font-weight:800;letter-spacing:.7px">DAILY ${window.BE_LABEL}</th><th colspan="3" class="sep-l" style="text-align:center;background:#f8fafc;color:#64748b;border-bottom:2px solid var(--border);font-size:8px;font-weight:800;letter-spacing:.7px">VS ${dl.d8}</th><th colspan="3" class="sep-l" style="text-align:center;background:#faf5ff;color:#a78bfa;border-bottom:2px solid #ede9fe;font-size:8px;font-weight:800;letter-spacing:.7px">${rrIsClose()?'CIERRE DE MES':'RR MES'}</th><th colspan="2" class="sep-l" style="text-align:center;background:#fff7ed;color:#ea7317;border-bottom:2px solid #fed7aa;font-size:8px;font-weight:800;letter-spacing:.7px">${rrIsClose()?'CIERRE DE MES VS HIST.':'RR VS HIST.'}</th></tr><tr style="background:var(--bg)"><th ${thSort('be',mk)} style="background:#f5f3ff;color:#7c3aed">${window.BE_LABEL}<br><span style="font-size:7px;font-weight:400;text-transform:none;letter-spacing:0">Daily forecast</span><span class="sort-arrow"></span></th><th ${thSort('var_be',mk)} style="background:#f5f3ff;color:#7c3aed">VAR<br><span style="font-size:7px;font-weight:400;text-transform:none;letter-spacing:0">${u}</span><span class="sort-arrow"></span></th><th ${thSort('d8',mk)} class="sep-l">${dl.d8}<span class="sort-arrow"></span></th><th ${thSort('var_d8',mk)}>VAR D-8<br><span style="font-size:7px;font-weight:400;color:#cbd5e1;text-transform:none;letter-spacing:0">${u}</span><span class="sort-arrow"></span></th><th ${thSort('var_lw',mk)}>VAR L3W<br><span style="font-size:7px;font-weight:400;color:#cbd5e1;text-transform:none;letter-spacing:0">${u}</span><span class="sort-arrow"></span></th><th ${thSort('rr_mes',mk)} class="sep-l th-dim">${rrIsClose()?'CIERRE DE MES':'RR MES'}<span class="sort-arrow"></span></th><th ${thSort('be_mes',mk)} class="th-dim">${window.BE_LABEL} MES<span class="sort-arrow"></span></th><th ${thSort('var_be_mes',mk)} class="th-dim">VAR ${window.BE_LABEL} MES<br><span style="font-size:7px;font-weight:400;text-transform:none;letter-spacing:0">${u}</span><span class="sort-arrow"></span></th><th ${thSort('var_lm',mk)} class="sep-l">VS LM<br><span style="font-size:7px;font-weight:400;text-transform:none;letter-spacing:0">mes ant.</span><span class="sort-arrow"></span></th><th ${thSort('var_ly',mk)}>VS LY<br><span style="font-size:7px;font-weight:400;text-transform:none;letter-spacing:0">mes compl.</span><span class="sort-arrow"></span></th></tr></thead><tbody>${tbody}</tbody></table></div>`;
+    return`<div class="ov-panel wide" id="${panelId}"><div class="ov-ph"><div class="ov-ph-bar" style="background:${m.color}"></div><span class="ov-ph-title">${m.label}${rrThroughBadge(m.key)}</span><div class="ov-ph-meta"><span class="ov-ph-date">D-1: ${dl.d1} · D-8: ${dl.d8}</span><span class="ov-ph-count">${sorted.length} países</span>${copyBtns(panelId,m.label,m.key)}</div></div><table class="ov"><thead><tr style="background:var(--bg)"><th style="text-align:left;border-bottom:none" rowspan="2">PAÍS</th><th ${thSort('d1',mk)} style="border-bottom:none;text-align:center" rowspan="2">${dl.d1}<span class="sort-arrow"></span></th><th colspan="2" style="text-align:center;background:#f5f3ff;color:#7c3aed;border-bottom:2px solid #ddd6fe;font-size:8px;font-weight:800;letter-spacing:.7px">DAILY ${window.BE_LABEL}</th><th colspan="3" class="sep-l" style="text-align:center;background:#f8fafc;color:#64748b;border-bottom:2px solid var(--border);font-size:8px;font-weight:800;letter-spacing:.7px">VS ${dl.d8}</th><th colspan="3" class="sep-l" style="text-align:center;background:#faf5ff;color:#a78bfa;border-bottom:2px solid #ede9fe;font-size:8px;font-weight:800;letter-spacing:.7px">${rrIsClose()?'CIERRE DE MES':'RR MES'}</th><th colspan="2" class="sep-l" style="text-align:center;background:#fff7ed;color:#ea7317;border-bottom:2px solid #fed7aa;font-size:8px;font-weight:800;letter-spacing:.7px">${rrIsClose()?'CIERRE DE MES VS HIST.':'RR VS HIST.'}</th></tr><tr style="background:var(--bg)"><th ${thSort('be',mk)} style="background:#f5f3ff;color:#7c3aed">${window.BE_LABEL}<br><span style="font-size:7px;font-weight:400;text-transform:none;letter-spacing:0">Daily forecast</span><span class="sort-arrow"></span></th><th ${thSort('var_be',mk)} style="background:#f5f3ff;color:#7c3aed">VAR<br><span style="font-size:7px;font-weight:400;text-transform:none;letter-spacing:0">${u}</span><span class="sort-arrow"></span></th><th ${thSort('d8',mk)} class="sep-l">${dl.d8}<span class="sort-arrow"></span></th><th ${thSort('var_d8',mk)}>VAR D-8<br><span style="font-size:7px;font-weight:400;color:#cbd5e1;text-transform:none;letter-spacing:0">${u}</span><span class="sort-arrow"></span></th><th ${thSort('var_lw',mk)}>VAR L3W<br><span style="font-size:7px;font-weight:400;color:#cbd5e1;text-transform:none;letter-spacing:0">${u}</span><span class="sort-arrow"></span></th><th ${thSort('rr_mes',mk)} class="sep-l th-dim">${rrIsClose()?'CIERRE DE MES':'RR MES'}<span class="sort-arrow"></span></th><th ${thSort('be_mes',mk)} class="th-dim">${window.BE_LABEL} MES<span class="sort-arrow"></span></th><th ${thSort('var_be_mes',mk)} class="th-dim">VAR ${window.BE_LABEL} MES<br><span style="font-size:7px;font-weight:400;text-transform:none;letter-spacing:0">${u}</span><span class="sort-arrow"></span></th><th ${thSort('var_lm',mk)} class="sep-l">VS LM<br><span style="font-size:7px;font-weight:400;text-transform:none;letter-spacing:0">mes ant.</span><span class="sort-arrow"></span></th><th ${thSort('var_ly',mk)}>VS LY<br><span style="font-size:7px;font-weight:400;text-transform:none;letter-spacing:0">mes compl.</span><span class="sort-arrow"></span></th></tr></thead><tbody>${tbody}</tbody></table></div>`;
   }
-  const tbody=sorted.map(r=>buildRowHtml(r,m)).join('');
+  const tbody=sorted.map(r=>buildRowHtml(r,m,isFull)).join('');
   const mk=m.key;
-  return`<div class="ov-panel" id="${panelId}"><div class="ov-ph"><div class="ov-ph-bar" style="background:${m.color}"></div><span class="ov-ph-title">${m.label}</span><div class="ov-ph-meta"><span class="ov-ph-date">D-1: ${dl.d1} · D-8: ${dl.d8}</span><span class="ov-ph-count">${sorted.length} países</span>${copyBtns(panelId,m.label)}</div></div><table class="ov"><thead><tr><th style="text-align:left">PAÍS</th><th ${thSort('d1',mk)}>${dl.d1}<span class="sort-arrow"></span></th><th ${thSort('d8',mk)}>${dl.d8}<span class="sort-arrow"></span></th><th ${thSort('var_d8',mk)}>VAR D-8<br><span style="font-size:7.5px;font-weight:400;color:#cbd5e1;text-transform:none;letter-spacing:0">${u}</span><span class="sort-arrow"></span></th><th ${thSort('var_lw',mk)}>VAR L3W<br><span style="font-size:7.5px;font-weight:400;color:#cbd5e1;text-transform:none;letter-spacing:0">${u}</span><span class="sort-arrow"></span></th></tr></thead><tbody>${tbody}</tbody></table></div>`;
+  return`<div class="ov-panel" id="${panelId}"><div class="ov-ph"><div class="ov-ph-bar" style="background:${m.color}"></div><span class="ov-ph-title">${m.label}</span><div class="ov-ph-meta"><span class="ov-ph-date">D-1: ${dl.d1} · D-8: ${dl.d8}</span><span class="ov-ph-count">${sorted.length} países</span>${copyBtns(panelId,m.label,m.key)}</div></div><table class="ov"><thead><tr><th style="text-align:left">PAÍS</th><th ${thSort('d1',mk)}>${dl.d1}<span class="sort-arrow"></span></th><th ${thSort('d8',mk)}>${dl.d8}<span class="sort-arrow"></span></th><th ${thSort('var_d8',mk)}>VAR D-8<br><span style="font-size:7.5px;font-weight:400;color:#cbd5e1;text-transform:none;letter-spacing:0">${u}</span><span class="sort-arrow"></span></th><th ${thSort('var_lw',mk)}>VAR L3W<br><span style="font-size:7.5px;font-weight:400;color:#cbd5e1;text-transform:none;letter-spacing:0">${u}</span><span class="sort-arrow"></span></th></tr></thead><tbody>${tbody}</tbody></table></div>`;
 }
 
 function updatePanel(metricKey){

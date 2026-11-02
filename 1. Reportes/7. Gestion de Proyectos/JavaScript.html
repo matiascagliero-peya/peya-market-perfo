@@ -1,4 +1,9 @@
 <script>
+    const CONFIG = {
+      SPREADSHEET_ID: "1vBq5i_IRlAuhgos6awzl68j-tlKo-7vZAKtwp4do1dA",
+      ADMIN_EMAIL: "matias.cagliero@pedidosya.com"
+    };
+
     function getRunner() {
       if (typeof window !== "undefined" && window.google?.script?.run) return window.google.script.run;
       if (typeof google !== "undefined" && google?.script?.run) return google.script.run;
@@ -8,25 +13,25 @@
     function debugLog(msg) {
       console.log("[DEBUG]", msg);
       const pre = document.getElementById("debugLogPre"), text = document.getElementById("debugText"), dot = document.getElementById("debugDot");
-      if (pre) { pre.textContent += `[${new Date().toLocaleTimeString()}] ${msg}\n`; pre.scrollTop = pre.scrollHeight; }
-      if (text) text.textContent = msg;
-      if (dot && String(msg).toLowerCase().includes("error")) {
-        dot.style.background = "#EF4444";
-        const box = document.getElementById("debugLogBox"); if (box) box.style.display = "block";
+      if (pre) {
+        pre.textContent += `[${new Date().toLocaleTimeString()}] ${msg}\n`;
+        pre.scrollTop = pre.scrollHeight;
       }
-      if (dot && (String(msg).toLowerCase().includes("conectado") || String(msg).toLowerCase().includes("listo"))) dot.style.background = "#22C55E";
+      if (text) text.textContent = msg;
+      if (dot) {
+        if (String(msg).toLowerCase().includes("error")) dot.style.background = "#EF4444";
+        else dot.style.background = "#22C55E";
+      }
     }
 
-    function toggleDebugLogs() {
-      const box = document.getElementById("debugLogBox");
-      if (box) box.style.display = (box.style.display === "none") ? "block" : "none";
+    function limpiarLogsConsola() {
+      const pre = document.getElementById("debugLogPre");
+      if (pre) pre.textContent = `[${new Date().toLocaleTimeString()}] Consola de diagnóstico reiniciada.\n`;
     }
 
     window.onerror = function(msg, url, line) {
+      console.error(`ERROR JS L${line}: ${msg}`);
       debugLog(`ERROR JS L${line}: ${msg}`);
-      const dot = document.getElementById("debugDot"), box = document.getElementById("debugLogBox");
-      if (dot) dot.style.background = "#EF4444";
-      if (box) box.style.display = "block";
     };
 
     function calcularSemanaClienteActual(fechaRef) {
@@ -57,6 +62,97 @@
       return lista;
     }
 
+    function obtenerFechaHoyKey() {
+      const d = new Date(), pad = n => String(n).padStart(2, "0");
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    }
+    function obtenerMesActualKey() {
+      const d = new Date(), pad = n => String(n).padStart(2, "0");
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}`;
+    }
+    function obtenerDiaHoyFormateado() {
+      const d = new Date(), dias = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"], meses = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+      return `${dias[d.getDay()]} ${d.getDate()} ${meses[d.getMonth()]}`;
+    }
+    function obtenerMesActualFormateado() {
+      const d = new Date(), meses = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+      return `${meses[d.getMonth()]} ${d.getFullYear()}`;
+    }
+
+    function hidratarChecksRecurrentes(lista) {
+      (lista || []).forEach(r => {
+        if (r.estado && typeof r.estado === "string" && r.estado.startsWith("{")) {
+          try {
+            const p = JSON.parse(r.estado);
+            if (!r.checksDiarios) r.checksDiarios = p.diarios || {};
+            if (!r.semanasCompletadas) r.semanasCompletadas = p.semanas || {};
+            if (!r.checksMensuales) r.checksMensuales = p.meses || {};
+            if (!r.historialVersiones) r.historialVersiones = p.versiones || [];
+          } catch (_) {}
+        }
+      });
+    }
+
+    function esSemanaPasada(semana) {
+      if (!semana || !STATE.semanaActual) return false;
+      if (coincidenSemanasClient(semana, STATE.semanaActual)) return false;
+      const idxCur = (STATE.semanas || []).findIndex(s => coincidenSemanasClient(s, STATE.semanaActual));
+      const idxTarget = (STATE.semanas || []).findIndex(s => coincidenSemanasClient(s, semana));
+      if (idxCur !== -1 && idxTarget !== -1) return idxTarget < idxCur;
+      const mCur = (STATE.semanaActual || "").match(/(?:w|semana\s*)(\d{1,2})/i);
+      const mTarget = (semana || "").match(/(?:w|semana\s*)(\d{1,2})/i);
+      if (mCur && mTarget) return parseInt(mTarget[1], 10) < parseInt(mCur[1], 10);
+      return false;
+    }
+
+    function esSemanaFutura(semana) {
+      if (!semana || !STATE.semanaActual) return false;
+      if (coincidenSemanasClient(semana, STATE.semanaActual)) return false;
+      return !esSemanaPasada(semana);
+    }
+
+    function irASemanaActual() {
+      const targetSem = STATE.semanaActual || calcularSemanaClienteActual();
+      if (!targetSem) return;
+
+      STATE.semanaActual = targetSem;
+      STATE.semana = targetSem;
+      try { localStorage.setItem("peya_app_semana", STATE.semana); } catch (_) {}
+
+      poblarOpcionesSemanas(true);
+      const el = document.getElementById("selectSemanaActual");
+      if (el) el.value = STATE.semana;
+
+      ejecutarRolloverTareasPendientes(STATE.semana);
+      actualizarBadges();
+      renderizarJerarquiaPersonas();
+      actualizarBotonesNavegacionSemana();
+
+      if (document.getElementById("tab-timeline")?.style.display !== "none") {
+        centrarTimelineEnSemanaActual();
+      }
+
+      notificar(`Volviendo a ${STATE.semana}`);
+    }
+
+    function obtenerTextoRecurrenteParaSemana(r, semana) {
+      if (!r) return "";
+      if (!semana || coincidenSemanasClient(semana, STATE.semanaActual) || !esSemanaPasada(semana)) {
+        return r.tarea || "";
+      }
+      if (Array.isArray(r.historialVersiones) && r.historialVersiones.length) {
+        const mTarget = (semana || "").match(/(?:w|semana\s*)(\d{1,2})/i);
+        const numTarget = mTarget ? parseInt(mTarget[1], 10) : 999;
+        for (let i = r.historialVersiones.length - 1; i >= 0; i--) {
+          const v = r.historialVersiones[i];
+          const mHasta = (v.hastaSemana || "").match(/(?:w|semana\s*)(\d{1,2})/i);
+          const numHasta = mHasta ? parseInt(mHasta[1], 10) : 0;
+          if (numTarget <= numHasta && v.tarea) return v.tarea;
+        }
+      }
+      return r.tarea || "";
+    }
+
     const esEntornoLocal = typeof location !== "undefined" && (location.hostname === "localhost" || location.hostname === "127.0.0.1" || location.protocol === "file:" || !location.hostname);
     if (esEntornoLocal && !getRunner()) {
       window.google = { script: { run: new Proxy({}, {
@@ -70,10 +166,14 @@
 
     const AVATAR_COLORS = ["#EA1D2C", "#2563EB", "#7C3AED", "#059669", "#D97706", "#DB2777", "#0891B2", "#4F46E5"];
 
+    const curWeekClient = calcularSemanaClienteActual();
     const STATE = {
-      usuario: null, esAdmin: false, semana: "", semanaActual: "",
-      semanas: [], equipo: [], semanal: [], recurrentes: [], futuros: [], reportes: [], bolsa: [],
-      timelineOffset: 0, ownerFiltro: "Todos", modoEdicionTodos: {}, colapsadoSemana: {}, colapsadoRecurrentes: {}, colapsadoProxima: {}
+      usuario: null, esAdmin: false,
+      semanaActual: curWeekClient,
+      semana: curWeekClient,
+      semanas: generarSemanasDisponiblesCliente(curWeekClient),
+      equipo: [], semanal: [], recurrentes: [], futuros: [], reportes: [], bolsa: [],
+      timelineOffset: 0, timelineFiltroTipo: "semanal", timelineOwnerFiltro: "Todos", ownerFiltro: "Todos", modoEdicionTodos: {}, colapsadoSemana: {}, colapsadoRecurrentes: {}, colapsadoProxima: {}, colapsadoProyectos: {}
     };
 
     function persistirMemoriaLocal() {
@@ -90,6 +190,18 @@
           const s = localStorage.getItem(`peya_app_${k}`);
           if (s) { const p = JSON.parse(s); if (Array.isArray(p) && p.length) STATE[k] = p; }
         });
+        const sOwner = localStorage.getItem("peya_app_owner");
+        if (sOwner) STATE.ownerFiltro = sOwner;
+        const sTlOwner = localStorage.getItem("peya_app_tl_owner");
+        if (sTlOwner) STATE.timelineOwnerFiltro = sTlOwner;
+        const sTlTipo = localStorage.getItem("peya_app_tl_tipo");
+        if (sTlTipo) STATE.timelineFiltroTipo = sTlTipo;
+        const sSem = localStorage.getItem("peya_app_semana");
+        if (sSem) STATE.semana = sSem;
+        const sColProy = localStorage.getItem("peya_app_colapsado_proyectos");
+        if (sColProy) {
+          try { STATE.colapsadoProyectos = JSON.parse(sColProy) || {}; } catch (_) {}
+        }
       } catch (e) {}
     }
 
@@ -100,6 +212,13 @@
       actualizarBotonesNavegacionSemana();
       actualizarBadges();
       renderizarTodo();
+      setupNotionKeyboardShortcuts();
+
+      // Restaurar exactamente la pestaña donde estaba el usuario antes de recargar
+      const savedTab = localStorage.getItem("peya_app_tab") || (location.hash ? location.hash.replace("#", "") : "semanal");
+      if (savedTab && ["semanal", "timeline", "bolsa", "admin"].includes(savedTab)) {
+        seleccionarTab(savedTab);
+      }
 
       function conectarConServidor(intento = 1) {
         const statusEl = document.getElementById("statusCargaDetalle");
@@ -127,15 +246,49 @@
             debugLog(`Config recibida: ${config.semanaActual}. Miembros: ${(config.equipo || []).length}`);
             if (config.usuarioActual) STATE.usuario = config.usuarioActual;
             STATE.esAdmin = config.usuarioActual ? config.usuarioActual.esAdmin : true;
-            if (config.semanaActual) { STATE.semanaActual = config.semanaActual; STATE.semana = config.semanaActual; }
+
+            STATE.semanaActual = config.semanaActual || STATE.semanaActual || calcularSemanaClienteActual();
+            const savedSem = localStorage.getItem("peya_app_semana");
+            if (savedSem && config.semanasDisponibles?.some(s => coincidenSemanasClient(s, savedSem))) {
+              STATE.semana = savedSem;
+            } else {
+              STATE.semana = STATE.semanaActual;
+            }
+
             if (config.semanasDisponibles?.length) STATE.semanas = config.semanasDisponibles;
             if (config.equipo?.length) STATE.equipo = config.equipo;
+            if (config.version) CLIENT_DATA_VERSION = config.version;
             actualizarPillConexion(config.conexionSheets ? config.conexionSheets.conectado : true);
+            if (Array.isArray(config.conectados)) {
+              actualizarUsuariosConectadosUI(config.conectados);
+            }
 
             const email = config.usuarioActual?.email?.toLowerCase() || "";
             if (STATE.esAdmin || email.includes("cagli") || email.includes("matias")) {
               STATE.esAdmin = true;
               const btn = document.getElementById("tabBtnAdmin"); if (btn) btn.style.display = "flex";
+            }
+
+            // Auto-filtro por defecto al usuario que entra según su email
+            if (config.usuarioActual?.nombre) {
+              const uNombre = config.usuarioActual.nombre.trim();
+              const uEmail = (config.usuarioActual.email || "").toLowerCase().trim();
+              const norm = s => String(s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+              const uNorm = norm(uNombre);
+
+              const matchingMember = (config.equipo || []).find(m => {
+                const mEmail = (m.email || "").toLowerCase().trim();
+                if (mEmail && mEmail === uEmail) return true;
+                const mNorm = norm(m.nombre);
+                return mNorm === uNorm || (uNorm.length > 3 && mNorm.includes(uNorm)) || (mNorm.length > 3 && uNorm.includes(mNorm));
+              });
+
+              if (matchingMember) {
+                STATE.ownerFiltro = matchingMember.nombre;
+              } else if (uNombre && uNombre !== "Analista") {
+                STATE.ownerFiltro = uNombre;
+              }
+              try { localStorage.setItem("peya_app_owner", STATE.ownerFiltro); } catch (_) {}
             }
 
             poblarOpcionesEquipo();
@@ -152,9 +305,11 @@
               if (d.equipo?.length) STATE.equipo = d.equipo;
               actualizarBadges();
               renderizarTodo();
+              iniciarSincronizacionEnVivo();
               debugLog(`Listo - Datos cargados (${STATE.semanal.length} tareas semanales)`);
             } else {
               renderizarTodo();
+              iniciarSincronizacionEnVivo();
               cargarDatosCompletos(config.semanaActual || STATE.semana);
             }
           })
@@ -228,6 +383,8 @@
       const el = document.getElementById("selectSemanaActual");
       if (!el || !el.value || el.value === STATE.semana) return;
       STATE.semana = el.value;
+      try { localStorage.setItem("peya_app_semana", STATE.semana); } catch (_) {}
+      ejecutarRolloverTareasPendientes(STATE.semana);
       actualizarBadges();
       renderizarJerarquiaPersonas();
       actualizarBotonesNavegacionSemana();
@@ -235,13 +392,17 @@
     }
 
     function desplazarSemana(delta) {
-      const idx = (STATE.semanas || []).findIndex(s => coincidenSemanasClient(s, STATE.semana));
+      let idx = (STATE.semanas || []).findIndex(s => coincidenSemanasClient(s, STATE.semana));
+      if (idx === -1) idx = (STATE.semanas || []).findIndex(s => coincidenSemanasClient(s, STATE.semanaActual));
       if (idx === -1) return;
       const nuevo = idx + delta;
       if (nuevo >= 0 && nuevo < STATE.semanas.length) {
         STATE.semana = STATE.semanas[nuevo];
+        try { localStorage.setItem("peya_app_semana", STATE.semana); } catch (_) {}
+        poblarOpcionesSemanas(true);
         const el = document.getElementById("selectSemanaActual");
         if (el) el.value = STATE.semana;
+        ejecutarRolloverTareasPendientes(STATE.semana);
         actualizarBadges();
         renderizarJerarquiaPersonas();
         actualizarBotonesNavegacionSemana();
@@ -254,6 +415,80 @@
       const btnNext = document.getElementById("btnSemanaNext"), btnPrev = document.getElementById("btnSemanaPrev");
       if (btnNext) btnNext.disabled = (idx >= STATE.semanas.length - 1);
       if (btnPrev) btnPrev.disabled = (idx <= 0);
+
+      const bEstado = document.getElementById("badgeSemanaEstado");
+      const btnVolver = document.getElementById("btnVolverSemanaActual");
+      const bannerContexto = document.getElementById("bannerContextoSemana");
+
+      const esActual = coincidenSemanasClient(STATE.semana, STATE.semanaActual);
+      const esPasada = !esActual && esSemanaPasada(STATE.semana);
+
+      if (btnVolver) {
+        btnVolver.style.display = esActual ? "none" : "inline-flex";
+      }
+
+      if (bEstado) {
+        if (esActual) {
+          bEstado.innerHTML = "Actual";
+          bEstado.style.background = "#ECFDF5";
+          bEstado.style.color = "#065F46";
+          bEstado.style.border = "1px solid #A7F3D0";
+          bEstado.style.cursor = "default";
+          bEstado.title = "Semana actual en curso: las tareas y ediciones aplican en tiempo real";
+          bEstado.onclick = null;
+          bEstado.classList.remove("is-interactive");
+        } else if (esPasada) {
+          bEstado.innerHTML = "Histórico · Volver ↺";
+          bEstado.style.background = "#FEF3C7";
+          bEstado.style.color = "#92400E";
+          bEstado.style.border = "1px solid #FDE68A";
+          bEstado.style.cursor = "pointer";
+          bEstado.title = "Semana pasada (registro histórico conservado). Clic para volver a la semana actual";
+          bEstado.onclick = irASemanaActual;
+          bEstado.classList.add("is-interactive");
+        } else {
+          bEstado.innerHTML = "Planificación · Volver ↺";
+          bEstado.style.background = "#EFF6FF";
+          bEstado.style.color = "#1D4ED8";
+          bEstado.style.border = "1px solid #BFDBFE";
+          bEstado.style.cursor = "pointer";
+          bEstado.title = "Semana futura (planificación de próximas iniciativas). Clic para volver a la semana actual";
+          bEstado.onclick = irASemanaActual;
+          bEstado.classList.add("is-interactive");
+        }
+      }
+
+      if (bannerContexto) {
+        if (esActual) {
+          bannerContexto.style.display = "none";
+          bannerContexto.className = "banner-contexto-semana";
+          bannerContexto.innerHTML = "";
+        } else if (esPasada) {
+          bannerContexto.style.display = "flex";
+          bannerContexto.className = "banner-contexto-semana banner-pasado";
+          bannerContexto.innerHTML = `
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span style="display:inline-flex;align-items:center;color:#92400E;">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+              </span>
+              <span>Estás visualizando el histórico de <strong>${escapeHtml(STATE.semana)}</strong> (Registro conservado).</span>
+            </div>
+            <button class="btn-banner-volver" onclick="irASemanaActual()" title="Ir a la semana actual">Volver a la Semana Actual &rarr;</button>
+          `;
+        } else {
+          bannerContexto.style.display = "flex";
+          bannerContexto.className = "banner-contexto-semana banner-futuro";
+          bannerContexto.innerHTML = `
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span style="display:inline-flex;align-items:center;color:#1E40AF;">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+              </span>
+              <span>Estás planificando para <strong>${escapeHtml(STATE.semana)}</strong>. Las iniciativas cargadas aplicarán a futuro.</span>
+            </div>
+            <button class="btn-banner-volver" onclick="irASemanaActual()" title="Ir a la semana actual">Volver a la Semana Actual &rarr;</button>
+          `;
+        }
+      }
     }
 
     // =========================================================================
@@ -266,37 +501,69 @@
     function parsearTodos(rawText) {
       if (!rawText) return { items: [], images: [] };
       const items = [], images = [];
-      String(rawText).split("\n").forEach(line => {
+      String(rawText).split(/\r?\n/).forEach(line => {
         const trimmed = line.trim();
         if (!trimmed) return;
         const img = trimmed.match(RGX_IMG_TAG) || trimmed.match(RGX_IMG_URL);
         if (img) { images.push(img[1]); return; }
 
-        const isSubpoint = /^(?:\s{2,}|\t+|↳)/.test(line) || /^↳/.test(trimmed);
-        let checked = false, text = trimmed.replace(/^↳\s*/, "");
-        if (/^[-*•]?\s*\[x\]\s*/i.test(text)) { checked = true; text = text.replace(/^[-*•]?\s*\[x\]\s*/i, ""); }
-        else if (/^[-*•]?\s*\[\s*\]\s*/i.test(text)) { text = text.replace(/^[-*•]?\s*\[\s*\]\s*/i, ""); }
-        else if (/^[-*•]\s+/.test(text)) { text = text.replace(/^[-*•]\s+/, ""); }
+        // Detección de encabezado de grupo o tema: Ej: # Mapster 2 o ## Daily Report
+        const mGroup = trimmed.match(/^#{1,3}\s+(.+)$/);
+        if (mGroup) {
+          items.push({ isGroupHeader: true, title: mGroup[1].trim() });
+          return;
+        }
+
+        // Detección exhaustiva de subtarea (↳, sangría, tab o tag [sub]):
+        const hasIndent = /^\s{1,}|\t/.test(line);
+        const hasSubArrow = /↳|&#8627;|\u21B3/.test(line);
+        const hasSubTag = /\[sub(?:tarea)?\]/i.test(line);
+        const isSubpoint = hasIndent || hasSubArrow || hasSubTag;
+
+        let checked = false;
+        let cleanLine = trimmed.replace(/^(?:↳|&#8627;|\u21B3|\[sub(?:tarea)?\])\s*/i, "");
+
+        if (/^[-*•]?\s*\[x\]\s*/i.test(cleanLine)) {
+          checked = true;
+          cleanLine = cleanLine.replace(/^[-*•]?\s*\[x\]\s*/i, "");
+        } else if (/^[-*•]?\s*\[\s*\]\s*/i.test(cleanLine)) {
+          checked = false;
+          cleanLine = cleanLine.replace(/^[-*•]?\s*\[\s*\]\s*/i, "");
+        } else if (/^[-*•]\s+/.test(cleanLine)) {
+          cleanLine = cleanLine.replace(/^[-*•]\s+/, "");
+        }
+
+        cleanLine = cleanLine.replace(/^(?:↳|&#8627;|\u21B3|\[sub(?:tarea)?\])\s*/i, "").trim();
 
         let itemLink = null;
-        const lk = text.match(RGX_LINK_TAG);
-        if (lk) { itemLink = { url: lk[1], label: lk[2] || "Link" }; text = text.replace(lk[0], "").trim(); }
-        else {
-          const u = text.match(/(https?:\/\/[^\s]+)$/i);
-          if (u) { itemLink = { url: u[1], label: "Link" }; text = text.replace(u[0], "").trim(); }
+        const lk = cleanLine.match(RGX_LINK_TAG);
+        if (lk && /^https?:\/\//i.test(lk[1].trim())) {
+          itemLink = { url: lk[1].trim(), label: lk[2] || "Link" };
+          cleanLine = cleanLine.replace(lk[0], "").trim();
+        } else {
+          const u = cleanLine.match(/(https?:\/\/[^\s]+)$/i);
+          if (u) {
+            itemLink = { url: u[1], label: "Link" };
+            cleanLine = cleanLine.replace(u[0], "").trim();
+          }
         }
-        items.push({ text: text, checked: checked, isSubpoint: isSubpoint, link: itemLink });
+        items.push({ text: cleanLine, checked: checked, isSubpoint: isSubpoint, link: itemLink });
       });
       return { items, images };
     }
 
     function serializarTodos(items, images) {
       const lines = [];
-      (items || []).forEach((it, idx) => {
-        if (idx !== items.length - 1 && !(it.text || "").trim() && !it.link) return;
+      (items || []).forEach((it) => {
+        if (it.isGroupHeader) {
+          if (it.title?.trim()) lines.push(`# ${it.title.trim()}`);
+          return;
+        }
         const prefix = it.isSubpoint ? "  ↳ " : "";
         let line = `${prefix}- [${it.checked ? 'x' : ' '}] ${it.text || ''}`;
-        if (it.link?.url) line += ` [link:${it.link.url}|${it.link.label || 'Link'}]`;
+        if (it.link?.url && /^https?:\/\//i.test(it.link.url.trim())) {
+          line += ` [link:${it.link.url.trim()}|${it.link.label || 'Link'}]`;
+        }
         lines.push(line);
       });
       (images || []).forEach(img => lines.push(`[img:${img}]`));
@@ -335,30 +602,121 @@
         const mensuales = recs.filter(r => r.frecuencia === "Mensual" || r.frecuencia === "Cierre de Mes");
         const futuros = STATE.futuros.filter(f => f.owner === m.nombre && f.estado !== "Promovido");
 
-        const cSem = !!STATE.colapsadoSemana[m.nombre], cRec = !!STATE.colapsadoRecurrentes[m.nombre], cProx = STATE.colapsadoProxima[m.nombre] ?? true;
+        const cSem = !!STATE.colapsadoSemana[m.nombre], cRec = STATE.colapsadoRecurrentes[m.nombre] ?? true, cProx = STATE.colapsadoProxima[m.nombre] ?? true;
 
         let todosHtml = "";
         if (modo === "raw") {
           todosHtml = `<textarea class="todos-raw-textarea" onchange="guardarTodosRaw('${escapeHtml(m.nombre)}', this.value)">${escapeHtml(itemSem?.todos || '')}</textarea>`;
         } else {
-          const rows = parsed.items.map((it, idx) => `
-            <div class="checklist-row ${it.isSubpoint ? 'is-subpoint' : ''}" draggable="true"
-                 ondragstart="handleTodoDragStart(event, '${escapeHtml(m.nombre)}', ${idx})"
-                 ondragover="e => e.preventDefault()"
-                 ondrop="handleTodoDrop(event, '${escapeHtml(m.nombre)}', ${idx})">
-              <span class="drag-handle">&#8942;&#8942;</span>
-              ${it.isSubpoint ? `<span style="color:var(--accent-blue);font-weight:800;">&#8627;</span>` : ''}
-              <input type="checkbox" class="checklist-checkbox" ${it.checked ? 'checked' : ''} onchange="toggleCheckItem('${escapeHtml(m.nombre)}', ${idx}, this.checked)">
-              <input type="text" class="checklist-input ${it.checked ? 'checked-text' : ''}" value="${escapeHtml(it.text)}" placeholder="Escribir prioridad..."
-                     onkeydown="handleChecklistKeydown(event, '${escapeHtml(m.nombre)}', ${idx}, ${it.isSubpoint})"
-                     oninput="editarTextoItem('${escapeHtml(m.nombre)}', ${idx}, this.value)"
-                     onblur="handleChecklistBlur('${escapeHtml(m.nombre)}', ${idx})">
-              <div class="row-tail-actions">
-                ${it.link ? `<a href="${escapeHtml(it.link.url)}" target="_blank" class="link-chip">${escapeHtml(it.link.label || 'Link')} &nearr;</a><button class="btn-del-mini" onclick="quitarLinkItem('${escapeHtml(m.nombre)}', ${idx})">&times;</button>` : `<button class="btn-add-row-link" onclick="adjuntarLinkItem('${escapeHtml(m.nombre)}', ${idx})">+ link</button>`}
-                <button class="btn-del-mini" onclick="eliminarCheckItem('${escapeHtml(m.nombre)}', ${idx})">&times;</button>
+          function renderFilaTarea(it, idx, owner) {
+            const isSel = (SELECTED_TODOS.owner === owner && SELECTED_TODOS.indices.has(idx));
+            return `
+              <div class="checklist-row ${it.isSubpoint ? 'is-subpoint' : ''} ${isSel ? 'is-selected' : ''}" draggable="false"
+                   id="todo_row_${escapeHtml(owner)}_${idx}"
+                   data-owner="${escapeHtml(owner)}"
+                   data-idx="${idx}"
+                   onclick="handleRowClick(event, '${escapeHtml(owner)}', ${idx})"
+                   onmousedown="handleRowMouseDown(event, '${escapeHtml(owner)}', ${idx})"
+                   onmouseenter="handleRowMouseEnter(event, '${escapeHtml(owner)}', ${idx})"
+                   ondragstart="handleTodoDragStart(event, '${escapeHtml(owner)}', ${idx})"
+                   ondragover="handleRowDragOver(event)"
+                   ondragleave="handleRowDragLeave(event)"
+                   ondragend="handleRowDragEnd(event)"
+                   ondrop="handleTodoDrop(event, '${escapeHtml(owner)}', ${idx})">
+                <span class="drag-handle" title="Arrastrar para reordenar · Clic para seleccionar"
+                      onmouseenter="activarDragFila(this)"
+                      onmouseleave="desactivarDragFila(this)"
+                      onmousedown="activarDragFila(this)"
+                      onclick="handleHandleClick(event, '${escapeHtml(owner)}', ${idx})">&#8942;&#8942;</span>
+                ${it.isSubpoint ? `<span style="color:var(--accent-blue);font-weight:800;">&#8627;</span>` : ''}
+                <input type="checkbox" class="checklist-checkbox" ${it.checked ? 'checked' : ''} onchange="toggleCheckItem('${escapeHtml(owner)}', ${idx}, this.checked)">
+                <input type="text" class="checklist-input ${it.checked ? 'checked-text' : ''}" value="${escapeHtml(it.text)}" placeholder="Escribir prioridad..."
+                       draggable="false"
+                       onmousedown="desactivarDragFila(this)"
+                       onkeydown="handleChecklistKeydown(event, '${escapeHtml(owner)}', ${idx}, ${it.isSubpoint})"
+                       oninput="editarTextoItem('${escapeHtml(owner)}', ${idx}, this.value)"
+                       onfocus="handleChecklistFocus(event, '${escapeHtml(owner)}', ${idx})"
+                       onblur="handleChecklistBlur('${escapeHtml(owner)}', ${idx})">
+                <div class="row-tail-actions">
+                  ${it.link ? `
+                    <div class="link-chip-wrap">
+                      <a href="${escapeHtml(it.link.url)}" target="_blank" class="link-chip" title="${escapeHtml(it.link.url)}">${escapeHtml(it.link.label || 'Link')} &nearr;</a>
+                      <button class="btn-edit-link" onclick="adjuntarLinkItem('${escapeHtml(owner)}', ${idx})" title="Editar enlace y nombre">&#9998;</button>
+                      <button class="btn-del-mini" onclick="quitarLinkItem('${escapeHtml(owner)}', ${idx})" title="Quitar enlace">&times;</button>
+                    </div>
+                  ` : `<button class="btn-add-row-link" onclick="adjuntarLinkItem('${escapeHtml(owner)}', ${idx})">+ link</button>`}
+                  <button class="btn-del-mini" onclick="eliminarCheckItem('${escapeHtml(owner)}', ${idx})">&times;</button>
+                </div>
               </div>
-            </div>
-          `).join("");
+            `;
+          }
+
+          let rowsHtml = "";
+          let curProy = null;
+          let curTasks = [];
+
+          function cerrarBloqueProyecto() {
+            if (!curProy) return "";
+            const proyKey = `sem_${m.nombre}_${curProy.idx}_${curProy.title}`;
+            const isCol = !!STATE.colapsadoProyectos[proyKey];
+            const totalGrp = curTasks.length;
+            const doneGrp = curTasks.filter(t => t.it.checked).length;
+            const pct = totalGrp > 0 ? Math.round((doneGrp / totalGrp) * 100) : 0;
+            const innerTasks = curTasks.map(t => renderFilaTarea(t.it, t.idx, m.nombre)).join("");
+
+            const out = `
+              <div class="project-block-container" id="proy_block_${escapeHtml(m.nombre)}_${curProy.idx}">
+                <div class="todo-group-header" draggable="false"
+                     id="todo_row_${escapeHtml(m.nombre)}_${curProy.idx}"
+                     data-owner="${escapeHtml(m.nombre)}"
+                     data-idx="${curProy.idx}"
+                     ondragstart="handleTodoDragStart(event, '${escapeHtml(m.nombre)}', ${curProy.idx})"
+                     ondragover="handleRowDragOver(event)"
+                     ondragleave="handleRowDragLeave(event)"
+                     ondragend="handleRowDragEnd(event)"
+                     ondrop="handleTodoDrop(event, '${escapeHtml(m.nombre)}', ${curProy.idx})">
+                  <span class="drag-handle" title="Arrastrar para reordenar proyecto"
+                        onmouseenter="activarDragFila(this)"
+                        onmouseleave="desactivarDragFila(this)"
+                        onmousedown="activarDragFila(this)">&#8942;&#8942;</span>
+                  <button class="proy-toggle-btn" onclick="toggleColapsarProyectoGenerico('${proyKey}', 'proy_body_sem_${escapeHtml(m.nombre)}_${curProy.idx}', 'proy_icon_sem_${escapeHtml(m.nombre)}_${curProy.idx}')" title="Colapsar / Desplegar proyecto">
+                    <span class="proy-toggle-icon ${isCol ? 'is-collapsed' : ''}" id="proy_icon_sem_${escapeHtml(m.nombre)}_${curProy.idx}">&#9660;</span>
+                  </button>
+                  <div style="display:flex;align-items:center;gap:6px;flex:1;min-width:0;">
+                    <span style="color:var(--accent-blue);font-weight:900;font-size:13px;">#</span>
+                    <input type="text" class="todo-group-title-input" value="${escapeHtml(curProy.title || '')}"
+                           placeholder="Nombre del tema o proyecto..."
+                           onkeydown="if(event.key==='Enter'){event.preventDefault();agregarCheckItemNuevo('${escapeHtml(m.nombre)}', ${curProy.idx + 1}, false);}"
+                           oninput="editarTituloGrupo('${escapeHtml(m.nombre)}', ${curProy.idx}, this.value)">
+                  </div>
+                  <div style="display:flex;align-items:center;gap:6px;">
+                    <span class="todo-group-badge ${pct === 100 && totalGrp > 0 ? 'all-done' : ''}">${doneGrp}/${totalGrp} (${pct}%)</span>
+                    <button class="btn-del-group" onclick="eliminarGrupoTema('${escapeHtml(m.nombre)}', ${curProy.idx})" title="Eliminar proyecto">&times;</button>
+                  </div>
+                </div>
+                <div class="project-tasks-body" id="proy_body_sem_${escapeHtml(m.nombre)}_${curProy.idx}" style="${isCol ? 'display:none;' : ''}">
+                  ${innerTasks || `<div style="font-size:11px;color:var(--text-muted);padding:4px 6px;font-style:italic;">Sin tareas aún en este proyecto. Presioná Enter arriba para sumar la primera.</div>`}
+                </div>
+              </div>
+            `;
+            curProy = null;
+            curTasks = [];
+            return out;
+          }
+
+          parsed.items.forEach((it, idx) => {
+            if (it.isGroupHeader) {
+              if (curProy) rowsHtml += cerrarBloqueProyecto();
+              curProy = { idx, title: it.title };
+            } else {
+              if (curProy) {
+                curTasks.push({ it, idx });
+              } else {
+                rowsHtml += renderFilaTarea(it, idx, m.nombre);
+              }
+            }
+          });
+          if (curProy) rowsHtml += cerrarBloqueProyecto();
 
           let imgsHtml = "";
           if (parsed.images.length) {
@@ -368,49 +726,161 @@
           }
 
           todosHtml = `
-            <div class="checklist-container" id="checklist_box_${escapeHtml(m.nombre)}" ondragover="e => e.preventDefault()" ondrop="handleTodoContainerDrop(event, '${escapeHtml(m.nombre)}')">
-              ${rows}
-              <div class="notion-ghost-row" onclick="agregarCheckItemNuevo('${escapeHtml(m.nombre)}', null, false)">
-                <span class="ghost-checkbox"></span><span class="ghost-text">Escribir tarea...</span>
+            <div class="checklist-container" id="checklist_box_${escapeHtml(m.nombre)}" ondragover="event.preventDefault()" ondrop="handleTodoContainerDrop(event, '${escapeHtml(m.nombre)}')">
+              ${rowsHtml}
+              <div class="todos-add-actions">
+                <button class="btn-add-inline" onclick="agregarCheckItemNuevo('${escapeHtml(m.nombre)}', null, false)">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                  <span>Nueva tarea</span>
+                </button>
+                <button class="btn-add-inline btn-add-group" onclick="agregarNuevoGrupoTema('${escapeHtml(m.nombre)}')">
+                  <span style="font-weight:900;font-size:12px;">#</span>
+                  <span>Nuevo grupo</span>
+                </button>
               </div>
             </div>
             ${imgsHtml}
           `;
         }
 
+        function renderFilaRecurrente(r, frec) {
+          let chk = false;
+          const fLower = (r.frecuencia || frec || "").toLowerCase();
+          if (fLower.includes("diari")) {
+            chk = !!r.checksDiarios?.[obtenerFechaHoyKey()];
+          } else if (fLower.includes("mensual") || fLower.includes("cierre")) {
+            chk = !!r.checksMensuales?.[obtenerMesActualKey()];
+          } else {
+            chk = !!r.semanasCompletadas?.[STATE.semana];
+          }
+          const lk = obtenerLinkData(r.links);
+          const isAuto = esRecurrenteAuto(r);
+          const isSub = esRecurrenteSub(r);
+          r.isSubpoint = isSub;
+          const textoMostrar = obtenerTextoRecurrenteParaSemana(r, STATE.semana);
+          return `
+            <div class="checklist-row ${isSub ? 'is-subpoint' : ''}" draggable="false"
+                 id="sub_rec_${r.id}"
+                 ondragstart="handleRecDragStart(event, '${escapeHtml(m.nombre)}', '${r.id}')"
+                 ondragover="handleRowDragOver(event)"
+                 ondragleave="handleRowDragLeave(event)"
+                 ondragend="handleRowDragEnd(event)"
+                 ondrop="handleRecDrop(event, '${escapeHtml(m.nombre)}', '${frec}', '${r.id}')">
+              <span class="drag-handle" title="Arrastrar para reordenar"
+                    onmouseenter="activarDragFila(this)"
+                    onmouseleave="desactivarDragFila(this)"
+                    onmousedown="activarDragFila(this)">&#8942;&#8942;</span>
+              ${isSub ? `<span style="color:var(--accent-emerald);font-weight:800;">&#8627;</span>` : ''}
+              <input type="checkbox" class="checklist-checkbox" ${chk ? 'checked' : ''} onchange="toggleCheckRecurrente('${r.id}', this.checked)">
+              <input type="text" class="checklist-input ${chk ? 'checked-text' : ''}" value="${escapeHtml(textoMostrar)}" placeholder="Escribir tarea..."
+                     draggable="false"
+                     onmousedown="desactivarDragFila(this)"
+                     onkeydown="handleRecKeydown(event, '${escapeHtml(m.nombre)}', '${frec}', '${r.id}')"
+                     oninput="editarTextoRecurrente('${r.id}', this.value)">
+              <div class="row-tail-actions">
+                <button class="tag-auto-btn ${isAuto ? 'is-auto' : ''}" onclick="toggleAutoRecurrente('${r.id}')" title="${isAuto ? 'Proceso automatizado (clic para alternar)' : 'Marcar como automatizado'}">
+                  <span class="auto-dot"></span>
+                  <span>Automatizado</span>
+                </button>
+                ${lk ? `
+                  <div class="link-chip-wrap">
+                    <a href="${escapeHtml(lk.url)}" target="_blank" class="link-chip" title="${escapeHtml(lk.url)}">${escapeHtml(lk.label)} &nearr;</a>
+                    <button class="btn-edit-link" onclick="adjuntarLinkRecurrente('${r.id}')" title="Editar enlace y nombre">&#9998;</button>
+                    <button class="btn-del-mini" onclick="quitarLinkRecurrente('${r.id}')" title="Quitar enlace">&times;</button>
+                  </div>
+                ` : `<button class="btn-add-row-link" onclick="adjuntarLinkRecurrente('${r.id}')">+ link</button>`}
+                <button class="btn-del-mini" onclick="eliminarRecurrenteDirecto('${r.id}')">&times;</button>
+              </div>
+            </div>
+          `;
+        }
+
         function renderSubRecGroup(items, frec) {
-          return items.map(r => {
-            const chk = !!r.semanasCompletadas?.[STATE.semana];
-            const lk = obtenerLinkData(r.links);
-            return `
-              <div class="checklist-row ${r.isSubpoint ? 'is-subpoint' : ''}" draggable="true"
-                   ondragstart="handleRecDragStart(event, '${escapeHtml(m.nombre)}', '${r.id}')"
-                   ondragover="e => e.preventDefault()"
-                   ondrop="handleRecDrop(event, '${escapeHtml(m.nombre)}', '${frec}', '${r.id}')">
-                <span class="drag-handle">&#8942;&#8942;</span>
-                ${r.isSubpoint ? `<span style="color:var(--accent-emerald);font-weight:800;">&#8627;</span>` : ''}
-                <input type="checkbox" class="checklist-checkbox" ${chk ? 'checked' : ''} onchange="toggleCheckRecurrente('${r.id}', this.checked)">
-                <input type="text" class="checklist-input ${chk ? 'checked-text' : ''}" value="${escapeHtml(r.tarea || '')}" placeholder="Escribir tarea..."
-                       onkeydown="handleRecKeydown(event, '${escapeHtml(m.nombre)}', '${frec}', '${r.id}')"
-                       oninput="editarTextoRecurrente('${r.id}', this.value)">
-                <div class="row-tail-actions">
-                  ${lk ? `<a href="${escapeHtml(lk.url)}" target="_blank" class="link-chip">${escapeHtml(lk.label)} &nearr;</a><button class="btn-del-mini" onclick="quitarLinkRecurrente('${r.id}')">&times;</button>` : `<button class="btn-add-row-link" onclick="adjuntarLinkRecurrente('${r.id}')">+ link</button>`}
-                  <button class="btn-del-mini" onclick="eliminarRecurrenteDirecto('${r.id}')">&times;</button>
+          let outHtml = "";
+          let curProy = null;
+          let curTasks = [];
+
+          function flushRecProject() {
+            if (!curProy) return "";
+            const key = `rec_${m.nombre}_${curProy.r.id}`;
+            const isCol = !!STATE.colapsadoProyectos[key];
+            const title = (curProy.r.tarea || "").replace(/^#{1,3}\s+/, "");
+            const innerTasks = curTasks.map(r => renderFilaRecurrente(r, frec)).join("");
+
+            const out = `
+              <div class="project-block-container rec-project" id="proy_rec_${curProy.r.id}">
+                <div class="todo-group-header rec-group-header-row" draggable="false"
+                     id="sub_rec_${curProy.r.id}"
+                     ondragstart="handleRecDragStart(event, '${escapeHtml(m.nombre)}', '${curProy.r.id}')"
+                     ondragover="handleRowDragOver(event)"
+                     ondragleave="handleRowDragLeave(event)"
+                     ondragend="handleRowDragEnd(event)"
+                     ondrop="handleRecDrop(event, '${escapeHtml(m.nombre)}', '${frec}', '${curProy.r.id}')">
+                  <span class="drag-handle" title="Arrastrar para reordenar proyecto"
+                        onmouseenter="activarDragFila(this)"
+                        onmouseleave="desactivarDragFila(this)"
+                        onmousedown="activarDragFila(this)">&#8942;&#8942;</span>
+                  <button class="proy-toggle-btn" onclick="toggleColapsarProyectoGenerico('${key}', 'proy_body_rec_${curProy.r.id}', 'icon_rec_${curProy.r.id}')" title="Colapsar / Desplegar proyecto">
+                    <span class="proy-toggle-icon ${isCol ? 'is-collapsed' : ''}" id="icon_rec_${curProy.r.id}">&#9660;</span>
+                  </button>
+                  <div style="display:flex;align-items:center;gap:6px;flex:1;min-width:0;">
+                    <span style="color:var(--accent-emerald);font-weight:900;font-size:13px;">#</span>
+                    <input type="text" class="todo-group-title-input" value="${escapeHtml(title)}"
+                           placeholder="Nombre del proyecto recurrente..."
+                           onkeydown="if(event.key==='Enter'){event.preventDefault();agregarRecurrenteConFrecuencia('${escapeHtml(m.nombre)}', '${frec}');}"
+                           oninput="editarTextoRecurrente('${curProy.r.id}', '# ' + this.value.replace(/^#+\\s*/, ''))">
+                  </div>
+                  <button class="btn-del-group" onclick="eliminarRecurrenteDirecto('${curProy.r.id}')" title="Eliminar proyecto">&times;</button>
+                </div>
+                <div class="project-tasks-body" id="proy_body_rec_${curProy.r.id}" style="${isCol ? 'display:none;' : ''}">
+                  ${innerTasks || `<div style="font-size:11px;color:var(--text-muted);padding:4px 6px;font-style:italic;">Sin tareas en este proyecto.</div>`}
                 </div>
               </div>
             `;
-          }).join("");
+            curProy = null;
+            curTasks = [];
+            return out;
+          }
+
+          items.forEach(r => {
+            if (r.isGroupHeader || /^#{1,3}\s+/.test(r.tarea || "")) {
+              if (curProy) outHtml += flushRecProject();
+              curProy = { r };
+            } else {
+              if (curProy) curTasks.push(r);
+              else outHtml += renderFilaRecurrente(r, frec);
+            }
+          });
+          if (curProy) outHtml += flushRecProject();
+          return outHtml;
         }
 
         const recurrentesHtml = `
           <div class="recurrentes-rows-container">
-            ${[ { t: 'Diario', c: 'frec-diario', items: diarias }, { t: 'Semanal', c: 'frec-semanal', items: semanales }, { t: 'Mensual / Cierre', c: 'frec-mensual', items: mensuales } ].map(g => `
+            ${[
+              { t: 'Diario', c: 'frec-diario', sub: `Hoy · ${obtenerDiaHoyFormateado()}`, items: diarias },
+              { t: 'Semanal', c: 'frec-semanal', sub: (STATE.semana || '').split('|')[0].trim(), items: semanales },
+              { t: 'Mensual / Cierre', c: 'frec-mensual', sub: obtenerMesActualFormateado(), items: mensuales }
+            ].map(g => `
               <div class="rec-group-section">
-                <div class="rec-group-header"><span class="badge-frec-pill ${g.c}">${g.t}</span><span class="rec-group-count">${g.items.length} tareas</span></div>
-                <div class="rec-group-rows" ondragover="e => e.preventDefault()" ondrop="handleRecContainerDrop(event, '${escapeHtml(m.nombre)}', '${g.t.split(' ')[0]}')">
+                <div class="rec-group-header" style="display:flex;align-items:center;justify-content:space-between;">
+                  <div style="display:flex;align-items:center;gap:6px;">
+                    <span class="badge-frec-pill ${g.c}">${g.t}</span>
+                    <span style="font-size:11px;font-weight:700;color:var(--text-secondary);">${escapeHtml(g.sub)}</span>
+                  </div>
+                  <span class="rec-group-count">${g.items.length} tareas</span>
+                </div>
+                <div class="rec-group-rows" ondragover="event.preventDefault()" ondrop="handleRecContainerDrop(event, '${escapeHtml(m.nombre)}', '${g.t.split(' ')[0]}')">
                   ${renderSubRecGroup(g.items, g.t.split(' ')[0])}
-                  <div class="notion-ghost-row" onclick="agregarRecurrenteConFrecuencia('${escapeHtml(m.nombre)}', '${g.t.split(' ')[0]}')">
-                    <span class="ghost-checkbox"></span><span class="ghost-text">Escribir tarea...</span>
+                  <div class="todos-add-actions">
+                    <button class="btn-add-inline" onclick="agregarRecurrenteConFrecuencia('${escapeHtml(m.nombre)}', '${g.t.split(' ')[0]}')">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                      <span>Nueva tarea</span>
+                    </button>
+                    <button class="btn-add-inline btn-add-group" onclick="agregarNuevoGrupoRecurrente('${escapeHtml(m.nombre)}', '${g.t.split(' ')[0]}')">
+                      <span style="font-weight:900;font-size:12px;color:var(--accent-emerald);">#</span>
+                      <span>Nuevo grupo</span>
+                    </button>
                   </div>
                 </div>
               </div>
@@ -418,20 +888,85 @@
           </div>
         `;
 
+        function renderFilaFuturo(f) {
+          return `
+            <div class="subpoint-row" id="sub_fut_${f.id}">
+              <span class="subpoint-bullet">&#8627;</span>
+              <input type="text" class="subpoint-task-input" value="${escapeHtml(f.tema || '')}" onchange="guardarCampoFuturoInline('${f.id}', 'tema', this.value)">
+              <input type="text" style="width:110px;font-size:11px;font-weight:700;padding:2px 5px;border:1px solid var(--border);border-radius:4px;" value="${escapeHtml(f.target || 'A definir')}" onchange="guardarCampoFuturoInline('${f.id}', 'target', this.value)">
+              <button class="btn-promote-item" onclick="promoverFuturoDirecto('${f.id}')">Promover &rarr;</button>
+              <button class="btn-del-mini" onclick="eliminarFuturoDirecto('${f.id}')">&times;</button>
+            </div>
+          `;
+        }
+
+        let futRowsHtml = "";
+        let curFutProy = null;
+        let curFutTasks = [];
+
+        function flushFutProject() {
+          if (!curFutProy) return "";
+          const key = `fut_${m.nombre}_${curFutProy.f.id}`;
+          const isCol = !!STATE.colapsadoProyectos[key];
+          const title = (curFutProy.f.tema || "").replace(/^#{1,3}\s+/, "");
+          const innerTasks = curFutTasks.map(f => renderFilaFuturo(f)).join("");
+
+          const out = `
+            <div class="project-block-container fut-project" id="proy_fut_${curFutProy.f.id}">
+              <div class="todo-group-header fut-group-header-row" draggable="false"
+                   id="sub_fut_${curFutProy.f.id}">
+                <button class="proy-toggle-btn" onclick="toggleColapsarProyectoGenerico('${key}', 'proy_body_fut_${curFutProy.f.id}', 'icon_fut_${curFutProy.f.id}')" title="Colapsar / Desplegar proyecto">
+                  <span class="proy-toggle-icon ${isCol ? 'is-collapsed' : ''}" id="icon_fut_${curFutProy.f.id}">&#9660;</span>
+                </button>
+                <div style="display:flex;align-items:center;gap:6px;flex:1;min-width:0;">
+                  <span style="color:#8B5CF6;font-weight:900;font-size:13px;">#</span>
+                  <input type="text" class="todo-group-title-input" value="${escapeHtml(title)}"
+                         placeholder="Nombre del proyecto futuro..."
+                         onkeydown="if(event.key==='Enter'){event.preventDefault();agregarFilaFuturoPara('${escapeHtml(m.nombre)}');}"
+                         oninput="guardarCampoFuturoInline('${curFutProy.f.id}', 'tema', '# ' + this.value.replace(/^#+\\s*/, ''))">
+                </div>
+                <div style="display:flex;align-items:center;gap:6px;">
+                  <input type="text" style="width:110px;font-size:11px;font-weight:700;padding:2px 5px;border:1px solid #DDD6FE;border-radius:4px;background:#FFFFFF;"
+                         value="${escapeHtml(curFutProy.f.target || 'A definir')}"
+                         placeholder="Target..."
+                         onchange="guardarCampoFuturoInline('${curFutProy.f.id}', 'target', this.value)">
+                  <button class="btn-del-group" onclick="eliminarFuturoDirecto('${curFutProy.f.id}')" title="Eliminar proyecto">&times;</button>
+                </div>
+              </div>
+              <div class="project-tasks-body" id="proy_body_fut_${curFutProy.f.id}" style="${isCol ? 'display:none;' : ''}">
+                ${innerTasks || `<div style="font-size:11px;color:var(--text-muted);padding:4px 6px;font-style:italic;">Sin iniciativas en este proyecto.</div>`}
+              </div>
+            </div>
+          `;
+          curFutProy = null;
+          curFutTasks = [];
+          return out;
+        }
+
+        futuros.forEach(f => {
+          if (f.isGroupHeader || /^#{1,3}\s+/.test(f.tema || "")) {
+            if (curFutProy) futRowsHtml += flushFutProject();
+            curFutProy = { f };
+          } else {
+            if (curFutProy) curFutTasks.push(f);
+            else futRowsHtml += renderFilaFuturo(f);
+          }
+        });
+        if (curFutProy) futRowsHtml += flushFutProject();
+
         const futurosHtml = `
           <div class="backlog-subpoints-list">
-            ${futuros.map(f => `
-              <div class="subpoint-row">
-                <span class="subpoint-bullet">&#8627;</span>
-                <input type="text" class="subpoint-task-input" value="${escapeHtml(f.tema || '')}" onchange="guardarCampoFuturoInline('${f.id}', 'tema', this.value)">
-                <input type="text" style="width:110px;font-size:11px;font-weight:700;padding:2px 5px;border:1px solid var(--border);border-radius:4px;" value="${escapeHtml(f.target || 'A definir')}" onchange="guardarCampoFuturoInline('${f.id}', 'target', this.value)">
-                <button class="btn-promote-item" onclick="promoverFuturoDirecto('${f.id}')">Promover &rarr;</button>
-                <button class="btn-del-mini" onclick="eliminarFuturoDirecto('${f.id}')">&times;</button>
-              </div>
-            `).join("")}
+            ${futRowsHtml}
           </div>
-          <div class="notion-ghost-row" onclick="agregarFilaFuturoPara('${escapeHtml(m.nombre)}')">
-            <span class="ghost-checkbox"></span><span class="ghost-text">Escribir proyecto o tarea...</span>
+          <div class="todos-add-actions">
+            <button class="btn-add-inline" onclick="agregarFilaFuturoPara('${escapeHtml(m.nombre)}')">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+              <span>Nueva iniciativa</span>
+            </button>
+            <button class="btn-add-inline btn-add-group" onclick="agregarNuevoGrupoFuturo('${escapeHtml(m.nombre)}')">
+              <span style="font-weight:900;font-size:12px;color:#8B5CF6;">#</span>
+              <span>Nuevo proyecto</span>
+            </button>
           </div>
         `;
 
@@ -441,7 +976,7 @@
               <div class="person-info"><div class="avatar-badge" style="background:${color};">${iniciales}</div><span class="person-name">${escapeHtml(m.nombre)}</span></div>
             </div>
             <div class="spine-section ${cSem ? 'is-collapsed' : ''}">
-              <div class="spine-bar spine-semana" onclick="toggleColapsarSemana('${escapeHtml(m.nombre)}')"><span class="spine-text">${cSem ? 'SEM.' : 'TAREA DE LA SEMANA'}</span></div>
+              <div class="spine-bar spine-semana" onclick="toggleColapsarSemana('${escapeHtml(m.nombre)}')"><span class="spine-text">${cSem ? 'SEM.' : 'SEMANAL'}</span></div>
               <div class="spine-body project-section-body">
                 <div class="todos-interactive-box">
                   <div class="todos-toolbar" onclick="toggleColapsarSemana('${escapeHtml(m.nombre)}')">
@@ -476,6 +1011,461 @@
         `;
       });
       contenedor.innerHTML = html;
+      actualizarVisualSeleccion();
+    }
+
+    // =========================================================================
+    // SELECCIÓN, COPIA Y DUPLICACIÓN DE TAREAS ESTILO NOTION
+    // =========================================================================
+    const SELECTED_TODOS = {
+      owner: null,
+      indices: new Set()
+    };
+    let LAST_CLICKED_INDEX = null;
+    let APP_CLIPBOARD_TASKS = [];
+
+    function seleccionarFilaTarea(owner, idx, isShift, isCtrl) {
+      if (SELECTED_TODOS.owner !== owner) {
+        SELECTED_TODOS.owner = owner;
+        SELECTED_TODOS.indices.clear();
+        LAST_CLICKED_INDEX = null;
+      }
+
+      if (isShift && LAST_CLICKED_INDEX !== null) {
+        const start = Math.min(LAST_CLICKED_INDEX, idx);
+        const end = Math.max(LAST_CLICKED_INDEX, idx);
+        SELECTED_TODOS.indices.clear();
+        for (let i = start; i <= end; i++) {
+          SELECTED_TODOS.indices.add(i);
+        }
+      } else if (isCtrl) {
+        if (SELECTED_TODOS.indices.has(idx)) {
+          SELECTED_TODOS.indices.delete(idx);
+          if (SELECTED_TODOS.indices.size === 0) SELECTED_TODOS.owner = null;
+        } else {
+          SELECTED_TODOS.indices.add(idx);
+        }
+        LAST_CLICKED_INDEX = idx;
+      } else {
+        SELECTED_TODOS.indices.clear();
+        SELECTED_TODOS.indices.add(idx);
+        LAST_CLICKED_INDEX = idx;
+      }
+
+      actualizarVisualSeleccion();
+    }
+
+    function limpiarSeleccionTareas() {
+      SELECTED_TODOS.owner = null;
+      SELECTED_TODOS.indices.clear();
+      LAST_CLICKED_INDEX = null;
+      actualizarVisualSeleccion();
+    }
+
+    function actualizarVisualSeleccion() {
+      document.querySelectorAll(".checklist-row.is-selected").forEach(r => r.classList.remove("is-selected"));
+
+      if (SELECTED_TODOS.owner && SELECTED_TODOS.indices.size > 0) {
+        SELECTED_TODOS.indices.forEach(idx => {
+          const row = document.getElementById(`todo_row_${SELECTED_TODOS.owner}_${idx}`);
+          if (row) row.classList.add("is-selected");
+        });
+      }
+
+      const bar = document.getElementById("floatingTaskSelectionBar");
+      const countEl = document.getElementById("floatingSelectionCount");
+      if (bar) {
+        const count = SELECTED_TODOS.indices.size;
+        if (count > 0) {
+          if (countEl) countEl.textContent = `${count} ${count === 1 ? 'tarea seleccionada' : 'tareas seleccionadas'}`;
+          bar.style.display = "flex";
+        } else {
+          bar.style.display = "none";
+        }
+      }
+    }
+
+    function handleRowClick(e, owner, idx) {
+      if (e.target.tagName === "INPUT" || e.target.tagName === "BUTTON" || e.target.tagName === "A" || e.target.closest("button") || e.target.closest("a") || e.target.classList.contains("checklist-checkbox")) {
+        return;
+      }
+      seleccionarFilaTarea(owner, idx, e.shiftKey, e.ctrlKey || e.metaKey);
+    }
+
+    function handleHandleClick(e, owner, idx) {
+      e.stopPropagation();
+      seleccionarFilaTarea(owner, idx, e.shiftKey, e.ctrlKey || e.metaKey);
+    }
+
+    function handleChecklistFocus(e, owner, idx) {
+      if (SELECTED_TODOS.indices.size > 1 || SELECTED_TODOS.owner !== owner) {
+        limpiarSeleccionTareas();
+      }
+      LAST_CLICKED_INDEX = idx;
+    }
+
+    let IS_MOUSE_DRAG_SELECTING = false;
+    let MOUSE_DRAG_START_IDX = null;
+    let MOUSE_DRAG_OWNER = null;
+
+    function handleRowMouseDown(e, owner, idx) {
+      if (e.target.tagName === "INPUT" || e.target.tagName === "BUTTON" || e.target.tagName === "A" || e.target.closest("button") || e.target.closest("a") || e.target.classList.contains("checklist-checkbox") || e.target.classList.contains("drag-handle")) {
+        return;
+      }
+      if (e.button === 0) { // Clic primario
+        IS_MOUSE_DRAG_SELECTING = true;
+        MOUSE_DRAG_START_IDX = idx;
+        MOUSE_DRAG_OWNER = owner;
+        seleccionarFilaTarea(owner, idx, e.shiftKey, e.ctrlKey || e.metaKey);
+      }
+    }
+
+    function handleRowMouseEnter(e, owner, idx) {
+      if (IS_MOUSE_DRAG_SELECTING && (e.buttons === 1) && MOUSE_DRAG_OWNER === owner && MOUSE_DRAG_START_IDX !== null) {
+        const start = Math.min(MOUSE_DRAG_START_IDX, idx);
+        const end = Math.max(MOUSE_DRAG_START_IDX, idx);
+        SELECTED_TODOS.owner = owner;
+        SELECTED_TODOS.indices.clear();
+        for (let i = start; i <= end; i++) {
+          SELECTED_TODOS.indices.add(i);
+        }
+        actualizarVisualSeleccion();
+        window.getSelection()?.removeAllRanges();
+      }
+    }
+
+    window.addEventListener("mouseup", () => {
+      IS_MOUSE_DRAG_SELECTING = false;
+    });
+
+    function copiarTareasSeleccionadas(silencioso = false) {
+      let owner = SELECTED_TODOS.owner;
+      let indices = Array.from(SELECTED_TODOS.indices);
+
+      if (!owner || !indices.length) {
+        const activeEl = document.activeElement;
+        if (activeEl && activeEl.classList.contains("checklist-input")) {
+          const row = activeEl.closest(".checklist-row");
+          owner = row?.getAttribute("data-owner");
+          const idx = parseInt(row?.getAttribute("data-idx"), 10);
+          if (owner && !isNaN(idx)) indices = [idx];
+        }
+      }
+
+      if (!owner || !indices.length) return;
+
+      const it = STATE.semanal.find(s => s.owner === owner && coincidenSemanasClient(s.semana, STATE.semana));
+      if (!it) return;
+
+      const p = parsearTodos(it.todos || "");
+      const sortedIndices = indices.sort((a, b) => a - b);
+      APP_CLIPBOARD_TASKS = sortedIndices.map(idx => {
+        const item = p.items[idx];
+        if (!item) return null;
+        return {
+          text: item.text,
+          isSubpoint: item.isSubpoint,
+          checked: false,
+          link: item.link ? { ...item.link } : null
+        };
+      }).filter(t => t && ((t.text || "").trim() || t.link));
+
+      if (!APP_CLIPBOARD_TASKS.length) return;
+
+      const mdText = APP_CLIPBOARD_TASKS.map(t => {
+        const prefix = t.isSubpoint ? "  ↳ " : "";
+        let line = `${prefix}- [ ] ${t.text}`;
+        if (t.link?.url) line += ` [link:${t.link.url}|${t.link.label || 'Link'}]`;
+        return line;
+      }).join("\n");
+
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(mdText);
+        }
+      } catch (_) {}
+
+      if (!silencioso) {
+        notificar(`${APP_CLIPBOARD_TASKS.length} ${APP_CLIPBOARD_TASKS.length === 1 ? 'tarea copiada' : 'tareas copiadas'} (Ctrl+V para duplicar/pegar)`);
+      }
+    }
+
+    function pegarTareas(targetOwner, targetIdx) {
+      if (!APP_CLIPBOARD_TASKS || !APP_CLIPBOARD_TASKS.length) {
+        notificar("No hay tareas copiadas. Seleccioná una o más y tocá Ctrl+C");
+        return false;
+      }
+
+      const owner = targetOwner || SELECTED_TODOS.owner;
+      if (!owner) {
+        notificar("Seleccioná un integrante para pegar las tareas");
+        return false;
+      }
+
+      let it = STATE.semanal.find(s => s.owner === owner && coincidenSemanasClient(s.semana, STATE.semana));
+      if (!it) {
+        it = { id: "SEM-" + Date.now().toString(36).toUpperCase(), semana: STATE.semana, owner: owner, proyecto: "Iniciativa Principal", todos: "", estado: "En proceso" };
+        STATE.semanal.push(it);
+      }
+      const p = parsearTodos(it.todos || "");
+
+      let insertAt = (typeof targetIdx === "number" && !isNaN(targetIdx)) ? targetIdx : p.items.length;
+      if (insertAt < 0) insertAt = 0;
+      if (insertAt > p.items.length) insertAt = p.items.length;
+
+      const clones = APP_CLIPBOARD_TASKS.map(t => ({
+        text: t.text,
+        checked: false,
+        isSubpoint: t.isSubpoint,
+        link: t.link ? { ...t.link } : null
+      }));
+
+      p.items.splice(insertAt, 0, ...clones);
+      it.todos = serializarTodos(p.items, p.images);
+      guardarCampoPersonaSemana(owner, "todos", it.todos);
+
+      renderizarJerarquiaPersonas();
+
+      SELECTED_TODOS.owner = owner;
+      SELECTED_TODOS.indices.clear();
+      for (let i = 0; i < clones.length; i++) {
+        SELECTED_TODOS.indices.add(insertAt + i);
+      }
+      LAST_CLICKED_INDEX = insertAt + clones.length - 1;
+      actualizarVisualSeleccion();
+
+      notificar(`${clones.length} ${clones.length === 1 ? 'tarea duplicada/pegada' : 'tareas duplicadas/pegadas'}`);
+      return true;
+    }
+
+    function duplicarTareasSeleccionadas() {
+      if (!SELECTED_TODOS.owner || !SELECTED_TODOS.indices.size) {
+        const activeEl = document.activeElement;
+        if (activeEl && activeEl.classList.contains("checklist-input")) {
+          const row = activeEl.closest(".checklist-row");
+          const owner = row?.getAttribute("data-owner");
+          const idx = parseInt(row?.getAttribute("data-idx"), 10);
+          if (owner && !isNaN(idx)) {
+            SELECTED_TODOS.owner = owner;
+            SELECTED_TODOS.indices.clear();
+            SELECTED_TODOS.indices.add(idx);
+          }
+        }
+      }
+
+      if (!SELECTED_TODOS.owner || !SELECTED_TODOS.indices.size) return;
+
+      copiarTareasSeleccionadas(true);
+      const maxIdx = Math.max(...SELECTED_TODOS.indices);
+      pegarTareas(SELECTED_TODOS.owner, maxIdx + 1);
+    }
+
+    function eliminarTareasSeleccionadas() {
+      if (!SELECTED_TODOS.owner || !SELECTED_TODOS.indices.size) return;
+      const owner = SELECTED_TODOS.owner;
+      const it = STATE.semanal.find(s => s.owner === owner && coincidenSemanasClient(s.semana, STATE.semana));
+      if (!it) return;
+
+      const count = SELECTED_TODOS.indices.size;
+      const p = parsearTodos(it.todos || "");
+
+      const accion = () => {
+        const sortedDesc = Array.from(SELECTED_TODOS.indices).sort((a, b) => b - a);
+        sortedDesc.forEach(idx => {
+          if (idx >= 0 && idx < p.items.length) {
+            p.items.splice(idx, 1);
+          }
+        });
+        it.todos = serializarTodos(p.items, p.images);
+        guardarCampoPersonaSemana(owner, "todos", it.todos);
+        limpiarSeleccionTareas();
+        renderizarJerarquiaPersonas();
+        notificar(`${count} ${count === 1 ? 'tarea eliminada' : 'tareas eliminadas'}`);
+      };
+
+      if (count === 1) {
+        accion();
+      } else {
+        confirmarEliminarInApp(
+          `¿Eliminar ${count} tareas?`,
+          `¿Estás seguro de eliminar las ${count} tareas seleccionadas de ${owner}?`,
+          accion
+        );
+      }
+    }
+
+    function navegarSeleccionTareas(delta, isShift) {
+      if (!SELECTED_TODOS.owner || !SELECTED_TODOS.indices.size) return;
+      const owner = SELECTED_TODOS.owner;
+      const it = STATE.semanal.find(s => s.owner === owner && coincidenSemanasClient(s.semana, STATE.semana));
+      if (!it) return;
+      const p = parsearTodos(it.todos || "");
+      const total = p.items.length;
+      if (!total) return;
+
+      const currentIdx = LAST_CLICKED_INDEX !== null ? LAST_CLICKED_INDEX : Math.max(...SELECTED_TODOS.indices);
+      const targetIdx = Math.max(0, Math.min(total - 1, currentIdx + delta));
+
+      if (isShift) {
+        SELECTED_TODOS.indices.add(targetIdx);
+        LAST_CLICKED_INDEX = targetIdx;
+      } else {
+        SELECTED_TODOS.indices.clear();
+        SELECTED_TODOS.indices.add(targetIdx);
+        LAST_CLICKED_INDEX = targetIdx;
+      }
+      actualizarVisualSeleccion();
+
+      const row = document.getElementById(`todo_row_${owner}_${targetIdx}`);
+      row?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+
+    let _notionShortcutsInitialized = false;
+    function setupNotionKeyboardShortcuts() {
+      if (_notionShortcutsInitialized) return;
+      _notionShortcutsInitialized = true;
+
+      window.addEventListener("keydown", function(e) {
+        // Modal de confirmación abierto: Enter confirma, Escape cancela
+        const confirmOverlay = document.getElementById("modalConfirmOverlay");
+        if (confirmOverlay && confirmOverlay.style.display !== "none") {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            e.stopPropagation();
+            ejecutarConfirmacionInApp();
+            return;
+          }
+          if (e.key === "Escape") {
+            e.preventDefault();
+            e.stopPropagation();
+            cerrarModalConfirm();
+            return;
+          }
+        }
+
+        const isCtrlOrCmd = e.ctrlKey || e.metaKey;
+
+        // Escape: clear selection
+        if (e.key === "Escape") {
+          if (SELECTED_TODOS.indices.size > 0) {
+            e.preventDefault();
+            limpiarSeleccionTareas();
+            return;
+          }
+        }
+
+        // Ctrl+C (Copy)
+        if (isCtrlOrCmd && (e.key === "c" || e.key === "C")) {
+          const selText = window.getSelection()?.toString();
+          if (SELECTED_TODOS.indices.size > 0 && (!selText || selText.length === 0)) {
+            e.preventDefault();
+            copiarTareasSeleccionadas();
+            return;
+          }
+        }
+
+        // Ctrl+V (Paste)
+        if (isCtrlOrCmd && (e.key === "v" || e.key === "V")) {
+          const activeEl = document.activeElement;
+          const isInsideInput = activeEl && (activeEl.tagName === "INPUT" || activeEl.tagName === "TEXTAREA");
+
+          if (SELECTED_TODOS.indices.size > 0 && (!isInsideInput || activeEl.classList.contains("checklist-input"))) {
+            if (APP_CLIPBOARD_TASKS.length > 0) {
+              e.preventDefault();
+              const maxIdx = Math.max(...SELECTED_TODOS.indices);
+              pegarTareas(SELECTED_TODOS.owner, maxIdx + 1);
+              return;
+            }
+          }
+        }
+
+        // Ctrl+D (Duplicate)
+        if (isCtrlOrCmd && (e.key === "d" || e.key === "D")) {
+          if (SELECTED_TODOS.indices.size > 0 || document.activeElement?.classList.contains("checklist-input")) {
+            e.preventDefault();
+            duplicarTareasSeleccionadas();
+            return;
+          }
+        }
+
+        // Ctrl+A (Select all tasks for current owner)
+        if (isCtrlOrCmd && (e.key === "a" || e.key === "A") && SELECTED_TODOS.owner && document.activeElement?.tagName !== "INPUT") {
+          e.preventDefault();
+          const it = STATE.semanal.find(s => s.owner === SELECTED_TODOS.owner && coincidenSemanasClient(s.semana, STATE.semana));
+          if (it) {
+            const p = parsearTodos(it.todos || "");
+            SELECTED_TODOS.indices.clear();
+            for (let i = 0; i < p.items.length; i++) {
+              SELECTED_TODOS.indices.add(i);
+            }
+            actualizarVisualSeleccion();
+            notificar(`${p.items.length} tareas seleccionadas`);
+          }
+          return;
+        }
+
+        // Delete / Backspace (Delete selected tasks)
+        if ((e.key === "Delete" || e.key === "Backspace") && SELECTED_TODOS.indices.size > 0) {
+          if (document.activeElement?.tagName !== "INPUT" && document.activeElement?.tagName !== "TEXTAREA") {
+            e.preventDefault();
+            eliminarTareasSeleccionadas();
+            return;
+          }
+        }
+
+        // Enter (Focus input of selected task to edit)
+        if (e.key === "Enter" && SELECTED_TODOS.indices.size === 1 && document.activeElement?.tagName !== "INPUT") {
+          const idx = Array.from(SELECTED_TODOS.indices)[0];
+          const row = document.getElementById(`todo_row_${SELECTED_TODOS.owner}_${idx}`);
+          const inp = row?.querySelector(".checklist-input");
+          if (inp) {
+            e.preventDefault();
+            inp.focus();
+            const len = inp.value.length;
+            inp.setSelectionRange(len, len);
+            limpiarSeleccionTareas();
+            return;
+          }
+        }
+
+        // ArrowUp / ArrowDown navigation
+        if (SELECTED_TODOS.indices.size > 0 && (e.key === "ArrowUp" || e.key === "ArrowDown")) {
+          if (document.activeElement?.tagName !== "INPUT" && document.activeElement?.tagName !== "TEXTAREA") {
+            e.preventDefault();
+            navegarSeleccionTareas(e.key === "ArrowDown" ? 1 : -1, e.shiftKey);
+            return;
+          }
+        }
+      });
+
+      // Clear selection on clicking outside
+      document.addEventListener("click", function(e) {
+        if (e.target.closest(".checklist-row") || e.target.closest("#floatingTaskSelectionBar") || e.target.closest(".modal-overlay") || e.target.closest(".control-bar")) {
+          return;
+        }
+        if (SELECTED_TODOS.indices.size > 0) {
+          limpiarSeleccionTareas();
+        }
+      });
+
+      // External text paste handler into selected row
+      window.addEventListener("paste", function(e) {
+        const activeEl = document.activeElement;
+        const isTyping = activeEl && (activeEl.tagName === "INPUT" || activeEl.tagName === "TEXTAREA");
+
+        if (SELECTED_TODOS.indices.size > 0 && !isTyping) {
+          const text = e.clipboardData?.getData("text/plain");
+          if (text) {
+            const parsed = parsearTodos(text);
+            if (parsed.items && parsed.items.length) {
+              e.preventDefault();
+              APP_CLIPBOARD_TASKS = parsed.items;
+              const maxIdx = Math.max(...SELECTED_TODOS.indices);
+              pegarTareas(SELECTED_TODOS.owner, maxIdx + 1);
+            }
+          }
+        }
+      });
     }
 
     // =========================================================================
@@ -496,11 +1486,30 @@
       renderizarJerarquiaPersonas();
     }
 
+    function toggleColapsarProyectoGenerico(key, bodyId, iconId) {
+      const isCurrentlyCollapsed = !!STATE.colapsadoProyectos[key];
+      STATE.colapsadoProyectos[key] = !isCurrentlyCollapsed;
+      try { localStorage.setItem("peya_app_colapsado_proyectos", JSON.stringify(STATE.colapsadoProyectos)); } catch (_) {}
+      const body = document.getElementById(bodyId);
+      const icon = document.getElementById(iconId);
+      if (body) body.style.display = STATE.colapsadoProyectos[key] ? "none" : "";
+      if (icon) icon.classList.toggle("is-collapsed", !!STATE.colapsadoProyectos[key]);
+    }
+
     function toggleExpandirColapsarProyectosActuales() {
       const colapsar = document.getElementById("labelToggleProyectosActuales")?.innerText.includes("Colapsar");
-      STATE.equipo.forEach(m => { STATE.colapsadoSemana[m.nombre] = colapsar; });
+      document.querySelectorAll(".project-tasks-body").forEach(b => {
+        b.style.display = colapsar ? "none" : "";
+      });
+      document.querySelectorAll(".proy-toggle-icon").forEach(icon => {
+        icon.classList.toggle("is-collapsed", colapsar);
+      });
+      for (const k in STATE.colapsadoProyectos) {
+        STATE.colapsadoProyectos[k] = colapsar;
+      }
+      try { localStorage.setItem("peya_app_colapsado_proyectos", JSON.stringify(STATE.colapsadoProyectos)); } catch (_) {}
       document.getElementById("labelToggleProyectosActuales").innerText = colapsar ? "Expandir Proyectos" : "Colapsar Proyectos";
-      renderizarJerarquiaPersonas();
+      notificar(colapsar ? "Proyectos colapsados" : "Proyectos expandidos");
     }
 
     function toggleCheckItem(owner, idx, chk) {
@@ -526,6 +1535,21 @@
       if (!it) return;
       const p = parsearTodos(it.todos || "");
       if (p.items[idx]) {
+        if (/^#{1,3}\s+\S+/.test(val)) {
+          const title = val.replace(/^#{1,3}\s+/, "").trim();
+          p.items[idx] = { isGroupHeader: true, title: title };
+          if (idx === p.items.length - 1 || p.items[idx + 1]?.isGroupHeader) {
+            p.items.splice(idx + 1, 0, { text: "", checked: false, isSubpoint: false, link: null });
+          }
+          it.todos = serializarTodos(p.items, p.images);
+          guardarCampoPersonaSemana(owner, "todos", it.todos);
+          renderizarJerarquiaPersonas();
+          setTimeout(() => {
+            const nextRow = document.getElementById(`todo_row_${owner}_${idx + 1}`);
+            nextRow?.querySelector(".checklist-input")?.focus();
+          }, 40);
+          return;
+        }
         p.items[idx].text = val;
         it.todos = serializarTodos(p.items, p.images);
         debounce(`todo_${owner}`, () => guardarCampoPersonaSemana(owner, "todos", it.todos), 600);
@@ -533,18 +1557,123 @@
     }
 
     function handleChecklistKeydown(e, owner, idx, isSub) {
-      if (e.key === "Enter") {
+      const isCtrlOrCmd = e.ctrlKey || e.metaKey;
+
+      if (e.key === "Escape") {
         e.preventDefault();
-        if (!e.target.value?.trim()) return;
+        e.target.blur();
+        seleccionarFilaTarea(owner, idx, false, false);
+        return;
+      }
+
+      if (isCtrlOrCmd && (e.key === "d" || e.key === "D")) {
+        e.preventDefault();
+        SELECTED_TODOS.owner = owner;
+        SELECTED_TODOS.indices.clear();
+        SELECTED_TODOS.indices.add(idx);
+        copiarTareasSeleccionadas(true);
+        pegarTareas(owner, idx + 1);
+        return;
+      }
+
+      if (e.key === "Tab") {
+        e.preventDefault();
+        const nuevoEstado = !e.shiftKey; // Tab indenta a subtarea (↳), Shift+Tab desindenta
+        toggleSubtareaItem(owner, idx, nuevoEstado);
+      } else if (e.key === "Enter") {
+        e.preventDefault();
         agregarCheckItemNuevo(owner, idx + 1, isSub);
       } else if (e.key === "Backspace" && e.target.value === "") {
         e.preventDefault();
-        eliminarCheckItem(owner, idx, true);
+        if (isSub) {
+          toggleSubtareaItem(owner, idx, false);
+        } else {
+          eliminarCheckItem(owner, idx, true);
+        }
       }
+    }
+
+    function toggleSubtareaItem(owner, idx, nuevoEstado) {
+      const it = STATE.semanal.find(s => s.owner === owner && coincidenSemanasClient(s.semana, STATE.semana));
+      if (!it) return;
+      const p = parsearTodos(it.todos || "");
+      if (p.items[idx]) {
+        p.items[idx].isSubpoint = typeof nuevoEstado === "boolean" ? nuevoEstado : !p.items[idx].isSubpoint;
+        it.todos = serializarTodos(p.items, p.images);
+        guardarCampoPersonaSemana(owner, "todos", it.todos);
+        renderizarJerarquiaPersonas();
+        setTimeout(() => {
+          const inputs = document.querySelectorAll(`#checklist_box_${owner} .checklist-input`);
+          if (inputs[idx]) {
+            inputs[idx].focus();
+            const len = inputs[idx].value.length;
+            inputs[idx].setSelectionRange(len, len);
+          }
+        }, 30);
+      }
+    }
+
+    function esRecurrenteSub(r) {
+      if (!r) return false;
+      return !!r.isSubpoint || /\[(?:sub|subtarea)\]/i.test(r.links || "") || /^\s*(?:↳|&#8627;|\u21B3)/.test(r.tarea || "");
+    }
+
+    function handleRecKeydown(e, owner, frec, id) {
+      if (e.key === "Tab") {
+        e.preventDefault();
+        const r = STATE.recurrentes.find(x => x.id === id);
+        if (r) {
+          r.isSubpoint = !e.shiftKey;
+          let lks = (r.links || "").replace(/\[(?:sub|subtarea)\]/gi, "").trim();
+          if (r.isSubpoint) {
+            lks = (lks ? lks + " " : "") + "[sub]";
+          }
+          r.links = lks;
+          renderizarJerarquiaPersonas();
+          setTimeout(() => {
+            const row = document.querySelector(`[ondrop*="${id}"]`) || document.querySelector(`#sub_rec_${id}`);
+            row?.querySelector(".checklist-input")?.focus();
+          }, 30);
+          callServer("actualizarCampoRecurrente", r.id, "links", r.links, r.owner, r.tarea);
+        }
+      } else if (e.key === "Enter") {
+        e.preventDefault();
+        if (!e.target.value?.trim()) return;
+        agregarRecurrenteConFrecuencia(owner, frec);
+      } else if (e.key === "Backspace" && e.target.value === "") {
+        e.preventDefault();
+        const r = STATE.recurrentes.find(x => x.id === id);
+        if (r && r.isSubpoint) {
+          r.isSubpoint = false;
+          r.links = (r.links || "").replace(/\[(?:sub|subtarea)\]/gi, "").trim();
+          renderizarJerarquiaPersonas();
+          callServer("actualizarCampoRecurrente", r.id, "links", r.links, r.owner, r.tarea);
+        } else {
+          eliminarRecurrenteDirecto(id);
+        }
+      }
+    }
+
+    function guardarTodosRaw(owner, val) {
+      guardarCampoPersonaSemana(owner, "todos", val);
+    }
+
+    function eliminarImagenItem(owner, imgIdx) {
+      const it = STATE.semanal.find(s => s.owner === owner && coincidenSemanasClient(s.semana, STATE.semana));
+      if (!it) return;
+      const p = parsearTodos(it.todos || "");
+      p.images.splice(imgIdx, 1);
+      it.todos = serializarTodos(p.items, p.images);
+      guardarCampoPersonaSemana(owner, "todos", it.todos);
+      renderizarJerarquiaPersonas();
     }
 
     function handleChecklistBlur(owner, idx) {
       setTimeout(() => {
+        const active = document.activeElement;
+        if (active && active.classList.contains("checklist-input") && active.closest(".checklist-row")?.getAttribute("data-owner") === owner) {
+          return;
+        }
         const it = STATE.semanal.find(s => s.owner === owner && coincidenSemanasClient(s.semana, STATE.semana));
         if (!it) return;
         const p = parsearTodos(it.todos || "");
@@ -554,53 +1683,226 @@
           guardarCampoPersonaSemana(owner, "todos", it.todos);
           renderizarJerarquiaPersonas();
         }
-      }, 180);
+      }, 250);
     }
 
     function agregarCheckItemNuevo(owner, atIdx, isSub) {
       let it = STATE.semanal.find(s => s.owner === owner && coincidenSemanasClient(s.semana, STATE.semana));
       if (!it) {
-        guardarCampoPersonaSemana(owner, "todos", "- [ ] \n");
-        it = STATE.semanal.find(s => s.owner === owner && coincidenSemanasClient(s.semana, STATE.semana));
+        it = { id: "SEM-" + Date.now().toString(36).toUpperCase(), semana: STATE.semana, owner: owner, proyecto: "Iniciativa Principal", todos: "- [ ] \n", estado: "En proceso" };
+        STATE.semanal.push(it);
       }
       const p = parsearTodos(it?.todos || "");
       const newItem = { text: "", checked: false, isSubpoint: !!isSub, link: null };
-      if (typeof atIdx === "number") p.items.splice(atIdx, 0, newItem);
-      else p.items.push(newItem);
+      const insertAt = typeof atIdx === "number" ? atIdx : p.items.length;
+      p.items.splice(insertAt, 0, newItem);
       it.todos = serializarTodos(p.items, p.images);
       guardarCampoPersonaSemana(owner, "todos", it.todos);
       renderizarJerarquiaPersonas();
       setTimeout(() => {
         const inputs = document.querySelectorAll(`#checklist_box_${owner} .checklist-input`);
-        const target = typeof atIdx === "number" ? inputs[atIdx] : inputs[inputs.length - 1];
-        target?.focus();
-      }, 40);
+        const target = inputs[insertAt] || inputs[inputs.length - 1];
+        if (target) {
+          target.focus();
+          target.setSelectionRange(0, 0);
+        }
+      }, 50);
     }
 
-    function eliminarCheckItem(owner, idx, focusPrev) {
-      const it = STATE.semanal.find(s => s.owner === owner && coincidenSemanasClient(s.semana, STATE.semana));
-      if (!it) return;
+    function agregarNuevoGrupoTema(owner) {
+      let it = STATE.semanal.find(s => s.owner === owner && coincidenSemanasClient(s.semana, STATE.semana));
+      if (!it) {
+        it = { id: "SEM-" + Date.now().toString(36).toUpperCase(), semana: STATE.semana, owner: owner, proyecto: "Iniciativa Principal", todos: "", estado: "En proceso" };
+        STATE.semanal.push(it);
+      }
       const p = parsearTodos(it.todos || "");
-      p.items.splice(idx, 1);
+      p.items.push({ isGroupHeader: true, title: "Nuevo Tema" });
+      p.items.push({ text: "", checked: false, isSubpoint: false, link: null });
       it.todos = serializarTodos(p.items, p.images);
       guardarCampoPersonaSemana(owner, "todos", it.todos);
       renderizarJerarquiaPersonas();
+      setTimeout(() => {
+        const inputs = document.querySelectorAll(`#checklist_box_${owner} .todo-group-title-input`);
+        const last = inputs[inputs.length - 1];
+        if (last) {
+          last.focus();
+          last.select();
+        }
+      }, 40);
+    }
+
+    function editarTituloGrupo(owner, idx, val) {
+      const it = STATE.semanal.find(s => s.owner === owner && coincidenSemanasClient(s.semana, STATE.semana));
+      if (!it) return;
+      const p = parsearTodos(it.todos || "");
+      if (p.items[idx] && p.items[idx].isGroupHeader) {
+        p.items[idx].title = val;
+        it.todos = serializarTodos(p.items, p.images);
+        debounce(`todo_grp_${owner}`, () => guardarCampoPersonaSemana(owner, "todos", it.todos), 600);
+      }
+    }
+
+    function eliminarGrupoTema(owner, idx) {
+      const it = STATE.semanal.find(s => s.owner === owner && coincidenSemanasClient(s.semana, STATE.semana));
+      if (!it) return;
+      const p = parsearTodos(it.todos || "");
+      if (p.items[idx] && p.items[idx].isGroupHeader) {
+        p.items.splice(idx, 1);
+        it.todos = serializarTodos(p.items, p.images);
+        guardarCampoPersonaSemana(owner, "todos", it.todos);
+        renderizarJerarquiaPersonas();
+        notificar("Tema eliminado (las tareas se conservaron)");
+      }
+    }
+
+    function esRecurrenteAuto(r) {
+      return !!r.isAuto || /\[(?:auto|automatizado)\]/i.test(r.links || "") || /\[(?:auto|automatizado)\]/i.test(r.tarea || "");
+    }
+
+    function toggleAutoItem(owner, idx) {
+      const it = STATE.semanal.find(s => s.owner === owner && coincidenSemanasClient(s.semana, STATE.semana));
+      if (!it) return;
+      const p = parsearTodos(it.todos || "");
+      if (p.items[idx]) {
+        p.items[idx].isAuto = !p.items[idx].isAuto;
+        it.todos = serializarTodos(p.items, p.images);
+        guardarCampoPersonaSemana(owner, "todos", it.todos);
+        renderizarJerarquiaPersonas();
+        notificar(p.items[idx].isAuto ? "Marcado como Automatizado" : "Tag Automatizado removido");
+      }
+    }
+
+    function toggleAutoRecurrente(id) {
+      const r = STATE.recurrentes.find(x => x.id === id);
+      if (!r) return;
+      r.isAuto = !esRecurrenteAuto(r);
+      let lks = (r.links || "").replace(/\[(?:auto|automatizado)\]/gi, "").trim();
+      if (r.isAuto) lks = (lks ? lks + " " : "") + "[auto]";
+      r.links = lks;
+      callServer("actualizarCampoRecurrente", r.id, "links", r.links, r.owner, r.tarea);
+      renderizarJerarquiaPersonas();
+      notificar(r.isAuto ? "Recurrente marcada como Automatizada" : "Tag Automatizado removido");
+    }
+
+    // Modal de Confirmación In-App
+    let _confirmCallback = null;
+    function confirmarEliminarInApp(titulo, mensaje, onConfirm) {
+      _confirmCallback = onConfirm;
+      const overlay = document.getElementById("modalConfirmOverlay");
+      const titEl = document.getElementById("modalConfirmTitulo");
+      const msgEl = document.getElementById("modalConfirmMensaje");
+      if (titEl) titEl.textContent = titulo || "¿Eliminar tarea?";
+      if (msgEl) msgEl.textContent = mensaje || "¿Estás seguro de que deseas eliminar este elemento?";
+      if (overlay) {
+        overlay.style.display = "flex";
+        setTimeout(() => {
+          document.getElementById("btnModalConfirmEjecutar")?.focus();
+        }, 50);
+      }
+    }
+    function cerrarModalConfirm() {
+      const overlay = document.getElementById("modalConfirmOverlay");
+      if (overlay) overlay.style.display = "none";
+      _confirmCallback = null;
+    }
+    function ejecutarConfirmacionInApp() {
+      if (typeof _confirmCallback === "function") {
+        const cb = _confirmCallback;
+        cerrarModalConfirm();
+        cb();
+      } else {
+        cerrarModalConfirm();
+      }
+    }
+    function handleModalConfirmKeydown(e) {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        e.stopPropagation();
+        ejecutarConfirmacionInApp();
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        cerrarModalConfirm();
+      }
+    }
+
+    function eliminarCheckItem(owner, idx, silent) {
+      const it = STATE.semanal.find(s => s.owner === owner && coincidenSemanasClient(s.semana, STATE.semana));
+      if (!it) return;
+      const p = parsearTodos(it.todos || "");
+      const itemText = p.items[idx]?.text || "esta tarea";
+      const accion = () => {
+        p.items.splice(idx, 1);
+        it.todos = serializarTodos(p.items, p.images);
+        guardarCampoPersonaSemana(owner, "todos", it.todos);
+        renderizarJerarquiaPersonas();
+        notificar("Tarea eliminada");
+      };
+      if (silent) accion();
+      else confirmarEliminarInApp("¿Eliminar prioridad semanal?", `¿Eliminar "${itemText}" del checklist de ${owner}?`, accion);
     }
 
     function toggleCheckRecurrente(id, chk) {
       const r = STATE.recurrentes.find(x => x.id === id);
       if (!r) return;
-      if (!r.semanasCompletadas) r.semanasCompletadas = {};
-      r.semanasCompletadas[STATE.semana] = chk;
+      const fLower = (r.frecuencia || "").toLowerCase();
+
+      if (fLower.includes("diari")) {
+        const hoyKey = obtenerFechaHoyKey();
+        if (!r.checksDiarios) r.checksDiarios = {};
+        r.checksDiarios[hoyKey] = chk;
+      } else if (fLower.includes("mensual") || fLower.includes("cierre")) {
+        const mesKey = obtenerMesActualKey();
+        if (!r.checksMensuales) r.checksMensuales = {};
+        r.checksMensuales[mesKey] = chk;
+      } else {
+        const semKey = STATE.semana || STATE.semanaActual;
+        if (!r.semanasCompletadas) r.semanasCompletadas = {};
+        r.semanasCompletadas[semKey] = chk;
+      }
+
+      r.estado = JSON.stringify({
+        diarios: r.checksDiarios || {},
+        semanas: r.semanasCompletadas || {},
+        meses: r.checksMensuales || {}
+      });
+
       persistirMemoriaLocal();
-      callServer("guardarTareaRecurrente", r);
+      renderizarJerarquiaPersonas();
+      debounce(`rec_chk_${id}`, () => {
+        callServer("actualizarCampoRecurrente", r.id, "estado", r.estado, r.owner, r.tarea);
+      }, 400);
     }
 
     function editarTextoRecurrente(id, txt) {
       const r = STATE.recurrentes.find(x => x.id === id);
-      if (!r) return;
+      if (!r || r.tarea === txt) return;
+
+      r.isGroupHeader = /^\s*#{1,3}\s+/.test(txt);
+
+      const tieneHistoricoPrevio = (r.semanasCompletadas && Object.keys(r.semanasCompletadas).length > 0) || (r.checksDiarios && Object.keys(r.checksDiarios).length > 0);
+      if (tieneHistoricoPrevio && r.tarea) {
+        if (!r.historialVersiones) r.historialVersiones = [];
+        const ult = r.historialVersiones[r.historialVersiones.length - 1];
+        if (!ult || ult.tarea !== r.tarea) {
+          const semPrev = obtenerSemanaAnterior(STATE.semana) || STATE.semana;
+          r.historialVersiones.push({ tarea: r.tarea, hastaSemana: semPrev, fecha: obtenerFechaHoyKey() });
+        }
+      }
+
       r.tarea = txt;
-      debounce(`rec_${id}`, () => callServer("actualizarCampoRecurrente", id, "tarea", txt, r.owner, txt), 600);
+      r.desdeSemana = STATE.semana;
+      r.estado = JSON.stringify({
+        diarios: r.checksDiarios || {},
+        semanas: r.semanasCompletadas || {},
+        meses: r.checksMensuales || {},
+        versiones: r.historialVersiones || []
+      });
+
+      debounce(`rec_${id}`, () => {
+        callServer("actualizarCampoRecurrente", id, "tarea", txt, r.owner, txt);
+        callServer("actualizarCampoRecurrente", id, "estado", r.estado, r.owner, txt);
+      }, 600);
     }
 
     function agregarRecurrenteConFrecuencia(owner, frec) {
@@ -614,11 +1916,33 @@
       callServer("guardarTareaRecurrente", nuevo);
     }
 
-    function eliminarRecurrenteDirecto(id) {
-      STATE.recurrentes = STATE.recurrentes.filter(r => r.id !== id);
+    function agregarNuevoGrupoRecurrente(owner, frec) {
+      const nuevo = {
+        id: "REC-" + Date.now().toString(36).toUpperCase(),
+        owner: owner,
+        isGroupHeader: true,
+        tarea: "# Nuevo Proyecto",
+        frecuencia: frec || "Semanal",
+        links: ""
+      };
+      STATE.recurrentes.push(nuevo);
       renderizarJerarquiaPersonas();
-      callServer("eliminarTareaRecurrente", id);
-      notificar("Tarea eliminada");
+      setTimeout(() => {
+        const inp = document.querySelector(`#sub_rec_${nuevo.id} .todo-group-title-input`);
+        if (inp) { inp.focus(); inp.select(); }
+      }, 50);
+      callServer("guardarTareaRecurrente", nuevo);
+    }
+
+    function eliminarRecurrenteDirecto(id) {
+      const r = STATE.recurrentes.find(x => x.id === id);
+      const txt = r?.tarea || "esta tarea recurrente";
+      confirmarEliminarInApp("¿Eliminar tarea recurrente?", `¿Estás seguro de eliminar "${txt}"? Se borrará definitivamente del catálogo y no volverá a aparecer en las próximas semanas.`, () => {
+        STATE.recurrentes = STATE.recurrentes.filter(x => x.id !== id);
+        renderizarJerarquiaPersonas();
+        callServer("eliminarTareaRecurrente", id);
+        notificar("Tarea recurrente eliminada");
+      });
     }
 
     function agregarFilaFuturoPara(owner) {
@@ -629,9 +1953,31 @@
       callServer("guardarTemaFuturo", f);
     }
 
+    function agregarNuevoGrupoFuturo(owner) {
+      const f = {
+        id: "FUT-" + Date.now().toString(36).toUpperCase(),
+        owner: owner,
+        isGroupHeader: true,
+        tema: "# Nuevo Proyecto",
+        target: "A definir",
+        estado: "Pendiente"
+      };
+      STATE.futuros.push(f);
+      renderizarJerarquiaPersonas();
+      setTimeout(() => {
+        const inp = document.querySelector(`#sub_fut_${f.id} .todo-group-title-input`);
+        if (inp) { inp.focus(); inp.select(); }
+      }, 50);
+      callServer("guardarTemaFuturo", f);
+    }
+
     function guardarCampoFuturoInline(id, campo, val) {
       const f = STATE.futuros.find(x => x.id === id);
-      if (f) { f[campo] = val; callServer("actualizarCampoFuturo", id, campo, val); }
+      if (f) {
+        f[campo] = val;
+        if (campo === "tema") f.isGroupHeader = /^\s*#{1,3}\s+/.test(val);
+        callServer("actualizarCampoFuturo", id, campo, val);
+      }
     }
 
     function promoverFuturoDirecto(id) {
@@ -645,10 +1991,13 @@
     }
 
     function eliminarFuturoDirecto(id) {
-      STATE.futuros = STATE.futuros.filter(x => x.id !== id);
-      renderizarJerarquiaPersonas();
-      callServer("eliminarTemaFuturo", id);
-      notificar("Tema eliminado");
+      const f = STATE.futuros.find(x => x.id === id);
+      confirmarEliminarInApp("¿Eliminar tema futuro?", `¿Eliminar "${f?.tema || 'este proyecto'}" del backlog?`, () => {
+        STATE.futuros = STATE.futuros.filter(x => x.id !== id);
+        renderizarJerarquiaPersonas();
+        callServer("eliminarTemaFuturo", id);
+        notificar("Tema eliminado");
+      });
     }
 
     // =========================================================================
@@ -657,25 +2006,51 @@
     let _modalCtx = null;
     function abrirModalLink(ctx) {
       _modalCtx = ctx;
+      const taskInput = document.getElementById("modalTaskName");
+      if (taskInput) taskInput.value = ctx.taskName || "";
       document.getElementById("modalLinkUrl").value = ctx.initialUrl || "";
       document.getElementById("modalLinkLabel").value = ctx.initialLabel || "";
       document.getElementById("modalLinkOverlay").style.display = "flex";
-      setTimeout(() => document.getElementById("modalLinkUrl").focus(), 40);
+      setTimeout(() => {
+        const urlInp = document.getElementById("modalLinkUrl");
+        if (urlInp) urlInp.focus();
+      }, 40);
     }
     function cerrarModalLink() { document.getElementById("modalLinkOverlay").style.display = "none"; _modalCtx = null; }
 
+    function handleModalLinkKeydown(e) {
+      if (e.key === "Enter") { e.preventDefault(); confirmarGuardarLink(); }
+      else if (e.key === "Escape") { cerrarModalLink(); }
+    }
+    function autoDetectarNombreReporte(url) {
+      const lbl = document.getElementById("modalLinkLabel");
+      if (!lbl || lbl.value.trim() !== "" || !url) return;
+      try {
+        const u = new URL(url);
+        if (u.hostname.includes("sheets") || u.hostname.includes("docs.google")) lbl.value = "Google Sheet";
+        else if (u.hostname.includes("datahub")) lbl.value = "Data Hub";
+        else if (u.hostname.includes("looker") || u.hostname.includes("datastudio")) lbl.value = "Looker Dashboard";
+        else lbl.value = u.hostname.replace("www.", "");
+      } catch (_) {}
+    }
+
     function confirmarGuardarLink() {
       if (!_modalCtx) return;
+      const taskName = (document.getElementById("modalTaskName")?.value || "").trim();
       const url = (document.getElementById("modalLinkUrl").value || "").trim();
       const label = (document.getElementById("modalLinkLabel").value || "").trim() || "Link";
-      if (!url) { notificar("Ingresa una URL válida"); return; }
 
       if (_modalCtx.type === "todo") {
         const it = STATE.semanal.find(s => s.owner === _modalCtx.owner && coincidenSemanasClient(s.semana, STATE.semana));
         if (it) {
           const p = parsearTodos(it.todos || "");
           if (p.items[_modalCtx.index]) {
-            p.items[_modalCtx.index].link = { url, label };
+            if (taskName) p.items[_modalCtx.index].text = taskName;
+            if (url && /^https?:\/\//i.test(url)) {
+              p.items[_modalCtx.index].link = { url, label };
+            } else {
+              p.items[_modalCtx.index].link = null; // Vacío por defecto si no se agrega URL
+            }
             it.todos = serializarTodos(p.items, p.images);
             guardarCampoPersonaSemana(_modalCtx.owner, "todos", it.todos);
           }
@@ -683,19 +2058,51 @@
       } else if (_modalCtx.type === "rec") {
         const r = STATE.recurrentes.find(x => x.id === _modalCtx.id);
         if (r) {
-          r.links = `[link:${url}|${label}]`;
+          if (taskName && r.tarea !== taskName) {
+            const tieneHistoricoPrevio = (r.semanasCompletadas && Object.keys(r.semanasCompletadas).length > 0) || (r.checksDiarios && Object.keys(r.checksDiarios).length > 0);
+            if (tieneHistoricoPrevio && r.tarea) {
+              if (!r.historialVersiones) r.historialVersiones = [];
+              r.historialVersiones.push({ tarea: r.tarea, hastaSemana: STATE.semana, fecha: obtenerFechaHoyKey() });
+            }
+            r.tarea = taskName;
+            r.desdeSemana = STATE.semana;
+          }
+          const autoTag = esRecurrenteAuto(r) ? "[auto]" : "";
+          const subTag = esRecurrenteSub(r) ? "[sub]" : "";
+          const tags = [autoTag, subTag].filter(Boolean).join(" ");
+          if (url && /^https?:\/\//i.test(url)) {
+            r.links = `[link:${url}|${label}]${tags ? ' ' + tags : ''}`;
+          } else {
+            r.links = tags; // Vacío por defecto (solo tags de metadata si existieran)
+          }
           callServer("actualizarCampoRecurrente", r.id, "links", r.links, r.owner, r.tarea);
+          r.estado = JSON.stringify({
+            diarios: r.checksDiarios || {},
+            semanas: r.semanasCompletadas || {},
+            meses: r.checksMensuales || {},
+            versiones: r.historialVersiones || []
+          });
+          callServer("actualizarCampoRecurrente", r.id, "tarea", r.tarea, r.owner, r.tarea);
+          callServer("actualizarCampoRecurrente", r.id, "estado", r.estado, r.owner, r.tarea);
         }
       }
       cerrarModalLink();
       renderizarJerarquiaPersonas();
-      notificar("Enlace adjuntado");
+      notificar("Guardado correctamente");
     }
 
     function adjuntarLinkItem(owner, idx) {
       const it = STATE.semanal.find(s => s.owner === owner && coincidenSemanasClient(s.semana, STATE.semana));
       const p = parsearTodos(it?.todos || "");
-      abrirModalLink({ type: "todo", owner, index: idx, initialUrl: p.items[idx]?.link?.url, initialLabel: p.items[idx]?.link?.label });
+      const item = p.items[idx];
+      abrirModalLink({
+        type: "todo",
+        owner,
+        index: idx,
+        taskName: item?.text || "",
+        initialUrl: item?.link?.url,
+        initialLabel: item?.link?.label
+      });
     }
     function quitarLinkItem(owner, idx) {
       const it = STATE.semanal.find(s => s.owner === owner && coincidenSemanasClient(s.semana, STATE.semana));
@@ -706,7 +2113,13 @@
     function adjuntarLinkRecurrente(id) {
       const r = STATE.recurrentes.find(x => x.id === id);
       const lk = obtenerLinkData(r?.links);
-      abrirModalLink({ type: "rec", id, initialUrl: lk?.url, initialLabel: lk?.label });
+      abrirModalLink({
+        type: "rec",
+        id,
+        taskName: r?.tarea || "",
+        initialUrl: lk?.url,
+        initialLabel: lk?.label
+      });
     }
     function quitarLinkRecurrente(id) {
       const r = STATE.recurrentes.find(x => x.id === id);
@@ -714,58 +2127,303 @@
     }
     function obtenerLinkData(raw) {
       if (!raw) return null;
-      if (typeof raw === "object" && raw.url) return raw;
-      const m = String(raw).trim().match(RGX_LINK_TAG);
-      return m ? { url: m[1], label: m[2] || "Link" } : { url: String(raw).trim(), label: "Link" };
+      if (typeof raw === "object" && raw.url) {
+        if (/^https?:\/\//i.test(raw.url)) return raw;
+        return null;
+      }
+      const str = String(raw).trim().replace(/\[(?:auto|automatizado)\]/gi, "").replace(/\[(?:sub|subtarea)\]/gi, "").trim();
+      if (!str) return null;
+      const m = str.match(RGX_LINK_TAG);
+      if (m && /^https?:\/\//i.test(m[1].trim())) return { url: m[1].trim(), label: m[2] || "Link" };
+      if (/^https?:\/\//i.test(str)) return { url: str, label: "Link" };
+      return null;
     }
 
     // =========================================================================
     // DRAG & DROP COMPACTO
     // =========================================================================
     let DRAG_ITEM = null;
-    function handleTodoDragStart(e, owner, idx) { DRAG_ITEM = { type: 'todo', owner, idx }; e.dataTransfer.setData("text/plain", JSON.stringify(DRAG_ITEM)); }
-    function handleRecDragStart(e, owner, id) { DRAG_ITEM = { type: 'rec', owner, id }; e.dataTransfer.setData("text/plain", JSON.stringify(DRAG_ITEM)); }
-    function handleBolsaDragStart(e, id) { DRAG_ITEM = { type: 'bolsa', id }; e.dataTransfer.setData("text/plain", JSON.stringify(DRAG_ITEM)); }
+
+    function activarDragFila(el) {
+      const row = el?.closest(".checklist-row");
+      if (row) row.setAttribute("draggable", "true");
+    }
+
+    function desactivarDragFila(el) {
+      if (!DRAG_ITEM) {
+        const row = el?.closest(".checklist-row");
+        if (row) row.setAttribute("draggable", "false");
+      }
+    }
+
+    function handleTodoDragStart(e, owner, idx) {
+      const isHandle = e.target.classList.contains("drag-handle") || e.target.closest(".drag-handle");
+      if (!isHandle && e.currentTarget.getAttribute("draggable") !== "true") {
+        e.preventDefault();
+        return false;
+      }
+      DRAG_ITEM = { type: 'todo', owner, idx };
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData("text/plain", JSON.stringify(DRAG_ITEM));
+      e.currentTarget.classList.add("is-dragging");
+    }
+    function handleRecDragStart(e, owner, id) {
+      const isHandle = e.target.classList.contains("drag-handle") || e.target.closest(".drag-handle");
+      if (!isHandle && e.currentTarget.getAttribute("draggable") !== "true") {
+        e.preventDefault();
+        return false;
+      }
+      DRAG_ITEM = { type: 'rec', owner, id };
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData("text/plain", JSON.stringify(DRAG_ITEM));
+      e.currentTarget.classList.add("is-dragging");
+    }
+    function handleBolsaDragStart(e, id) {
+      DRAG_ITEM = { type: 'bolsa', id };
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData("text/plain", JSON.stringify(DRAG_ITEM));
+    }
+
+    let _dragIsSubpointTarget = false;
+    let _dragDropPosition = "before";
+
+    function handleRowDragOver(e) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
+      const row = e.currentTarget;
+      const rect = row.getBoundingClientRect();
+      const relY = e.clientY - rect.top;
+      const isBottom = relY > (rect.height / 2);
+      const offsetX = e.clientX - rect.left;
+
+      _dragIsSubpointTarget = (offsetX > 35);
+      _dragDropPosition = isBottom ? "after" : "before";
+
+      document.querySelectorAll(".checklist-row").forEach(r => {
+        if (r !== row) r.classList.remove("drag-over", "drag-over-after", "drag-over-subpoint");
+      });
+
+      row.classList.remove("drag-over", "drag-over-after", "drag-over-subpoint");
+      if (_dragDropPosition === "after") {
+        row.classList.add("drag-over-after");
+      } else if (_dragIsSubpointTarget) {
+        row.classList.add("drag-over-subpoint");
+      } else {
+        row.classList.add("drag-over");
+      }
+    }
+
+    function handleRowDragLeave(e) {
+      if (!e.currentTarget.contains(e.relatedTarget)) {
+        e.currentTarget.classList.remove("drag-over", "drag-over-after", "drag-over-subpoint");
+      }
+    }
+
+    function handleRowDragEnd(e) {
+      document.querySelectorAll(".checklist-row").forEach(r => {
+        r.classList.remove("drag-over", "drag-over-after", "drag-over-subpoint", "is-dragging");
+        r.setAttribute("draggable", "false");
+      });
+      DRAG_ITEM = null;
+      _dragIsSubpointTarget = false;
+      _dragDropPosition = "before";
+    }
 
     function handleTodoDrop(e, targetOwner, targetIdx) {
       e.preventDefault();
+      e.stopPropagation();
+      document.querySelectorAll(".checklist-row").forEach(r => r.classList.remove("drag-over", "drag-over-after", "drag-over-subpoint", "is-dragging"));
       if (!DRAG_ITEM) return;
       const targetSem = STATE.semanal.find(s => s.owner === targetOwner && coincidenSemanasClient(s.semana, STATE.semana));
-      if (!targetSem) return;
+      if (!targetSem) { DRAG_ITEM = null; return; }
       const p = parsearTodos(targetSem.todos || "");
 
+      let insertIdx = (_dragDropPosition === "after") ? targetIdx + 1 : targetIdx;
+
       if (DRAG_ITEM.type === "todo" && DRAG_ITEM.owner === targetOwner) {
+        const itemOrigin = p.items[DRAG_ITEM.idx];
+        if (DRAG_ITEM.idx < insertIdx) insertIdx--;
+        if (DRAG_ITEM.idx === insertIdx && itemOrigin && itemOrigin.isSubpoint === _dragIsSubpointTarget) {
+          DRAG_ITEM = null; return;
+        }
         const moved = p.items.splice(DRAG_ITEM.idx, 1)[0];
-        p.items.splice(targetIdx, 0, moved);
-        targetSem.todos = serializarTodos(p.items, p.images);
-        guardarCampoPersonaSemana(targetOwner, "todos", targetSem.todos);
+        if (moved) {
+          moved.isSubpoint = _dragIsSubpointTarget;
+          p.items.splice(insertIdx, 0, moved);
+          targetSem.todos = serializarTodos(p.items, p.images);
+          guardarCampoPersonaSemana(targetOwner, "todos", targetSem.todos);
+          notificar(moved.isSubpoint ? "Convertida en subtarea ↳" : "Orden de prioridades actualizado");
+        }
       } else if (DRAG_ITEM.type === "rec") {
         const rec = STATE.recurrentes.find(r => r.id === DRAG_ITEM.id);
         if (rec) {
-          p.items.splice(targetIdx, 0, { text: rec.tarea, checked: false, isSubpoint: false, link: obtenerLinkData(rec.links) });
+          p.items.splice(insertIdx, 0, { text: rec.tarea, checked: false, isSubpoint: _dragIsSubpointTarget, link: obtenerLinkData(rec.links) });
           targetSem.todos = serializarTodos(p.items, p.images);
           guardarCampoPersonaSemana(targetOwner, "todos", targetSem.todos);
+          notificar("Tarea recurrente copiada a la semana");
         }
       } else if (DRAG_ITEM.type === "bolsa") {
         const b = STATE.bolsa.find(x => String(x.id) === String(DRAG_ITEM.id));
         if (b) {
-          p.items.splice(targetIdx, 0, { text: b.titulo, checked: false, isSubpoint: false, link: null });
+          p.items.splice(insertIdx, 0, { text: b.titulo, checked: false, isSubpoint: _dragIsSubpointTarget, link: null });
           targetSem.todos = serializarTodos(p.items, p.images);
           guardarCampoPersonaSemana(targetOwner, "todos", targetSem.todos);
           callServer("asignarTareaBolsaAMiembro", b.id, targetOwner, false, STATE.semana);
+          notificar("Tarea asignada a la semana");
         }
       }
       DRAG_ITEM = null;
+      _dragIsSubpointTarget = false;
+      _dragDropPosition = "before";
       renderizarJerarquiaPersonas();
     }
 
-    function handleTodoContainerDrop(e, targetOwner) { handleTodoDrop(e, targetOwner, 0); }
-    function handleRecDrop(e, targetOwner, frec, targetId) { e.preventDefault(); DRAG_ITEM = null; }
-    function handleRecContainerDrop(e, targetOwner, frec) { e.preventDefault(); DRAG_ITEM = null; }
+    function handleTodoContainerDrop(e, targetOwner) {
+      e.preventDefault();
+      document.querySelectorAll(".checklist-row").forEach(r => r.classList.remove("drag-over", "is-dragging"));
+      if (!DRAG_ITEM) return;
+      const targetSem = STATE.semanal.find(s => s.owner === targetOwner && coincidenSemanasClient(s.semana, STATE.semana));
+      const p = parsearTodos(targetSem?.todos || "");
+      handleTodoDrop(e, targetOwner, p.items.length);
+    }
+
+    function handleRecDrop(e, targetOwner, targetFrec, targetId) {
+      e.preventDefault();
+      e.stopPropagation();
+      document.querySelectorAll(".checklist-row").forEach(r => r.classList.remove("drag-over", "is-dragging"));
+      if (!DRAG_ITEM) return;
+
+      let targetIdx = STATE.recurrentes.findIndex(r => r.id === targetId);
+      if (targetIdx === -1) targetIdx = STATE.recurrentes.length;
+
+      if (DRAG_ITEM.type === "rec") {
+        const srcId = DRAG_ITEM.id;
+        const srcIdx = STATE.recurrentes.findIndex(r => r.id === srcId);
+        if (srcIdx === -1) { DRAG_ITEM = null; return; }
+
+        const movedRec = STATE.recurrentes.splice(srcIdx, 1)[0];
+        if (targetOwner && movedRec.owner !== targetOwner) movedRec.owner = targetOwner;
+        if (targetFrec && movedRec.frecuencia !== targetFrec) {
+          movedRec.frecuencia = targetFrec;
+          callServer("actualizarCampoRecurrente", movedRec.id, "frecuencia", targetFrec, movedRec.owner, movedRec.tarea);
+        }
+
+        STATE.recurrentes.splice(targetIdx, 0, movedRec);
+        callServer("guardarOrdenRecurrentes", STATE.recurrentes.map(r => r.id));
+        notificar("Orden de tareas recurrentes actualizado");
+
+      } else if (DRAG_ITEM.type === "todo") {
+        const semItem = STATE.semanal.find(s => s.owner === DRAG_ITEM.owner && coincidenSemanasClient(s.semana, STATE.semana));
+        const p = parsearTodos(semItem?.todos || "");
+        const srcTodo = p.items[DRAG_ITEM.idx];
+        if (srcTodo && (srcTodo.text || "").trim()) {
+          const nuevaRec = {
+            id: "REC-" + Date.now().toString(36).toUpperCase() + Math.random().toString(36).slice(2, 5),
+            owner: targetOwner || DRAG_ITEM.owner,
+            tarea: srcTodo.text,
+            frecuencia: targetFrec || "Semanal",
+            links: srcTodo.link ? `[link:${srcTodo.link.url}|${srcTodo.link.label || 'Link'}]` : "",
+            estado: "{}"
+          };
+          STATE.recurrentes.splice(targetIdx, 0, nuevaRec);
+          callServer("guardarTareaRecurrente", nuevaRec);
+
+          p.items.splice(DRAG_ITEM.idx, 1);
+          semItem.todos = serializarTodos(p.items, p.images);
+          guardarCampoPersonaSemana(DRAG_ITEM.owner, "todos", semItem.todos);
+
+          notificar(`Tarea convertida a recurrente (${targetFrec || 'Semanal'})`);
+        }
+      } else if (DRAG_ITEM.type === "bolsa") {
+        const b = STATE.bolsa.find(x => String(x.id) === String(DRAG_ITEM.id));
+        if (b) {
+          const nuevaRec = {
+            id: "REC-" + Date.now().toString(36).toUpperCase() + Math.random().toString(36).slice(2, 5),
+            owner: targetOwner || "Sin asignar",
+            tarea: b.titulo,
+            frecuencia: targetFrec || "Semanal",
+            links: b.descripcion ? `[link:${b.descripcion}|Link]` : "",
+            estado: "{}"
+          };
+          STATE.recurrentes.splice(targetIdx, 0, nuevaRec);
+          callServer("guardarTareaRecurrente", nuevaRec);
+          callServer("eliminarTareaBolsa", b.id);
+          STATE.bolsa = STATE.bolsa.filter(x => String(x.id) !== String(b.id));
+          actualizarBadges();
+          notificar(`Iniciativa de la bolsa convertida a recurrente (${targetFrec || 'Semanal'})`);
+        }
+      }
+
+      DRAG_ITEM = null;
+      persistirMemoriaLocal();
+      renderizarJerarquiaPersonas();
+    }
+
+    function handleRecContainerDrop(e, targetOwner, targetFrec) {
+      e.preventDefault();
+      e.stopPropagation();
+      document.querySelectorAll(".checklist-row").forEach(r => r.classList.remove("drag-over", "is-dragging"));
+      if (!DRAG_ITEM) return;
+
+      if (DRAG_ITEM.type === "rec") {
+        const srcIdx = STATE.recurrentes.findIndex(r => r.id === DRAG_ITEM.id);
+        if (srcIdx === -1) { DRAG_ITEM = null; return; }
+
+        const movedRec = STATE.recurrentes.splice(srcIdx, 1)[0];
+        if (targetOwner && movedRec.owner !== targetOwner) movedRec.owner = targetOwner;
+        if (targetFrec && movedRec.frecuencia !== targetFrec) {
+          movedRec.frecuencia = targetFrec;
+          callServer("actualizarCampoRecurrente", movedRec.id, "frecuencia", targetFrec, movedRec.owner, movedRec.tarea);
+        }
+        STATE.recurrentes.push(movedRec);
+        callServer("guardarOrdenRecurrentes", STATE.recurrentes.map(r => r.id));
+        notificar("Tarea recurrente movida");
+
+      } else if (DRAG_ITEM.type === "todo") {
+        const semItem = STATE.semanal.find(s => s.owner === DRAG_ITEM.owner && coincidenSemanasClient(s.semana, STATE.semana));
+        const p = parsearTodos(semItem?.todos || "");
+        const srcTodo = p.items[DRAG_ITEM.idx];
+        if (srcTodo && (srcTodo.text || "").trim()) {
+          const nuevaRec = {
+            id: "REC-" + Date.now().toString(36).toUpperCase() + Math.random().toString(36).slice(2, 5),
+            owner: targetOwner || DRAG_ITEM.owner,
+            tarea: srcTodo.text,
+            frecuencia: targetFrec || "Semanal",
+            links: srcTodo.link ? `[link:${srcTodo.link.url}|${srcTodo.link.label || 'Link'}]` : "",
+            estado: "{}"
+          };
+          STATE.recurrentes.push(nuevaRec);
+          callServer("guardarTareaRecurrente", nuevaRec);
+
+          p.items.splice(DRAG_ITEM.idx, 1);
+          semItem.todos = serializarTodos(p.items, p.images);
+          guardarCampoPersonaSemana(DRAG_ITEM.owner, "todos", semItem.todos);
+
+          notificar(`Tarea convertida a recurrente (${targetFrec || 'Semanal'})`);
+        }
+      }
+
+      DRAG_ITEM = null;
+      persistirMemoriaLocal();
+      renderizarJerarquiaPersonas();
+    }
 
     // =========================================================================
-    // LLAMADAS AL SERVIDOR Y PERSISTENCIA
+    // LLAMADAS AL SERVIDOR, PERSISTENCIA Y SINCRONIZACIÓN EN VIVO
     // =========================================================================
+    let CLIENT_DATA_VERSION = null;
+    let LIVE_SYNC_TIMER = null;
+    let LIVE_SECONDS_TIMER = null;
+    let LAST_SYNC_TIME = Date.now();
+    let IS_SYNCING = false;
+    let IS_SAVING = false;
+
+    function refrescarTimestampSincronizacion() {
+      LAST_SYNC_TIME = Date.now();
+      const el = document.getElementById("connSecondsAgo");
+      if (el) el.textContent = "0s";
+    }
+
     function callServer(fn, ...args) {
       persistirMemoriaLocal();
       const runner = getRunner();
@@ -775,11 +2433,175 @@
         return;
       }
       try {
-        runner.withSuccessHandler(() => { actualizarPillConexion(true); notificar("Guardado en Google Sheets"); })
-          .withFailureHandler(err => { actualizarPillConexion(false, err?.message || err); notificar("Guardado localmente"); })
-          [fn](...args);
-      } catch (e) { actualizarPillConexion(false, e.message); }
+        IS_SAVING = true;
+        runner.withSuccessHandler(res => {
+          IS_SAVING = false;
+          refrescarTimestampSincronizacion();
+          if (res?.version) CLIENT_DATA_VERSION = res.version;
+          actualizarPillConexion(true);
+          notificar("Guardado en Google Sheets");
+        })
+        .withFailureHandler(err => {
+          IS_SAVING = false;
+          actualizarPillConexion(false, err?.message || err);
+          notificar("Guardado localmente");
+        })
+        [fn](...args);
+      } catch (e) {
+        IS_SAVING = false;
+        actualizarPillConexion(false, e.message);
+      }
     }
+
+    function iniciarSincronizacionEnVivo() {
+      if (LIVE_SYNC_TIMER) clearInterval(LIVE_SYNC_TIMER);
+      if (LIVE_SECONDS_TIMER) clearInterval(LIVE_SECONDS_TIMER);
+
+      LAST_SYNC_TIME = Date.now();
+
+      // Contador continuo de segundos estilo 1s o 2s
+      LIVE_SECONDS_TIMER = setInterval(() => {
+        const el = document.getElementById("connSecondsAgo");
+        if (!el) return;
+        const diff = Math.max(0, Math.floor((Date.now() - LAST_SYNC_TIME) / 1000));
+        el.textContent = `${diff}s`;
+      }, 1000);
+
+      // Verificación en segundo plano cada 4 segundos
+      LIVE_SYNC_TIMER = setInterval(() => {
+        verificarCambiosEnVivo();
+      }, 4000);
+
+      // Al regresar a la pestaña, sincronizar de inmediato
+      document.addEventListener("visibilitychange", () => {
+        if (!document.hidden) {
+          verificarCambiosEnVivo(true);
+        }
+      });
+
+      window.addEventListener("focus", () => {
+        verificarCambiosEnVivo(true);
+      });
+    }
+
+    let PENDING_REMOTE_SYNC_DATA = null;
+
+    function verificarCambiosEnVivo(forzar = false) {
+      if (document.hidden && !forzar) return;
+      if (IS_SAVING || IS_SYNCING) return;
+
+      // Si el usuario está escribiendo activamente, no interrumpir foco
+      const activeEl = document.activeElement;
+      const isTyping = activeEl && (activeEl.tagName === "INPUT" || activeEl.tagName === "TEXTAREA");
+      if (isTyping && !forzar) return;
+
+      const runner = getRunner();
+      if (!runner || typeof runner.verificarVersionDatos !== "function") return;
+
+      IS_SYNCING = true;
+      const currentVer = CLIENT_DATA_VERSION || "";
+      const userInfo = {
+        email: STATE.usuario?.email || "",
+        nombre: STATE.usuario?.nombre || ""
+      };
+
+      runner
+        .withSuccessHandler(res => {
+          IS_SYNCING = false;
+          refrescarTimestampSincronizacion();
+          if (!res) return;
+
+          if (Array.isArray(res.conectados)) {
+            actualizarUsuariosConectadosUI(res.conectados);
+          }
+
+          if (res.alDia) {
+            actualizarPillConexion(true);
+            return;
+          }
+
+          CLIENT_DATA_VERSION = res.version;
+          if (res.datos) {
+            aplicarCambiosRemotosEnVivo(res.datos);
+          }
+        })
+        .withFailureHandler(() => {
+          IS_SYNCING = false;
+        })
+        .verificarVersionDatos(currentVer, STATE.semana, userInfo);
+    }
+
+    function actualizarUsuariosConectadosUI(conectados) {
+      const el = document.getElementById("connUsersText");
+      const pill = document.getElementById("sheetsConnectionBadge");
+      if (!el) return;
+
+      let lista = Array.isArray(conectados) ? conectados.filter(Boolean) : [];
+      if (!lista.length && STATE.usuario?.nombre) {
+        const pNom = STATE.usuario.nombre.trim().split(" ")[0];
+        lista = [pNom.charAt(0).toUpperCase() + pNom.slice(1)];
+      }
+
+      if (!lista.length) {
+        el.textContent = "";
+        if (pill) pill.title = "Estado de conexión con Google Sheets. Clic para ver detalles.";
+        return;
+      }
+
+      el.textContent = ` · ${lista.join(", ")}`;
+      if (pill) {
+        pill.title = `Conectados en vivo (${lista.length}): ${lista.join(", ")}. Clic para ver diagnósticos.`;
+      }
+    }
+
+    function aplicarCambiosRemotosEnVivo(d) {
+      if (!d) return;
+
+      // Si el usuario está escribiendo activamente, posponer la actualización de UI para no robar el foco
+      const activeEl = document.activeElement;
+      const isTyping = activeEl && (activeEl.tagName === "INPUT" || activeEl.tagName === "TEXTAREA");
+      if (isTyping) {
+        PENDING_REMOTE_SYNC_DATA = d;
+        return;
+      }
+
+      // Actualizar datos
+      if (d.recurrentes) STATE.recurrentes = d.recurrentes;
+      if (d.futuros) STATE.futuros = d.futuros;
+      if (d.bolsa) STATE.bolsa = d.bolsa;
+      if (d.equipo?.length) STATE.equipo = d.equipo;
+      if (d.seguimientoSemanal) STATE.semanal = d.seguimientoSemanal;
+
+      // Re-renderizar la vista actual
+      renderizarTodo();
+      actualizarBadges();
+
+      // Efecto visual en la barra de conexión
+      const pill = document.getElementById("sheetsConnectionBadge");
+      const label = document.getElementById("connLabel");
+      const dot = document.getElementById("connDot");
+      if (dot) dot.style.background = "#10B981";
+      if (label) {
+        label.textContent = "Sincronizado en vivo";
+        setTimeout(() => { if (label) label.textContent = "En vivo"; }, 3000);
+      }
+      notificar("Cambios de tu equipo sincronizados en vivo");
+    }
+
+    window.addEventListener("focusout", e => {
+      if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA")) {
+        setTimeout(() => {
+          const active = document.activeElement;
+          if (!active || (active.tagName !== "INPUT" && active.tagName !== "TEXTAREA")) {
+            if (PENDING_REMOTE_SYNC_DATA) {
+              const d = PENDING_REMOTE_SYNC_DATA;
+              PENDING_REMOTE_SYNC_DATA = null;
+              aplicarCambiosRemotosEnVivo(d);
+            }
+          }
+        }, 250);
+      }
+    });
 
     function guardarCampoPersonaSemana(owner, campo, val) {
       let it = STATE.semanal.find(s => s.owner === owner && coincidenSemanasClient(s.semana, STATE.semana));
@@ -797,17 +2619,18 @@
       if (!pill || !label || !dot) return;
       pill.className = `connection-status-pill ${conectado ? 'conn-ok' : 'conn-warn'}`;
       dot.style.background = conectado ? "#10B981" : "#F59E0B";
-      label.textContent = conectado ? "Sheets Conectado" : "Modo Local / Desconectado";
+      label.textContent = conectado ? "En vivo" : "Local";
       pill.title = detalle || (conectado ? "Sincronizado en tiempo real con Google Sheets." : "Sin conexión.");
     }
 
     function mostrarDiagnosticoSheets() {
       const modal = document.getElementById("modalDiagnosticoSheets"); if (!modal) return;
       modal.style.display = "flex";
+      const spId = STATE.conexionSheets?.spreadsheetId || CONFIG.SPREADSHEET_ID;
       document.getElementById("diagBodyContent").innerHTML = `
         <div style="font-size:12px;line-height:1.6;">
           <strong>Estado:</strong> ${STATE.conexionSheets?.conectado ? 'Conectado a Google Sheets' : 'Desconectado / Local'}<br>
-          <strong>Planilla ID:</strong> <code>${CONFIG?.SPREADSHEET_ID || '1vBq5i_IRlAuhgos6awzl68j-tlKo-7vZAKtwp4do1dA'}</code><br>
+          <strong>Planilla ID:</strong> <code>${spId}</code><br>
           <strong>Tareas cargadas:</strong> ${STATE.semanal.length} semanales, ${STATE.recurrentes.length} recurrentes, ${STATE.bolsa.length} en bolsa.
         </div>
       `;
@@ -818,6 +2641,252 @@
     // =========================================================================
     // VISTAS: TIMELINE, BOLSA Y ADMIN
     // =========================================================================
+    function cambiarFiltroTipoTimeline(val) {
+      STATE.timelineFiltroTipo = val || "semanal";
+      try { localStorage.setItem("peya_app_tl_tipo", STATE.timelineFiltroTipo); } catch (_) {}
+      renderizarTimeline();
+    }
+
+    function irASemanaYPersona(owner, semana) {
+      STATE.semana = semana;
+      const selSem = document.getElementById("selectSemanaActual");
+      if (selSem) selSem.value = semana;
+      STATE.ownerFiltro = owner || "Todos";
+      const selOwn = document.getElementById("selectFiltroOwner");
+      if (selOwn) selOwn.value = STATE.ownerFiltro;
+      try {
+        localStorage.setItem("peya_app_semana", semana);
+        localStorage.setItem("peya_app_owner", STATE.ownerFiltro);
+        localStorage.setItem("peya_app_tab", "semanal");
+      } catch (_) {}
+      actualizarBadges();
+      actualizarBotonesNavegacionSemana();
+      seleccionarTab("semanal");
+      renderizarJerarquiaPersonas();
+      setTimeout(() => {
+        const card = document.getElementById(`card_persona_${owner}`);
+        card?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 100);
+    }
+
+    let TIMELINE_DRAG = null;
+    function handleTimelineTodoDragStart(e, id, owner, semana, idx) {
+      TIMELINE_DRAG = { type: 'todo', id, owner, semana, idx };
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData("text/plain", JSON.stringify(TIMELINE_DRAG));
+      e.currentTarget.classList.add("is-dragging");
+    }
+    function handleTimelineTaskDragStart(e, id, owner, semana) {
+      TIMELINE_DRAG = { type: 'init', id, owner, semana };
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData("text/plain", JSON.stringify(TIMELINE_DRAG));
+      e.currentTarget.classList.add("is-dragging");
+    }
+    function handleTimelineTaskDragEnd(e) {
+      document.querySelectorAll(".timeline-card, .timeline-task-item").forEach(c => c.classList.remove("is-dragging"));
+      document.querySelectorAll(".timeline-td-week").forEach(c => c.classList.remove("timeline-cell-drop-target"));
+      TIMELINE_DRAG = null;
+    }
+    function handleTimelineCellDragOver(e) {
+      if (!TIMELINE_DRAG) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
+      const cell = e.currentTarget;
+      if (!cell.classList.contains("timeline-cell-drop-target")) {
+        document.querySelectorAll(".timeline-td-week").forEach(c => { if (c !== cell) c.classList.remove("timeline-cell-drop-target"); });
+        cell.classList.add("timeline-cell-drop-target");
+      }
+    }
+    function handleTimelineCellDragLeave(e) { e.currentTarget.classList.remove("timeline-cell-drop-target"); }
+    function handleTimelineCellDrop(e, targetOwner, targetSemana) {
+      e.preventDefault();
+      document.querySelectorAll(".timeline-td-week").forEach(c => c.classList.remove("timeline-cell-drop-target"));
+      document.querySelectorAll(".timeline-card, .timeline-task-item").forEach(c => c.classList.remove("is-dragging"));
+
+      if (TIMELINE_DRAG) {
+        const { type, owner: srcOwner, semana: srcSemana, idx: srcIdx, id: srcId } = TIMELINE_DRAG;
+        TIMELINE_DRAG = null;
+
+        if (srcOwner === targetOwner && coincidenSemanasClient(srcSemana, targetSemana)) return;
+
+        if (type === "todo") {
+          const srcSem = STATE.semanal.find(s => s.owner === srcOwner && coincidenSemanasClient(s.semana, srcSemana));
+          if (!srcSem) return;
+          const pSrc = parsearTodos(srcSem.todos || "");
+          const movedTask = pSrc.items.splice(srcIdx, 1)[0];
+          if (!movedTask) return;
+          srcSem.todos = serializarTodos(pSrc.items, pSrc.images);
+          guardarCampoPersonaSemana(srcOwner, "todos", srcSem.todos);
+
+          let destSem = STATE.semanal.find(s => s.owner === targetOwner && coincidenSemanasClient(s.semana, targetSemana));
+          if (!destSem) {
+            destSem = {
+              id: "SEM-" + Date.now().toString(36).toUpperCase(),
+              semana: targetSemana,
+              owner: targetOwner,
+              proyecto: "Iniciativas de la Semana",
+              todos: "",
+              estado: "En proceso"
+            };
+            STATE.semanal.push(destSem);
+          }
+          const pDest = parsearTodos(destSem.todos || "");
+          pDest.items.push(movedTask);
+          destSem.todos = serializarTodos(pDest.items, pDest.images);
+          guardarCampoPersonaSemana(targetOwner, "todos", destSem.todos);
+
+          persistirMemoriaLocal();
+          renderizarTimeline();
+          renderizarJerarquiaPersonas();
+          notificar(`Tarea "${movedTask.text}" movida a ${targetSemana.split('|')[0].trim()} (${targetOwner})`);
+        } else {
+          let task = STATE.semanal.find(x => x.id === srcId);
+          if (!task) task = STATE.semanal.find(x => x.owner === srcOwner && coincidenSemanasClient(x.semana, srcSemana));
+          if (!task) return;
+
+          const destExistente = STATE.semanal.find(x => x.owner === targetOwner && coincidenSemanasClient(x.semana, targetSemana));
+          if (destExistente && destExistente.id !== task.id) {
+            const pSrc = parsearTodos(task.todos || "");
+            const pDest = parsearTodos(destExistente.todos || "");
+            pSrc.items.forEach(it => pDest.items.push(it));
+            destExistente.todos = serializarTodos(pDest.items, pDest.images.concat(pSrc.images));
+            task.todos = "";
+            callServer("guardarSeguimientoSemanal", destExistente);
+            callServer("guardarSeguimientoSemanal", task);
+          } else {
+            task.semana = targetSemana;
+            task.owner = targetOwner;
+            callServer("guardarSeguimientoSemanal", task);
+          }
+
+          persistirMemoriaLocal();
+          renderizarTimeline();
+          renderizarJerarquiaPersonas();
+          notificar(`Iniciativa movida a ${targetSemana.split('|')[0].trim()} (${targetOwner})`);
+        }
+      }
+    }
+
+    function toggleCheckItemTimeline(owner, semana, idx, chk) {
+      const it = STATE.semanal.find(s => s.owner === owner && coincidenSemanasClient(s.semana, semana));
+      if (!it) return;
+      const p = parsearTodos(it.todos || "");
+      if (p.items[idx]) {
+        p.items[idx].checked = chk;
+        it.todos = serializarTodos(p.items, p.images);
+        guardarCampoPersonaSemana(owner, "todos", it.todos);
+        renderizarTimeline();
+        renderizarJerarquiaPersonas();
+        notificar(chk ? "Tarea marcada como terminada" : "Tarea desmarcada");
+      }
+    }
+
+    function eliminarCheckItemDesdeTimeline(owner, semana, idx) {
+      const it = STATE.semanal.find(s => s.owner === owner && coincidenSemanasClient(s.semana, semana));
+      if (!it) return;
+      const p = parsearTodos(it.todos || "");
+      const itemText = p.items[idx]?.text || "esta tarea";
+      confirmarEliminarInApp(
+        "¿Eliminar tarea de la semana?",
+        `¿Eliminar "${itemText}" de la semana de ${owner}?`,
+        () => {
+          p.items.splice(idx, 1);
+          it.todos = serializarTodos(p.items, p.images);
+          guardarCampoPersonaSemana(owner, "todos", it.todos);
+          renderizarTimeline();
+          renderizarJerarquiaPersonas();
+          notificar("Tarea eliminada");
+        }
+      );
+    }
+
+    function obtenerSemanaAnterior(semana) {
+      if (!semana || !STATE.semanas?.length) return null;
+      const idx = STATE.semanas.findIndex(s => coincidenSemanasClient(s, semana));
+      if (idx > 0) return STATE.semanas[idx - 1];
+      return null;
+    }
+
+    function ejecutarRolloverTareasPendientes(semanaDestino) {
+      const semDest = semanaDestino || STATE.semana;
+      if (!semDest || !STATE.equipo?.length) return;
+      if (esSemanaPasada(semDest)) return;
+
+      const semPrev = obtenerSemanaAnterior(semDest);
+      if (!semPrev) return;
+
+      let totalRolled = 0;
+      STATE.equipo.forEach(m => {
+        const itPrev = STATE.semanal.find(s => s.owner === m.nombre && coincidenSemanasClient(s.semana, semPrev));
+        if (!itPrev || !itPrev.todos) return;
+
+        const pPrev = parsearTodos(itPrev.todos);
+        const noCompletadas = pPrev.items.filter(it => !it.checked && (it.text || "").trim().length > 0);
+        if (!noCompletadas.length) return;
+
+        let itCur = STATE.semanal.find(s => s.owner === m.nombre && coincidenSemanasClient(s.semana, semDest));
+        if (!itCur) {
+          itCur = {
+            id: "SEM-" + Date.now().toString(36).toUpperCase() + Math.random().toString(36).slice(2, 5),
+            semana: semDest,
+            owner: m.nombre,
+            proyecto: itPrev.proyecto || "Iniciativas de la Semana",
+            todos: "",
+            estado: "En proceso"
+          };
+          STATE.semanal.push(itCur);
+        }
+
+        const pCur = parsearTodos(itCur.todos || "");
+        let cambiaron = false;
+
+        noCompletadas.forEach(itPend => {
+          const textoClean = itPend.text.trim().toLowerCase();
+          const yaExiste = pCur.items.some(x => x.text.trim().toLowerCase() === textoClean);
+          if (!yaExiste) {
+            pCur.items.push({
+              text: itPend.text,
+              checked: false,
+              isSubpoint: itPend.isSubpoint,
+              link: itPend.link
+            });
+            cambiaron = true;
+            totalRolled++;
+          }
+        });
+
+        if (cambiaron) {
+          itCur.todos = serializarTodos(pCur.items, pCur.images);
+          callServer("guardarSeguimientoSemanal", itCur);
+        }
+      });
+
+      if (totalRolled > 0) {
+        persistirMemoriaLocal();
+        notificar(`${totalRolled} tarea(s) pendiente(s) se trasladaron automáticamente a esta semana`);
+      }
+    }
+
+    function eliminarTareaDesdeTimeline(e, id, owner, semana) {
+      if (e) e.stopPropagation();
+      const semNombre = (semana || "").split('|')[0].trim();
+      confirmarEliminarInApp(
+        "¿Eliminar iniciativa de la semana?",
+        `¿Estás seguro de eliminar las iniciativas de ${owner} en ${semNombre}?`,
+        () => {
+          STATE.semanal = STATE.semanal.filter(x => {
+            if (id && x.id === id) return false;
+            if (x.owner === owner && coincidenSemanasClient(x.semana, semana)) return false;
+            return true;
+          });
+          renderizarTimeline();
+          renderizarJerarquiaPersonas();
+          callServer("eliminarSeguimientoSemanal", id, owner, semana);
+          notificar("Iniciativa eliminada");
+        }
+      );
+    }
+
     function renderizarTimeline() {
       const cont = document.getElementById("timelineContainer");
       if (!cont) return;
@@ -826,69 +2895,336 @@
         cont.innerHTML = `<div style="padding:30px;text-align:center;color:var(--text-muted);">Cargando línea de tiempo desde Google Sheets...</div>`;
         return;
       }
+      const filtro = STATE.timelineFiltroTipo || "semanal";
+
+      let miembros = STATE.equipo || [];
+      if (STATE.timelineOwnerFiltro && STATE.timelineOwnerFiltro !== "Todos") {
+        miembros = miembros.filter(m => m.nombre === STATE.timelineOwnerFiltro);
+      }
+
       let html = `<table class="timeline-table"><thead><tr><th class="timeline-th-person">Miembro</th>` +
-        semanas.map(s => `<th class="timeline-th-week ${coincidenSemanasClient(s, STATE.semanaActual) ? 'is-current-week' : ''}">${escapeHtml(s.split('|')[0])}<div style="font-size:9.5px;color:var(--text-muted);">${escapeHtml(s.split('|')[1] || '')}</div></th>`).join("") +
+        semanas.map(s => {
+          const isCur = coincidenSemanasClient(s, STATE.semanaActual);
+          const isPast = !isCur && esSemanaPasada(s);
+          const isFut = !isCur && !isPast;
+          const weekThClass = isCur ? 'is-current-week' : (isPast ? 'is-past-week' : 'is-future-week');
+
+          let badgeHtml = "";
+          if (isCur) {
+            badgeHtml = `<div style="display:flex;justify-content:center;"><span class="timeline-current-week-badge">Semana Actual</span></div>`;
+          } else if (isPast) {
+            badgeHtml = `<div style="display:flex;justify-content:center;"><span class="timeline-week-badge badge-past">Histórico</span></div>`;
+          } else if (isFut) {
+            badgeHtml = `<div style="display:flex;justify-content:center;"><span class="timeline-week-badge badge-future">Planificación</span></div>`;
+          }
+
+          return `<th class="timeline-th-week ${weekThClass}">
+            ${badgeHtml}
+            <span style="font-weight:${isCur ? '900' : '800'};font-size:${isCur ? '12px' : '11px'};">${escapeHtml(s.split('|')[0])}</span>
+            <div style="font-size:9.5px;color:${isCur ? '#1D4ED8' : (isPast ? 'var(--text-muted)' : '#4338CA')};font-weight:${isCur ? '700' : '500'};">${escapeHtml(s.split('|')[1] || '')}</div>
+          </th>`;
+        }).join("") +
         `</tr></thead><tbody>`;
 
-      STATE.equipo.forEach(m => {
+      miembros.forEach(m => {
         html += `<tr><td class="timeline-td-person"><strong>${escapeHtml(m.nombre)}</strong></td>`;
         semanas.forEach(s => {
-          const t = STATE.semanal.find(x => x.owner === m.nombre && coincidenSemanasClient(x.semana, s));
-          html += `<td class="timeline-td-week ${coincidenSemanasClient(s, STATE.semanaActual) ? 'is-current-week' : ''}">
-            ${t ? `<div class="timeline-card" onclick="seleccionarTab('semanal')"><strong>${escapeHtml(t.proyecto || 'Iniciativa')}</strong></div>` : `<div style="font-size:10px;color:var(--text-muted);cursor:pointer;" onclick="crearTareaParaPersonaSemana('${escapeHtml(m.nombre)}', '${escapeHtml(s)}')">+ Planificar</div>`}
-          </td>`;
+          let semanalContent = "";
+          let recurrentesContent = "";
+          let futurosContent = "";
+
+          // 1. Iniciativas y Tareas Semanales (si filtro es 'todas' o 'semanal')
+          if (filtro === "todas" || filtro === "semanal") {
+            const itemsSem = STATE.semanal.filter(x => x.owner === m.nombre && coincidenSemanasClient(x.semana, s));
+            let semCardsHtml = "";
+            itemsSem.forEach(t => {
+              const parsed = parsearTodos(t.todos || "");
+              const semTotal = parsed.items.length;
+              const semDone = parsed.items.filter(it => it.checked).length;
+              const proyTitle = (t.proyecto || "").trim() || "Iniciativas de la Semana";
+
+              let rowsHtml = "";
+              if (semTotal > 0) {
+                rowsHtml = `<div class="timeline-todos-list">` + parsed.items.map((it, idx) => {
+                  if (!(it.text || "").trim()) return "";
+                  return `
+                    <div class="timeline-task-row ${it.isSubpoint ? 'is-subtask' : ''} ${it.checked ? 'is-completed' : ''}" draggable="true"
+                         ondragstart="handleTimelineTodoDragStart(event, '${t.id}', '${escapeHtml(m.nombre)}', '${escapeHtml(s)}', ${idx})"
+                         ondragend="handleTimelineTaskDragEnd(event)"
+                         title="${it.isSubpoint ? 'Subtarea ↳' : 'Tarea •'} (Arrastrá a otra semana · Check para marcar)">
+                      <span class="drag-handle" style="font-size:9px;padding:0;" title="Arrastrar">&#8942;&#8942;</span>
+                      ${it.isSubpoint ? `<span style="color:var(--accent-blue);font-weight:800;font-size:10px;">↳</span>` : ''}
+                      <input type="checkbox" class="timeline-task-check" ${it.checked ? 'checked' : ''}
+                             onclick="event.stopPropagation(); toggleCheckItemTimeline('${escapeHtml(m.nombre)}', '${escapeHtml(s)}', ${idx}, this.checked)"
+                             title="${it.checked ? 'Marcar como pendiente' : 'Marcar como terminada'}">
+                      <span class="timeline-task-name ${it.checked ? 'checked-text' : ''}"
+                            onclick="irASemanaYPersona('${escapeHtml(m.nombre)}', '${escapeHtml(s)}')">
+                        ${escapeHtml(it.text)}
+                      </span>
+                      <button class="btn-del-mini" style="font-size:10px;padding:0 2px;"
+                              onclick="event.stopPropagation(); eliminarCheckItemDesdeTimeline('${escapeHtml(m.nombre)}', '${escapeHtml(s)}', ${idx})"
+                              title="Eliminar tarea">&times;</button>
+                    </div>
+                  `;
+                }).join("") + `</div>`;
+              }
+
+              semCardsHtml += `
+                <div class="timeline-box-semanal">
+                  <div class="timeline-box-header">
+                    <div style="display:flex;align-items:center;gap:5px;flex:1;overflow:hidden;">
+                      <span class="timeline-tag-pill tag-pill-semanal">Semanal</span>
+                      <span class="timeline-proy-title" onclick="irASemanaYPersona('${escapeHtml(m.nombre)}', '${escapeHtml(s)}')" title="${escapeHtml(proyTitle)}">${escapeHtml(proyTitle)}</span>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:3px;flex-shrink:0;">
+                      ${semTotal > 0 ? `<span class="timeline-counter-badge ${semDone === semTotal ? 'all-done' : ''}">${semDone}/${semTotal}</span>` : ''}
+                      <button class="btn-del-mini" style="font-size:11px;padding:0 2px;" onclick="eliminarTareaDesdeTimeline(event, '${t.id}', '${escapeHtml(m.nombre)}', '${escapeHtml(s)}')" title="Eliminar iniciativa">&times;</button>
+                    </div>
+                  </div>
+                  ${rowsHtml}
+                </div>
+              `;
+            });
+            semanalContent = semCardsHtml;
+          }
+
+          // 2. Tareas Recurrentes (si filtro es 'todas' o 'recurrentes')
+          if (filtro === "todas" || filtro === "recurrentes") {
+            const recs = STATE.recurrentes.filter(r => r.owner === m.nombre);
+            let recItemsHtml = "";
+            recs.forEach(r => {
+              let chk = false;
+              const fLower = (r.frecuencia || "").toLowerCase();
+              let frecClass = "frec-pill-semanal", frecTxt = "Semanal";
+              if (fLower.includes("diari")) {
+                frecClass = "frec-pill-diario"; frecTxt = "Diario";
+                chk = coincidenSemanasClient(s, STATE.semanaActual) ? !!r.checksDiarios?.[obtenerFechaHoyKey()] : !!r.semanasCompletadas?.[s];
+              } else if (fLower.includes("mensual") || fLower.includes("cierre")) {
+                frecClass = "frec-pill-mensual"; frecTxt = "Mensual";
+                chk = !!r.checksMensuales?.[obtenerMesActualKey()];
+              } else {
+                chk = !!r.semanasCompletadas?.[s];
+              }
+              const txt = obtenerTextoRecurrenteParaSemana(r, s);
+              if (txt) {
+                const isAuto = esRecurrenteAuto(r);
+                recItemsHtml += `
+                  <div class="timeline-rec-item ${chk ? 'is-completed' : ''}" onclick="irASemanaYPersona('${escapeHtml(m.nombre)}', '${escapeHtml(s)}')" title="${chk ? 'Completada en ' + s : 'Pendiente en ' + s}">
+                    <input type="checkbox" class="timeline-rec-check" ${chk ? 'checked' : ''}
+                           onclick="event.stopPropagation(); toggleCheckRecurrente('${r.id}', this.checked)" title="Marcar recurrente">
+                    <span class="timeline-frec-pill ${frecClass}">${frecTxt}</span>
+                    ${isAuto ? `<span style="display:inline-flex;align-items:center;color:#047857;" title="Automatizado"><svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg></span>` : ''}
+                    <span class="timeline-rec-name ${chk ? 'checked-text' : ''}">
+                      ${escapeHtml(txt)}
+                    </span>
+                    <button class="btn-del-mini" style="font-size:10px;padding:0 2px;margin-left:auto;" onclick="event.stopPropagation(); eliminarRecurrenteDirecto('${r.id}')" title="Eliminar recurrente">&times;</button>
+                  </div>
+                `;
+              }
+            });
+            if (recItemsHtml) {
+              recurrentesContent = `<div class="timeline-rec-container">${recItemsHtml}</div>`;
+            }
+          }
+
+          // 3. Próximos / Futuros (si filtro es 'todas' o 'futuros')
+          if (filtro === "todas" || filtro === "futuros") {
+            const futuros = STATE.futuros.filter(f => f.owner === m.nombre && f.estado !== "Promovido");
+            let futItemsHtml = "";
+            futuros.forEach(f => {
+              futItemsHtml += `
+                <div class="timeline-fut-item" onclick="irASemanaYPersona('${escapeHtml(m.nombre)}', '${escapeHtml(s)}')" title="Target: ${escapeHtml(f.target || 'A definir')}">
+                  <div style="display:flex;align-items:center;justify-content:space-between;gap:4px;">
+                    <div style="display:flex;align-items:center;gap:4px;overflow:hidden;">
+                      <span class="timeline-tag-pill tag-pill-fut">Próximo</span>
+                      <span class="timeline-fut-title">↳ ${escapeHtml(f.tema || 'Iniciativa')}</span>
+                    </div>
+                    <button class="btn-del-mini" style="font-size:10px;padding:0 2px;" onclick="event.stopPropagation(); eliminarFuturoDirecto('${f.id}')" title="Eliminar tema">&times;</button>
+                  </div>
+                  <div style="font-size:9.5px;color:var(--text-muted);font-weight:600;padding-left:4px;">${escapeHtml(f.target || '')}</div>
+                </div>
+              `;
+            });
+            if (futItemsHtml) {
+              futurosContent = `<div style="display:flex;flex-direction:column;gap:4px;">${futItemsHtml}</div>`;
+            }
+          }
+
+          let cellHtml = "";
+          if (semanalContent || recurrentesContent || futurosContent) {
+            cellHtml = `<div class="timeline-cell-container">${semanalContent}${recurrentesContent}${futurosContent}</div>`;
+          } else {
+            cellHtml = `<button class="timeline-btn-planificar" onclick="crearTareaParaPersonaSemana('${escapeHtml(m.nombre)}', '${escapeHtml(s)}')">+ Planificar Semana</button>`;
+          }
+
+          const isCur = coincidenSemanasClient(s, STATE.semanaActual);
+          const isPast = !isCur && esSemanaPasada(s);
+          const weekTdClass = isCur ? 'is-current-week' : (isPast ? 'is-past-week' : 'is-future-week');
+
+          html += `<td class="timeline-td-week ${weekTdClass}"
+                       ondragover="handleTimelineCellDragOver(event)"
+                       ondragleave="handleTimelineCellDragLeave(event)"
+                       ondrop="handleTimelineCellDrop(event, '${escapeHtml(m.nombre)}', '${escapeHtml(s)}')">${cellHtml}</td>`;
         });
         html += `</tr>`;
       });
       cont.innerHTML = html + `</tbody></table>`;
     }
 
+    let _timelineCreateCtx = null;
     function crearTareaParaPersonaSemana(owner, sem) {
-      const p = prompt(`Iniciativa para ${owner} en ${sem.split('|')[0]}:`);
-      if (!p?.trim()) return;
-      const n = { id: "SEM-" + Date.now().toString(36).toUpperCase(), semana: sem, owner: owner, proyecto: p.trim(), todos: "- [ ] Iniciar", estado: "En proceso" };
-      STATE.semanal.push(n);
-      callServer("guardarSeguimientoSemanal", n);
-      renderizarTimeline();
+      _timelineCreateCtx = { owner, sem };
+      const modal = document.getElementById("modalNuevaIniciativaTimeline");
+      const tit = document.getElementById("modalTimelineTitulo");
+      const sub = document.getElementById("modalTimelineSubtitulo");
+      const inpProy = document.getElementById("modalTimelineInputProyecto");
+      const inpTodo = document.getElementById("modalTimelineInputPrimerTodo");
+
+      if (tit) tit.textContent = `Nueva Iniciativa para ${owner}`;
+      if (sub) sub.textContent = `Semana: ${sem.split('|')[0].trim()}`;
+      if (inpProy) inpProy.value = "";
+      if (inpTodo) inpTodo.value = "";
+
+      if (modal) modal.style.display = "flex";
+      setTimeout(() => inpProy?.focus(), 40);
     }
-    function desplazarVentanaTimeline(d) { STATE.timelineOffset += d; renderizarTimeline(); }
-    function centrarTimelineEnSemanaActual() { STATE.timelineOffset = 0; renderizarTimeline(); }
+
+    function cerrarModalNuevaIniciativaTimeline() {
+      const modal = document.getElementById("modalNuevaIniciativaTimeline");
+      if (modal) modal.style.display = "none";
+      _timelineCreateCtx = null;
+    }
+
+    function handleTimelineModalKeydown(e) {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        confirmarCrearIniciativaTimeline();
+      } else if (e.key === "Escape") {
+        cerrarModalNuevaIniciativaTimeline();
+      }
+    }
+
+    function confirmarCrearIniciativaTimeline() {
+      if (!_timelineCreateCtx) return;
+      const { owner, sem } = _timelineCreateCtx;
+      const proy = (document.getElementById("modalTimelineInputProyecto")?.value || "").trim();
+      const primerTodo = (document.getElementById("modalTimelineInputPrimerTodo")?.value || "").trim();
+
+      if (!proy) {
+        notificar("Escribí el título de la iniciativa");
+        document.getElementById("modalTimelineInputProyecto")?.focus();
+        return;
+      }
+
+      const initialTodo = primerTodo ? `- [ ] ${primerTodo}` : "- [ ] Iniciar";
+
+      let t = STATE.semanal.find(x => x.owner === owner && coincidenSemanasClient(x.semana, sem));
+      if (t) {
+        t.proyecto = proy;
+        if (!t.todos || !t.todos.trim()) t.todos = initialTodo;
+        else if (primerTodo) t.todos += `\n${initialTodo}`;
+      } else {
+        t = {
+          id: "SEM-" + Date.now().toString(36).toUpperCase(),
+          semana: sem,
+          owner: owner,
+          proyecto: proy,
+          todos: initialTodo,
+          estado: "En proceso"
+        };
+        STATE.semanal.push(t);
+      }
+
+      cerrarModalNuevaIniciativaTimeline();
+      callServer("guardarSeguimientoSemanal", t);
+      renderizarTimeline();
+      renderizarJerarquiaPersonas();
+      notificar(`Iniciativa creada para ${owner}`);
+    }
+
+    function desplazarVentanaTimeline(d) {
+      const wrap = document.getElementById("timelineWrapper");
+      if (!wrap) return;
+      wrap.scrollBy({ left: d * 280, behavior: "smooth" });
+    }
+
+    function centrarTimelineEnSemanaActual(inmediato = false) {
+      const scrollFn = () => {
+        const wrap = document.getElementById("timelineWrapper");
+        const cur = wrap?.querySelector(".timeline-th-week.is-current-week");
+        if (wrap && cur && cur.offsetLeft > 0) {
+          const personColWidth = 190;
+          const left = cur.offsetLeft;
+          const w = wrap.clientWidth;
+          const scrollTarget = left - personColWidth - ((w - personColWidth) / 2) + (cur.offsetWidth / 2);
+          wrap.scrollTo({ left: Math.max(0, scrollTarget), behavior: inmediato ? "auto" : "smooth" });
+        }
+      };
+      setTimeout(scrollFn, 50);
+      setTimeout(scrollFn, 200);
+      setTimeout(scrollFn, 500);
+    }
 
     function renderizarBolsa() {
       const cont = document.getElementById("contenedorBolsa"); if (!cont) return;
       const pilar = document.getElementById("selectFiltroPilarBolsa")?.value || "Todos";
       const prio = document.getElementById("selectFiltroPrioridadBolsa")?.value || "Todas";
-      const q = (document.getElementById("inputBuscarBolsa")?.value || "").toLowerCase();
+      const q = (document.getElementById("inputBuscarBolsa")?.value || "").toLowerCase().trim();
 
       const items = (STATE.bolsa || []).filter(b => {
         if (b.estado === "Completado" || b.estado === "Asignada") return false;
-        if (pilar !== "Todos" && b.pilar !== pilar) return false;
-        if (prio !== "Todas" && b.prioridad !== prio) return false;
+        if (pilar !== "Todos" && (b.pilar || "").toLowerCase() !== pilar.toLowerCase()) return false;
+        if (prio !== "Todas" && (b.prioridad || "").toLowerCase() !== prio.toLowerCase()) return false;
         if (q && !b.titulo?.toLowerCase().includes(q) && !b.descripcion?.toLowerCase().includes(q)) return false;
         return true;
       });
 
       if (!items.length) {
-        cont.innerHTML = `<div style="padding:40px;text-align:center;color:var(--text-muted);font-size:13px;">No hay tareas pendientes en la bolsa con esos filtros.</div>`;
+        cont.innerHTML = `
+          <div style="padding: 50px 20px; text-align: center; background: #FFFFFF; border: 1px dashed var(--border-strong); border-radius: var(--radius-lg); margin-top: 6px;">
+            <div style="display:flex;justify-content:center;margin-bottom:12px;color:#94A3B8;">
+              <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"></polyline><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"></path></svg>
+            </div>
+            <div style="font-size: 14px; font-weight: 800; color: var(--text); margin-bottom: 4px;">No hay tareas pendientes en la bolsa</div>
+            <div style="font-size: 12px; color: var(--text-secondary); max-width: 380px; margin: 0 auto 16px auto;">
+              No se encontraron iniciativas con los filtros actuales. Podés publicar una nueva iniciativa para el equipo.
+            </div>
+            <button class="btn btn-black" onclick="toggleFormNuevaBolsaInline()">+ Publicar Nueva Tarea</button>
+          </div>
+        `;
         return;
       }
 
-      cont.innerHTML = `<div class="bolsa-grid">` + items.map(b => `
-        <div class="bolsa-card" draggable="true" ondragstart="handleBolsaDragStart(event, '${b.id}')">
-          <div class="bolsa-card-header">
-            <strong>${escapeHtml(b.titulo)}</strong>
-            <span class="bolsa-priority-pill priority-${(b.prioridad || 'media').toLowerCase()}">${escapeHtml(b.prioridad || 'Media')}</span>
+      cont.innerHTML = `<div class="bolsa-grid">` + items.map(b => {
+        const pilarClass = `pilar-${(b.pilar || 'performance').toLowerCase()}`;
+        const pilarBorderClass = `pilar-border-${(b.pilar || 'performance').toLowerCase()}`;
+        const prioClass = `priority-${(b.prioridad || 'media').toLowerCase()}`;
+        return `
+          <div class="bolsa-card ${pilarBorderClass}" draggable="true" ondragstart="handleBolsaDragStart(event, '${b.id}')" title="Arrastrá esta tarjeta a la semana de un analista para asignarla">
+            <div class="bolsa-card-header">
+              <span class="bolsa-card-title">${escapeHtml(b.titulo)}</span>
+              <div class="bolsa-card-badges">
+                <span class="pilar-badge ${pilarClass}">${escapeHtml(b.pilar || 'General')}</span>
+                <span class="bolsa-priority-pill ${prioClass}">${escapeHtml(b.prioridad || 'Media')}</span>
+              </div>
+            </div>
+            ${b.descripcion ? `<div class="bolsa-card-desc">${escapeHtml(b.descripcion)}</div>` : ''}
+            <div class="bolsa-card-footer">
+              <div style="display:flex;align-items:center;gap:6px;">
+                <span style="font-size:11px;font-weight:700;color:var(--text-secondary);">Asignar a:</span>
+                <select class="bolsa-assign-select" onchange="asignarTareaBolsaASelect('${b.id}', this.value)">
+                  <option value="">Elegir analista...</option>
+                  ${STATE.equipo.map(m => `<option value="${escapeHtml(m.nombre)}">${escapeHtml(m.nombre)}</option>`).join("")}
+                </select>
+              </div>
+              <div style="display:flex;align-items:center;gap:4px;">
+                <span class="bolsa-drag-hint" title="Arrastrá al tablero semanal">&#8942;&#8942; Arrastrar</span>
+                <button class="btn-del-mini" style="margin-left:4px;" onclick="eliminarTareaBolsaDirecto('${b.id}')" title="Eliminar de la bolsa">&times;</button>
+              </div>
+            </div>
           </div>
-          <div style="font-size:11px;color:var(--text-secondary);flex:1;">${escapeHtml(b.descripcion || '')}</div>
-          <div style="display:flex;justify-content:space-between;align-items:center;border-top:1px solid var(--border);padding-top:8px;">
-            <select onchange="asignarTareaBolsaASelect('${b.id}', this.value)" style="font-size:10px;">
-              <option value="">Asignar a...</option>
-              ${STATE.equipo.map(m => `<option value="${escapeHtml(m.nombre)}">${escapeHtml(m.nombre)}</option>`).join("")}
-            </select>
-            <button class="btn btn-outline" style="font-size:10px;padding:2px 6px;" onclick="eliminarTareaBolsaDirecto('${b.id}')">&times;</button>
-          </div>
-        </div>
-      `).join("") + `</div>`;
+        `;
+      }).join("") + `</div>`;
     }
 
     function filtrarBolsa() { renderizarBolsa(); }
@@ -916,12 +3252,14 @@
     }
 
     function eliminarTareaBolsaDirecto(id) {
-      if (!confirm("¿Eliminar esta tarea de la bolsa?")) return;
-      STATE.bolsa = STATE.bolsa.filter(x => String(x.id) !== String(id));
-      actualizarBadges();
-      renderizarBolsa();
-      callServer("eliminarTareaBolsa", id);
-      notificar("Tarea eliminada");
+      const b = STATE.bolsa.find(x => String(x.id) === String(id));
+      confirmarEliminarInApp("¿Eliminar tarea de la bolsa?", `¿Eliminar "${b?.titulo || 'esta tarea'}" de la bolsa colectiva?`, () => {
+        STATE.bolsa = STATE.bolsa.filter(x => String(x.id) !== String(id));
+        actualizarBadges();
+        renderizarBolsa();
+        callServer("eliminarTareaBolsa", id);
+        notificar("Tarea eliminada");
+      });
     }
 
     function asignarTareaBolsaASelect(id, owner) {
@@ -952,20 +3290,138 @@
       runner.withSuccessHandler(res => {
         if (res?.equipo) STATE.equipo = res.equipo;
         renderizarTablaAdminEquipo();
+        renderizarTablaAdminUsuarios(res?.resumenUsuarios || []);
       }).obtenerDatosAdmin();
+    }
+
+    function renderizarTablaAdminUsuarios(usuarios) {
+      const tbody = document.getElementById("tbodyAdminUsuarios");
+      if (!tbody) return;
+      if (!usuarios || usuarios.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" style="padding:24px;text-align:center;color:var(--text-muted);font-size:12px;">Sin registros de actividad aún en la hoja 4. Logs.</td></tr>`;
+        return;
+      }
+      tbody.innerHTML = usuarios.map(u => `
+        <tr style="border-bottom:1px solid var(--border);">
+          <td style="padding:10px 12px;font-family:monospace;font-size:11px;"><strong>${escapeHtml(u.email || u.usuario)}</strong></td>
+          <td style="padding:10px 12px;text-align:center;font-weight:700;">${u.sesiones || 0}</td>
+          <td style="padding:10px 12px;text-align:center;font-weight:700;color:var(--accent-blue);">${u.cambios || 0}</td>
+          <td style="padding:10px 12px;text-align:center;font-weight:700;">${u.clicsReportes || 0}</td>
+          <td style="padding:10px 12px;font-size:11px;color:var(--text-secondary);font-family:monospace;">${escapeHtml(u.ultimoAcceso || '—')}</td>
+        </tr>
+      `).join("");
+    }
+
+    let _adminDragIdx = null;
+    function handleAdminDragStart(e, idx) {
+      _adminDragIdx = idx;
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData("text/plain", idx);
+      e.currentTarget.classList.add("is-dragging");
+    }
+    function handleAdminDragOver(e, idx) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
+      const row = e.currentTarget;
+      document.querySelectorAll(".admin-team-row").forEach(r => { if (r !== row) r.classList.remove("drag-over"); });
+      row.classList.add("drag-over");
+    }
+    function handleAdminDragLeave(e) { e.currentTarget.classList.remove("drag-over"); }
+    function handleAdminDragEnd(e) {
+      document.querySelectorAll(".admin-team-row").forEach(r => r.classList.remove("is-dragging", "drag-over"));
+      _adminDragIdx = null;
+    }
+    function handleAdminDrop(e, targetIdx) {
+      e.preventDefault();
+      document.querySelectorAll(".admin-team-row").forEach(r => r.classList.remove("drag-over"));
+      if (_adminDragIdx === null || _adminDragIdx === targetIdx) return;
+      const movido = STATE.equipo.splice(_adminDragIdx, 1)[0];
+      STATE.equipo.splice(targetIdx, 0, movido);
+      _adminDragIdx = null;
+
+      renderizarTablaAdminEquipo();
+      poblarOpcionesEquipo();
+      renderizarJerarquiaPersonas();
+      callServer("guardarOrdenEquipo", STATE.equipo.map(m => m.email));
+      notificar(`Orden actualizado: ${movido.nombre} en posición #${targetIdx + 1}`);
     }
 
     function renderizarTablaAdminEquipo() {
       const tbody = document.getElementById("tbodyAdminEquipo");
       if (!tbody) return;
-      tbody.innerHTML = (STATE.equipo || []).map(m => `
-        <tr style="border-bottom:1px solid var(--border);">
-          <td style="padding:8px;"><strong>${escapeHtml(m.nombre)}</strong></td>
-          <td style="padding:8px;font-family:monospace;font-size:11px;">${escapeHtml(m.email || '')}</td>
-          <td style="padding:8px;text-align:right;"><button class="btn-del-mini" onclick="eliminarMiembroDesdeAdmin('${escapeHtml(m.email)}')">&times;</button></td>
-        </tr>
-      `).join("");
-      document.getElementById("countAdminEquipo").innerText = STATE.equipo.length;
+      const total = (STATE.equipo || []).length;
+      tbody.innerHTML = (STATE.equipo || []).map((m, idx) => {
+        const color = obtenerColorAvatar(m.nombre);
+        const iniciales = obtenerIniciales(m.nombre);
+        return `
+          <tr class="admin-team-row" draggable="true" id="admin_row_${idx}"
+              ondragstart="handleAdminDragStart(event, ${idx})"
+              ondragover="handleAdminDragOver(event, ${idx})"
+              ondragleave="handleAdminDragLeave(event)"
+              ondrop="handleAdminDrop(event, ${idx})"
+              ondragend="handleAdminDragEnd(event)"
+              style="border-bottom:1px solid var(--border);">
+            <td style="padding:10px 12px;text-align:center;white-space:nowrap;">
+              <div style="display:flex;align-items:center;justify-content:center;gap:6px;">
+                <span class="admin-drag-handle" title="Arrastrar para ordenar">&#10495;</span>
+                <span class="admin-order-badge">#${idx + 1}</span>
+              </div>
+            </td>
+            <td style="padding:10px 12px;">
+              <div style="display:flex;align-items:center;gap:10px;">
+                <div class="avatar-badge" style="background:${color};width:26px;height:26px;font-size:10px;">${iniciales}</div>
+                <input type="text" class="admin-member-input" value="${escapeHtml(m.nombre)}"
+                       onchange="editarNombreMiembroDesdeAdmin('${escapeHtml(m.email)}', this.value, '${escapeHtml(m.nombre)}')"
+                       title="Hacé clic para editar el nombre">
+              </div>
+            </td>
+            <td style="padding:10px 12px;font-family:monospace;font-size:11px;color:var(--text-secondary);">${escapeHtml(m.email || '')}</td>
+            <td style="padding:10px 12px;text-align:right;white-space:nowrap;">
+              <div style="display:flex;align-items:center;justify-content:flex-end;gap:4px;">
+                <button class="btn btn-outline" style="padding:3px 6px;font-size:9px;" onclick="moverOrdenMiembroDesdeAdmin(${idx}, -1)" ${idx === 0 ? 'disabled' : ''} title="Subir">&#9650;</button>
+                <button class="btn btn-outline" style="padding:3px 6px;font-size:9px;" onclick="moverOrdenMiembroDesdeAdmin(${idx}, 1)" ${idx === total - 1 ? 'disabled' : ''} title="Bajar">&#9660;</button>
+                <button class="btn-del-mini" style="margin-left:6px;" onclick="eliminarMiembroDesdeAdmin('${escapeHtml(m.email)}')">&times;</button>
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join("");
+      const c = document.getElementById("countAdminEquipo"); if (c) c.innerText = STATE.equipo.length;
+    }
+
+    function moverOrdenMiembroDesdeAdmin(idx, delta) {
+      const nuevoIdx = idx + delta;
+      if (nuevoIdx < 0 || nuevoIdx >= STATE.equipo.length) return;
+      const movido = STATE.equipo.splice(idx, 1)[0];
+      STATE.equipo.splice(nuevoIdx, 0, movido);
+      renderizarTablaAdminEquipo();
+      poblarOpcionesEquipo();
+      renderizarJerarquiaPersonas();
+      callServer("guardarOrdenEquipo", STATE.equipo.map(m => m.email));
+      notificar("Orden del equipo actualizado");
+    }
+
+    function editarNombreMiembroDesdeAdmin(email, nuevoNombre, viejoNombre) {
+      const nomTrim = (nuevoNombre || "").trim();
+      if (!nomTrim) {
+        notificar("El nombre no puede estar vacío");
+        renderizarTablaAdminEquipo();
+        return;
+      }
+      if (nomTrim === viejoNombre) return;
+
+      const m = STATE.equipo.find(x => x.email === email);
+      if (m) m.nombre = nomTrim;
+
+      STATE.semanal.forEach(s => { if (s.owner === viejoNombre) s.owner = nomTrim; });
+      STATE.recurrentes.forEach(r => { if (r.owner === viejoNombre) r.owner = nomTrim; });
+      STATE.futuros.forEach(f => { if (f.owner === viejoNombre) f.owner = nomTrim; });
+
+      renderizarTablaAdminEquipo();
+      poblarOpcionesEquipo();
+      renderizarJerarquiaPersonas();
+      callServer("actualizarNombreMiembro", email, nomTrim, viejoNombre);
+      notificar(`Nombre cambiado a ${nomTrim}`);
     }
 
     function toggleFormNuevoMiembro() {
@@ -987,41 +3443,121 @@
     }
 
     function eliminarMiembroDesdeAdmin(email) {
-      if (!confirm(`¿Eliminar al miembro ${email}?`)) return;
-      STATE.equipo = STATE.equipo.filter(m => m.email !== email);
-      poblarOpcionesEquipo();
-      renderizarJerarquiaPersonas();
-      renderizarTablaAdminEquipo();
-      getRunner()?.withSuccessHandler(res => { if (res?.equipo) STATE.equipo = res.equipo; }).eliminarMiembroEquipo(email);
+      confirmarEliminarInApp("¿Eliminar miembro del equipo?", `¿Estás seguro de eliminar al integrante ${email}? Esta acción lo quitará del tablero y de la hoja 3. Equipo.`, () => {
+        STATE.equipo = STATE.equipo.filter(m => m.email !== email);
+        poblarOpcionesEquipo();
+        renderizarJerarquiaPersonas();
+        renderizarTablaAdminEquipo();
+        getRunner()?.withSuccessHandler(res => { if (res?.equipo) STATE.equipo = res.equipo; }).eliminarMiembroEquipo(email);
+        notificar("Miembro eliminado");
+      });
+    }
+
+    function cambiarFiltroOwnerTimeline(val) {
+      STATE.timelineOwnerFiltro = val || "Todos";
+      try { localStorage.setItem("peya_app_tl_owner", STATE.timelineOwnerFiltro); } catch (_) {}
+      renderizarTimeline();
     }
 
     function seleccionarTab(key) {
+      try { localStorage.setItem("peya_app_tab", key); } catch (_) {}
       ["semanal", "timeline", "bolsa", "admin"].forEach(t => {
         const el = document.getElementById(`tab-${t}`); if (el) el.style.display = (t === key) ? "block" : "none";
         const btn = document.getElementById(`tabBtn${t.charAt(0).toUpperCase() + t.slice(1)}`);
         if (btn) btn.classList.toggle("active", t === key);
       });
       if (key === "admin") cargarDatosAdmin();
+      if (key === "timeline") {
+        const sel = document.getElementById("selectFiltroTipoTimeline");
+        if (sel) sel.value = STATE.timelineFiltroTipo || "semanal";
+        const selTl = document.getElementById("selectFiltroOwnerTimeline");
+        if (selTl) selTl.value = STATE.timelineOwnerFiltro || "Todos";
+        renderizarTimeline();
+        centrarTimelineEnSemanaActual();
+      }
+      if (key === "bolsa") renderizarBolsa();
+      if (key === "semanal") renderizarJerarquiaPersonas();
     }
 
     function poblarOpcionesEquipo() {
-      const sel = document.getElementById("selectFiltroOwner"); if (!sel) return;
+      const sel = document.getElementById("selectFiltroOwner");
+      const selTl = document.getElementById("selectFiltroOwnerTimeline");
       const opts = `<option value="Todos">Todos los miembros</option>` + (STATE.equipo || []).map(m => `<option value="${escapeHtml(m.nombre)}">${escapeHtml(m.nombre)}</option>`).join("");
-      sel.innerHTML = opts;
+      if (sel) {
+        sel.innerHTML = opts;
+        if (STATE.ownerFiltro && [...sel.options].some(o => o.value === STATE.ownerFiltro)) sel.value = STATE.ownerFiltro;
+      }
+      if (selTl) {
+        selTl.innerHTML = opts;
+        if (STATE.timelineOwnerFiltro && [...selTl.options].some(o => o.value === STATE.timelineOwnerFiltro)) selTl.value = STATE.timelineOwnerFiltro;
+      }
     }
 
-    function poblarOpcionesSemanas() {
+    function poblarOpcionesSemanas(forzar = false) {
       const sel = document.getElementById("selectSemanaActual"); if (!sel) return;
-      const opts = (STATE.semanas || []).map(s => {
-        const selAttr = coincidenSemanasClient(s, STATE.semana) ? "selected" : "";
-        const suf = coincidenSemanasClient(s, STATE.semanaActual) ? " — Semana Actual" : "";
-        return `<option value="${escapeHtml(s)}" ${selAttr}>${escapeHtml(s)}${suf}</option>`;
-      }).join("");
-      sel.innerHTML = opts || `<option value="">Cargando semana desde Sheets...</option>`;
+      const curWeek = STATE.semanaActual || calcularSemanaClienteActual();
+      STATE.semanaActual = curWeek;
+
+      let semanas = STATE.semanas || [];
+      if (!semanas.length || !semanas.some(s => coincidenSemanasClient(s, curWeek))) {
+        semanas = generarSemanasDisponiblesCliente(curWeek);
+        STATE.semanas = semanas;
+      }
+
+      // Encontrar el índice de la semana actual
+      let idxCur = semanas.findIndex(s => coincidenSemanasClient(s, curWeek));
+      if (idxCur === -1) idxCur = Math.floor(semanas.length / 2);
+
+      // 1. Semanas anteriores: máximo 5 (las 5 más recientes antes de la actual)
+      const todasPasadas = semanas.slice(0, idxCur);
+      let pasadas = todasPasadas.slice(-5);
+      if (esSemanaPasada(STATE.semana) && !pasadas.some(s => coincidenSemanasClient(s, STATE.semana))) {
+        pasadas.push(STATE.semana);
+        pasadas.sort((a, b) => semanas.indexOf(a) - semanas.indexOf(b));
+      }
+
+      // 2. Semana actual
+      const actual = [semanas[idxCur] || curWeek];
+
+      // 3. Próximas semanas: máximo 5 (las 5 inmediatas siguientes)
+      const todasFuturas = semanas.slice(idxCur + 1);
+      let futuras = todasFuturas.slice(0, 5);
+      if (esSemanaFutura(STATE.semana) && !futuras.some(s => coincidenSemanasClient(s, STATE.semana))) {
+        futuras.push(STATE.semana);
+        futuras.sort((a, b) => semanas.indexOf(a) - semanas.indexOf(b));
+      }
+
+      const makeOpt = (s, prefix = "", suffix = "", styleAttr = "", classAttr = "") => {
+        const isSel = coincidenSemanasClient(s, STATE.semana);
+        return `<option value="${escapeHtml(s)}" ${isSel ? 'selected' : ''} ${classAttr ? `class="${classAttr}"` : ''} ${styleAttr ? `style="${styleAttr}"` : ''}>${prefix}${escapeHtml(s)}${suffix}</option>`;
+      };
+
+      let html = "";
+      if (pasadas.length) {
+        html += `<optgroup label="-- Semanas Pasadas --" class="optgroup-pasadas" style="color: #92400E; background-color: #FEF3C7; font-weight: 800;">` +
+          pasadas.map(s => makeOpt(s, "• ", "", "color: var(--text); background: #FFFFFF; font-weight: 600;")).join("") +
+          `</optgroup>`;
+      }
+      if (actual.length) {
+        html += `<optgroup label="-- Semana actual --" class="optgroup-actual" style="color: #065F46; background-color: #ECFDF5; font-weight: 800;">` +
+          actual.map(s => makeOpt(s, "", " (Semana Actual)", "background-color: #ECFDF5; color: #065F46; font-weight: 800;", "opt-semana-actual")).join("") +
+          `</optgroup>`;
+      }
+      if (futuras.length) {
+        html += `<optgroup label="-- Proximas semanas --" class="optgroup-futuras" style="color: #1E40AF; background-color: #EFF6FF; font-weight: 800;">` +
+          futuras.map(s => makeOpt(s, "• ", "", "color: var(--text); background: #FFFFFF; font-weight: 600;")).join("") +
+          `</optgroup>`;
+      }
+
+      sel.innerHTML = html;
+
+      const optSel = [...sel.options].find(o => coincidenSemanasClient(o.value, STATE.semana));
+      if (optSel) sel.value = optSel.value;
     }
 
     function aplicarFiltros() {
       STATE.ownerFiltro = document.getElementById("selectFiltroOwner")?.value || "Todos";
+      try { localStorage.setItem("peya_app_owner", STATE.ownerFiltro); } catch (_) {}
       renderizarTodo();
     }
 
