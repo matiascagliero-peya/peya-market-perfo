@@ -921,4 +921,77 @@
   .tag-auto-btn.is-auto { background: #ECFDF5; color: #047857; border: 1px solid #10B981; font-weight: 800; }
   .tag-auto-btn .auto-dot { width: 5px; height: 5px; border-radius: 50%; background: #94A3B8; display: inline-block; }
   .tag-auto-btn.is-auto .auto-dot { background: #10B981; }
+
+  /* MENÚ FLOTANTE SLASH COMMAND ESTILO NOTION */
+  .notion-slash-menu {
+    position: fixed;
+    z-index: 9999;
+    width: 270px;
+    max-height: 330px;
+    background: #FFFFFF;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    box-shadow: 0 12px 32px -4px rgba(15, 23, 42, 0.16), 0 4px 12px -2px rgba(15, 23, 42, 0.08);
+    overflow-y: auto;
+    padding: 6px 0;
+    user-select: none;
+    font-family: var(--font);
+    animation: slashMenuIn 0.1s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  @keyframes slashMenuIn {
+    from { opacity: 0; transform: translateY(-4px) scale(0.98); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  .slash-menu-header {
+    font-size: 10px;
+    font-weight: 800;
+    color: var(--text-muted);
+    padding: 6px 12px 3px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+  .slash-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 12px;
+    cursor: pointer;
+    font-size: 12px;
+    color: var(--text);
+    transition: background 0.1s ease;
+  }
+  .slash-menu-item:hover, .slash-menu-item.is-active {
+    background: #F1F5F9;
+  }
+  .slash-menu-icon {
+    width: 24px;
+    height: 24px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    background: #FFFFFF;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    flex-shrink: 0;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  }
+  .slash-menu-content {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+  .slash-menu-title {
+    font-weight: 700;
+    line-height: 1.2;
+    color: var(--text);
+  }
+  .slash-menu-desc {
+    font-size: 10px;
+    color: var(--text-muted);
+    margin-top: 1px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
 </style>

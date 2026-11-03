@@ -82,7 +82,9 @@ function checkYEnviarEmail() {
 
   Logger.log('=== checkYEnviarEmail ===');
   Logger.log('Hora actual     : ' + horaStr + ' (' + zona + ')');
-  Logger.log('Ventana de envío: ' + HORA_ENVIO + ':' + String(MINUTO_ENVIO).padStart(2,'0') + ' → ' + HORA_ENVIO + ':' + String(MINUTO_ENVIO + VENTANA_MIN).padStart(2,'0'));
+  const finMinTotal = minObj + VENTANA_MIN;
+  const finHoraStr = String(Math.floor(finMinTotal / 60)).padStart(2, '0') + ':' + String(finMinTotal % 60).padStart(2, '0');
+  Logger.log('Ventana de envío: ' + String(HORA_ENVIO).padStart(2, '0') + ':' + String(MINUTO_ENVIO).padStart(2, '0') + ' → ' + finHoraStr);
   Logger.log('Hoy             : ' + hoyStr);
 
   if (minAhora < minObj || minAhora > minObj + VENTANA_MIN) {

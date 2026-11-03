@@ -400,6 +400,38 @@ function obtenerDatosCompletos(semanaFiltro) {
   return _cargarPaqueteDatos(getDB(), semanaFiltro);
 }
 
+function subirImagenAdjunto(base64Data, nombreArchivo) {
+  try {
+    if (!base64Data) return { success: false, error: "Datos vacíos" };
+    const commaIdx = base64Data.indexOf(',');
+    if (commaIdx === -1) return { success: true, url: base64Data };
+
+    const header = base64Data.substring(0, commaIdx);
+    const contentType = header.substring(5, header.indexOf(';')) || "image/png";
+    const bytes = Utilities.base64Decode(base64Data.substring(commaIdx + 1));
+    const blob = Utilities.newBlob(bytes, contentType, nombreArchivo || ('img_' + Date.now() + '.png'));
+
+    let folder;
+    const folders = DriveApp.getFoldersByName("Adjuntos Proyectos PeYa");
+    if (folders.hasNext()) {
+      folder = folders.next();
+    } else {
+      folder = DriveApp.createFolder("Adjuntos Proyectos PeYa");
+    }
+
+    const file = folder.createFile(blob);
+    try {
+      file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    } catch (_) {}
+
+    const fileId = file.getId();
+    const url = `https://drive.google.com/thumbnail?id=${fileId}&sz=w1200`;
+    return { success: true, url: url, fileId: fileId };
+  } catch (e) {
+    return { success: true, url: base64Data };
+  }
+}
+
 // ==============================================================================
 // CRUD — 1. SEGUIMIENTO SEMANAL
 // ==============================================================================

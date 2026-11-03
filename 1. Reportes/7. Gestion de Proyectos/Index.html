@@ -483,6 +483,13 @@
     <button class="floating-selection-close" onclick="limpiarSeleccionTareas()" title="Deseleccionar (Esc)">&times;</button>
   </div>
 
+  <!-- MENÚ FLOTANTE SLASH COMMAND ESTILO NOTION -->
+  <div id="notionSlashMenu" class="notion-slash-menu" style="display: none;">
+    <div class="slash-menu-header">BLOQUES Y ACCIONES</div>
+    <div class="slash-menu-list" id="slashMenuList"></div>
+  </div>
+  <input type="file" id="inputSubirImagenGlobal" accept="image/*" style="display: none;" onchange="handleArchivoImagenSeleccionado(this)">
+
   <?!= include('JavaScript'); ?>
 </body>
 </html>

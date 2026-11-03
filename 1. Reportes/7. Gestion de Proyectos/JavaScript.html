@@ -1448,8 +1448,26 @@
         }
       });
 
-      // External text paste handler into selected row
+      // Captura y pegado inteligente: imágenes del portapapeles y texto
       window.addEventListener("paste", function(e) {
+        // 1. Detección de imagen en el portapapeles
+        const items = e.clipboardData?.items;
+        if (items) {
+          for (let i = 0; i < items.length; i++) {
+            if (items[i].type && items[i].type.startsWith("image/")) {
+              const file = items[i].getAsFile();
+              if (file) {
+                e.preventDefault();
+                const activeEl = document.activeElement;
+                const activeRow = activeEl?.closest(".checklist-row") || activeEl?.closest(".todo-group-header") || activeEl?.closest(".person-card");
+                const owner = activeRow?.getAttribute("data-owner") || activeRow?.id?.replace("card_persona_", "") || TARGET_IMAGE_OWNER || (STATE.ownerFiltro !== "Todos" ? STATE.ownerFiltro : "") || STATE.usuario?.nombre || STATE.equipo?.[0]?.nombre;
+                procesarYAdjuntarImagen(file, owner);
+                return;
+              }
+            }
+          }
+        }
+
         const activeEl = document.activeElement;
         const isTyping = activeEl && (activeEl.tagName === "INPUT" || activeEl.tagName === "TEXTAREA");
 
@@ -1530,6 +1548,245 @@
       _timers[key] = setTimeout(fn, delay);
     }
 
+    // =========================================================================
+    // SUBIDA Y PEGADO DE IMÁGENES & SLASH COMMANDS ESTILO NOTION
+    // =========================================================================
+    let TARGET_IMAGE_OWNER = null;
+    let SLASH_MENU_CTX = null;
+    let SLASH_ACTIVE_INDEX = 0;
+
+    const SLASH_COMMANDS = [
+      { id: "todo", title: "Tarea", desc: "Casilla simple de verificación", icon: "📝", group: "BLOQUES BÁSICOS" },
+      { id: "subtarea", title: "Subtarea", desc: "Tarea anidada dependiente (↳)", icon: "↳", group: "BLOQUES BÁSICOS" },
+      { id: "proyecto", title: "Proyecto / Grupo", desc: "Encabezado con color y toggle", icon: "📁", group: "BLOQUES BÁSICOS" },
+      { id: "subir_imagen", title: "Subir Imagen", desc: "Desde archivo de tu computadora", icon: "🖼️", group: "MULTIMEDIA" },
+      { id: "pegar_imagen", title: "Pegar Imagen", desc: "Pegar captura del portapapeles", icon: "📋", group: "MULTIMEDIA" },
+      { id: "enlace", title: "Adjuntar Enlace", desc: "Vincular a doc o dashboard", icon: "🔗", group: "ACCIONES" },
+      { id: "automatizado", title: "Automatizado", desc: "Marcar proceso automático", icon: "⚙️", group: "ACCIONES" },
+      { id: "eliminar", title: "Eliminar Tarea", desc: "Borrar este elemento", icon: "🗑️", group: "ACCIONES" }
+    ];
+
+    function isSlashMenuOpen() {
+      const menu = document.getElementById("notionSlashMenu");
+      return menu && menu.style.display !== "none";
+    }
+
+    function abrirSlashMenu(inputEl, owner, idx, query = "") {
+      const menu = document.getElementById("notionSlashMenu");
+      if (!menu || !inputEl) return;
+      SLASH_MENU_CTX = { inputEl, owner, idx, query };
+      SLASH_ACTIVE_INDEX = 0;
+      renderSlashMenu();
+
+      const rect = inputEl.getBoundingClientRect();
+      const menuWidth = 270;
+      const menuHeight = 310;
+
+      let top = rect.bottom + window.scrollY + 4;
+      let left = rect.left + window.scrollX;
+
+      if (left + menuWidth > window.innerWidth) {
+        left = window.innerWidth - menuWidth - 12;
+      }
+      if (top + menuHeight > window.innerHeight + window.scrollY) {
+        top = rect.top + window.scrollY - menuHeight - 4;
+      }
+
+      menu.style.top = `${Math.max(10, top)}px`;
+      menu.style.left = `${Math.max(10, left)}px`;
+      menu.style.display = "block";
+    }
+
+    function cerrarSlashMenu() {
+      const menu = document.getElementById("notionSlashMenu");
+      if (menu) menu.style.display = "none";
+      SLASH_MENU_CTX = null;
+    }
+
+    function renderSlashMenu() {
+      const list = document.getElementById("slashMenuList");
+      if (!list || !SLASH_MENU_CTX) return;
+
+      const q = (SLASH_MENU_CTX.query || "").toLowerCase();
+      const filtered = SLASH_COMMANDS.filter(c =>
+        !q || c.title.toLowerCase().includes(q) || c.desc.toLowerCase().includes(q) || c.id.includes(q)
+      );
+
+      if (!filtered.length) {
+        list.innerHTML = `<div style="padding: 10px 14px; font-size: 11px; color: var(--text-muted); font-style: italic;">Sin comandos coincidentes</div>`;
+        return;
+      }
+
+      if (SLASH_ACTIVE_INDEX >= filtered.length) SLASH_ACTIVE_INDEX = 0;
+      if (SLASH_ACTIVE_INDEX < 0) SLASH_ACTIVE_INDEX = filtered.length - 1;
+
+      let currentGroup = "";
+      let html = "";
+
+      filtered.forEach((cmd, i) => {
+        if (cmd.group !== currentGroup) {
+          currentGroup = cmd.group;
+          html += `<div class="slash-menu-header">${currentGroup}</div>`;
+        }
+        const isActive = (i === SLASH_ACTIVE_INDEX);
+        html += `
+          <div class="slash-menu-item ${isActive ? 'is-active' : ''}" onmousedown="ejecutarSlashCommand('${cmd.id}')">
+            <div class="slash-menu-icon">${cmd.icon}</div>
+            <div class="slash-menu-content">
+              <div class="slash-menu-title">${cmd.title}</div>
+              <div class="slash-menu-desc">${cmd.desc}</div>
+            </div>
+          </div>
+        `;
+      });
+
+      list.innerHTML = html;
+    }
+
+    function moverSlashMenu(delta) {
+      if (!SLASH_MENU_CTX) return;
+      const q = (SLASH_MENU_CTX.query || "").toLowerCase();
+      const filtered = SLASH_COMMANDS.filter(c => !q || c.title.toLowerCase().includes(q) || c.desc.toLowerCase().includes(q) || c.id.includes(q));
+      if (!filtered.length) return;
+      SLASH_ACTIVE_INDEX = (SLASH_ACTIVE_INDEX + delta + filtered.length) % filtered.length;
+      renderSlashMenu();
+    }
+
+    function ejecutarSlashSeleccionado() {
+      if (!SLASH_MENU_CTX) return;
+      const q = (SLASH_MENU_CTX.query || "").toLowerCase();
+      const filtered = SLASH_COMMANDS.filter(c => !q || c.title.toLowerCase().includes(q) || c.desc.toLowerCase().includes(q) || c.id.includes(q));
+      if (filtered[SLASH_ACTIVE_INDEX]) {
+        ejecutarSlashCommand(filtered[SLASH_ACTIVE_INDEX].id);
+      }
+    }
+
+    function ejecutarSlashCommand(cmdId) {
+      if (!SLASH_MENU_CTX) return;
+      const { inputEl, owner, idx } = SLASH_MENU_CTX;
+      cerrarSlashMenu();
+
+      if (inputEl) {
+        const rawVal = inputEl.value || "";
+        const cleanVal = rawVal.replace(/\/([^\s]*)$/, "").trim();
+        inputEl.value = cleanVal;
+        editarTextoItem(owner, idx, cleanVal);
+      }
+
+      if (cmdId === "subir_imagen") {
+        TARGET_IMAGE_OWNER = owner;
+        document.getElementById("inputSubirImagenGlobal")?.click();
+      } else if (cmdId === "pegar_imagen") {
+        pegarImagenDesdePortapapeles(owner);
+      } else if (cmdId === "proyecto") {
+        editarTextoItem(owner, idx, "# Nuevo Proyecto");
+      } else if (cmdId === "subtarea") {
+        toggleSubtareaItem(owner, idx, true);
+      } else if (cmdId === "todo") {
+        toggleSubtareaItem(owner, idx, false);
+      } else if (cmdId === "enlace") {
+        adjuntarLinkItem(owner, idx);
+      } else if (cmdId === "automatizado") {
+        toggleAutoItem(owner, idx);
+      } else if (cmdId === "eliminar") {
+        eliminarCheckItem(owner, idx, true);
+      }
+    }
+
+    function comprimirImagen(file, maxAncho = 1200, calidad = 0.82) {
+      return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const img = new Image();
+          img.onload = () => {
+            let w = img.width, h = img.height;
+            if (w > maxAncho) {
+              h = Math.round((h * maxAncho) / w);
+              w = maxAncho;
+            }
+            const canvas = document.createElement("canvas");
+            canvas.width = w;
+            canvas.height = h;
+            const ctx = canvas.getContext("2d");
+            ctx.drawImage(img, 0, 0, w, h);
+            const dataUrl = canvas.toDataURL("image/jpeg", calidad);
+            resolve(dataUrl);
+          };
+          img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+
+    function procesarYAdjuntarImagen(file, owner) {
+      if (!file || !owner) return;
+      notificar("Optimizando y adjuntando imagen...");
+      comprimirImagen(file, 1200, 0.82).then(base64 => {
+        const runner = getRunner();
+        if (runner && typeof runner.subirImagenAdjunto === "function") {
+          runner
+            .withSuccessHandler(res => {
+              const url = (res && res.url) ? res.url : base64;
+              adjuntarUrlImagenASemana(owner, url);
+            })
+            .withFailureHandler(() => {
+              adjuntarUrlImagenASemana(owner, base64);
+            })
+            .subirImagenAdjunto(base64, file.name || "captura.png");
+        } else {
+          adjuntarUrlImagenASemana(owner, base64);
+        }
+      });
+    }
+
+    function adjuntarUrlImagenASemana(owner, url) {
+      let it = STATE.semanal.find(s => s.owner === owner && coincidenSemanasClient(s.semana, STATE.semana));
+      if (!it) {
+        it = { id: "SEM-" + Date.now().toString(36).toUpperCase(), semana: STATE.semana, owner: owner, proyecto: "Iniciativa Principal", todos: "", estado: "En proceso" };
+        STATE.semanal.push(it);
+      }
+      const p = parsearTodos(it.todos || "");
+      p.images.push(url);
+      it.todos = serializarTodos(p.items, p.images);
+      guardarCampoPersonaSemana(owner, "todos", it.todos);
+      renderizarJerarquiaPersonas();
+      notificar("🖼️ Imagen adjuntada con éxito");
+    }
+
+    function handleArchivoImagenSeleccionado(inputEl) {
+      const file = inputEl.files?.[0];
+      if (file) {
+        const owner = TARGET_IMAGE_OWNER || STATE.usuario?.nombre || STATE.ownerFiltro;
+        procesarYAdjuntarImagen(file, owner);
+      }
+      inputEl.value = "";
+    }
+
+    async function pegarImagenDesdePortapapeles(owner) {
+      try {
+        if (navigator.clipboard && navigator.clipboard.read) {
+          const items = await navigator.clipboard.read();
+          for (const item of items) {
+            const imgType = item.types.find(t => t.startsWith("image/"));
+            if (imgType) {
+              const blob = await item.getType(imgType);
+              procesarYAdjuntarImagen(blob, owner);
+              return;
+            }
+          }
+        }
+        notificar("Copiá una captura al portapapeles y presioná Ctrl+V para pegarla");
+      } catch (err) {
+        notificar("Presioná Ctrl+V en tu teclado para pegar la imagen copiada");
+      }
+    }
+
+    window.addEventListener("mousedown", function(e) {
+      if (isSlashMenuOpen() && !e.target.closest("#notionSlashMenu")) {
+        cerrarSlashMenu();
+      }
+    });
+
     function editarTextoItem(owner, idx, val) {
       const it = STATE.semanal.find(s => s.owner === owner && coincidenSemanasClient(s.semana, STATE.semana));
       if (!it) return;
@@ -1550,6 +1807,17 @@
           }, 40);
           return;
         }
+
+        // Detección de comando slash "/" estilo Notion
+        if (val.includes("/")) {
+          const slashIdx = val.lastIndexOf("/");
+          const q = val.substring(slashIdx + 1).toLowerCase().trim();
+          const inputEl = document.querySelector(`#todo_row_${owner}_${idx} .checklist-input`);
+          abrirSlashMenu(inputEl, owner, idx, q);
+        } else if (isSlashMenuOpen()) {
+          cerrarSlashMenu();
+        }
+
         p.items[idx].text = val;
         it.todos = serializarTodos(p.items, p.images);
         debounce(`todo_${owner}`, () => guardarCampoPersonaSemana(owner, "todos", it.todos), 600);
@@ -1557,6 +1825,26 @@
     }
 
     function handleChecklistKeydown(e, owner, idx, isSub) {
+      if (isSlashMenuOpen()) {
+        if (e.key === "ArrowDown") {
+          e.preventDefault();
+          moverSlashMenu(1);
+          return;
+        } else if (e.key === "ArrowUp") {
+          e.preventDefault();
+          moverSlashMenu(-1);
+          return;
+        } else if (e.key === "Enter") {
+          e.preventDefault();
+          ejecutarSlashSeleccionado();
+          return;
+        } else if (e.key === "Escape") {
+          e.preventDefault();
+          cerrarSlashMenu();
+          return;
+        }
+      }
+
       const isCtrlOrCmd = e.ctrlKey || e.metaKey;
 
       if (e.key === "Escape") {
