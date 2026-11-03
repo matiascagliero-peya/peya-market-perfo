@@ -495,7 +495,7 @@
     // PARSER & SERIALIZADOR DE TO-DOS
     // =========================================================================
     const RGX_LINK_TAG = /\[link:(https?:\/\/[^|\]]+)(?:\|([^\]]+))?\]/i;
-    const RGX_IMG_TAG = /\[img:(https?:\/\/[^\]]+)\]/i;
+    const RGX_IMG_TAG = /\[img:([^\]]+)\]/i;
     const RGX_IMG_URL = /^(https?:\/\/[^\s]+\.(?:png|jpg|jpeg|gif|webp|svg))(?:\?[^\s]*)?$/i;
 
     function parsearTodos(rawText) {
@@ -504,8 +504,19 @@
       String(rawText).split(/\r?\n/).forEach(line => {
         const trimmed = line.trim();
         if (!trimmed) return;
-        const img = trimmed.match(RGX_IMG_TAG) || trimmed.match(RGX_IMG_URL);
-        if (img) { images.push(img[1]); return; }
+
+        // Detección de imágenes (etiqueta [img:...] o URL directa)
+        const imgTagMatch = trimmed.match(RGX_IMG_TAG);
+        if (imgTagMatch) {
+          images.push(imgTagMatch[1]);
+          const lineSinImg = trimmed.replace(RGX_IMG_TAG, "").replace(/^[-*•]?\s*\[[ x]?\]\s*/i, "").trim();
+          if (!lineSinImg) return;
+        }
+        const imgUrlMatch = trimmed.match(RGX_IMG_URL);
+        if (imgUrlMatch) {
+          images.push(imgUrlMatch[1]);
+          return;
+        }
 
         // Detección de encabezado de grupo o tema: Ej: # Mapster 2 o ## Daily Report
         const mGroup = trimmed.match(/^#{1,3}\s+(.+)$/);
@@ -634,7 +645,7 @@
                        draggable="false"
                        onmousedown="desactivarDragFila(this)"
                        onkeydown="handleChecklistKeydown(event, '${escapeHtml(owner)}', ${idx}, ${it.isSubpoint})"
-                       oninput="editarTextoItem('${escapeHtml(owner)}', ${idx}, this.value)"
+                       oninput="editarTextoItem('${escapeHtml(owner)}', ${idx}, this.value, this)"
                        onfocus="handleChecklistFocus(event, '${escapeHtml(owner)}', ${idx})"
                        onblur="handleChecklistBlur('${escapeHtml(owner)}', ${idx})">
                 <div class="row-tail-actions">
@@ -1582,14 +1593,14 @@
       const menuWidth = 270;
       const menuHeight = 310;
 
-      let top = rect.bottom + window.scrollY + 4;
-      let left = rect.left + window.scrollX;
+      let top = rect.bottom + 4;
+      let left = rect.left;
 
       if (left + menuWidth > window.innerWidth) {
-        left = window.innerWidth - menuWidth - 12;
+        left = Math.max(10, window.innerWidth - menuWidth - 16);
       }
-      if (top + menuHeight > window.innerHeight + window.scrollY) {
-        top = rect.top + window.scrollY - menuHeight - 4;
+      if (top + menuHeight > window.innerHeight) {
+        top = Math.max(10, rect.top - menuHeight - 4);
       }
 
       menu.style.top = `${Math.max(10, top)}px`;
@@ -1787,7 +1798,7 @@
       }
     });
 
-    function editarTextoItem(owner, idx, val) {
+    function editarTextoItem(owner, idx, val, el) {
       const it = STATE.semanal.find(s => s.owner === owner && coincidenSemanasClient(s.semana, STATE.semana));
       if (!it) return;
       const p = parsearTodos(it.todos || "");
@@ -1812,7 +1823,7 @@
         if (val.includes("/")) {
           const slashIdx = val.lastIndexOf("/");
           const q = val.substring(slashIdx + 1).toLowerCase().trim();
-          const inputEl = document.querySelector(`#todo_row_${owner}_${idx} .checklist-input`);
+          const inputEl = el || document.activeElement;
           abrirSlashMenu(inputEl, owner, idx, q);
         } else if (isSlashMenuOpen()) {
           cerrarSlashMenu();
