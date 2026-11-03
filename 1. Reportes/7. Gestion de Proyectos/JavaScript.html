@@ -1556,14 +1556,14 @@
     let SLASH_ACTIVE_INDEX = 0;
 
     const SLASH_COMMANDS = [
-      { id: "todo", title: "Tarea", desc: "Casilla simple de verificación", icon: "📝", group: "BLOQUES BÁSICOS" },
-      { id: "subtarea", title: "Subtarea", desc: "Tarea anidada dependiente (↳)", icon: "↳", group: "BLOQUES BÁSICOS" },
-      { id: "proyecto", title: "Proyecto / Grupo", desc: "Encabezado con color y toggle", icon: "📁", group: "BLOQUES BÁSICOS" },
-      { id: "subir_imagen", title: "Subir Imagen", desc: "Desde archivo de tu computadora", icon: "🖼️", group: "MULTIMEDIA" },
-      { id: "pegar_imagen", title: "Pegar Imagen", desc: "Pegar captura del portapapeles", icon: "📋", group: "MULTIMEDIA" },
-      { id: "enlace", title: "Adjuntar Enlace", desc: "Vincular a doc o dashboard", icon: "🔗", group: "ACCIONES" },
-      { id: "automatizado", title: "Automatizado", desc: "Marcar proceso automático", icon: "⚙️", group: "ACCIONES" },
-      { id: "eliminar", title: "Eliminar Tarea", desc: "Borrar este elemento", icon: "🗑️", group: "ACCIONES" }
+      { id: "todo", title: "Tarea", desc: "Casilla simple de verificación", icon: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>`, group: "BLOQUES BÁSICOS" },
+      { id: "subtarea", title: "Subtarea", desc: "Tarea anidada dependiente", icon: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>`, group: "BLOQUES BÁSICOS" },
+      { id: "proyecto", title: "Proyecto / Grupo", desc: "Encabezado con color y toggle", icon: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>`, group: "BLOQUES BÁSICOS" },
+      { id: "subir_imagen", title: "Subir Imagen", desc: "Desde archivo de tu computadora", icon: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>`, group: "MULTIMEDIA" },
+      { id: "pegar_imagen", title: "Pegar Imagen", desc: "Pegar captura del portapapeles", icon: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect></svg>`, group: "MULTIMEDIA" },
+      { id: "enlace", title: "Adjuntar Enlace", desc: "Vincular a doc o dashboard", icon: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>`, group: "ACCIONES" },
+      { id: "automatizado", title: "Automatizado", desc: "Marcar proceso automático", icon: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>`, group: "ACCIONES" },
+      { id: "eliminar", title: "Eliminar Tarea", desc: "Borrar este elemento", icon: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>`, group: "ACCIONES" }
     ];
 
     function isSlashMenuOpen() {
@@ -1750,7 +1750,7 @@
       it.todos = serializarTodos(p.items, p.images);
       guardarCampoPersonaSemana(owner, "todos", it.todos);
       renderizarJerarquiaPersonas();
-      notificar("🖼️ Imagen adjuntada con éxito");
+      notificar("Imagen adjuntada con éxito");
     }
 
     function handleArchivoImagenSeleccionado(inputEl) {
