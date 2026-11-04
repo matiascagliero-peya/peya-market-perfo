@@ -30,18 +30,20 @@
       --r: 10px;
     }
 
-    body[data-theme="dark"] {
+    :root[data-theme="dark"], body[data-theme="dark"], [data-theme="dark"] {
       --t1: #f8fafc;
       --t2: #cbd5e1;
       --t3: #94a3b8;
-      --t4: #475569;
+      --t4: #64748b;
       --border: #334155;
       --border2: #1e293b;
-      --bg: #0f172a;
-      --card: #1e293b;
-      --sh: 0 2px 8px rgba(0,0,0,.35);
-      --green-bg: rgba(21, 128, 61, 0.2);
-      --rose-bg: rgba(225, 29, 72, 0.2);
+      --bg: #0b0f19;
+      --card: #111827;
+      --sh: 0 4px 14px rgba(0,0,0,.5);
+      --green: #22c55e;
+      --green-bg: rgba(34, 197, 94, 0.2);
+      --rose: #f43f5e;
+      --rose-bg: rgba(244, 63, 94, 0.2);
     }
 
     body {
@@ -458,6 +460,125 @@
       font-family: inherit;
     }
     .restore-btn:hover { background: rgba(234, 4, 78, 0.1); }
+
+    /* ── REGLAS DE ALTO CONTRASTE PARA MODO NOCHE (BENCHMARK) ── */
+    [data-theme="dark"] .panel {
+      background: #111827 !important;
+      border-color: #334155 !important;
+    }
+    [data-theme="dark"] .ph {
+      background: #111827 !important;
+      border-bottom-color: #1e293b !important;
+    }
+    [data-theme="dark"] .ph-count {
+      background: #1e293b !important;
+      color: #94a3b8 !important;
+    }
+    [data-theme="dark"] .fbar {
+      background: rgba(17, 24, 39, 0.96) !important;
+      border-bottom-color: #334155 !important;
+    }
+    [data-theme="dark"] .fs,
+    [data-theme="dark"] .fsrch,
+    [data-theme="dark"] .n-btn,
+    [data-theme="dark"] .copy-btn {
+      background: #1e293b !important;
+      border-color: #334155 !important;
+      color: #f8fafc !important;
+    }
+    [data-theme="dark"] .fsrch::placeholder {
+      color: #64748b !important;
+    }
+    [data-theme="dark"] .fsep {
+      background: #334155 !important;
+    }
+    [data-theme="dark"] .metrics-dropdown {
+      background: #1e293b !important;
+      border-color: #334155 !important;
+    }
+    [data-theme="dark"] .dropdown-header {
+      background: #111827 !important;
+      border-bottom-color: #334155 !important;
+      color: #cbd5e1 !important;
+    }
+    [data-theme="dark"] .dropdown-item:hover {
+      background: #334155 !important;
+    }
+    [data-theme="dark"] table.mx th.sticky,
+    [data-theme="dark"] table.mx td.sticky {
+      background: #111827 !important;
+    }
+    [data-theme="dark"] table.mx td.sticky-1 {
+      background: #111827 !important;
+      border-right: 1px solid #1e293b !important;
+    }
+    [data-theme="dark"] table.mx td.sticky-2 {
+      background: #111827 !important;
+      border-right: 2px solid #334155 !important;
+      box-shadow: 4px 0 10px rgba(0, 0, 0, 0.4) !important;
+    }
+    [data-theme="dark"] table.mx thead tr.sub th {
+      background: #162032 !important;
+      color: #94a3b8 !important;
+      border-bottom: 1px solid #334155 !important;
+    }
+    [data-theme="dark"] table.mx thead tr.grp th.sticky-1,
+    [data-theme="dark"] table.mx thead tr.grp th.sticky-2 {
+      background: #162032 !important;
+      color: #cbd5e1 !important;
+    }
+    [data-theme="dark"] table.mx td {
+      border-bottom-color: #1e293b !important;
+      color: #f1f5f9 !important;
+    }
+    [data-theme="dark"] table.mx td.grp-sep {
+      border-left: 2px solid #334155 !important;
+    }
+    [data-theme="dark"] table.mx tbody tr:hover td {
+      background: rgba(255, 255, 255, 0.05) !important;
+    }
+    [data-theme="dark"] .wh-name {
+      color: #f8fafc !important;
+    }
+    [data-theme="dark"] .wh-cc {
+      color: #94a3b8 !important;
+    }
+    [data-theme="dark"] .cc-badge {
+      background: #1e293b !important;
+      border: 1px solid #334155 !important;
+      color: #cbd5e1 !important;
+    }
+    [data-theme="dark"] .v {
+      color: #f8fafc !important;
+      font-weight: 700 !important;
+    }
+    [data-theme="dark"] .nd {
+      color: #475569 !important;
+    }
+    [data-theme="dark"] .vb-neu {
+      background: #1e293b !important;
+      color: #94a3b8 !important;
+    }
+    [data-theme="dark"] #rings-filter-bar {
+      background: #111827 !important;
+      border-bottom-color: #334155 !important;
+    }
+    [data-theme="dark"] table.tb th {
+      background: #162032 !important;
+      border-bottom-color: #334155 !important;
+      color: #cbd5e1 !important;
+    }
+    [data-theme="dark"] table.tb td {
+      border-bottom-color: #1e293b !important;
+      color: #f1f5f9 !important;
+    }
+    [data-theme="dark"] table.tb td.sticky-1,
+    [data-theme="dark"] table.tb td.sticky-2 {
+      background: #111827 !important;
+    }
+    [data-theme="dark"] table.tb tbody tr:hover td {
+      background: rgba(255, 255, 255, 0.05) !important;
+    }
   </style>
 </head>
 <body>
@@ -573,29 +694,29 @@
     // ============================================================
     let METRICS = [
       // Demand Stimulation & Transaccionales
-      { key: 'orders', label: 'Confirmed Orders', shortLabel: 'Orders', fmt: 'int', varFmt: 'pct_rel', hi: true, bg: '#fff0f3', tc: '#ea044e' },
-      { key: 'net_sales', label: 'GMV Dmarts ($)', shortLabel: 'GMV', fmt: 'curr', varFmt: 'pct_rel', hi: true, bg: '#eff6ff', tc: '#2563eb' },
-      { key: 'aov', label: 'AFV (Ticket AOV)', shortLabel: 'AFV', fmt: 'curr', varFmt: 'pct_rel', hi: true, bg: '#fff7ed', tc: '#ea580c' },
-      { key: 'units', label: 'Units Sold', shortLabel: 'Units', fmt: 'int', varFmt: 'pct_rel', hi: true, bg: '#fdf2f8', tc: '#be185d' },
-      { key: 'basket_size', label: 'Basket Size', shortLabel: 'Basket', fmt: 'float', varFmt: 'pct_rel', hi: true, bg: '#f8fafc', tc: '#475569' },
-      { key: 'discounts', label: 'Discounts ($)', shortLabel: 'Discounts', fmt: 'curr', varFmt: 'pct_rel', hi: false, bg: '#fff1f2', tc: '#e11d48' },
-      { key: 'discount_intensity', label: 'Gross Basket Discount %', shortLabel: 'Disc %', fmt: 'pct', varFmt: 'pp', hi: false, bg: '#f5f3ff', tc: '#7c3aed' },
-      { key: 'uf_share', label: 'Confirmed Orders share % - UF', shortLabel: 'UF Share %', fmt: 'pct', varFmt: 'pp', hi: true, bg: '#ecfeff', tc: '#0891b2' },
+      { key: 'orders', label: 'Confirmed Orders', shortLabel: 'Orders', fmt: 'int', varFmt: 'pct_rel', hi: true, bg: '#fff0f3', tc: '#ea044e', darkTc: '#ff4d79' },
+      { key: 'net_sales', label: 'GMV Dmarts ($)', shortLabel: 'GMV', fmt: 'curr', varFmt: 'pct_rel', hi: true, bg: '#eff6ff', tc: '#2563eb', darkTc: '#60a5fa' },
+      { key: 'aov', label: 'AFV (Ticket AOV)', shortLabel: 'AFV', fmt: 'curr', varFmt: 'pct_rel', hi: true, bg: '#fff7ed', tc: '#ea580c', darkTc: '#fb923c' },
+      { key: 'units', label: 'Units Sold', shortLabel: 'Units', fmt: 'int', varFmt: 'pct_rel', hi: true, bg: '#fdf2f8', tc: '#be185d', darkTc: '#f472b6' },
+      { key: 'basket_size', label: 'Basket Size', shortLabel: 'Basket', fmt: 'float', varFmt: 'pct_rel', hi: true, bg: '#f8fafc', tc: '#475569', darkTc: '#cbd5e1' },
+      { key: 'discounts', label: 'Discounts ($)', shortLabel: 'Discounts', fmt: 'curr', varFmt: 'pct_rel', hi: false, bg: '#fff1f2', tc: '#e11d48', darkTc: '#fb7185' },
+      { key: 'discount_intensity', label: 'Gross Basket Discount %', shortLabel: 'Disc %', fmt: 'pct', varFmt: 'pp', hi: false, bg: '#f5f3ff', tc: '#7c3aed', darkTc: '#a78bfa' },
+      { key: 'uf_share', label: 'Confirmed Orders share % - UF', shortLabel: 'UF Share %', fmt: 'pct', varFmt: 'pp', hi: true, bg: '#ecfeff', tc: '#0891b2', darkTc: '#22d3ee' },
 
       // Demand Stimulation & Usuarios
-      { key: 'penetration', label: 'Platform MAUs penetration %', shortLabel: 'Penetr. %', fmt: 'pct', varFmt: 'pp', hi: true, bg: '#f0fdf4', tc: '#15803d' },
-      { key: 'dmart_users', label: 'Dmart MAUs', shortLabel: 'Dmart MAUs', fmt: 'int', varFmt: 'pct_rel', hi: true, bg: '#eff6ff', tc: '#1d4ed8' },
-      { key: 'peya_users', label: 'Platform MAUs', shortLabel: 'Platform MAUs', fmt: 'int', varFmt: 'pct_rel', hi: true, bg: '#f0f9ff', tc: '#0284c7' },
-      { key: 'frequency', label: 'Frequency', shortLabel: 'Freq', fmt: 'float', varFmt: 'pct_rel', hi: true, bg: '#ecfeff', tc: '#0284c7' },
-      { key: 'core_pct', label: 'Core Users %', shortLabel: 'Core %', fmt: 'pct', varFmt: 'pp', hi: true, bg: '#faf5ff', tc: '#9333ea' },
-      { key: 'high_income_pct', label: 'High Income %', shortLabel: 'High Inc %', fmt: 'pct', varFmt: 'pp', hi: true, bg: '#fffbeb', tc: '#b45309' },
+      { key: 'penetration', label: 'Platform MAUs penetration %', shortLabel: 'Penetr. %', fmt: 'pct', varFmt: 'pp', hi: true, bg: '#f0fdf4', tc: '#15803d', darkTc: '#4ade80' },
+      { key: 'dmart_users', label: 'Dmart MAUs', shortLabel: 'Dmart MAUs', fmt: 'int', varFmt: 'pct_rel', hi: true, bg: '#eff6ff', tc: '#1d4ed8', darkTc: '#60a5fa' },
+      { key: 'peya_users', label: 'Platform MAUs', shortLabel: 'Platform MAUs', fmt: 'int', varFmt: 'pct_rel', hi: true, bg: '#f0f9ff', tc: '#0284c7', darkTc: '#38bdf8' },
+      { key: 'frequency', label: 'Frequency', shortLabel: 'Freq', fmt: 'float', varFmt: 'pct_rel', hi: true, bg: '#ecfeff', tc: '#0284c7', darkTc: '#38bdf8' },
+      { key: 'core_pct', label: 'Core Users %', shortLabel: 'Core %', fmt: 'pct', varFmt: 'pp', hi: true, bg: '#faf5ff', tc: '#9333ea', darkTc: '#c084fc' },
+      { key: 'high_income_pct', label: 'High Income %', shortLabel: 'High Inc %', fmt: 'pct', varFmt: 'pp', hi: true, bg: '#fffbeb', tc: '#b45309', darkTc: '#fcd34d' },
 
       // Operational Excellence
-      { key: 'seamless', label: 'Seamless Delivery %', shortLabel: 'Seamless %', fmt: 'pct', varFmt: 'pp', hi: true, bg: '#f0fdf4', tc: '#16a34a' },
-      { key: 'fail_rate', label: 'Rejected orders %', shortLabel: 'Rejected %', fmt: 'pct', varFmt: 'pp', hi: false, bg: '#fff1f2', tc: '#dc2626' },
-      { key: 'order_late', label: 'Late Orders %', shortLabel: 'Late %', fmt: 'pct', varFmt: 'pp', hi: false, bg: '#fffbeb', tc: '#d97706' },
-      { key: 'late_10', label: 'Order late 10 min %', shortLabel: 'Late >10m', fmt: 'pct', varFmt: 'pp', hi: false, bg: '#fdf2f8', tc: '#f43f5e' },
-      { key: 'delivery_time', label: 'Avg. Delivery Time', shortLabel: 'Deliv. Time', fmt: 'min', varFmt: 'min_abs', hi: false, bg: '#fff7ed', tc: '#c2410c' }
+      { key: 'seamless', label: 'Seamless Delivery %', shortLabel: 'Seamless %', fmt: 'pct', varFmt: 'pp', hi: true, bg: '#f0fdf4', tc: '#16a34a', darkTc: '#4ade80' },
+      { key: 'fail_rate', label: 'Rejected orders %', shortLabel: 'Rejected %', fmt: 'pct', varFmt: 'pp', hi: false, bg: '#fff1f2', tc: '#dc2626', darkTc: '#f87171' },
+      { key: 'order_late', label: 'Late Orders %', shortLabel: 'Late %', fmt: 'pct', varFmt: 'pp', hi: false, bg: '#fffbeb', tc: '#d97706', darkTc: '#fbbf24' },
+      { key: 'late_10', label: 'Order late 10 min %', shortLabel: 'Late >10m', fmt: 'pct', varFmt: 'pp', hi: false, bg: '#fdf2f8', tc: '#f43f5e', darkTc: '#fb7185' },
+      { key: 'delivery_time', label: 'Avg. Delivery Time', shortLabel: 'Deliv. Time', fmt: 'min', varFmt: 'min_abs', hi: false, bg: '#fff7ed', tc: '#c2410c', darkTc: '#fb923c' }
     ];
 
     const ORIGINAL_METRICS_ORDER = [...METRICS];
@@ -735,9 +856,11 @@
       const phDate = document.getElementById('ph-date');
       if (phDate) phDate.textContent = `Mes: ${currentSelectedMonth} · vs Anterior: ${currentPrevMonth}`;
 
+      const isDark = document.documentElement.getAttribute('data-theme') === 'dark' || (document.body && document.body.getAttribute('data-theme') === 'dark');
+
       // Fila 1 de Encabezado: Grupos de Métrica
-      let h1 = `<th class="sticky sticky-1 grp" rowspan="2" style="text-align:left; background:var(--border2); color:var(--t2);">ALMACÉN / TIENDA</th>`;
-      h1 += `<th class="sticky sticky-2 grp" rowspan="2" style="background:var(--border2); color:var(--t2);">PAÍS</th>`;
+      let h1 = `<th class="sticky sticky-1 grp" rowspan="2" style="text-align:left; background:${isDark ? '#162032' : 'var(--border2)'}; color:${isDark ? '#cbd5e1' : 'var(--t2)'}; border-bottom:1px solid ${isDark ? '#334155' : 'var(--border)'};">ALMACÉN / TIENDA</th>`;
+      h1 += `<th class="sticky sticky-2 grp" rowspan="2" style="background:${isDark ? '#162032' : 'var(--border2)'}; color:${isDark ? '#cbd5e1' : 'var(--t2)'}; border-right:2px solid ${isDark ? '#334155' : 'var(--border)'}; border-bottom:1px solid ${isDark ? '#334155' : 'var(--border)'};">PAÍS</th>`;
 
       METRICS.forEach(m => {
         const isSorted = sortKey === m.key;
@@ -745,8 +868,12 @@
         const isVisible = visibleMetrics.has(m.key);
         const colClass = `m-col m-col-${m.key}${isVisible ? '' : ' collapsed'}`;
 
+        const grpBg = isDark ? (isSorted ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.03)') : m.bg;
+        const grpColor = isDark ? (m.darkTc || m.tc) : m.tc;
+        const grpBorder = isDark ? `border-top:3px solid ${m.tc}; border-left:2px solid ${m.tc}40; border-bottom:1px solid #334155;` : `border-left:2px solid ${m.tc}25;`;
+
         h1 += `
-          <th colspan="2" class="${colClass} grp${isSorted ? ' sorted' : ''}" onclick="setSort('${m.key}')" style="background:${m.bg}; color:${m.tc}; border-left:2px solid ${m.tc}25;">
+          <th colspan="2" class="${colClass} grp${isSorted ? ' sorted' : ''}" onclick="setSort('${m.key}')" style="background:${grpBg}; color:${grpColor}; ${grpBorder}">
             ${m.shortLabel} <span class="sort-arr">${arr}</span>
           </th>
         `;
@@ -756,12 +883,12 @@
       let h2 = '';
       METRICS.forEach(m => {
         const isSorted = sortKey === m.key;
-        const bg = isSorted ? `background:${m.bg};` : '';
+        const bg = isDark ? (isSorted ? 'background:rgba(255,255,255,0.06);' : 'background:#162032;') : (isSorted ? `background:${m.bg};` : '');
         const varLabel = m.varFmt === 'min_abs' ? 'Δmin' : m.varFmt === 'pp' ? 'Δpp' : 'vs M-1';
         const isVisible = visibleMetrics.has(m.key);
         const colClass = `m-col m-col-${m.key}${isVisible ? '' : ' collapsed'}`;
 
-        h2 += `<th class="${colClass} sub val-h" style="border-left:2px solid ${m.tc}25; ${bg}">M</th>`;
+        h2 += `<th class="${colClass} sub val-h" style="border-left:2px solid ${isDark ? m.tc + '40' : m.tc + '25'}; ${bg}">M</th>`;
         h2 += `<th class="${colClass} sub" style="${bg}">${varLabel}</th>`;
       });
 
@@ -787,8 +914,8 @@
           const mVal = getVal(row, m.key, 'm');
           const prevVal = getVal(row, m.key, 'prev');
           const isSorted = sortKey === m.key;
-          const bg = isSorted ? `background:${m.bg}25;` : '';
-          const sep = `border-left:2px solid ${m.tc}20;`;
+          const bg = isDark ? (isSorted ? 'background:rgba(255,255,255,0.04);' : '') : (isSorted ? `background:${m.bg}25;` : '');
+          const sep = `border-left:2px solid ${isDark ? m.tc + '30' : m.tc + '20'};`;
           const isVisible = visibleMetrics.has(m.key);
           const colClass = `m-col m-col-${m.key}${isVisible ? '' : ' collapsed'}`;
 
@@ -988,60 +1115,87 @@
       loadBenchmarkData(month);
     }
 
-    function loadBenchmarkData(targetMonth) {
-      const splash = document.getElementById('splash');
-      if (splash) splash.classList.remove('out');
+    function applyBenchmarkData(res) {
+      if (!res || !res.rows) return;
+      ALL_ROWS = res.rows || [];
+      currentSelectedMonth = res.selectedMonth || '2026-09-01';
+      currentPrevMonth = res.prevMonth || '2026-08-01';
 
+      const monthSelect = document.getElementById('f-month');
+      if (monthSelect && monthSelect.options.length <= 1 && res.months) {
+        monthSelect.innerHTML = '';
+        res.months.forEach(m => {
+          const opt = document.createElement('option');
+          opt.value = m;
+          opt.textContent = m;
+          if (m === currentSelectedMonth) opt.selected = true;
+          monthSelect.appendChild(opt);
+        });
+      }
+
+      const ccSelect = document.getElementById('f-cc');
+      if (ccSelect && ccSelect.options.length <= 1 && res.countries) {
+        res.countries.forEach(c => {
+          const opt = document.createElement('option');
+          opt.value = c;
+          opt.textContent = c;
+          ccSelect.appendChild(opt);
+        });
+      }
+
+      try {
+        initMetricsDropdown();
+        buildTable();
+      } catch (renderErr) {
+        console.error('[Benchmark Render Error]:', renderErr);
+      }
+    }
+
+    function loadBenchmarkData(targetMonth) {
       const country = document.getElementById('f-cc').value;
+      const splash = document.getElementById('splash');
+      const cacheKey = `mapster_bench_${targetMonth || 'def'}_${country || 'all'}`;
+
+      // 1. Carga instantánea desde sessionStorage (5 ms)
+      let hasCached = false;
+      try {
+        const cachedRaw = sessionStorage.getItem(cacheKey);
+        if (cachedRaw) {
+          const cached = JSON.parse(cachedRaw);
+          if (cached && cached.rows && cached.rows.length > 0) {
+            applyBenchmarkData(cached);
+            hasCached = true;
+            if (splash) splash.classList.add('out');
+          }
+        }
+      } catch(e) {}
+
+      if (!hasCached && splash) {
+        splash.classList.remove('out');
+      }
 
       google.script.run
         .withSuccessHandler(res => {
           if (!res || !res.rows) {
-            document.getElementById('sp-note').textContent = 'No se encontraron datos en la planilla.';
-            if (splash) splash.classList.add('out');
+            if (!hasCached) {
+              document.getElementById('sp-note').textContent = 'No se encontraron datos en la planilla.';
+              if (splash) splash.classList.add('out');
+            }
             return;
           }
 
-          ALL_ROWS = res.rows || [];
-          currentSelectedMonth = res.selectedMonth || '2026-09-01';
-          currentPrevMonth = res.prevMonth || '2026-08-01';
-
-          // Poblar meses si no estaban
-          const monthSelect = document.getElementById('f-month');
-          if (monthSelect && monthSelect.options.length <= 1 && res.months) {
-            monthSelect.innerHTML = '';
-            res.months.forEach(m => {
-              const opt = document.createElement('option');
-              opt.value = m;
-              opt.textContent = m;
-              if (m === currentSelectedMonth) opt.selected = true;
-              monthSelect.appendChild(opt);
-            });
-          }
-
-          // Poblar países si no estaban
-          const ccSelect = document.getElementById('f-cc');
-          if (ccSelect && ccSelect.options.length <= 1 && res.countries) {
-            res.countries.forEach(c => {
-              const opt = document.createElement('option');
-              opt.value = c;
-              opt.textContent = c;
-              ccSelect.appendChild(opt);
-            });
-          }
-
           try {
-            initMetricsDropdown();
-            buildTable();
-          } catch (renderErr) {
-            console.error('[Benchmark Render Error]:', renderErr);
-          } finally {
-            if (splash) splash.classList.add('out');
-          }
+            sessionStorage.setItem(cacheKey, JSON.stringify(res));
+          } catch(e) {}
+
+          applyBenchmarkData(res);
+          if (splash) splash.classList.add('out');
         })
         .withFailureHandler(err => {
-          document.getElementById('sp-note').textContent = 'Error: ' + err.message;
-          if (splash) splash.classList.add('out');
+          if (!hasCached) {
+            document.getElementById('sp-note').textContent = 'Error: ' + err.message;
+            if (splash) splash.classList.add('out');
+          }
         })
         .getBenchmarkData(targetMonth || null, country);
     }
@@ -1155,10 +1309,12 @@
           <tbody>
       `;
 
+      const isDark = document.documentElement.getAttribute('data-theme') === 'dark' || (document.body && document.body.getAttribute('data-theme') === 'dark');
+
       filtered.forEach(row => {
-        const penColor = row.penetration_pct > 25 ? '#15803d' : (row.penetration_pct > 15 ? '#0284c7' : 'var(--t1)');
-        const dtColor = row.avg_dt > 40 ? '#ef4444' : (row.avg_dt > 32 ? '#ea580c' : '#15803d');
-        const lateColor = row.pct_late > 25 ? '#ef4444' : (row.pct_late > 15 ? '#ea580c' : '#15803d');
+        const penColor = row.penetration_pct > 25 ? (isDark ? '#4ade80' : '#15803d') : (row.penetration_pct > 15 ? (isDark ? '#38bdf8' : '#0284c7') : (isDark ? '#f8fafc' : 'var(--t1)'));
+        const dtColor = row.avg_dt > 40 ? '#f43f5e' : (row.avg_dt > 32 ? '#fb923c' : (isDark ? '#4ade80' : '#15803d'));
+        const lateColor = row.pct_late > 25 ? '#f43f5e' : (row.pct_late > 15 ? '#fb923c' : (isDark ? '#4ade80' : '#15803d'));
 
         html += `
           <tr>
@@ -1172,26 +1328,26 @@
               </span>
             </td>
             <td style="text-align:center;">
-              <span style="display:inline-block; font-size:10px; font-weight:800; padding:2px 8px; border-radius:10px; background:rgba(2,132,199,0.12); color:#0284c7; border:1px solid rgba(2,132,199,0.3); font-family:'JetBrains Mono',monospace;">
+              <span style="display:inline-block; font-size:10px; font-weight:800; padding:2px 8px; border-radius:10px; background:${isDark ? 'rgba(56,189,248,0.15)' : 'rgba(2,132,199,0.12)'}; color:${isDark ? '#38bdf8' : '#0284c7'}; border:1px solid ${isDark ? 'rgba(56,189,248,0.3)' : 'rgba(2,132,199,0.3)'}; font-family:'JetBrains Mono',monospace;">
                 ${row.anillo}
               </span>
             </td>
-            <td style="text-align:right; font-family:'JetBrains Mono',monospace; font-weight:600;">
+            <td style="text-align:right; font-family:'JetBrains Mono',monospace; font-weight:600; color:${isDark ? '#f8fafc' : 'var(--t1)'};">
               ${row.covered_maus ? row.covered_maus.toLocaleString('es-AR') : '—'}
             </td>
-            <td style="text-align:right; font-family:'JetBrains Mono',monospace; font-weight:700; color:#2563eb;">
+            <td style="text-align:right; font-family:'JetBrains Mono',monospace; font-weight:700; color:${isDark ? '#60a5fa' : '#2563eb'};">
               ${row.dmart_maus ? row.dmart_maus.toLocaleString('es-AR') : '—'}
             </td>
             <td style="text-align:right; font-family:'JetBrains Mono',monospace; font-weight:800; color:${penColor};">
               ${row.penetration_pct !== null ? row.penetration_pct.toFixed(1) + '%' : '—'}
             </td>
-            <td style="text-align:right; font-family:'JetBrains Mono',monospace; font-weight:700; color:#ea044e;">
+            <td style="text-align:right; font-family:'JetBrains Mono',monospace; font-weight:700; color:${isDark ? '#ff4d79' : '#ea044e'};">
               ${row.orders ? row.orders.toLocaleString('es-AR') : '—'}
             </td>
-            <td style="text-align:right; font-family:'JetBrains Mono',monospace; font-weight:700;">
+            <td style="text-align:right; font-family:'JetBrains Mono',monospace; font-weight:700; color:${isDark ? '#f8fafc' : 'var(--t1)'};">
               ${row.net_sales ? '$ ' + row.net_sales.toLocaleString('es-AR', {minimumFractionDigits:2, maximumFractionDigits:2}) : '—'}
             </td>
-            <td style="text-align:right; font-family:'JetBrains Mono',monospace; font-weight:700; color:#ea580c;">
+            <td style="text-align:right; font-family:'JetBrains Mono',monospace; font-weight:700; color:${isDark ? '#fb923c' : '#ea580c'};">
               ${row.aov !== null ? '$ ' + row.aov.toFixed(2) : '—'}
             </td>
             <td style="text-align:right; font-family:'JetBrains Mono',monospace; font-weight:700; color:${dtColor};">
@@ -1210,6 +1366,14 @@
 
     window.addEventListener('load', () => {
       loadBenchmarkData();
+    });
+
+    // Re-renderizar al instante ante alternancia de tema (Modo Día / Modo Noche)
+    window.addEventListener('mapsterThemeChanged', () => {
+      buildTable();
+      if (currentBenchmarkView === 'rings') {
+        buildRingsTable();
+      }
     });
   </script>
 </body>

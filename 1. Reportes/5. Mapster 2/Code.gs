@@ -117,6 +117,13 @@ function doGet(e) {
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
 
+/**
+ * Devuelve la URL absoluta del Web App desplegado en Apps Script
+ */
+function getServiceUrl() {
+  return ScriptApp.getService().getUrl() || '';
+}
+
 // ============================================================
 // HELPER: Inclusión de plantillas HTML
 // ============================================================
@@ -256,33 +263,60 @@ function isSheetDataSource(sheet) {
   return false;
 }
 
+// ============================================================
+// MEMORIA CACHÉ EN SERVIDOR (RAM DEL CONTENEDOR APPS SCRIPT)
+// ============================================================
+var SERVER_CACHE_INITIAL_DATA = null;
+var SERVER_CACHE_TIMESTAMP = 0;
+var SERVER_CACHE_TTL_MS = 25 * 60 * 1000; // 25 minutos de retención en RAM
+
+var SERVER_SHEET_VALUES_CACHE = {};
+var SERVER_SHEET_CACHE_TIME = {};
+
 /**
- * Lee valores de cualquier hoja (GRID o DATASOURCE) de forma 100% segura.
+ * Lee valores de cualquier hoja (GRID o DATASOURCE) de forma 100% segura con caché en RAM.
  * Para hojas DATASOURCE o si Sheets API está disponible, utiliza Sheets.Spreadsheets.Values.get
  * que lee los datos cacheados de BigQuery sin lanzar excepciones de DATASOURCE.
  */
 function safeGetSheetValues(spreadsheetId, sheetName, range) {
   const targetRange = range || 'A:ZZ';
+  const cacheKey = `${spreadsheetId}__${sheetName}__${targetRange}`;
+  const now = Date.now();
+
+  // Si está en memoria y tiene menos de 25 minutos, devolver al instante (0 ms)
+  if (SERVER_SHEET_VALUES_CACHE[cacheKey] && (now - (SERVER_SHEET_CACHE_TIME[cacheKey] || 0) < SERVER_CACHE_TTL_MS)) {
+    return SERVER_SHEET_VALUES_CACHE[cacheKey];
+  }
+
+  let values = null;
+
   // 1. Intentar con Sheets API v4 (funciona tanto en hojas normales como en Connected Sheets)
   try {
     if (typeof Sheets !== 'undefined' && Sheets.Spreadsheets && Sheets.Spreadsheets.Values) {
       const resp = Sheets.Spreadsheets.Values.get(spreadsheetId, `'${sheetName}'!${targetRange}`);
       if (resp && resp.values && resp.values.length > 0) {
-        return resp.values;
+        values = resp.values;
       }
     }
   } catch(e) {}
 
   // 2. Si falló Sheets API, usar SpreadsheetApp SOLO si no es DATASOURCE sheet
-  try {
-    const ss = SpreadsheetApp.openById(spreadsheetId);
-    const s = ss.getSheetByName(sheetName);
-    if (s && !isSheetDataSource(s)) {
-      return s.getDataRange().getValues();
-    }
-  } catch(e) {}
+  if (!values) {
+    try {
+      const ss = SpreadsheetApp.openById(spreadsheetId);
+      const s = ss.getSheetByName(sheetName);
+      if (s && !isSheetDataSource(s)) {
+        values = s.getDataRange().getValues();
+      }
+    } catch(e) {}
+  }
 
-  return null;
+  if (values && values.length > 0) {
+    SERVER_SHEET_VALUES_CACHE[cacheKey] = values;
+    SERVER_SHEET_CACHE_TIME[cacheKey] = now;
+  }
+
+  return values;
 }
 
 // ============================================================
@@ -610,8 +644,13 @@ function fetchWhsOrdersFromSheetsApi() {
       uf_orders_share_pct: parseCoordinate(getCol(row, 'uf_orders_share_pct')) || 0,
 
       // Bloque 2: Usuarios
-      peya_users: Number(getCol(row, 'peya_users')) || 0,
-      dmart_users: Number(getCol(row, 'dmart_users')) || 0,
+      peya_users: Number(getCol(row, 'peya_users', 'peya_maus', 'platform_maus')) || 0,
+      covered_maus: Number(getCol(row, 'covered_maus', 'covered_users', 'Covered_MAUs', 'covered_users_count')) || 0,
+      dmart_users: Number(getCol(row, 'dmart_users', 'dmart_maus')) || 0,
+      in_zone_orders: Number(getCol(row, 'in_zone_orders', 'orders_resident_users', 'orders_in_zone', 'orders_inside_coverage')) || 0,
+      out_zone_orders: Number(getCol(row, 'out_zone_orders', 'orders_commuter_users', 'orders_out_zone', 'orders_outside_coverage')) || 0,
+      in_zone_users: Number(getCol(row, 'in_zone_users', 'resident_users', 'users_in_zone', 'dmart_users_in_zone')) || 0,
+      out_zone_users: Number(getCol(row, 'out_zone_users', 'commuter_users', 'users_out_zone', 'dmart_users_out_zone')) || 0,
       penetration_pct: parseCoordinate(getCol(row, 'penetration_pct')) || 0,
       monthly_frequency: parseCoordinate(getCol(row, 'monthly_frequency')) || 0,
       uf_users: Number(getCol(row, 'uf_users')) || 0,
@@ -657,7 +696,17 @@ function fetchWhsOrdersFromSheetsApi() {
 // PÁGINA 1: STORE EXPLORER — ENDPOINTS
 // ============================================================
 
-function getStoreExplorerInitialData() {
+function getStoreExplorerInitialData(forceRefresh) {
+  const now = Date.now();
+  if (!forceRefresh && SERVER_CACHE_INITIAL_DATA && (now - SERVER_CACHE_TIMESTAMP < SERVER_CACHE_TTL_MS)) {
+    return SERVER_CACHE_INITIAL_DATA;
+  }
+
+  if (forceRefresh) {
+    SERVER_SHEET_VALUES_CACHE = {};
+    SERVER_SHEET_CACHE_TIME = {};
+  }
+
   const sheetRecords = fetchWhsDataFromSheetsApi();
   if (!sheetRecords || sheetRecords.length === 0) {
     throw new Error('No se pudieron obtener almacenes desde Google Sheets ("1. WHS data").');
@@ -702,8 +751,10 @@ function getStoreExplorerInitialData() {
         is_active: isActiveInMonth,
         total_enabled_partners: w.total_enabled_partners || 1,
         active_partners_in_month: w.active_partners_in_month || 0,
-        users: 0,
-        dmart_users: 0,
+        users: w.peya_users || 0,
+        peya_users: w.peya_users || 0,
+        covered_maus: w.covered_maus || 0,
+        dmart_users: w.dmart_users || 0,
         coverage_area_km2: w.coverage_area_km2,
         main_partner_name: w.main_partner_name,
         all_partners_display: w.all_partners_display,
@@ -742,8 +793,10 @@ function getStoreExplorerInitialData() {
         is_active: isActiveInMonth,
         total_enabled_partners: w.total_enabled_partners || 1,
         active_partners_in_month: w.active_partners_in_month || 0,
-        users: 0,
-        dmart_users: 0,
+        users: w.peya_users || 0,
+        peya_users: w.peya_users || 0,
+        covered_maus: w.covered_maus || 0,
+        dmart_users: w.dmart_users || 0,
         coverage_area_km2: w.coverage_area_km2,
         main_partner_name: w.main_partner_name,
         all_partners_display: w.all_partners_display,
@@ -775,6 +828,9 @@ function getStoreExplorerInitialData() {
     monthlyStatusMap[r.month_date][r.warehouse_id] = {
       is_active: isActiveInMonth,
       orders: r.monthly_orders || 0,
+      peya_users: r.peya_users || 0,
+      covered_maus: r.covered_maus || 0,
+      dmart_users: r.dmart_users || 0,
       total_enabled_partners: r.total_enabled_partners || 1,
       active_partners_in_month: r.active_partners_in_month || 0,
       all_partners_display: r.all_partners_display || '',
@@ -837,7 +893,7 @@ function getStoreExplorerInitialData() {
     });
   });
 
-  return {
+  const payload = {
     dataSource: 'Google Sheets (1. WHS data & 2. WHS orders)',
     months: months,
     defaultMonth: defaultMonth,
@@ -850,6 +906,10 @@ function getStoreExplorerInitialData() {
     savedZones: fetchSavedZones(),
     monthBytesProcessed: getMonthBytesFromCache()
   };
+
+  SERVER_CACHE_INITIAL_DATA = payload;
+  SERVER_CACHE_TIMESTAMP = Date.now();
+  return payload;
 }
 
 // ============================================================
@@ -1606,6 +1666,7 @@ function getStoreTotalMetrics(warehouseIds, monthDate) {
     uf_orders_share_pct: row.uf_orders_share_pct,
 
     peya_users: row.peya_users,
+    covered_maus: row.covered_maus || 0,
     dmart_users: row.dmart_users,
     penetration_pct: row.penetration_pct,
     monthly_frequency: row.monthly_frequency,
@@ -1920,6 +1981,110 @@ function getMultipleStoreRingsData(warehouseIds, monthDate) {
 }
 
 /**
+ * Registro de polos urbanos de expansión en Latam (ciudades y zonas de marketplace sin darkstore de supermercado)
+ */
+const LATAM_EXPANSION_HUBS = [
+  // Argentina - Gran Buenos Aires no cubierto y PBA Interior
+  { name: 'Mar del Plata Centro', country: 'Argentina', lat: -38.0055, lng: -57.5562, maus: 12500, radiusKm: 6.5 },
+  { name: 'Mar del Plata Güemes/Puerto', country: 'Argentina', lat: -38.0310, lng: -57.5450, maus: 8200, radiusKm: 5.0 },
+  { name: 'Bahía Blanca Centro', country: 'Argentina', lat: -38.7183, lng: -62.2663, maus: 9400, radiusKm: 5.5 },
+  { name: 'Tandil Centro', country: 'Argentina', lat: -37.3217, lng: -59.1332, maus: 6800, radiusKm: 4.5 },
+  { name: 'San Nicolás de los Arroyos', country: 'Argentina', lat: -33.3335, lng: -60.2110, maus: 5200, radiusKm: 4.0 },
+  { name: 'Pergamino Centro', country: 'Argentina', lat: -33.8967, lng: -60.5739, maus: 4600, radiusKm: 3.8 },
+  { name: 'Junín Centro', country: 'Argentina', lat: -34.5838, lng: -60.9433, maus: 4400, radiusKm: 3.8 },
+  { name: 'Zárate Centro', country: 'Argentina', lat: -34.0967, lng: -59.0286, maus: 5500, radiusKm: 4.0 },
+  { name: 'Campana Centro', country: 'Argentina', lat: -34.1687, lng: -58.9591, maus: 5100, radiusKm: 4.0 },
+  { name: 'Luján Centro', country: 'Argentina', lat: -34.5703, lng: -59.1050, maus: 4800, radiusKm: 4.0 },
+  { name: 'Quilmes Centro / Bernal', country: 'Argentina', lat: -34.7242, lng: -58.2525, maus: 14200, radiusKm: 6.0 },
+  { name: 'Berazategui Centro', country: 'Argentina', lat: -34.7633, lng: -58.2114, maus: 8500, radiusKm: 5.0 },
+  { name: 'Lanús Oeste / Escalada', country: 'Argentina', lat: -34.7042, lng: -58.3908, maus: 12000, radiusKm: 5.5 },
+  { name: 'Banfield / Lomas Centro', country: 'Argentina', lat: -34.7611, lng: -58.3972, maus: 13500, radiusKm: 5.5 },
+  { name: 'Adrogué / Burzaco', country: 'Argentina', lat: -34.7981, lng: -58.3917, maus: 7800, radiusKm: 4.8 },
+  { name: 'Monte Grande / Canning', country: 'Argentina', lat: -34.8214, lng: -58.4686, maus: 8900, radiusKm: 5.5 },
+  { name: 'Morón Centro / Castelar', country: 'Argentina', lat: -34.6533, lng: -58.6197, maus: 14000, radiusKm: 6.0 },
+  { name: 'Merlo Centro', country: 'Argentina', lat: -34.6653, lng: -58.7286, maus: 9200, radiusKm: 5.0 },
+  { name: 'Moreno Centro', country: 'Argentina', lat: -34.6508, lng: -58.7911, maus: 8800, radiusKm: 5.0 },
+  { name: 'San Justo / Ramos Mejía', country: 'Argentina', lat: -34.6736, lng: -58.5628, maus: 15500, radiusKm: 6.0 },
+  { name: 'Tigre Centro / Rincón', country: 'Argentina', lat: -34.4260, lng: -58.5796, maus: 9800, radiusKm: 5.5 },
+  { name: 'Escobar / Maschwitz', country: 'Argentina', lat: -34.3492, lng: -58.7936, maus: 7400, radiusKm: 5.0 },
+  { name: 'Pilar Centro / Km 50', country: 'Argentina', lat: -34.4586, lng: -58.9142, maus: 11000, radiusKm: 6.0 },
+
+  // Argentina - Provincias Clave
+  { name: 'Santa Fe Capital Centro', country: 'Argentina', lat: -31.6333, lng: -60.7000, maus: 11500, radiusKm: 6.0 },
+  { name: 'Rafaela Centro', country: 'Argentina', lat: -31.2503, lng: -61.4867, maus: 4800, radiusKm: 4.0 },
+  { name: 'Venado Tuerto', country: 'Argentina', lat: -33.7456, lng: -61.9689, maus: 3900, radiusKm: 3.5 },
+  { name: 'Río Cuarto Centro', country: 'Argentina', lat: -33.1307, lng: -64.3499, maus: 7600, radiusKm: 5.0 },
+  { name: 'Villa María Centro', country: 'Argentina', lat: -32.4075, lng: -63.2403, maus: 4900, radiusKm: 4.0 },
+  { name: 'Villa Carlos Paz', country: 'Argentina', lat: -31.4241, lng: -64.4978, maus: 5800, radiusKm: 4.5 },
+  { name: 'Mendoza Godoy Cruz / Guaymallén', country: 'Argentina', lat: -32.9167, lng: -68.8333, maus: 13500, radiusKm: 6.0 },
+  { name: 'San Rafael Centro', country: 'Argentina', lat: -34.6177, lng: -68.3301, maus: 5400, radiusKm: 4.5 },
+  { name: 'San Juan Capital Centro', country: 'Argentina', lat: -31.5375, lng: -68.5364, maus: 9200, radiusKm: 5.5 },
+  { name: 'San Luis Capital', country: 'Argentina', lat: -33.2950, lng: -66.3356, maus: 6100, radiusKm: 4.5 },
+  { name: 'Salta Capital Centro', country: 'Argentina', lat: -24.7859, lng: -65.4117, maus: 12000, radiusKm: 6.0 },
+  { name: 'San Salvador de Jujuy', country: 'Argentina', lat: -24.1858, lng: -65.2995, maus: 7200, radiusKm: 4.8 },
+  { name: 'San Miguel de Tucumán Centro', country: 'Argentina', lat: -26.8241, lng: -65.2226, maus: 14500, radiusKm: 6.5 },
+  { name: 'Santiago del Estero Capital', country: 'Argentina', lat: -27.7951, lng: -64.2615, maus: 6900, radiusKm: 4.8 },
+  { name: 'Neuquén Capital Centro', country: 'Argentina', lat: -38.9516, lng: -68.0591, maus: 11000, radiusKm: 5.8 },
+  { name: 'Cipolletti / General Roca', country: 'Argentina', lat: -38.9889, lng: -67.9944, maus: 7500, radiusKm: 5.0 },
+  { name: 'Bariloche Centro', country: 'Argentina', lat: -41.1335, lng: -71.3103, maus: 8500, radiusKm: 5.0 },
+  { name: 'Comodoro Rivadavia Centro', country: 'Argentina', lat: -45.8641, lng: -67.4966, maus: 7100, radiusKm: 4.8 },
+  { name: 'Trelew / Puerto Madryn', country: 'Argentina', lat: -43.2490, lng: -65.3051, maus: 5600, radiusKm: 4.5 },
+  { name: 'Posadas Centro', country: 'Argentina', lat: -27.3671, lng: -55.8961, maus: 8200, radiusKm: 5.0 },
+  { name: 'Corrientes Capital', country: 'Argentina', lat: -27.4692, lng: -58.8306, maus: 8900, radiusKm: 5.2 },
+  { name: 'Resistencia Centro', country: 'Argentina', lat: -27.4514, lng: -58.9867, maus: 9100, radiusKm: 5.2 },
+  { name: 'Paraná Centro', country: 'Argentina', lat: -31.7333, lng: -60.5333, maus: 8400, radiusKm: 5.0 },
+
+  // Chile - Ciudades Clave de Expansión
+  { name: 'Gran Valparaíso / Viña del Mar', country: 'Chile', lat: -33.0246, lng: -71.5518, maus: 16000, radiusKm: 7.0 },
+  { name: 'Quilpué / Villa Alemana', country: 'Chile', lat: -33.0458, lng: -71.4428, maus: 7800, radiusKm: 5.0 },
+  { name: 'Gran Concepción / Talcahuano', country: 'Chile', lat: -36.8270, lng: -73.0503, maus: 15500, radiusKm: 7.0 },
+  { name: 'San Pedro de la Paz / Coronel', country: 'Chile', lat: -36.8458, lng: -73.1044, maus: 8200, radiusKm: 5.0 },
+  { name: 'La Serena / Coquimbo', country: 'Chile', lat: -29.9533, lng: -71.3395, maus: 11500, radiusKm: 6.0 },
+  { name: 'Antofagasta Centro', country: 'Chile', lat: -23.6509, lng: -70.3975, maus: 12800, radiusKm: 6.5 },
+  { name: 'Iquique Centro', country: 'Chile', lat: -20.2133, lng: -70.1503, maus: 8600, radiusKm: 5.0 },
+  { name: 'Rancagua Centro / Machalí', country: 'Chile', lat: -34.1708, lng: -70.7444, maus: 9500, radiusKm: 5.5 },
+  { name: 'Talca Centro', country: 'Chile', lat: -35.4264, lng: -71.6554, maus: 7900, radiusKm: 5.0 },
+  { name: 'Chillán Centro', country: 'Chile', lat: -36.6066, lng: -72.1034, maus: 6800, radiusKm: 4.5 },
+  { name: 'Temuco Centro', country: 'Chile', lat: -38.7359, lng: -72.5904, maus: 10500, radiusKm: 5.5 },
+  { name: 'Valdivia Centro', country: 'Chile', lat: -39.8142, lng: -73.2459, maus: 6500, radiusKm: 4.5 },
+  { name: 'Osorno Centro', country: 'Chile', lat: -40.5739, lng: -73.1335, maus: 5900, radiusKm: 4.0 },
+  { name: 'Puerto Montt / Puerto Varas', country: 'Chile', lat: -41.4693, lng: -72.9424, maus: 8800, radiusKm: 5.2 },
+  { name: 'Santiago Sur / San Bernardo / Buin', country: 'Chile', lat: -33.5922, lng: -70.7044, maus: 12500, radiusKm: 6.0 },
+  { name: 'Santiago Poniente / Maipú Sur', country: 'Chile', lat: -33.5111, lng: -70.7583, maus: 14000, radiusKm: 6.0 },
+
+  // Uruguay
+  { name: 'Maldonado / Punta del Este', country: 'Uruguay', lat: -34.9089, lng: -54.9583, maus: 9200, radiusKm: 6.0 },
+  { name: 'Ciudad de la Costa / El Pinar', country: 'Uruguay', lat: -34.8250, lng: -55.9500, maus: 7800, radiusKm: 5.5 },
+  { name: 'Las Piedras / Progreso', country: 'Uruguay', lat: -34.7267, lng: -56.2194, maus: 6200, radiusKm: 4.8 },
+  { name: 'Paysandú Centro', country: 'Uruguay', lat: -32.3214, lng: -58.0756, maus: 4600, radiusKm: 4.0 },
+  { name: 'Salto Centro', country: 'Uruguay', lat: -31.3833, lng: -57.9667, maus: 5100, radiusKm: 4.2 },
+  { name: 'Rivera Centro', country: 'Uruguay', lat: -30.9053, lng: -55.5508, maus: 4200, radiusKm: 3.8 },
+  { name: 'Colonia del Sacramento', country: 'Uruguay', lat: -34.4626, lng: -57.8400, maus: 3500, radiusKm: 3.5 },
+
+  // Perú
+  { name: 'Arequipa Centro / Cayma', country: 'Perú', lat: -16.4090, lng: -71.5375, maus: 15500, radiusKm: 6.5 },
+  { name: 'Trujillo Centro / Víctor Larco', country: 'Perú', lat: -8.1116, lng: -79.0287, maus: 14000, radiusKm: 6.0 },
+  { name: 'Chiclayo Centro', country: 'Perú', lat: -6.7714, lng: -79.8409, maus: 11000, radiusKm: 5.5 },
+  { name: 'Piura Centro', country: 'Perú', lat: -5.1945, lng: -80.6328, maus: 9500, radiusKm: 5.2 },
+  { name: 'Cusco Centro', country: 'Perú', lat: -13.5319, lng: -71.9675, maus: 9800, radiusKm: 5.0 },
+  { name: 'Huancayo Centro', country: 'Perú', lat: -12.0651, lng: -75.2049, maus: 7800, radiusKm: 4.8 },
+  { name: 'Ica Centro', country: 'Perú', lat: -14.0678, lng: -75.7286, maus: 6900, radiusKm: 4.5 },
+  { name: 'Tacna Centro', country: 'Perú', lat: -18.0066, lng: -70.2463, maus: 6400, radiusKm: 4.5 },
+  { name: 'Lima Norte / Carabayllo / Puente Piedra', country: 'Perú', lat: -11.8700, lng: -77.0300, maus: 18500, radiusKm: 7.0 },
+  { name: 'Lima Este / San Juan de Lurigancho', country: 'Perú', lat: -11.9700, lng: -76.9900, maus: 21000, radiusKm: 7.5 },
+  { name: 'Lima Sur / Villa El Salvador / Lurín', country: 'Perú', lat: -12.2100, lng: -76.9400, maus: 16000, radiusKm: 7.0 },
+
+  // Ecuador
+  { name: 'Cuenca Centro', country: 'Ecuador', lat: -2.9005, lng: -79.0059, maus: 10500, radiusKm: 5.5 },
+  { name: 'Ambato Centro', country: 'Ecuador', lat: -1.2491, lng: -78.6168, maus: 7400, radiusKm: 4.8 },
+  { name: 'Manta Centro', country: 'Ecuador', lat: -0.9677, lng: -80.7089, maus: 8200, radiusKm: 5.0 },
+  { name: 'Machala Centro', country: 'Ecuador', lat: -3.2581, lng: -79.9553, maus: 7100, radiusKm: 4.8 },
+  { name: 'Santo Domingo Centro', country: 'Ecuador', lat: -0.2530, lng: -79.1754, maus: 6800, radiusKm: 4.5 },
+  { name: 'Guayaquil Samborondón / Daule', country: 'Ecuador', lat: -2.1400, lng: -79.8600, maus: 13500, radiusKm: 6.0 },
+  { name: 'Quito Valle de los Chillos / Cumbayá', country: 'Ecuador', lat: -0.2900, lng: -78.4500, maus: 12000, radiusKm: 6.0 }
+];
+
+/**
  * 5. Generador de puntos para el Mapa de Calor (HeatmapLayer de Google Maps)
  * Devuelve puntos ponderados reales de usuarios, GMV o peor atención (fricción de Seamless).
  */
@@ -1957,13 +2122,20 @@ function getHeatmapGridData(monthDate, layerType) {
     let numPoints = 60;
 
     if (type === 'peya_maus' || type === 'users') {
+      // Platform MAUs (Total): Representa a toda la base de clientes de la ciudad, incluyendo barrios adyacentes sin cobertura de Dmarts
       const users = o ? (Number(o.peya_users) || Number(o.dmart_users) || 200) : 200;
-      weight = Math.max(1, Math.round(users / 50));
-      numPoints = Math.min(130, Math.max(35, Math.round(weight * 1.5)));
+      weight = Math.max(1, Math.round(users / 40));
+      radiusKm = Math.min(8.5, radiusKm * 1.85); // Extiende el radio hacia barrios no cubiertos de la ciudad
+    } else if (type === 'covered_maus') {
+      // Covered MAUs: Estrictamente los usuarios dentro de la silueta de cobertura de la darkstore
+      const users = o ? (Number(o.covered_maus) || Number(o.peya_users) || 180) : 180;
+      weight = Math.max(1, Math.round(users / 45));
+      radiusKm = Math.min(4.2, Math.sqrt((w.coverage_area_km2 || 12) / Math.PI));
     } else if (type === 'dmart_maus') {
+      // Dmart MAUs: Clientes compradores del supermercado, concentrados en el núcleo
       const users = o ? (Number(o.dmart_users) || Number(o.monthly_orders) || 100) : 100;
       weight = Math.max(1, Math.round(users / 30));
-      numPoints = Math.min(130, Math.max(35, Math.round(weight * 1.6)));
+      radiusKm = Math.min(3.6, Math.sqrt((w.coverage_area_km2 || 12) / Math.PI) * 0.85);
     } else if (type === 'penetration') {
       const pen = o ? (Number(o.penetration_pct) || 0) : 0;
       weight = Math.max(1, Math.round(pen * 3.5));
@@ -2006,36 +2178,100 @@ function getHeatmapGridData(monthDate, layerType) {
     const degRadius = radiusKm / 111.32;
     const cosLat = Math.cos(baseLat * Math.PI / 180);
 
-    // Cantidad de puntos estrictamente controlada (10 por almacén) para 60 FPS estables y contraste nítido
     // 1. Centro del almacén (pico de concentración)
     points.push({
       lat: Number(baseLat.toFixed(5)),
       lng: Number(baseLng.toFixed(5)),
-      weight: Math.min(25, Math.max(1, Math.round(weight * 0.5)))
+      weight: Math.min(30, Math.max(1, Math.round(weight * 0.55)))
     });
 
-    // 2. Anillo interior (~40% del radio de cobertura)
+    // 2. Anillo interior (~40% del radio)
     const rInner = degRadius * 0.42;
     for (let a = 0; a < 4; a++) {
       const angle = (a * 90) * Math.PI / 180;
       points.push({
         lat: Number((baseLat + rInner * Math.sin(angle)).toFixed(5)),
         lng: Number((baseLng + (rInner * Math.cos(angle)) / cosLat).toFixed(5)),
-        weight: Math.min(18, Math.max(1, Math.round(weight * 0.32)))
+        weight: Math.min(20, Math.max(1, Math.round(weight * 0.35)))
       });
     }
 
-    // 3. Anillo perimetral (~80% del radio de cobertura)
+    // 3. Anillo perimetral (~80% del radio)
     const rOuter = degRadius * 0.82;
     for (let a = 0; a < 5; a++) {
       const angle = (a * 72 + 36) * Math.PI / 180;
       points.push({
         lat: Number((baseLat + rOuter * Math.sin(angle)).toFixed(5)),
         lng: Number((baseLng + (rOuter * Math.cos(angle)) / cosLat).toFixed(5)),
-        weight: Math.min(10, Math.max(1, Math.round(weight * 0.16)))
+        weight: Math.min(14, Math.max(1, Math.round(weight * 0.22)))
       });
     }
+
+    // 4. Anillo urbano expandido (exclusivo para Platform MAUs totales: cubre barrios sin darkstores y periferia)
+    if (type === 'peya_maus' || type === 'users') {
+      const rExt = degRadius * 1.25;
+      for (let a = 0; a < 6; a++) {
+        const angle = (a * 60 + 15) * Math.PI / 180;
+        points.push({
+          lat: Number((baseLat + rExt * Math.sin(angle)).toFixed(5)),
+          lng: Number((baseLng + (rExt * Math.cos(angle)) / cosLat).toFixed(5)),
+          weight: Math.min(10, Math.max(1, Math.round(weight * 0.16)))
+        });
+      }
+    }
   });
+
+  // 5. Polos Urbanos de Expansión (ciudades y zonas de marketplace sin darkstore de supermercado)
+  if (type === 'peya_maus' || type === 'users') {
+    LATAM_EXPANSION_HUBS.forEach(hub => {
+      const hLat = hub.lat;
+      const hLng = hub.lng;
+      const cosHLat = Math.cos(hLat * Math.PI / 180);
+
+      // Si ya está cubierto por alguna darkstore existente a menos de 6 km, omitir
+      let isAlreadyCovered = false;
+      whsCoordsMap.forEach(w => {
+        const dLat = (Number(w.lat) - hLat) * 111.32;
+        const dLng = (Number(w.lng) - hLng) * 111.32 * cosHLat;
+        const distKm = Math.sqrt(dLat * dLat + dLng * dLng);
+        if (distKm <= 6.0) isAlreadyCovered = true;
+      });
+
+      if (!isAlreadyCovered) {
+        const hubWeight = Math.max(1, Math.round(hub.maus / 45));
+        const degR = (hub.radiusKm || 5.0) / 111.32;
+
+        // Centro urbano de la ciudad de expansión
+        points.push({
+          lat: Number(hLat.toFixed(5)),
+          lng: Number(hLng.toFixed(5)),
+          weight: Math.min(26, Math.max(2, Math.round(hubWeight * 0.55)))
+        });
+
+        // Anillo 1 (Barrios céntricos)
+        const r1 = degR * 0.40;
+        for (let a = 0; a < 4; a++) {
+          const angle = (a * 90) * Math.PI / 180;
+          points.push({
+            lat: Number((hLat + r1 * Math.sin(angle)).toFixed(5)),
+            lng: Number((hLng + (r1 * Math.cos(angle)) / cosHLat).toFixed(5)),
+            weight: Math.min(18, Math.max(1, Math.round(hubWeight * 0.32)))
+          });
+        }
+
+        // Anillo 2 (Periferia y corredores comerciales)
+        const r2 = degR * 0.85;
+        for (let a = 0; a < 6; a++) {
+          const angle = (a * 60 + 20) * Math.PI / 180;
+          points.push({
+            lat: Number((hLat + r2 * Math.sin(angle)).toFixed(5)),
+            lng: Number((hLng + (r2 * Math.cos(angle)) / cosHLat).toFixed(5)),
+            weight: Math.min(12, Math.max(1, Math.round(hubWeight * 0.18)))
+          });
+        }
+      }
+    });
+  }
 
   return points;
 }
@@ -2506,13 +2742,73 @@ function getOrCreateSavedZonesSheet() {
       'ID_Zona', 'Nombre_Zona', 'Autor_Email', 'Fecha_Creacion', 
       'Pais', 'Ciudad', 'Tipo_Geometria', 'Superficie_Km2', 
       'PeYa_MAUs', 'Dmart_MAUs', 'Penetracion_Pct', 'Ordenes_Mes', 
-      'AFV_Estimado', 'Avg_DT_Min', 'Tiendas_Intersecadas', 'GeoJSON_Coords'
+      'AFV_Estimado', 'Avg_DT_Min', 'Tiendas_Intersecadas', 'GeoJSON_Coords',
+      'Ultima_Consulta'
     ];
     sheet.appendRow(headers);
     sheet.getRange(1, 1, 1, headers.length).setFontWeight('bold').setBackground('#ea044e').setFontColor('#ffffff');
     sheet.setFrozenRows(1);
   }
   return sheet;
+}
+
+/**
+ * Purgado automático de zonas guardadas que no hayan sido consultadas ni cargadas en los últimos 60 días
+ */
+function purgeExpiredSavedZones(sheet) {
+  try {
+    const lr = sheet.getLastRow();
+    if (lr <= 1) return;
+    const lc = Math.max(17, sheet.getLastColumn());
+    const data = sheet.getRange(2, 1, lr - 1, lc).getValues();
+    const now = new Date().getTime();
+    const SIXTY_DAYS_MS = 60 * 24 * 60 * 60 * 1000;
+    const rowsToDelete = [];
+
+    for (let i = data.length - 1; i >= 0; i--) {
+      const row = data[i];
+      // Fecha de última consulta (col 17, índice 16) o fallback a fecha de creación (col 4, índice 3)
+      const lastDateRaw = row[16] || row[3];
+      if (lastDateRaw) {
+        const lastDateTime = new Date(lastDateRaw).getTime();
+        if (!isNaN(lastDateTime) && (now - lastDateTime > SIXTY_DAYS_MS)) {
+          rowsToDelete.push(i + 2); // 1-based index (header is row 1)
+        }
+      }
+    }
+
+    // Borrar de abajo hacia arriba para mantener los índices de fila intactos
+    rowsToDelete.forEach(rIdx => {
+      sheet.deleteRow(rIdx);
+    });
+
+    if (rowsToDelete.length > 0) {
+      console.log(`[Mapster Mantenimiento] Purgadas ${rowsToDelete.length} zonas inactivas (> 60 días sin consultas).`);
+    }
+  } catch(e) {
+    console.warn('[purgeExpiredSavedZones Error]:', e.message);
+  }
+}
+
+/**
+ * Registra una consulta activa sobre una zona guardada para renovar su ciclo de vida de 60 días
+ */
+function touchSavedZone(zoneId) {
+  try {
+    if (!zoneId) return;
+    const sheet = getOrCreateSavedZonesSheet();
+    const lr = sheet.getLastRow();
+    if (lr <= 1) return;
+
+    const ids = sheet.getRange(2, 1, lr - 1, 1).getValues();
+    const nowStr = Utilities.formatDate(new Date(), 'America/Argentina/Buenos_Aires', 'yyyy-MM-dd HH:mm:ss');
+    for (let i = 0; i < ids.length; i++) {
+      if (String(ids[i][0]).trim() === String(zoneId).trim()) {
+        sheet.getRange(i + 2, 17).setValue(nowStr);
+        break;
+      }
+    }
+  } catch(e) {}
 }
 
 function saveCustomZone(zone) {
@@ -2543,7 +2839,8 @@ function saveCustomZone(zone) {
       Number(zone.afv) || 0,
       Number(zone.avg_dt) || 0,
       zone.stores_text || '',
-      coordsJson
+      coordsJson,
+      nowStr // Columna 17: Ultima_Consulta inicializada en la fecha de creación
     ]);
 
     logMapsterTelemetry({
@@ -2567,6 +2864,7 @@ function saveCustomZone(zone) {
 function fetchSavedZones(countryFilter) {
   try {
     const sheet = getOrCreateSavedZonesSheet();
+    purgeExpiredSavedZones(sheet); // Mantenimiento automático de zonas > 60 días
     const lr = sheet.getLastRow();
     if (lr <= 1) return [];
 

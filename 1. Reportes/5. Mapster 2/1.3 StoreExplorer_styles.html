@@ -1814,4 +1814,38 @@
       color: var(--brand-red);
       font-weight: 700;
     }
+
+    /* ── SECCIONES COLAPSABLES EN BARRA LATERAL (ACCORDION) ── */
+    .toolbar-accordion {
+      border-top: 1px solid var(--border-sheet);
+      margin-top: 5px;
+      padding-top: 4px;
+    }
+    .toolbar-accordion-summary {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--text-sheet-body);
+      cursor: pointer;
+      padding: 4px 2px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      list-style: none;
+      user-select: none;
+      transition: color 0.15s ease;
+    }
+    .toolbar-accordion-summary:hover {
+      color: var(--brand-red);
+    }
+    .toolbar-accordion-summary::-webkit-details-marker {
+      display: none;
+    }
+    .toolbar-accordion .accordion-arrow {
+      transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      color: var(--text-sheet-muted);
+    }
+    .toolbar-accordion[open] .accordion-arrow {
+      transform: rotate(90deg);
+      color: var(--brand-red);
+    }
   </style>

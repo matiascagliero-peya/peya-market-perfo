@@ -3,8 +3,8 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 
-<!-- Google Maps JavaScript API (fijada en versión 3.58 para soporte de HeatmapLayer y DrawingManager) -->
-<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAlvfKkIkT-vh01-T9tCeZ6KV5mA3eiscM&libraries=geometry,drawing,visualization&v=3.58"></script>
+<!-- Google Maps JavaScript API (fijada en versión 3.58 para soporte de HeatmapLayer, DrawingManager y Places) -->
+<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAlvfKkIkT-vh01-T9tCeZ6KV5mA3eiscM&libraries=geometry,drawing,visualization,places&v=3.58"></script>
 <!-- Chart.js para visualización analítica -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js" crossorigin="anonymous"></script>
 <!-- Turf.js para operaciones geoespaciales avanzadas -->
@@ -512,14 +512,14 @@
     </div>
     <div class="nav-divider"></div>
     <nav class="main-nav">
-      <a href="<?= scriptUrl ?>?page=explorer" target="_top" class="nav-item <?= activePage === 'explorer' ? 'active' : '' ?>">
+      <a href="<?= (typeof scriptUrl !== 'undefined' && scriptUrl) ? (scriptUrl + '?page=explorer') : '?page=explorer' ?>" onclick="return navigateToMapsterPage('explorer', event)" target="_top" class="nav-item <?= activePage === 'explorer' ? 'active' : '' ?>">
         <span class="nav-item-icon">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
         </span>
         <span>Store Explorer</span>
       </a>
       <? if (typeof isAdmin !== 'undefined' && isAdmin) { ?>
-      <a href="<?= scriptUrl ?>?page=benchmark" target="_top" class="nav-item <?= activePage === 'benchmark' ? 'active' : '' ?>">
+      <a href="<?= (typeof scriptUrl !== 'undefined' && scriptUrl) ? (scriptUrl + '?page=benchmark') : '?page=benchmark' ?>" onclick="return navigateToMapsterPage('benchmark', event)" target="_top" class="nav-item <?= activePage === 'benchmark' ? 'active' : '' ?>">
         <span class="nav-item-icon">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
         </span>
@@ -543,7 +543,7 @@
 
     <? if (typeof isAdmin !== 'undefined' && isAdmin) { ?>
     <!-- Botón Exclusivo de Analytics para matias.cagliero@pedidosya.com al lado del Modo Día -->
-    <a href="<?= scriptUrl ?>?page=analytics" target="_top" class="theme-toggle-btn <?= (typeof activePage !== 'undefined' && activePage === 'analytics') ? 'active-admin-btn' : '' ?>" title="Panel de Analytics y Auditoría (Solo Admin)" style="text-decoration:none; display:inline-flex; align-items:center; gap:5px; background:rgba(234,4,78,0.08); border-color:rgba(234,4,78,0.25); color:var(--brand-red); font-weight:700;">
+    <a href="<?= (typeof scriptUrl !== 'undefined' && scriptUrl) ? (scriptUrl + '?page=analytics') : '?page=analytics' ?>" onclick="return navigateToMapsterPage('analytics', event)" target="_top" class="theme-toggle-btn <?= (typeof activePage !== 'undefined' && activePage === 'analytics') ? 'active-admin-btn' : '' ?>" title="Panel de Analytics y Auditoría (Solo Admin)" style="text-decoration:none; display:inline-flex; align-items:center; gap:5px; background:rgba(234,4,78,0.08); border-color:rgba(234,4,78,0.25); color:var(--brand-red); font-weight:700;">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
         <line x1="18" y1="20" x2="18" y2="10"></line>
         <line x1="12" y1="20" x2="12" y2="4"></line>
@@ -583,7 +583,28 @@
   window.updateBigQueryBytesCounter = function(bytes) {
     const el = document.getElementById('lblBytesAcumulados');
     if (el) el.textContent = fmtBytesMes(bytes);
+    try { sessionStorage.setItem('mapster_bq_bytes', String(bytes || 0)); } catch(e) {}
   };
+
+  // Inicialización inmediata del contador de BigQuery en todas las páginas (0ms con sessionStorage)
+  (function initBigQueryCounter() {
+    try {
+      const cached = sessionStorage.getItem('mapster_bq_bytes');
+      if (cached !== null) {
+        window.updateBigQueryBytesCounter(parseInt(cached, 10));
+      }
+    } catch(e) {}
+
+    if (typeof google !== 'undefined' && google.script && google.script.run) {
+      google.script.run
+        .withSuccessHandler(function(bytes) {
+          if (bytes !== null && bytes !== undefined) {
+            window.updateBigQueryBytesCounter(bytes);
+          }
+        })
+        .getMonthBytesFromCache();
+    }
+  })();
 
   // ── Gestión Global de Tema Día / Noche (Modo Día por Defecto) ──
   let currentTheme = localStorage.getItem('mapster_theme') || 'light';
@@ -646,6 +667,56 @@
   function hideLoading() {
     const overlay = document.getElementById('loading-overlay');
     if (overlay) overlay.style.display = 'none';
+  }
+
+  /**
+   * Navegación segura compatible con iframes de Apps Script y ejecución directa
+   */
+  function navigateToMapsterPage(targetPage, event) {
+    if (event) {
+      try { event.preventDefault(); } catch(e) {}
+    }
+    showLoading('Cargando ' + (targetPage === 'explorer' ? 'Store Explorer' : (targetPage === 'benchmark' ? 'Benchmark Tiendas' : 'Analytics')) + '...');
+
+    var rawUrl = '<?= (typeof scriptUrl !== "undefined" && scriptUrl) ? scriptUrl : "" ?>';
+
+    if (rawUrl && rawUrl.startsWith('http')) {
+      var dest = rawUrl.split('?')[0] + '?page=' + targetPage;
+      try {
+        if (window.top) {
+          window.top.location.href = dest;
+          return false;
+        }
+      } catch(e) {}
+      window.location.href = dest;
+      return false;
+    }
+
+    if (typeof google !== 'undefined' && google.script && google.script.run) {
+      google.script.run
+        .withSuccessHandler(function(url) {
+          if (url && url.startsWith('http')) {
+            var dest = url.split('?')[0] + '?page=' + targetPage;
+            try {
+              if (window.top) {
+                window.top.location.href = dest;
+                return;
+              }
+            } catch(e) {}
+            window.location.href = dest;
+          } else {
+            window.location.href = '?page=' + targetPage;
+          }
+        })
+        .withFailureHandler(function() {
+          window.location.href = '?page=' + targetPage;
+        })
+        .getServiceUrl();
+      return false;
+    }
+
+    window.location.href = '?page=' + targetPage;
+    return false;
   }
 
   function showToast(message, type = 'info') {

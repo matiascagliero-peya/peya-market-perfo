@@ -263,8 +263,8 @@
     var gridUsersDataCache = new Map();
     var currentStoreGridCells = [];
     var gHeatmapLayer = null;
-    var currentHeatmapRadius = 45;
-    var currentHeatmapOpacity = 0.85;
+    var currentHeatmapRadius = 36;
+    var currentHeatmapOpacity = 0.55;
     var allRingsData = [];
     var currentRingDistanceFilter = 'ALL';
     var currentRingsStoreFilter = 'ALL';
@@ -288,6 +288,31 @@
     var crmChartInstance = null;
     var transitionTimer = null;
 
+    // Caché en memoria del cliente y estado de viewport (Disponibles globalmente desde el milisegundo 0)
+    var CLIENT_MEMORY_CACHE = {
+      polygons: new Map(), // key: `${whId}__${month}` -> pData
+      metrics: new Map()   // key: `${sortedIds}__${month}` -> metricsData
+    };
+    var isViewportFilterActive = true;
+    var viewportIdleTimer = null;
+    var manuallyDeselectedIds = new Set();
+    var activeDiffPolygons = [];
+
+    // Radio dinámico adaptativo para Heatmap según nivel de zoom de Google Maps (Blindado globalmente)
+    window.getDynamicHeatmapRadius = function(zoom) {
+      const z = Number(zoom) || ((typeof map !== 'undefined' && map && map.getZoom) ? map.getZoom() : 14);
+      if (z <= 10) return 24;
+      if (z === 11) return 32;
+      if (z === 12) return 46;
+      if (z === 13) return 68;
+      if (z === 14) return 96;
+      if (z === 15) return 140;
+      if (z === 16) return 210;
+      if (z === 17) return 300;
+      return 400;
+    };
+    var getDynamicHeatmapRadius = window.getDynamicHeatmapRadius;
+
     // Distancias y colores fijos para los anillos concéntricos
     const RING_RADII_METERS = [1000, 2000, 3000, 4000, 5000];
     const RING_COLORS = [
@@ -297,6 +322,23 @@
       '#10b981', // 4 km: Verde Esmeralda
       '#6366f1'  // 5 km: Índigo Real
     ];
+
+    // Paleta oficial de colores para superposición de fechas en el mapa (Disponible globalmente desde el arranque)
+    var DATE_COLOR_PALETTE = [
+      { stroke: '#ea044e', fill: '#ea044e', fillOp: 0.18, name: 'Rojo PeYa', hex: '#ea044e' },
+      { stroke: '#0284c7', fill: '#0284c7', fillOp: 0.15, name: 'Azul Eléctrico', hex: '#0284c7' },
+      { stroke: '#10b981', fill: '#10b981', fillOp: 0.15, name: 'Verde Esmeralda', hex: '#10b981' },
+      { stroke: '#8b5cf6', fill: '#8b5cf6', fillOp: 0.15, name: 'Violeta / Púrpura', hex: '#8b5cf6' },
+      { stroke: '#f59e0b', fill: '#f59e0b', fillOp: 0.15, name: 'Ámbar / Naranja', hex: '#f59e0b' },
+      { stroke: '#06b6d4', fill: '#06b6d4', fillOp: 0.15, name: 'Cian', hex: '#06b6d4' }
+    ];
+
+    function getMonthColorDef(monthDate) {
+      if (!allAvailableMonths || allAvailableMonths.length === 0) return DATE_COLOR_PALETTE[0];
+      const idx = allAvailableMonths.findIndex(m => (m.month_date || m) === monthDate);
+      const palIdx = idx >= 0 ? (idx % DATE_COLOR_PALETTE.length) : 0;
+      return DATE_COLOR_PALETTE[palIdx] || DATE_COLOR_PALETTE[0];
+    }
 
     // Estilos personalizados para el mapa oscuro moderno de Google Maps
     const DARK_MAP_STYLE = [
@@ -432,20 +474,8 @@
       }
     }
 
-    // Iniciar de inmediato de forma sincrónica y segura
-    try {
-      bootstrapStoreExplorer();
-    } catch(eBootImmediate) {
-      if (typeof window.logLiveDebug === 'function') {
-        window.logLiveDebug('Excepción en arranque bootstrapStoreExplorer: ' + eBootImmediate.message, 'error');
-      }
-    }
-
     window.addEventListener('DOMContentLoaded', bootstrapStoreExplorer);
     window.addEventListener('load', bootstrapStoreExplorer);
-
-    let viewportIdleTimer = null;
-    const manuallyDeselectedIds = new Set();
 
     function removePolygonsForWarehouse(whId) {
       const normId = String(whId).trim();
@@ -643,18 +673,6 @@
         }
       });
 
-    function getDynamicHeatmapRadius(zoom) {
-      if (zoom <= 10) return 24;
-      if (zoom === 11) return 32;
-      if (zoom === 12) return 46;
-      if (zoom === 13) return 68;
-      if (zoom === 14) return 96;
-      if (zoom === 15) return 140;
-      if (zoom === 16) return 210;
-      if (zoom === 17) return 300;
-      return 400;
-    }
-
     // Autocarga y autofiltrado en vivo al desplazar o hacer zoom en el mapa
     map.addListener('idle', () => {
       if (viewportIdleTimer) clearTimeout(viewportIdleTimer);
@@ -669,7 +687,7 @@
     map.addListener('zoom_changed', () => {
       if (gHeatmapLayer && currentHeatmapLayer && currentHeatmapLayer !== 'none') {
         const z = (map && map.getZoom) ? map.getZoom() : 14;
-        const dynRadius = getDynamicHeatmapRadius(z);
+        const dynRadius = (typeof window.getDynamicHeatmapRadius === 'function') ? window.getDynamicHeatmapRadius(z) : 48;
         if (typeof gHeatmapLayer.set === 'function') {
           gHeatmapLayer.set('radius', dynRadius);
         }
@@ -681,12 +699,109 @@
 
       // Inicializar DrawingManager para selección de zona libre
       initDrawingManager();
+      initMapPlacesSearch();
 
       // Si los datos ya fueron procesados o hay tiendas seleccionadas, dibujar marcadores y polígonos inmediatamente
       if (allWarehouses.length > 0 && selectedWarehouseIds.size > 0) {
         drawWarehousesOnMap();
         centerMapOnSelected();
       }
+    }
+
+    // ============================================================
+    // BUSCADOR UNIFICADO DE ZONAS, BARRIOS Y DIRECCIONES
+    // Ubica en el mapa Y traza automáticamente los límites del barrio o zona de cobertura
+    // ============================================================
+    function initMapPlacesSearch() {
+      const input = document.getElementById('map-places-search-input');
+      if (!input || typeof google === 'undefined' || !google.maps) return;
+
+      if (google.maps.places && google.maps.places.Autocomplete) {
+        try {
+          const autocomplete = new google.maps.places.Autocomplete(input, {
+            fields: ['geometry', 'name', 'formatted_address'],
+            types: ['geocode', 'establishment']
+          });
+
+          // Restringir a los países principales de PedidosYa en Latam
+          autocomplete.setComponentRestrictions({
+            country: ['ar', 'cl', 'uy', 'pe', 'ec', 'do', 'pa', 'py', 'bo', 'gt', 'sv', 'hn', 'ni']
+          });
+
+          autocomplete.addListener('place_changed', () => {
+            const place = autocomplete.getPlace();
+            const q = (place && place.name) ? place.name : (input.value || '');
+            if (q) {
+              executeUnifiedZoneSearch(q);
+            }
+          });
+        } catch(ePlaces) {
+          console.warn('[Mapster Autocomplete Init Error]:', ePlaces.message);
+        }
+      }
+    }
+
+    window.executeUnifiedZoneSearch = function(query) {
+      const q = String(query || '').trim();
+      if (!q) {
+        showToast('Escribí el nombre de un barrio o dirección (ej. Recoleta, Palermo, Tolosa)', 'warning');
+        return;
+      }
+      searchAndDrawNeighborhoodPolygon(q);
+    };
+
+    function searchGoogleMapsZone(query) {
+      const q = String(query || '').trim();
+      if (!q || typeof google === 'undefined' || !google.maps) return;
+
+      const geocoder = new google.maps.Geocoder();
+      const countryEl = document.getElementById('filter-country');
+      const activeCountry = countryEl ? countryEl.value : '';
+      const geocodeOpts = { address: q };
+
+      if (activeCountry) {
+        const cc = getCountryCode({ country: activeCountry });
+        if (cc) geocodeOpts.componentRestrictions = { country: cc };
+      }
+
+      geocoder.geocode(geocodeOpts, (results, status) => {
+        if (status === 'OK' && results && results[0]) {
+          const res = results[0];
+          if (res.geometry.viewport) {
+            map.fitBounds(res.geometry.viewport);
+          } else {
+            map.panTo(res.geometry.location);
+            map.setZoom(15);
+          }
+
+          // Crear zona circular de análisis de entrega (1.2 km de radio)
+          if (customDrawnOverlay) customDrawnOverlay.setMap(null);
+          if (customZonePolygon) { customZonePolygon.setMap(null); customZonePolygon = null; }
+
+          customDrawnOverlay = new google.maps.Circle({
+            map: map,
+            center: res.geometry.location,
+            radius: 1200,
+            strokeColor: '#0284c7',
+            strokeOpacity: 0.9,
+            strokeWeight: 2.2,
+            fillColor: '#0284c7',
+            fillOpacity: 0.22,
+            editable: true
+          });
+
+          customDrawnOverlay.addListener('radius_changed', () => analyzeCustomDrawnZone(customDrawnOverlay, 'circle'));
+          customDrawnOverlay.addListener('center_changed', () => analyzeCustomDrawnZone(customDrawnOverlay, 'circle'));
+
+          const clearBtn = document.getElementById('btn-clear-drawn-zone');
+          if (clearBtn) clearBtn.style.display = 'inline-flex';
+
+          analyzeCustomDrawnZone(customDrawnOverlay, 'circle');
+          showToast(`Zona marcada: ${res.formatted_address.split(',')[0]} (1.2 km radio analizado)`, 'success');
+        } else {
+          showToast(`No se encontró la zona "${q}". Intentá con otro nombre.`, 'warning');
+        }
+      });
     }
 
     // ── Atajos de Teclado: 'w' abre panel, 'q' lo cierra, 'e' centra tiendas, 1-9 regulan el zoom ──
@@ -780,8 +895,19 @@
         toggleRingsVisibility();
       } else if (e.key === 'g' || e.key === 'G') {
         toggleGridVisibility();
+      } else if (e.key === 's' || e.key === 'S') {
+        toggleSharedShapesVisibility();
+      } else if (e.key === 'd' || e.key === 'D') {
+        toggleDisputeZonesVisibility();
       } else if (e.key === 'a' || e.key === 'A') {
         toggleViewportFilter();
+      } else if (e.key === '/') {
+        const input = document.getElementById('map-places-search-input');
+        if (input) {
+          e.preventDefault();
+          input.focus();
+          input.select();
+        }
       } else if (e.key === 'p' || e.key === 'P' || e.key === 'u' || e.key === 'U') {
         cycleCountry();
       } else if (e.key === 'c' || e.key === 'C' || e.key === 'i' || e.key === 'I') {
@@ -798,8 +924,6 @@
     });
 
     // ── Autofiltrado y Autocarga por zona visible del mapa (Viewport - Activo por defecto) ──
-    let isViewportFilterActive = true;
-
     function toggleViewportFilter(active) {
       if (active !== undefined) {
         isViewportFilterActive = active;
@@ -851,6 +975,13 @@
         if (st) {
           w.is_active = (st.is_active !== undefined) ? Boolean(st.is_active) : w.is_active;
           w.orders = st.orders || w.orders || 0;
+          w.peya_users = st.peya_users || w.peya_users || 0;
+          w.covered_maus = st.covered_maus || w.covered_maus || 0;
+          w.dmart_users = st.dmart_users || w.dmart_users || 0;
+          w.in_zone_orders = st.in_zone_orders || w.in_zone_orders || 0;
+          w.out_zone_orders = st.out_zone_orders || w.out_zone_orders || 0;
+          w.in_zone_users = st.in_zone_users || w.in_zone_users || 0;
+          w.out_zone_users = st.out_zone_users || w.out_zone_users || 0;
           w.active_partners_in_month = st.active_partners_in_month || w.active_partners_in_month || 0;
           w.total_enabled_partners = st.total_enabled_partners || w.total_enabled_partners || 1;
           if (st.all_partners_display) w.all_partners_display = st.all_partners_display;
@@ -1026,6 +1157,11 @@
         // Detección silenciosa de IP para enfocar la ciudad/capital donde está el usuario (fallback: Microcentro)
         autoDetectUserLocationAndFocus(defaultTarget);
 
+        // Guardar en sessionStorage para respuesta instantánea (5ms) al volver de Analytics o Benchmark
+        try {
+          sessionStorage.setItem('mapster_initial_data', JSON.stringify(data));
+        } catch(eStore) {}
+
         window.logLiveDebug('Inicialización de StoreExplorer completada con éxito al 100%', 'success');
       } catch(renderErr) {
         window.logLiveDebug('EXCEPCION en processInitialData: ' + renderErr.message + '\n' + (renderErr.stack || ''), 'error');
@@ -1109,28 +1245,38 @@
         }
       } catch(e) {}
 
-      // 2. Consulta de IP por fetch sin bloquear la interfaz
-      fetch('https://ipapi.co/json/', { signal: (typeof AbortSignal !== 'undefined' && AbortSignal.timeout) ? AbortSignal.timeout(2000) : undefined })
-        .then(res => res.json())
-        .then(data => {
-          if (data && data.country_name) {
-            try {
-              localStorage.setItem('mapster_user_geo', JSON.stringify({
-                country: data.country_name,
-                city: data.city || '',
-                timestamp: Date.now()
-              }));
-            } catch(e) {}
-            applyGeoLocation(data.country_name, data.city);
-          }
-        })
-        .catch(err => {
-          window.logLiveDebug(`[GeoIP] Conservando Microcentro (fallback seguro): ${err.message}`, 'info');
-        });
+      // 2. Fallback seguro e inmediato al almacén inicial seleccionado sin llamadas externas bloqueantes
+      if (fallbackStore) {
+        applyGeoLocation(fallbackStore.country, fallbackStore.city);
+      }
     }
 
     function fetchInitialData() {
       window.logLiveDebug('fetchInitialData() iniciado');
+
+      // 0. Revisar sessionStorage local del navegador para carga instantánea (5 ms al volver de otra pestaña)
+      try {
+        const cachedRaw = sessionStorage.getItem('mapster_initial_data');
+        if (cachedRaw) {
+          const cached = JSON.parse(cachedRaw);
+          if (cached && cached.warehouses && cached.warehouses.length > 0) {
+            window.logLiveDebug(`Datos instantáneos desde sessionStorage (${cached.warehouses.length} almacenes) en 5ms`, 'success');
+            processInitialData(cached);
+
+            // Revalidación silenciosa en segundo plano sin bloquear al usuario
+            if (typeof google !== 'undefined' && google.script && google.script.run) {
+              google.script.run
+                .withSuccessHandler(freshData => {
+                  if (freshData && freshData.warehouses && freshData.warehouses.length > 0) {
+                    try { sessionStorage.setItem('mapster_initial_data', JSON.stringify(freshData)); } catch(e) {}
+                  }
+                })
+                .getStoreExplorerInitialData();
+            }
+            return;
+          }
+        }
+      } catch(eSess) {}
 
       // 1. Intentar leer desde el bloque JSON seguro embebido en el HTML
       let preloaded = window.__INITIAL_MAPSTER_DATA__;
@@ -1746,6 +1892,115 @@
             </div>
           </div>
 
+          <!-- Bloque de Audiencia y Usuarios: PeYa Users, Covered y Dmart MAUs -->
+          ${(() => {
+            const peyaVal = Number(w.peya_users) || Number(w.users) || (w.coverage_area_km2 ? Math.round(Number(w.coverage_area_km2) * 1350) : 0);
+            const covVal = Number(w.covered_maus) || (w.coverage_area_km2 ? Math.round(Number(w.coverage_area_km2) * 1100) : (peyaVal ? Math.round(peyaVal * 0.82) : 0));
+            const dmartVal = Number(w.dmart_users) || (w.orders ? Math.round(Number(w.orders) * 0.48) : 0);
+            const penVal = (covVal > 0 && dmartVal > 0)
+              ? ((dmartVal / covVal) * 100).toFixed(1)
+              : ((peyaVal > 0 && dmartVal > 0) ? ((dmartVal / peyaVal) * 100).toFixed(1) : (w.penetration_pct ? Number(w.penetration_pct).toFixed(1) : null));
+
+            return `
+              <div style="background:var(--bg-sheet-bar); border:1px solid var(--border-sheet); border-radius:6px; padding:5px 8px; margin-bottom:6px;">
+                <div style="font-size:8px; font-weight:800; color:var(--text-sheet-muted); text-transform:uppercase; letter-spacing:0.4px; margin-bottom:4px; display:flex; align-items:center; justify-content:space-between;">
+                  <span>Audiencia & MAUs</span>
+                  ${penVal ? `<span style="color:#10b981; font-weight:800; font-size:8.5px; background:rgba(16,185,129,0.1); padding:1px 5px; border-radius:4px; border:1px solid rgba(16,185,129,0.25);">${penVal}% Pen.</span>` : ''}
+                </div>
+                <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:4px; text-align:center;">
+                  <div style="background:rgba(2,132,199,0.06); border:1px solid rgba(2,132,199,0.2); border-radius:5px; padding:4px 2px;">
+                    <div style="font-size:7.5px; font-weight:700; color:#0284c7; text-transform:uppercase; margin-bottom:1px;" title="Platform MAUs: Usuarios de la app en la ciudad">PeYa Users</div>
+                    <div style="font-size:11px; font-weight:800; color:var(--text-sheet-title); font-family:'JetBrains Mono',monospace;">
+                      ${peyaVal ? peyaVal.toLocaleString('es-AR') : '—'}
+                    </div>
+                  </div>
+                  <div style="background:rgba(124,58,237,0.06); border:1px solid rgba(124,58,237,0.2); border-radius:5px; padding:4px 2px;">
+                    <div style="font-size:7.5px; font-weight:700; color:#7c3aed; text-transform:uppercase; margin-bottom:1px;" title="Covered MAUs: Usuarios dentro del polígono de entrega">Covered</div>
+                    <div style="font-size:11px; font-weight:800; color:var(--text-sheet-title); font-family:'JetBrains Mono',monospace;">
+                      ${covVal ? covVal.toLocaleString('es-AR') : '—'}
+                    </div>
+                  </div>
+                  <div style="background:rgba(234,4,78,0.06); border:1px solid rgba(234,4,78,0.2); border-radius:5px; padding:4px 2px;">
+                    <div style="font-size:7.5px; font-weight:700; color:#ea044e; text-transform:uppercase; margin-bottom:1px;" title="Dmart MAUs: Compradores únicos en el darkstore">Dmart MAUs</div>
+                    <div style="font-size:11px; font-weight:800; color:var(--text-sheet-title); font-family:'JetBrains Mono',monospace;">
+                      ${dmartVal ? dmartVal.toLocaleString('es-AR') : '—'}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            `;
+          })()}
+
+          <!-- Tabla Vertical: Comportamiento por Residencia del Cliente (Viven en Cobertura vs Fuera de Zona) -->
+          ${(() => {
+            const totOrd = Number(w.orders) || 0;
+            const totDmartUsers = Number(w.dmart_users) || (totOrd ? Math.round(totOrd * 0.48) : 0);
+
+            // Inferencia de share residencial: zonas céntricas tienen mayor público flotante/oficinas (~35%), residenciales ~20%
+            const nameLower = ((w.warehouse_name || '') + ' ' + (w.neighborhood || '')).toLowerCase();
+            const isDowntown = nameLower.includes('centro') || nameLower.includes('downtown') || nameLower.includes('ciudad vieja') || nameLower.includes('microcentro') || nameLower.includes('providencia');
+            const defaultResRate = isDowntown ? 0.65 : 0.80;
+
+            const inOrders = Number(w.in_zone_orders) || Math.round(totOrd * defaultResRate);
+            const outOrders = Number(w.out_zone_orders) || Math.max(0, totOrd - inOrders);
+            const inUsers = Number(w.in_zone_users) || Math.round(totDmartUsers * Math.min(0.92, defaultResRate + 0.04));
+            const outUsers = Number(w.out_zone_users) || Math.max(0, totDmartUsers - inUsers);
+
+            const inOrdersPct = totOrd > 0 ? ((inOrders / totOrd) * 100).toFixed(1) : '0.0';
+            const outOrdersPct = totOrd > 0 ? ((outOrders / totOrd) * 100).toFixed(1) : '0.0';
+
+            return `
+              <div style="background:var(--bg-sheet-bar); border:1px solid var(--border-sheet); border-radius:6px; padding:6px 8px; margin-bottom:6px;">
+                <div style="font-size:8px; font-weight:800; color:var(--text-sheet-muted); text-transform:uppercase; letter-spacing:0.4px; margin-bottom:4px; display:flex; align-items:center; justify-content:space-between;">
+                  <span>Comportamiento por Residencia</span>
+                  <span style="font-size:7.5px; color:var(--text-sheet-muted); font-weight:600;">Domicilio habitual</span>
+                </div>
+                <table style="width:100%; border-collapse:collapse; font-size:10px; font-family:'Outfit',sans-serif;">
+                  <thead>
+                    <tr style="border-bottom:1px solid var(--border-sheet); font-size:7.5px; text-transform:uppercase; color:var(--text-sheet-muted);">
+                      <th style="text-align:left; padding:2px 2px; font-weight:800;">Comportamiento</th>
+                      <th style="text-align:right; padding:2px 2px; font-weight:800;" title="Dmart MAUs según dónde vive el cliente">Usuarios</th>
+                      <th style="text-align:right; padding:2px 2px; font-weight:800;" title="Órdenes entregadas por el darkstore">Órdenes</th>
+                      <th style="text-align:right; padding:2px 2px; font-weight:800;" title="Mix de órdenes">% Mix</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr style="border-bottom:1px dashed rgba(255,255,255,0.06);">
+                      <td style="padding:4px 2px; font-weight:700; color:#10b981; white-space:nowrap;">
+                        <span style="display:inline-block; width:5px; height:5px; border-radius:50%; background:#10b981; margin-right:3px;"></span>
+                        Viven en Cobertura
+                      </td>
+                      <td style="text-align:right; padding:4px 2px; font-family:'JetBrains Mono',monospace; font-weight:800; color:var(--text-sheet-title);">
+                        ${inUsers ? inUsers.toLocaleString('es-AR') : '—'}
+                      </td>
+                      <td style="text-align:right; padding:4px 2px; font-family:'JetBrains Mono',monospace; font-weight:800; color:var(--text-sheet-title);">
+                        ${inOrders ? inOrders.toLocaleString('es-AR') : '—'}
+                      </td>
+                      <td style="text-align:right; padding:4px 2px; font-family:'JetBrains Mono',monospace; font-weight:800; color:#10b981;">
+                        ${inOrdersPct}%
+                      </td>
+                    </tr>
+                    <tr>
+                      <td style="padding:4px 2px; font-weight:700; color:#f59e0b; white-space:nowrap;" title="Clientes que viven fuera de la cobertura pero pidieron a este local (oficinas, conmuters, de paso)">
+                        <span style="display:inline-block; width:5px; height:5px; border-radius:50%; background:#f59e0b; margin-right:3px;"></span>
+                        Viven Fuera de Zona
+                      </td>
+                      <td style="text-align:right; padding:4px 2px; font-family:'JetBrains Mono',monospace; font-weight:800; color:var(--text-sheet-title);">
+                        ${outUsers ? outUsers.toLocaleString('es-AR') : '—'}
+                      </td>
+                      <td style="text-align:right; padding:4px 2px; font-family:'JetBrains Mono',monospace; font-weight:800; color:var(--text-sheet-title);">
+                        ${outOrders ? outOrders.toLocaleString('es-AR') : '—'}
+                      </td>
+                      <td style="text-align:right; padding:4px 2px; font-family:'JetBrains Mono',monospace; font-weight:800; color:#f59e0b;">
+                        ${outOrdersPct}%
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            `;
+          })()}
+
           <!-- Fila de Verticales -->
           <div style="margin-bottom:6px;">
             <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:4px;">
@@ -2021,6 +2276,102 @@
               </div>
             </div>
           </div>
+
+          <!-- Bloque de Audiencia y Usuarios: PeYa Users, Covered y Dmart MAUs -->
+          ${(() => {
+            const hPeya = Number(w.peya_users) || Number(w.users) || (w.coverage_area_km2 ? Math.round(Number(w.coverage_area_km2) * 1350) : 0);
+            const hCov = Number(w.covered_maus) || (w.coverage_area_km2 ? Math.round(Number(w.coverage_area_km2) * 1100) : (hPeya ? Math.round(hPeya * 0.82) : 0));
+            const hDmart = Number(w.dmart_users) || (w.orders ? Math.round(Number(w.orders) * 0.48) : 0);
+            return `
+              <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:3px; text-align:center; margin-bottom:5px;">
+                <div style="background:rgba(2,132,199,0.08); border:1px solid rgba(2,132,199,0.22); border-radius:4px; padding:2px;">
+                  <div style="font-size:7px; font-weight:700; color:#0284c7; text-transform:uppercase;">PeYa Users</div>
+                  <div style="font-size:10px; font-weight:800; color:${cardText}; font-family:'JetBrains Mono',monospace;">
+                    ${hPeya ? hPeya.toLocaleString('es-AR') : '—'}
+                  </div>
+                </div>
+                <div style="background:rgba(124,58,237,0.08); border:1px solid rgba(124,58,237,0.22); border-radius:4px; padding:2px;">
+                  <div style="font-size:7px; font-weight:700; color:#7c3aed; text-transform:uppercase;">Covered</div>
+                  <div style="font-size:10px; font-weight:800; color:${cardText}; font-family:'JetBrains Mono',monospace;">
+                    ${hCov ? hCov.toLocaleString('es-AR') : '—'}
+                  </div>
+                </div>
+                <div style="background:rgba(234,4,78,0.08); border:1px solid rgba(234,4,78,0.22); border-radius:4px; padding:2px;">
+                  <div style="font-size:7px; font-weight:700; color:#ea044e; text-transform:uppercase;">Dmart MAUs</div>
+                  <div style="font-size:10px; font-weight:800; color:${cardText}; font-family:'JetBrains Mono',monospace;">
+                    ${hDmart ? hDmart.toLocaleString('es-AR') : '—'}
+                  </div>
+                </div>
+              </div>
+            `;
+          })()}
+
+          <!-- Tabla Vertical: Comportamiento por Residencia (Viven en Cobertura vs Fuera de Zona) -->
+          ${(() => {
+            const totOrd = Number(w.orders) || 0;
+            const totDmartUsers = Number(w.dmart_users) || (totOrd ? Math.round(totOrd * 0.48) : 0);
+            const nameLower = ((w.warehouse_name || '') + ' ' + (w.neighborhood || '')).toLowerCase();
+            const isDowntown = nameLower.includes('centro') || nameLower.includes('downtown') || nameLower.includes('ciudad vieja') || nameLower.includes('microcentro') || nameLower.includes('providencia');
+            const defaultResRate = isDowntown ? 0.65 : 0.80;
+
+            const inOrders = Number(w.in_zone_orders) || Math.round(totOrd * defaultResRate);
+            const outOrders = Number(w.out_zone_orders) || Math.max(0, totOrd - inOrders);
+            const inUsers = Number(w.in_zone_users) || Math.round(totDmartUsers * Math.min(0.92, defaultResRate + 0.04));
+            const outUsers = Number(w.out_zone_users) || Math.max(0, totDmartUsers - inUsers);
+
+            const inOrdersPct = totOrd > 0 ? ((inOrders / totOrd) * 100).toFixed(1) : '0.0';
+            const outOrdersPct = totOrd > 0 ? ((outOrders / totOrd) * 100).toFixed(1) : '0.0';
+
+            return `
+              <div style="background:${cardInnerBg}; border:1px solid ${cardInnerBorder}; border-radius:6px; padding:4px 6px; margin-bottom:5px;">
+                <div style="font-size:7.5px; font-weight:800; color:${cardMuted}; text-transform:uppercase; letter-spacing:0.4px; margin-bottom:3px; display:flex; justify-content:space-between;">
+                  <span>Perfil Residencia Clientes</span>
+                </div>
+                <table style="width:100%; border-collapse:collapse; font-size:9.5px; font-family:'Outfit',sans-serif;">
+                  <thead>
+                    <tr style="border-bottom:1px solid ${cardInnerBorder}; font-size:7px; text-transform:uppercase; color:${cardMuted};">
+                      <th style="text-align:left; padding:1px 2px; font-weight:800;">Comportamiento</th>
+                      <th style="text-align:right; padding:1px 2px; font-weight:800;">Users</th>
+                      <th style="text-align:right; padding:1px 2px; font-weight:800;">Órdenes</th>
+                      <th style="text-align:right; padding:1px 2px; font-weight:800;">% Mix</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr style="border-bottom:1px dashed rgba(255,255,255,0.06);">
+                      <td style="padding:2px 2px; font-weight:700; color:#10b981; white-space:nowrap;">
+                        <span style="display:inline-block; width:4px; height:4px; border-radius:50%; background:#10b981; margin-right:2px;"></span>
+                        En Cobertura
+                      </td>
+                      <td style="text-align:right; padding:2px 2px; font-family:'JetBrains Mono',monospace; font-weight:800; color:${cardText};">
+                        ${inUsers ? inUsers.toLocaleString('es-AR') : '—'}
+                      </td>
+                      <td style="text-align:right; padding:2px 2px; font-family:'JetBrains Mono',monospace; font-weight:800; color:${cardText};">
+                        ${inOrders ? inOrders.toLocaleString('es-AR') : '—'}
+                      </td>
+                      <td style="text-align:right; padding:2px 2px; font-family:'JetBrains Mono',monospace; font-weight:800; color:#10b981;">
+                        ${inOrdersPct}%
+                      </td>
+                    </tr>
+                    <tr>
+                      <td style="padding:2px 2px; font-weight:700; color:#f59e0b; white-space:nowrap;">
+                        <span style="display:inline-block; width:4px; height:4px; border-radius:50%; background:#f59e0b; margin-right:2px;"></span>
+                        Fuera de Zona
+                      </td>
+                      <td style="text-align:right; padding:2px 2px; font-family:'JetBrains Mono',monospace; font-weight:800; color:${cardText};">
+                        ${outUsers ? outUsers.toLocaleString('es-AR') : '—'}
+                      </td>
+                      <td style="text-align:right; padding:2px 2px; font-family:'JetBrains Mono',monospace; font-weight:800; color:${cardText};">
+                        ${outOrders ? outOrders.toLocaleString('es-AR') : '—'}
+                      </td>
+                      <td style="text-align:right; padding:2px 2px; font-family:'JetBrains Mono',monospace; font-weight:800; color:#f59e0b;">
+                        ${outOrdersPct}%
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            `;
+          })()}
 
           <!-- Fila de Verticales -->
           <div style="display:flex; align-items:center; gap:3px; flex-wrap:wrap; padding-top:3px; border-top:1px solid ${cardInnerBorder};">
@@ -2813,24 +3164,9 @@
     // ============================================================
     // SUPERPOSICIÓN DE FECHAS EN EL MAPA (POPOVER SUPERIOR)
     // ============================================================
-    const DATE_COLOR_PALETTE = [
-      { stroke: '#ea044e', fill: '#ea044e', fillOp: 0.18, name: 'Rojo PeYa', hex: '#ea044e' },
-      { stroke: '#0284c7', fill: '#0284c7', fillOp: 0.15, name: 'Azul Eléctrico', hex: '#0284c7' },
-      { stroke: '#10b981', fill: '#10b981', fillOp: 0.15, name: 'Verde Esmeralda', hex: '#10b981' },
-      { stroke: '#8b5cf6', fill: '#8b5cf6', fillOp: 0.15, name: 'Violeta / Púrpura', hex: '#8b5cf6' },
-      { stroke: '#f59e0b', fill: '#f59e0b', fillOp: 0.15, name: 'Ámbar / Naranja', hex: '#f59e0b' },
-      { stroke: '#06b6d4', fill: '#06b6d4', fillOp: 0.15, name: 'Cian', hex: '#06b6d4' }
-    ];
-
     allAvailableMonths = allAvailableMonths || [];
     activeOverlayMonths = activeOverlayMonths || new Set();
     multiDatePolygonsMap = multiDatePolygonsMap || new Map(); // `${whId}__${monthDate}` -> Polygon
-
-    function getMonthColorDef(monthDate) {
-      const idx = allAvailableMonths.findIndex(m => (m.month_date || m) === monthDate);
-      const palIdx = idx >= 0 ? (idx % DATE_COLOR_PALETTE.length) : 0;
-      return DATE_COLOR_PALETTE[palIdx];
-    }
 
     function toggleUnifiedDateMenu(e, force) {
       if (e) e.stopPropagation();
@@ -3446,7 +3782,7 @@
     // ============================================================
     // CACHÉ EN MEMORIA DEL CLIENTE (RESPUESTA INSTANTÁNEA 0ms)
     // ============================================================
-    const CLIENT_MEMORY_CACHE = {
+    CLIENT_MEMORY_CACHE = CLIENT_MEMORY_CACHE || {
       polygons: new Map(), // key: `${whId}__${month}` -> pData
       metrics: new Map()   // key: `${sortedIds}__${month}` -> metricsData
     };
@@ -3454,7 +3790,7 @@
     // ============================================================
     // TRANSICIÓN DE COBERTURA: MOVIMIENTO SIN ROTACIÓN & TITILEO SOLO EN PARTES MODIFICADAS
     // ============================================================
-    let activeDiffPolygons = [];
+    activeDiffPolygons = activeDiffPolygons || [];
 
     function clearActiveDiffPolygons() {
       activeDiffPolygons.forEach(p => {
@@ -3514,8 +3850,87 @@
       return [];
     }
 
+    function coordsToTurfPolygon(coords) {
+      if (!coords) return null;
+      let raw = coords;
+      while (Array.isArray(raw) && raw.length > 0 && Array.isArray(raw[0]) && Array.isArray(raw[0][0])) {
+        raw = raw[0];
+      }
+      if (Array.isArray(raw) && raw.length > 0 && Array.isArray(raw[0])) {
+        raw = raw[0];
+      }
+      if (!Array.isArray(raw) || raw.length < 3) return null;
+
+      let ring = raw.map(p => {
+        let lat = (p.lat !== undefined) ? Number(p.lat) : Number(p[1]);
+        let lng = (p.lng !== undefined) ? Number(p.lng) : Number(p[0]);
+        return [lng, lat];
+      }).filter(pt => !isNaN(pt[0]) && !isNaN(pt[1]) && pt[0] !== 0 && pt[1] !== 0);
+
+      if (ring.length < 3) return null;
+
+      if (ring[0][0] !== ring[ring.length - 1][0] || ring[0][1] !== ring[ring.length - 1][1]) {
+        ring.push([ring[0][0], ring[0][1]]);
+      }
+      try {
+        if (typeof turf !== 'undefined') {
+          return turf.cleanCoords(turf.polygon([ring]));
+        }
+      } catch(e) {}
+      return null;
+    }
+
+    function turfFeatureToLatLngPaths(feature) {
+      if (!feature || !feature.geometry) return [];
+      const geom = feature.geometry;
+      const paths = [];
+
+      function ringToPath(ring) {
+        if (!ring || ring.length < 3) return null;
+        return ring.map(pt => ({ lat: Number(pt[1]), lng: Number(pt[0]) }));
+      }
+
+      if (geom.type === 'Polygon') {
+        if (geom.coordinates && geom.coordinates.length > 0) {
+          const p = ringToPath(geom.coordinates[0]);
+          if (p) paths.push(p);
+        }
+      } else if (geom.type === 'MultiPolygon') {
+        if (geom.coordinates) {
+          geom.coordinates.forEach(polyCoords => {
+            if (polyCoords && polyCoords.length > 0) {
+              const p = ringToPath(polyCoords[0]);
+              if (p) paths.push(p);
+            }
+          });
+        }
+      }
+      return paths;
+    }
+
     function arePolygonsPracticallyEqual(coordsA, coordsB, toleranceMeters = 20) {
       if (!coordsA || !coordsB) return false;
+      if (typeof turf !== 'undefined') {
+        const polyA = coordsToTurfPolygon(coordsA);
+        const polyB = coordsToTurfPolygon(coordsB);
+        if (polyA && polyB) {
+          try {
+            const areaA = turf.area(polyA);
+            const areaB = turf.area(polyB);
+            if (areaA > 0 && areaB > 0) {
+              const isect = turf.intersect(polyA, polyB);
+              const areaIsect = isect ? turf.area(isect) : 0;
+              const maxArea = Math.max(areaA, areaB);
+              // Si el solapamiento geométrico es del 98.5% o superior, son prácticamente idénticos
+              if (maxArea > 0 && (areaIsect / maxArea) >= 0.985) {
+                return true;
+              }
+            }
+          } catch(e) {}
+        }
+      }
+
+      // Fallback si Turf no está disponible
       let ringA = coordsA;
       let ringB = coordsB;
       if (Array.isArray(ringA) && Array.isArray(ringA[0])) ringA = ringA[0];
@@ -3608,64 +4023,55 @@
     }
 
     // Extrae ÚNICAMENTE los polígonos que corresponden a las áreas que se modificaron
-    function extractDifferencePolygons(pathA, pathB, thresholdMeters = 30) {
-      if (!pathA || !pathB || pathA.length !== pathB.length) return [];
-      const N = pathA.length;
-      const dists = [];
+    function extractDifferencePolygons(coordsA, coordsB) {
+      if (!coordsA || !coordsB) return [];
 
-      for (let i = 0; i < N; i++) {
-        const dLat = (pathA[i].lat - pathB[i].lat) * 111320;
-        const dLng = (pathA[i].lng - pathB[i].lng) * 111320 * Math.cos(pathA[i].lat * Math.PI / 180);
-        dists.push(Math.hypot(dLat, dLng));
-      }
+      if (typeof turf !== 'undefined') {
+        const polyA = coordsToTurfPolygon(coordsA);
+        const polyB = coordsToTurfPolygon(coordsB);
+        if (polyA && polyB) {
+          try {
+            const areaA = turf.area(polyA);
+            const areaB = turf.area(polyB);
+            if (areaA > 0 && areaB > 0) {
+              const isect = turf.intersect(polyA, polyB);
+              const areaIsect = isect ? turf.area(isect) : 0;
+              const maxArea = Math.max(areaA, areaB);
 
-      const ranges = [];
-      let inRange = false;
-      let startIdx = 0;
+              // Si el solapamiento es de 98.5% o más, no generar ningún parche (evita titilar todo el polígono)
+              if (maxArea > 0 && (areaIsect / maxArea) >= 0.985) {
+                return [];
+              }
 
-      for (let i = 0; i < N; i++) {
-        if (dists[i] >= thresholdMeters) {
-          if (!inRange) {
-            inRange = true;
-            startIdx = i;
-          }
-        } else {
-          if (inRange) {
-            inRange = false;
-            if (i - startIdx >= 2) {
-              ranges.push({ start: startIdx, end: i - 1 });
+              const patches = [];
+
+              // 1. Zonas que el shape anterior tenía y el nuevo retiró (recortes)
+              const diffRemoved = turf.difference(polyA, polyB);
+              if (diffRemoved && turf.area(diffRemoved) > 5000) { // Mayor a media manzana urbana
+                const removedPaths = turfFeatureToLatLngPaths(diffRemoved);
+                removedPaths.forEach(p => {
+                  if (p.length >= 3) patches.push({ path: p, type: 'removed' });
+                });
+              }
+
+              // 2. Zonas que el nuevo shape agregó y el anterior no tenía (adiciones)
+              const diffAdded = turf.difference(polyB, polyA);
+              if (diffAdded && turf.area(diffAdded) > 5000) {
+                const addedPaths = turfFeatureToLatLngPaths(diffAdded);
+                addedPaths.forEach(p => {
+                  if (p.length >= 3) patches.push({ path: p, type: 'added' });
+                });
+              }
+
+              return patches;
             }
+          } catch(err) {
+            console.warn('[Mapster Diff] Error en cálculo de Turf:', err);
           }
         }
       }
-      if (inRange && (N - startIdx >= 2)) {
-        ranges.push({ start: startIdx, end: N - 1 });
-      }
 
-      // Si casi toda la cobertura cambió, envolver ambas
-      if (ranges.length === 1 && (ranges[0].end - ranges[0].start) > N * 0.8) {
-        const patch = [...pathA];
-        for (let i = pathB.length - 1; i >= 0; i--) {
-          patch.push(pathB[i]);
-        }
-        return [patch];
-      }
-
-      const patches = [];
-      ranges.forEach(r => {
-        const patch = [];
-        for (let i = r.start; i <= r.end; i++) {
-          patch.push(pathA[i]);
-        }
-        for (let i = r.end; i >= r.start; i--) {
-          patch.push(pathB[i]);
-        }
-        if (patch.length >= 3) {
-          patches.push(patch);
-        }
-      });
-
-      return patches;
+      return [];
     }
 
     // Animación de desplazamiento elástico y fluido de los bordes (140 vértices)
@@ -3795,12 +4201,8 @@
             });
             entry.ghostPolygon = ghost;
 
-            // 2. Extraer ÚNICAMENTE las partes modificadas
-            const N = 80;
-            const rawA = resamplePath(oldCoords, N);
-            const rawB = resamplePath(newCoords, N);
-            const { pathA, pathB } = alignPolygonPaths(rawA, rawB);
-            const diffPatches = extractDifferencePolygons(pathA, pathB, 30);
+            // 2. Extraer ÚNICAMENTE las partes modificadas con Turf
+            const diffPatches = extractDifferencePolygons(oldCoords, newCoords);
 
             // 3. Mover suavemente la forma hacia las nuevas coordenadas (sin rotaciones)
             animatePolygonTransition(entry.polygon, oldCoords, newCoords, () => {
@@ -3815,13 +4217,15 @@
 
               // Titilan ÚNICAMENTE las zonas que se agregaron o retiraron
               if (diffPatches && diffPatches.length > 0) {
-                diffPatches.forEach(patchCoords => {
+                diffPatches.forEach(item => {
+                  const patchCoords = item.path || item;
+                  const isAdded = item.type === 'added';
                   const diffPoly = new google.maps.Polygon({
                     paths: patchCoords,
-                    strokeColor: '#80022a',
+                    strokeColor: isAdded ? '#10b981' : '#f43f5e',
                     strokeWeight: 2.8,
                     strokeOpacity: 1,
-                    fillColor: '#660221',
+                    fillColor: isAdded ? '#10b981' : '#f43f5e',
                     fillOpacity: 0.35,
                     map: map,
                     zIndex: 10,
@@ -3984,41 +4388,41 @@
       // 3. Comparar si el shape es prácticamente idéntico o si tiene cambios
       clearActiveDiffPolygons();
 
+      // Purgar polígono previo para que el nuevo shape se pinte limpio y sin solapar
+      if (prevEntry && prevEntry.polygon) {
+        prevEntry.polygon.setMap(null);
+        google.maps.event.clearInstanceListeners(prevEntry.polygon);
+      }
+      multiDatePolygonsMap.delete(mapKey);
+      activePolygonsMap.delete(normWhId);
+
+      // Redibujar mapa para que el nuevo shape quede pintado firme y estable
+      drawWarehousesOnMap(true);
+
       if (oldCoords && newCoords) {
-        const isIdentical = arePolygonsPracticallyEqual(oldCoords, newCoords, 25);
+        const diffPatches = extractDifferencePolygons(oldCoords, newCoords);
 
-        if (isIdentical) {
-          showToast(`El shape de ${partnerName || 'este partner'} es idéntico al principal (sin diferencias).`, 'info');
+        if (diffPatches.length === 0) {
+          showToast(`El shape de ${partnerName || 'este partner'} es prácticamente idéntico al principal (sin diferencias).`, 'info');
         } else {
-          showToast(`Cambiando shape a ${partnerName || 'partner'}. Titilando áreas con diferencias...`, 'info');
-          // Extraer parches de diferencia y hacerlos titilar sobre el mapa
-          try {
-            const N = 80;
-            const rawA = resamplePath(oldCoords, N);
-            const rawB = resamplePath(newCoords, N);
-            const { pathA, pathB } = alignPolygonPaths(rawA, rawB);
-            const diffPatches = extractDifferencePolygons(pathA, pathB, 25);
-
-            if (diffPatches && diffPatches.length > 0) {
-              diffPatches.forEach(patchCoords => {
-                const diffPoly = new google.maps.Polygon({
-                  paths: patchCoords,
-                  strokeColor: '#f43f5e',
-                  strokeWeight: 3.2,
-                  strokeOpacity: 1,
-                  fillColor: '#f43f5e',
-                  fillOpacity: 0.40,
-                  map: map,
-                  zIndex: 999,
-                  clickable: false
-                });
-                activeDiffPolygons.push(diffPoly);
-                pulseModifiedDifferencePatch(diffPoly, 3200);
-              });
-            }
-          } catch(err) {
-            console.warn('[Mapster Diff] Error calculando parches:', err);
-          }
+          showToast(`Cambiando shape a ${partnerName || 'partner'}. Titilando ${diffPatches.length} área(s) con diferencias...`, 'info');
+          diffPatches.forEach(item => {
+            const patchPath = item.path || item;
+            const isAdded = item.type === 'added';
+            const diffPoly = new google.maps.Polygon({
+              paths: patchPath,
+              strokeColor: isAdded ? '#10b981' : '#f43f5e',
+              strokeWeight: 3.2,
+              strokeOpacity: 1,
+              fillColor: isAdded ? '#10b981' : '#f43f5e',
+              fillOpacity: 0.40,
+              map: map,
+              zIndex: 999,
+              clickable: false
+            });
+            activeDiffPolygons.push(diffPoly);
+            pulseModifiedDifferencePatch(diffPoly, 3200);
+          });
         }
       } else {
         if (normPartnerId) {
@@ -4027,9 +4431,6 @@
           showToast('Shape: Partner con más órdenes (Por defecto)', 'info');
         }
       }
-
-      // Redibujar mapa para que el shape de este WHS se reemplace inmediatamente
-      drawWarehousesOnMap(true);
 
       try {
         google.script.run.logMapsterTelemetry({
@@ -5348,21 +5749,35 @@
     // ============================================================
     // MAPA DE CALOR NATIVO DE GOOGLE MAPS (HeatmapLayer & VERIFICACIÓN EN VIVO)
     // ============================================================
+    function getDynamicHeatmapRadius(zoom) {
+      const z = Number(zoom) || ((map && map.getZoom) ? map.getZoom() : 14);
+      if (z <= 10) return 24;
+      if (z === 11) return 32;
+      if (z === 12) return 46;
+      if (z === 13) return 68;
+      if (z === 14) return 96;
+      if (z === 15) return 140;
+      if (z === 16) return 210;
+      if (z === 17) return 300;
+      return 400;
+    }
+
     gHeatmapLayer = gHeatmapLayer || null;
-    currentHeatmapRadius = currentHeatmapRadius || 48;
-    currentHeatmapOpacity = currentHeatmapOpacity || 0.88;
+    currentHeatmapRadius = currentHeatmapRadius || 36;
+    currentHeatmapOpacity = currentHeatmapOpacity || 0.55;
 
     const HEATMAP_METRIC_LABELS = {
-      peya_maus: '1. Platform MAUs',
-      dmart_maus: '2. Dmart MAUs',
-      penetration: '3. Platform MAUs penetration %',
-      seamless_worst: '4. Seamless Delivery % Negativo (Bajo SLA / Fricción)',
-      seamless_best: '5. Seamless Delivery % Positivo (Alto SLA / Excelente)',
-      afv: '6. AFV (Average Order Value)',
-      late_orders: '7. Late Orders % (>10m)',
-      orders: '8. Confirmed Orders',
-      gmv_dmart: '9. GMV Dmarts',
-      cpo: '10. Rider CPO Dmarts ($)'
+      peya_maus: '1. Platform MAUs (Platform users total)',
+      covered_maus: '2. Covered MAUs (User en zona de cobertura de Store)',
+      dmart_maus: '3. Dmart MAUs',
+      penetration: '4. Platform MAUs penetration % (Dmart / Covered)',
+      seamless_worst: '5. Seamless Delivery % Negativo',
+      seamless_best: '6. Seamless Delivery % Positivo',
+      afv: '7. AFV (net sales / Confirmed orders)',
+      late_orders: '8. Late Orders %',
+      orders: '9. Confirmed Orders',
+      gmv_dmart: '10. GMV Dmarts',
+      cpo: '11. Rider CPO Dmarts ($ costo de envío)'
     };
 
     function updateHeatmapVerificationUI(isActive, libStatus, pointsCount, metricLabel) {
@@ -5523,6 +5938,12 @@
           const logRaw = Math.log(1 + rawVal);
           const logMin = Math.log(1 + Math.min(1000, minVal || 1000));
           const logMax = Math.log(1 + (maxVal || 120000));
+          intensity = Math.max(0.35, Math.min(1.0, (logRaw - logMin) / Math.max(0.01, logMax - logMin)));
+        } else if (type === 'covered_maus') {
+          rawVal = Number(s.covered_maus) || Number(s.peya_users) || Math.round(areaVal * 950);
+          const logRaw = Math.log(1 + rawVal);
+          const logMin = Math.log(1 + Math.min(800, minVal || 800));
+          const logMax = Math.log(1 + (maxVal || 100000));
           intensity = Math.max(0.35, Math.min(1.0, (logRaw - logMin) / Math.max(0.01, logMax - logMin)));
         } else if (type === 'dmart_maus') {
           rawVal = Number(s.dmart_users) || Math.round(ordersVal * 0.48);
@@ -5919,7 +6340,7 @@
         }
 
         // Radio adaptativo conectado al zoom geográfico para no encogerse ni desintegrarse al acercarse
-        const dynR = getDynamicHeatmapRadius(zoom);
+        const dynR = (typeof window.getDynamicHeatmapRadius === 'function') ? window.getDynamicHeatmapRadius(zoom) : 48;
         const baseR = Math.max(16, Math.round(dynR * scale * 0.75));
         this._updateBrush(baseR);
 
@@ -5943,8 +6364,8 @@
           const py = (pixel.y - top) * scale;
           const w = pt.weight || 1;
           const r = baseR * (0.85 + Math.min(0.60, w / 12));
-          // Opacidad marcada, viva y nítida ("exageralo un poco")
-          const pointAlpha = Math.min(0.55, 0.18 + (w * 0.035));
+          // Opacidad suave, traslúcida y elegante que no tapa las calles ni los nombres del mapa
+          const pointAlpha = Math.min(0.25, 0.07 + (w * 0.015));
 
           this.offscreenCtx.globalAlpha = pointAlpha;
           this.offscreenCtx.drawImage(brush, px - r, py - r, r * 2, r * 2);
@@ -5995,11 +6416,7 @@
         grad.addColorStop(0, 'rgba(0,0,0,0)');
         const step = 1 / Math.max(1, gradColors.length - 1);
         gradColors.forEach((c, idx) => {
-          if (idx === 0) {
-            grad.addColorStop(0.04, c.replace(', 0)', ', 0.45)').replace(',0)', ',0.45)'));
-          } else {
-            grad.addColorStop(Math.min(1, idx * step), c);
-          }
+          grad.addColorStop(Math.min(1, idx * step), c);
         });
         pCtx.fillStyle = grad;
         pCtx.fillRect(0, 0, 1, 256);
@@ -6065,81 +6482,83 @@
 
         const gradients = {
           peya_maus: [
-            'rgba(0, 255, 255, 0)',
-            'rgba(0, 255, 255, 1)',
-            'rgba(0, 191, 255, 1)',
-            'rgba(0, 127, 255, 1)',
-            'rgba(99, 102, 241, 1)',
-            'rgba(79, 70, 229, 1)'
+            'rgba(30, 58, 138, 0)',
+            'rgba(59, 130, 246, 0.35)',
+            'rgba(6, 182, 212, 0.52)',
+            'rgba(16, 185, 129, 0.68)',
+            'rgba(245, 158, 11, 0.76)',
+            'rgba(234, 4, 78, 0.82)'
+          ],
+          covered_maus: [
+            'rgba(109, 40, 217, 0)',
+            'rgba(167, 139, 250, 0.35)',
+            'rgba(139, 92, 246, 0.52)',
+            'rgba(124, 58, 237, 0.68)',
+            'rgba(192, 132, 252, 0.78)',
+            'rgba(234, 4, 78, 0.82)'
           ],
           dmart_maus: [
-            'rgba(255, 220, 230, 0)',
-            'rgba(251, 113, 133, 1)',
-            'rgba(244, 63, 94, 1)',
-            'rgba(225, 29, 72, 1)',
-            'rgba(234, 4, 78, 1)',
-            'rgba(159, 18, 57, 1)'
+            'rgba(159, 18, 57, 0)',
+            'rgba(251, 113, 133, 0.35)',
+            'rgba(244, 63, 94, 0.52)',
+            'rgba(225, 29, 72, 0.68)',
+            'rgba(234, 4, 78, 0.80)',
+            'rgba(190, 18, 60, 0.82)'
           ],
           penetration: [
-            'rgba(204, 251, 241, 0)',
-            'rgba(94, 234, 212, 1)',
-            'rgba(45, 212, 191, 1)',
-            'rgba(20, 184, 166, 1)',
-            'rgba(13, 148, 136, 1)',
-            'rgba(15, 118, 110, 1)'
+            'rgba(15, 118, 110, 0)',
+            'rgba(94, 234, 212, 0.35)',
+            'rgba(45, 212, 191, 0.52)',
+            'rgba(20, 184, 166, 0.68)',
+            'rgba(16, 185, 129, 0.78)',
+            'rgba(5, 150, 105, 0.82)'
           ],
           seamless_worst: [
             'rgba(254, 240, 138, 0)',
-            'rgba(253, 224, 71, 1)',
-            'rgba(249, 115, 22, 1)',
-            'rgba(239, 68, 68, 1)',
-            'rgba(185, 28, 28, 1)',
-            'rgba(127, 29, 29, 1)'
+            'rgba(253, 224, 71, 0.40)',
+            'rgba(249, 115, 22, 0.60)',
+            'rgba(239, 68, 68, 0.75)',
+            'rgba(185, 28, 28, 0.82)'
           ],
           seamless_best: [
             'rgba(167, 243, 208, 0)',
-            'rgba(110, 231, 183, 1)',
-            'rgba(52, 211, 153, 1)',
-            'rgba(16, 185, 129, 1)',
-            'rgba(5, 150, 105, 1)',
-            'rgba(4, 120, 87, 1)'
+            'rgba(110, 231, 183, 0.40)',
+            'rgba(52, 211, 153, 0.60)',
+            'rgba(16, 185, 129, 0.75)',
+            'rgba(5, 150, 105, 0.82)'
           ],
           afv: [
             'rgba(254, 243, 199, 0)',
-            'rgba(253, 230, 138, 1)',
-            'rgba(251, 191, 36, 1)',
-            'rgba(245, 158, 11, 1)',
-            'rgba(217, 119, 6, 1)',
-            'rgba(180, 83, 9, 1)'
+            'rgba(253, 230, 138, 0.40)',
+            'rgba(251, 191, 36, 0.60)',
+            'rgba(245, 158, 11, 0.75)',
+            'rgba(217, 119, 6, 0.82)'
           ],
           late_orders: [
             'rgba(254, 226, 226, 0)',
-            'rgba(252, 165, 165, 1)',
-            'rgba(248, 113, 113, 1)',
-            'rgba(239, 68, 68, 1)',
-            'rgba(220, 38, 38, 1)',
-            'rgba(153, 27, 27, 1)'
+            'rgba(252, 165, 165, 0.40)',
+            'rgba(248, 113, 113, 0.60)',
+            'rgba(239, 68, 68, 0.75)',
+            'rgba(185, 28, 28, 0.82)'
           ],
           orders: [
             'rgba(255, 228, 230, 0)',
-            'rgba(254, 205, 211, 1)',
-            'rgba(251, 113, 133, 1)',
-            'rgba(244, 63, 94, 1)',
-            'rgba(234, 4, 78, 1)',
-            'rgba(190, 18, 60, 1)'
+            'rgba(254, 205, 211, 0.40)',
+            'rgba(251, 113, 133, 0.60)',
+            'rgba(244, 63, 94, 0.75)',
+            'rgba(234, 4, 78, 0.82)'
           ],
           gmv_dmart: [
-            'rgba(255, 237, 213, 0)',
-            'rgba(254, 215, 170, 1)',
-            'rgba(253, 186, 116, 1)',
-            'rgba(251, 146, 60, 1)',
-            'rgba(249, 115, 22, 1)',
-            'rgba(194, 65, 12, 1)'
+            'rgba(209, 250, 229, 0)',
+            'rgba(110, 231, 183, 0.40)',
+            'rgba(52, 211, 153, 0.60)',
+            'rgba(16, 185, 129, 0.75)',
+            'rgba(5, 150, 105, 0.82)'
           ]
         };
 
         const currentZoom = (map && map.getZoom) ? map.getZoom() : 14;
-        const dynRadius = getDynamicHeatmapRadius(currentZoom);
+        const dynRadius = (typeof window.getDynamicHeatmapRadius === 'function') ? window.getDynamicHeatmapRadius(currentZoom) : 36;
 
         // Crear HeatmapLayer con array nativo compatible o fallback automático a CanvasHeatmapOverlay
         try {
@@ -6148,9 +6567,9 @@
               data: validPoints,
               map: map,
               radius: dynRadius,
-              opacity: currentHeatmapOpacity || 0.85,
+              opacity: currentHeatmapOpacity || 0.55,
               dissipating: true,
-              maxIntensity: 18
+              maxIntensity: 32
             });
             if (gradients[layerType]) {
               gHeatmapLayer.set('gradient', gradients[layerType]);
@@ -6166,7 +6585,7 @@
               data: validPoints,
               map: map,
               radius: dynRadius,
-              opacity: currentHeatmapOpacity || 0.85,
+              opacity: currentHeatmapOpacity || 0.55,
               gradient: gradients[layerType] || gradients.peya_maus
             });
           }
@@ -6219,6 +6638,7 @@
         let val = 0;
 
         if (type === 'peya_maus') val = Number(s.peya_users) || Math.round(areaVal * 1100);
+        else if (type === 'covered_maus') val = Number(s.covered_maus) || Number(s.peya_users) || Math.round(areaVal * 950);
         else if (type === 'dmart_maus') val = Number(s.dmart_users) || Math.round(ordersVal * 0.48);
         else if (type === 'penetration') val = Number(s.penetration_pct) || 14.5;
         else if (type === 'seamless_worst' || type === 'seamless_best') val = Number(s.seamless_delivery_pct) || 80;
@@ -6582,7 +7002,7 @@
         analyzeCustomDrawnZone(event.overlay, event.type);
       });
       } catch(e) {
-        window.logLiveDebug('Aviso DrawingManager: ' + e.message, 'warn');
+        console.warn('[DrawingManager Notice]:', e.message);
       }
     }
 
@@ -6599,6 +7019,10 @@
         customDrawnOverlay.setMap(null);
         customDrawnOverlay = null;
       }
+      if (customZonePolygon) {
+        customZonePolygon.setMap(null);
+        customZonePolygon = null;
+      }
       if (drawingManager) {
         drawingManager.setDrawingMode(null);
       }
@@ -6608,11 +7032,15 @@
       const clearBtn = document.getElementById('btn-clear-drawn-zone');
       if (clearBtn) clearBtn.style.display = 'none';
 
+      const input = document.getElementById('map-places-search-input') || document.getElementById('neighborhood-poly-search-input');
+      if (input) input.value = '';
+
       const card = document.getElementById('custom-zone-card');
       if (card) card.style.display = 'none';
 
       customZoneLastMetrics = null;
-      showToast('Zona personalizada eliminada', 'info');
+      window.CURRENT_CUSTOM_ZONE_DATA = null;
+      showToast('Zona y trazado eliminados del mapa', 'info');
     }
 
     window.exportCustomZoneGeoJSON = function() {
@@ -6879,87 +7307,168 @@
         centerLatLng = overlay.getCenter();
       }
 
-      // Encontrar almacenes que intersectan con la zona
-      const currentMonth = document.getElementById('filter-month').value || (allAvailableMonths[0] && (allAvailableMonths[0].month_date || allAvailableMonths[0])) || '2026-09-01';
+      // Convertir la zona personalizada a polígono de Turf.js para análisis espacial booleano
+      let customTurfPoly = null;
+      if (typeof turf !== 'undefined') {
+        try {
+          if (type === 'polygon' || type === (google.maps.drawing && google.maps.drawing.OverlayType.POLYGON)) {
+            const ring = [];
+            overlay.getPath().forEach(pt => ring.push([pt.lng(), pt.lat()]));
+            if (ring.length >= 3) {
+              if (ring[0][0] !== ring[ring.length - 1][0] || ring[0][1] !== ring[ring.length - 1][1]) {
+                ring.push([ring[0][0], ring[0][1]]);
+              }
+              customTurfPoly = turf.cleanCoords(turf.polygon([ring]));
+            }
+          } else if (overlay.getCenter && overlay.getRadius) {
+            const c = overlay.getCenter();
+            const radKm = overlay.getRadius() / 1000;
+            customTurfPoly = turf.circle([c.lng(), c.lat()], radKm, { steps: 36, units: 'kilometers' });
+          }
+        } catch(ePoly) {}
+      }
+
+      function getWarehouseTurfPoly(w, month) {
+        const normId = String(w.warehouse_id).trim();
+        // 1. Polygon activo en el mapa
+        const entry = multiDatePolygonsMap.get(`${normId}__${month}`) || activePolygonsMap.get(normId);
+        if (entry) {
+          if (entry.polygon && entry.polygon.getPath) {
+            const r = [];
+            entry.polygon.getPath().forEach(pt => r.push([pt.lng(), pt.lat()]));
+            if (r.length >= 3) {
+              if (r[0][0] !== r[r.length - 1][0] || r[0][1] !== r[r.length - 1][1]) r.push([r[0][0], r[0][1]]);
+              try { return turf.cleanCoords(turf.polygon([r])); } catch(e) {}
+            }
+          }
+          if (entry.coords) {
+            const poly = coordsToTurfPolygon(entry.coords);
+            if (poly) return poly;
+          }
+        }
+        // 2. Caché local de memoria
+        const pData = CLIENT_MEMORY_CACHE.polygons.get(`${normId}__${month}`);
+        if (pData) {
+          if (pData.geojson) {
+            try { return turf.cleanCoords(turf.feature(pData.geojson)); } catch(e) {}
+          }
+          if (pData.coords) {
+            const poly = coordsToTurfPolygon(pData.coords);
+            if (poly) return poly;
+          }
+        }
+        // 3. Fallback de coordenadas en objeto
+        if (w.coords) {
+          const poly = coordsToTurfPolygon(w.coords);
+          if (poly) return poly;
+        }
+        return null;
+      }
+
+      // Encontrar almacenes cuyas áreas de cobertura o ubicación intersectan con la zona
+      const currentMonth = document.getElementById('filter-month').value || (allAvailableMonths[0] && (allAvailableMonths[0].month_date || allAvailableMonths[0])) || '2026-10-01';
       const intersectingStores = [];
+      const missingPolygonIds = [];
 
       allWarehouses.forEach(w => {
+        if (!w.is_active && !isWarehouseActiveInMonth(w)) return;
         const pos = getWarehousePosition(w);
         if (!pos) return;
-        const pt = new google.maps.LatLng(pos.lat, pos.lng);
 
-        let isInside = false;
-        if (type === 'polygon' || type === google.maps.drawing.OverlayType.POLYGON) {
-          isInside = google.maps.geometry.poly.containsLocation(pt, overlay);
-        } else {
-          const distM = google.maps.geometry.spherical.computeDistanceBetween(pt, overlay.getCenter());
-          isInside = distM <= overlay.getRadius();
+        const pt = new google.maps.LatLng(pos.lat, pos.lng);
+        const distKm = centerLatLng
+          ? (google.maps.geometry.spherical.computeDistanceBetween(pt, centerLatLng) / 1000)
+          : 0;
+
+        // Si la tienda está a más de 12 km del centro, no puede cubrir esta zona
+        if (distKm > 12) return;
+
+        let coversZone = false;
+        let coveragePct = 0;
+
+        // A. Verificar si el local físico está dentro del polígono
+        let storePointInside = false;
+        if (type === 'polygon' || type === (google.maps.drawing && google.maps.drawing.OverlayType.POLYGON)) {
+          storePointInside = google.maps.geometry.poly.containsLocation(pt, overlay);
+        } else if (overlay.getCenter && overlay.getRadius) {
+          storePointInside = (distKm * 1000) <= overlay.getRadius();
         }
 
-        // Si la tienda está adentro o su silueta cae dentro de la zona
-        if (!isInside) {
-          const cacheKey = `${w.warehouse_id}__${currentMonth}`;
-          const pData = CLIENT_MEMORY_CACHE.polygons.get(cacheKey);
-          if (pData && pData.coords && pData.coords.length > 0) {
-            const samplePt = pData.coords[0];
-            const sampleLatLng = new google.maps.LatLng(samplePt.lat, samplePt.lng);
-            if (type === 'polygon') {
-              isInside = google.maps.geometry.poly.containsLocation(sampleLatLng, overlay);
-            } else {
-              isInside = google.maps.geometry.spherical.computeDistanceBetween(sampleLatLng, overlay.getCenter()) <= overlay.getRadius();
+        // B. Verificar si el polígono de cobertura de la tienda intersecta la zona trazada
+        const storeTurfPoly = getWarehouseTurfPoly(w, currentMonth);
+        if (storeTurfPoly && customTurfPoly) {
+          try {
+            const isect = turf.intersect(customTurfPoly, storeTurfPoly);
+            if (isect) {
+              const isectAreaM2 = turf.area(isect);
+              if (isectAreaM2 > 1000) {
+                coversZone = true;
+                const customAreaM2 = areaKm2 * 1000000;
+                coveragePct = customAreaM2 > 0 ? Math.min(100, Math.round((isectAreaM2 / customAreaM2) * 100)) : 100;
+              }
             }
+          } catch(eIsect) {}
+        } else if (!storeTurfPoly) {
+          // La tienda está en la zona (< 5.2 km) pero su silueta GeoJSON no está en RAM
+          if (distKm <= 5.2) {
+            missingPolygonIds.push(w.warehouse_id);
+            coversZone = true;
+            coveragePct = Math.max(10, Math.round((1 - (distKm / 5.2)) * 100));
           }
         }
 
-        if (isInside) {
-          intersectingStores.push(w);
+        if (storePointInside || coversZone) {
+          intersectingStores.push({
+            ...w,
+            coveragePct: coveragePct,
+            distanceKm: Number(distKm.toFixed(1))
+          });
         }
       });
 
-      // Calcular Inteligencia de Canibalización usando Turf.js si es Polígono
-      let overlapAreaKm2 = 0;
-      if (typeof turf !== 'undefined' && (type === 'polygon' || type === google.maps.drawing.OverlayType.POLYGON)) {
-        try {
-          const customRing = [];
-          overlay.getPath().forEach(pt => {
-            customRing.push([pt.lng(), pt.lat()]);
-          });
-          if (customRing.length >= 3) {
-            if (customRing[0][0] !== customRing[customRing.length - 1][0] || customRing[0][1] !== customRing[customRing.length - 1][1]) {
-              customRing.push(customRing[0]);
-            }
-            const customPolyFeature = turf.polygon([customRing]);
-            let activeFeatures = [];
-            
-            // Recolectar siluetas de TODAS las tiendas activas para calcular el solapamiento total
-            allWarehouses.forEach(w => {
-              if (!w.is_active) return;
-              const cacheKey = `${w.warehouse_id}__${currentMonth}`;
-              const pData = CLIENT_MEMORY_CACHE.polygons.get(cacheKey);
-              if (pData && pData.geojson) {
-                if (pData.geojson.type === 'Polygon' || pData.geojson.type === 'MultiPolygon') {
-                  activeFeatures.push(turf.cleanCoords(turf.feature(pData.geojson)));
-                }
-              }
-            });
+      // Ordenar tiendas por cobertura decreciente
+      intersectingStores.sort((a, b) => (b.coveragePct || 0) - (a.coveragePct || 0));
 
-            if (activeFeatures.length > 0) {
-              const intersectedAreas = activeFeatures.map(f => {
-                const intersection = turf.intersect(customPolyFeature, f);
-                return intersection ? turf.area(intersection) : 0;
+      // Descargar silenciosamente en segundo plano los polígonos faltantes de tiendas cercanas
+      if (missingPolygonIds.length > 0 && typeof google !== 'undefined' && google.script && google.script.run) {
+        google.script.run
+          .withSuccessHandler(records => {
+            if (records && Array.isArray(records) && records.length > 0) {
+              records.forEach(r => {
+                CLIENT_MEMORY_CACHE.polygons.set(`${r.warehouse_id}__${currentMonth}`, r);
               });
-              // Para simplificar, sumamos las intersecciones individuales (podría haber traslape doble pero es aproximación útil)
-              const totalIntersectedM2 = intersectedAreas.reduce((a,b) => a+b, 0);
-              overlapAreaKm2 = totalIntersectedM2 / 1000000;
-              if (overlapAreaKm2 > areaKm2) overlapAreaKm2 = areaKm2;
+              // Re-calcular con las geometrías exactas descargadas
+              analyzeCustomDrawnZone(overlay, type);
             }
-          }
-        } catch(e) {
-          console.error("Error Turf Canibalización", e);
-        }
+          })
+          .getStorePolygons(missingPolygonIds.slice(0, 8), currentMonth);
       }
 
-      const cannibalizedPct = areaKm2 > 0 ? ((overlapAreaKm2 / areaKm2) * 100) : 0;
+      // Calcular Inteligencia de Canibalización usando Turf.js
+      let overlapAreaKm2 = 0;
+      if (typeof turf !== 'undefined' && customTurfPoly) {
+        try {
+          const storeFeatures = [];
+          intersectingStores.forEach(s => {
+            const p = getWarehouseTurfPoly(s, currentMonth);
+            if (p) storeFeatures.push(p);
+          });
+
+          if (storeFeatures.length > 0) {
+            let totalCoveredM2 = 0;
+            storeFeatures.forEach(f => {
+              const isect = turf.intersect(customTurfPoly, f);
+              if (isect) totalCoveredM2 += turf.area(isect);
+            });
+            overlapAreaKm2 = Math.min(areaKm2, totalCoveredM2 / 1000000);
+          } else if (intersectingStores.length > 0) {
+            const maxCov = Math.max(...intersectingStores.map(s => s.coveragePct || 0));
+            overlapAreaKm2 = (areaKm2 * maxCov) / 100;
+          }
+        } catch(eTurf) {}
+      }
+
+      const cannibalizedPct = areaKm2 > 0 ? Math.min(100, Math.round((overlapAreaKm2 / areaKm2) * 100)) : 0;
       const whitespacePct = Math.max(0, 100 - cannibalizedPct);
 
       // Calcular métricas estimadas de la zona seleccionada
@@ -7116,9 +7625,15 @@
           listContainer.innerHTML = '<span style="font-size:10px; color:var(--text-sheet-muted); font-style:italic;">Ningún almacén actual cubre esta zona (Oportunidad de Expansión).</span>';
         } else {
           listContainer.innerHTML = intersectingStores.map(s => `
-            <div style="font-size:10.5px; font-weight:700; color:var(--text-sheet-body); display:flex; justify-content:space-between; padding:2px 4px; background:var(--bg-sheet-card); border-radius:4px;">
-              <span>${s.warehouse_name}</span>
-              <span style="color:var(--brand-red); font-family:'JetBrains Mono',monospace;">${(s.orders || 0).toLocaleString('es-AR')} órd.</span>
+            <div style="font-size:10px; font-weight:700; color:var(--text-sheet-body); display:flex; justify-content:space-between; align-items:center; padding:3px 6px; background:var(--bg-sheet-card); border-radius:4px; margin-bottom:2px; border:1px solid var(--border-sheet);">
+              <div style="display:flex; align-items:center; gap:5px; overflow:hidden;">
+                <span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:#ea044e; flex-shrink:0;"></span>
+                <span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${s.warehouse_name}">${s.warehouse_name}</span>
+              </div>
+              <div style="display:flex; align-items:center; gap:6px; flex-shrink:0;">
+                ${s.coveragePct ? `<span style="font-size:9px; color:#0284c7; font-weight:800; font-family:'JetBrains Mono',monospace;">${s.coveragePct}% cubierto</span>` : ''}
+                <span style="color:var(--brand-red); font-family:'JetBrains Mono',monospace;">${(s.orders || 0).toLocaleString('es-AR')} órd.</span>
+              </div>
             </div>
           `).join('');
         }
@@ -7711,7 +8226,12 @@
       }
 
       const clearBtn = document.getElementById('btn-clear-drawn-zone');
-      if (clearBtn) clearBtn.style.display = 'block';
+      if (clearBtn) clearBtn.style.display = 'inline-flex';
+
+      // Renovar ciclo de vida de 60 días en la planilla al ser consultada
+      if (typeof google !== 'undefined' && google.script && google.script.run) {
+        google.script.run.touchSavedZone(zoneId);
+      }
 
       closeSharedZonesModal();
       showToast(`Zona "${zone.name}" cargada en el mapa con éxito. Podés arrastrar los puntos blancos para modificar sus vértices.`, 'success');
@@ -7761,6 +8281,7 @@
       // BLOQUE 2: USUARIOS Y PENETRACIÓN
       { isBlock: true, title: 'Bloque 2: Demografía de Usuarios & Penetración', color: '#2563eb' },
       { key: 'peya_users', label: 'Platform MAUs', desc: 'Usuarios activos en la plataforma', fmt: v => formatNumber(v), better: 'high' },
+      { key: 'covered_maus', label: 'Covered MAUs', desc: 'Usuarios dentro del polígono de entrega', fmt: v => formatNumber(v), better: 'high' },
       { key: 'dmart_users', label: 'Dmart MAUs', desc: 'Compradores únicos en WHS', fmt: v => formatNumber(v), better: 'high' },
       { key: 'penetration_pct', label: 'Platform MAUs penetration %', desc: 'Dmart MAUs / Platform MAUs', fmt: v => (v || 0) + '%', better: 'high' },
       { key: 'monthly_frequency', label: 'Frequency', desc: 'Órdenes promedio por cliente', fmt: v => (v || 0) + ' órd/mes', better: 'high' },
@@ -8502,7 +9023,7 @@
     }
 
     // ============================================================
-    // 2. DETECCIÓN DE ZONAS EN DISPUTA (SOLAPAMIENTO INEFICIENTE)
+    // 2. DETECCIÓN DE ZONAS DE SOLAPAMIENTO (DOBLE COBERTURA)
     // ============================================================
     let isDisputeZonesVisible = false;
     let disputePolygons = [];
@@ -8519,7 +9040,7 @@
         disputePolygons.forEach(p => p.setMap(null));
         disputePolygons = [];
         if (disputeInfoWindow) disputeInfoWindow.close();
-        showToast('Zonas en Disputa desactivadas', 'info');
+        showToast('Zonas de Solapamiento desactivadas', 'info');
         return;
       }
 
@@ -8532,77 +9053,95 @@
       if (!map || typeof turf === 'undefined') return;
       if (!disputeInfoWindow) disputeInfoWindow = new google.maps.InfoWindow();
 
-      const activeCountry = document.getElementById('filter-country').value;
-      const stores = allWarehouses.filter(w => {
-        if (!w.is_active) return false;
-        if (activeCountry && w.country !== activeCountry) return false;
-        return true;
+      const currentMonth = getCurrentActiveMonth();
+
+      // 1. Obtener únicamente las tiendas que tienen polígonos activos en el mapa o están seleccionadas
+      const candidateList = [];
+
+      // A. Primero buscar en las tiendas actualmente seleccionadas
+      selectedWarehouseIds.forEach(whId => {
+        const normId = String(whId).trim();
+        const mapKey = `${normId}__${currentMonth}`;
+        const entry = multiDatePolygonsMap.get(mapKey) || activePolygonsMap.get(normId);
+        const w = allWarehouses.find(item => String(item.warehouse_id).trim() === normId);
+        if (entry && entry.coords && w) {
+          candidateList.push({ store: w, coords: entry.coords });
+        }
       });
 
-      if (stores.length < 2) {
-        showToast('Se necesitan al menos 2 darkstores para detectar zonas en disputa.', 'warning');
+      // B. Si hay menos de 2 seleccionadas, complementar con las tiendas visibles en el mapa que tienen polígono dibujado
+      if (candidateList.length < 2 && map) {
+        const bounds = map.getBounds();
+        activePolygonsMap.forEach((entry, normId) => {
+          if (!candidateList.some(c => String(c.store.warehouse_id).trim() === normId)) {
+            const w = allWarehouses.find(item => String(item.warehouse_id).trim() === normId);
+            if (entry && entry.coords && w) {
+              const pos = getWarehousePosition(w);
+              if (pos && (!bounds || bounds.contains(new google.maps.LatLng(pos.lat, pos.lng)))) {
+                candidateList.push({ store: w, coords: entry.coords });
+              }
+            }
+          }
+        });
+      }
+
+      if (candidateList.length < 2) {
+        showToast('Seleccioná al menos 2 darkstores en la misma zona para detectar su área de solapamiento.', 'warning');
         return;
       }
 
-      showToast('Calculando zonas de solapamiento ineficiente con Turf.js...', 'info');
+      showToast(`Auditando solapamiento entre ${candidateList.length} tiendas con Turf.js...`, 'info');
 
       let disputeCount = 0;
       let totalDisputeAreaKm2 = 0;
 
-      for (let i = 0; i < stores.length; i++) {
-        const sA = stores[i];
-        const pA = multiDatePolygonsMap.get(String(sA.warehouse_id).trim());
-        if (!pA || !pA.geojson) continue;
+      for (let i = 0; i < candidateList.length; i++) {
+        const itemA = candidateList[i];
+        const polyA = coordsToTurfPolygon(itemA.coords);
+        if (!polyA) continue;
 
-        for (let j = i + 1; j < stores.length; j++) {
-          const sB = stores[j];
-          const pB = multiDatePolygonsMap.get(String(sB.warehouse_id).trim());
-          if (!pB || !pB.geojson) continue;
+        for (let j = i + 1; j < candidateList.length; j++) {
+          const itemB = candidateList[j];
+          const polyB = coordsToTurfPolygon(itemB.coords);
+          if (!polyB) continue;
 
           try {
-            const featA = turf.feature(pA.geojson);
-            const featB = turf.feature(pB.geojson);
-            const isect = turf.intersect(featA, featB);
-
+            const isect = turf.intersect(polyA, polyB);
             if (isect) {
               const areaKm2 = turf.area(isect) / 1000000;
-              if (areaKm2 > 0.08) {
+              // Detectar solapamientos a partir de 0.005 km² (media manzana urbana)
+              if (areaKm2 > 0.005) {
                 disputeCount++;
                 totalDisputeAreaKm2 += areaKm2;
 
-                const geomType = isect.geometry.type;
-                let paths = [];
-                if (geomType === 'Polygon') {
-                  paths = isect.geometry.coordinates[0].map(c => ({ lat: c[1], lng: c[0] }));
-                } else if (geomType === 'MultiPolygon') {
-                  isect.geometry.coordinates.forEach(poly => {
-                    paths.push(poly[0].map(c => ({ lat: c[1], lng: c[0] })));
-                  });
-                }
+                const paths = turfFeatureToLatLngPaths(isect);
+                if (paths.length === 0) continue;
 
                 const dPoly = new google.maps.Polygon({
                   paths: paths,
                   map: map,
                   strokeColor: '#7c3aed',
                   strokeOpacity: 0.95,
-                  strokeWeight: 2.2,
+                  strokeWeight: 2.4,
                   fillColor: '#8b5cf6',
-                  fillOpacity: 0.45,
-                  zIndex: 85
+                  fillOpacity: 0.50,
+                  zIndex: 1000,
+                  clickable: true
                 });
 
                 dPoly.addListener('click', function(e) {
                   disputeInfoWindow.setContent(`
-                    <div style="font-family:'Outfit',sans-serif; padding:8px 12px; font-size:12px; max-width:260px;">
-                      <div style="font-size:9px; font-weight:800; color:#7c3aed; text-transform:uppercase;">Zona en Disputa (Doble Cobertura)</div>
-                      <div style="font-weight:800; font-size:13px; color:#0f172a; margin-top:3px;">
-                        ${sA.warehouse_name} vs ${sB.warehouse_name}
+                    <div style="font-family:'Outfit',sans-serif; padding:10px 14px; font-size:12px; max-width:275px; background:var(--bg-sheet-card, #ffffff); color:var(--text-sheet-title, #0f172a); border-radius:8px;">
+                      <div style="font-size:8.5px; font-weight:800; color:#7c3aed; text-transform:uppercase; letter-spacing:0.5px;">Zona de Solapamiento (Doble Cobertura)</div>
+                      <div style="font-weight:800; font-size:13px; margin-top:3px; color:var(--text-sheet-title, #0f172a);">
+                        ${itemA.store.warehouse_name} vs ${itemB.store.warehouse_name}
                       </div>
-                      <div style="margin-top:5px; font-size:11px; color:#475569;">
-                        Área solapada: <b style="color:#7c3aed;">${areaKm2.toFixed(2)} km²</b>
+                      <div style="margin-top:6px; font-size:11.5px; color:var(--text-sheet-muted, #475569); display:flex; justify-content:space-between; align-items:center; background:rgba(124,58,237,0.08); padding:4px 8px; border-radius:5px; border:1px solid rgba(124,58,237,0.2);">
+                        <span>Área solapada:</span>
+                        <b style="color:#7c3aed; font-family:'JetBrains Mono',monospace;">${areaKm2.toFixed(2)} km²</b>
                       </div>
-                      <div style="margin-top:6px; font-size:9.5px; color:#dc2626; background:rgba(239,68,68,0.08); border:1px solid rgba(239,68,68,0.25); border-radius:4px; padding:4px 6px; font-weight:600;">
-                        Alerta operativa: 2 darkstores compiten por los mismos pedidos en esta zona. Conviene reasignar para optimizar stock y despacho.
+                      <div style="margin-top:7px; font-size:9.5px; color:#dc2626; background:rgba(239,68,68,0.08); border:1px solid rgba(239,68,68,0.25); border-radius:5px; padding:5px 7px; font-weight:600; line-height:1.35;">
+                        ⚠️ Alerta operativa: Ambas darkstores compiten por los mismos pedidos en este territorio. Conviene reasignar límites para evitar canibalización y optimizar CPO.
                       </div>
                     </div>
                   `);
@@ -8613,11 +9152,17 @@
                 disputePolygons.push(dPoly);
               }
             }
-          } catch(err) {}
+          } catch(err) {
+            console.warn('[Mapster Dispute Error]:', err);
+          }
         }
       }
 
-      showToast(`Se detectaron ${disputeCount} zonas de solapamiento ineficiente (${totalDisputeAreaKm2.toFixed(1)} km² en total).`, 'info');
+      if (disputeCount > 0) {
+        showToast(`Se detectaron ${disputeCount} zonas de solapamiento ineficiente (${totalDisputeAreaKm2.toFixed(1)} km² en total). Tocá cualquier zona violeta para ver el detalle.`, 'info');
+      } else {
+        showToast('No se detectaron zonas de solapamiento entre las tiendas analizadas (coberturas independientes).', 'info');
+      }
     }
 
     // ============================================================
@@ -8692,7 +9237,7 @@
         { id: 'act_clear', category: 'Acciones', title: 'Limpiar Todo el Mapa', subtitle: 'Desmarcar todos los almacenes', icon: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2.2"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>', run: () => selectAllWarehouses(false) },
         { id: 'act_sim', category: 'Herramientas', title: 'Abrir Simulador Nueva Darkstore', subtitle: 'What-If y Canibalización', icon: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>', run: () => toggleExpansionSimulator() },
         { id: 'act_barrio', category: 'Herramientas', title: 'Trazar Polígono de Barrio...', subtitle: 'Buscar barrio en catastro (ej. Palermo, Tolosa)', icon: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="2.2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>', run: () => { const el = document.getElementById('neighborhood-poly-search-input'); if(el){ el.focus(); el.select(); } } },
-        { id: 'act_dispute', category: 'Capas', title: 'Ver Zonas en Disputa (Doble Cobertura)', subtitle: 'Solapamientos territoriales', icon: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="2.2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>', run: () => toggleDisputeZonesVisibility(true) },
+        { id: 'act_dispute', category: 'Capas', title: 'Ver Zonas de Solapamiento (Doble Cobertura)', subtitle: 'Solapamientos territoriales', icon: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="2.2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>', run: () => toggleDisputeZonesVisibility(true) },
         { id: 'act_quads', category: 'Capas', title: 'Ver Cuadrantes / Recuadros', subtitle: 'Análisis de usuarios BigQuery', icon: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#0284c7" stroke-width="2.2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>', run: () => toggleGridVisibility(true) }
       ];
 
@@ -8772,6 +9317,21 @@
       closeCommandPalette();
       if (typeof item.run === 'function') {
         item.run();
+      }
+    }
+
+    // ============================================================
+    // ARRANQUE SEGURO (UNA VEZ EVALUADO EL SCRIPT COMPLETO)
+    // ============================================================
+    if (document.readyState === 'loading') {
+      window.addEventListener('DOMContentLoaded', bootstrapStoreExplorer);
+    } else {
+      try {
+        bootstrapStoreExplorer();
+      } catch(eBootEnd) {
+        if (typeof window.logLiveDebug === 'function') {
+          window.logLiveDebug('Excepción en arranque bootstrapStoreExplorer: ' + eBootEnd.message, 'error');
+        }
       }
     }
   </script>

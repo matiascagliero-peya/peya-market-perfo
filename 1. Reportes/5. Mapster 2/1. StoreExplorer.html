@@ -54,18 +54,11 @@
       <span>Cargando shape...</span>
     </div>
 
-    <!-- ── MINI MENSAJE DE CARGA DE HEATMAP CON BARRA DE PROGRESO ── -->
-    <div id="heatmap-loading-pill" class="shape-loading-pill" style="display:none; left:160px; min-width:220px; flex-direction:column; align-items:flex-start; padding:7px 12px; background:rgba(15,23,42,0.92); border:1px solid rgba(2,132,199,0.38); border-radius:8px; box-shadow:0 8px 24px rgba(0,0,0,0.38); z-index:999;">
-      <div style="display:flex; align-items:center; justify-content:space-between; width:100%; margin-bottom:5px;">
-        <div style="display:flex; align-items:center; gap:6px;">
-          <span class="mini-spinner" style="border-top-color:#38bdf8; width:11px; height:11px; border-width:2px;"></span>
-          <span id="heatmap-loading-text" style="font-size:10.5px; font-weight:700; color:#f8fafc;">Cargando mapa de calor...</span>
-        </div>
-        <span id="heatmap-loading-pct" style="font-size:10px; font-weight:800; color:#38bdf8; font-family:'JetBrains Mono',monospace;">0%</span>
-      </div>
-      <div style="width:100%; height:4px; background:rgba(255,255,255,0.14); border-radius:99px; overflow:hidden;">
-        <div id="heatmap-progress-bar-fill" style="width:0%; height:100%; background:linear-gradient(90deg, #0284c7, #38bdf8); border-radius:99px; transition:width 0.18s ease-out;"></div>
-      </div>
+    <!-- ── MINI MENSAJE DE CARGA DE HEATMAP (IDÉNTICO A SHAPE LOADING PILL) ── -->
+    <div id="heatmap-loading-pill" class="shape-loading-pill" style="display:none; border-color:rgba(56,189,248,0.55); box-shadow:0 6px 20px rgba(0,0,0,0.4), 0 0 10px rgba(56,189,248,0.35);">
+      <span class="mini-spinner" style="border-top-color:#38bdf8;"></span>
+      <span id="heatmap-loading-text">Cargando mapa de calor...</span>
+      <span id="heatmap-loading-pct" style="font-size:10px; font-weight:800; color:#38bdf8; font-family:'JetBrains Mono',monospace;">0%</span>
     </div>
 
     <!-- ── LEYENDA FLOTANTE DE FECHAS EN EL MAPA ── -->
@@ -187,11 +180,17 @@
           </div>
         </div>
 
-        <!-- Botón On-Demand para Conteo Exacto en BigQuery -->
-        <button type="button" id="btn-calc-zone-bq" class="btn-calc-grid" onclick="confirmAndCalculateZoneBigQuery()" style="margin-top:6px;">
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
-          <span>Calcular Usuarios Exactos (BigQuery)</span>
-        </button>
+        <!-- Acciones de Zona: Calcular BigQuery y Eliminar Zona -->
+        <div style="display:flex; gap:6px; margin-top:8px;">
+          <button type="button" id="btn-calc-zone-bq" class="btn-calc-grid" onclick="confirmAndCalculateZoneBigQuery()" style="flex:1; margin-top:0;">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+            <span>Calcular (BigQuery)</span>
+          </button>
+          <button type="button" onclick="clearCustomDrawnZone()" style="background:rgba(239,68,68,0.12); color:#ef4444; border:1px solid rgba(239,68,68,0.32); border-radius:6px; padding:0 10px; font-weight:700; font-size:10px; cursor:pointer; display:flex; align-items:center; gap:4px; height:28px;" title="Eliminar este polígono del mapa">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+            <span>Eliminar</span>
+          </button>
+        </div>
 
         <!-- Aviso Interactivo de Edición de Vértices -->
         <div id="zone-edit-vertices-hint" style="margin-top:6px; font-size:9.5px; color:#0284c7; background:rgba(2,132,199,0.08); border:1px solid rgba(2,132,199,0.2); padding:3px 6px; border-radius:4px; display:flex; align-items:center; gap:4px;">
@@ -204,6 +203,50 @@
     <!-- ── BARRA FLOTANTE DE CAPAS SOBRE EL MAPA (TOP RIGHT) ── -->
     <div class="map-floating-toolbar">
       <div class="toolbar-card">
+        <!-- Buscador Unificado de Zonas, Barrios y Direcciones con Marcado Automático y Botón Dibujar a Mano -->
+        <div class="has-shortcut-tip" style="position:relative; margin-bottom:8px;">
+          <div style="display:flex; align-items:center; gap:4px;">
+            <div style="display:flex; align-items:center; background:var(--bg-sheet-bar); border:1px solid var(--border-sheet); border-radius:6px; padding:2px 6px; flex:1; transition:border-color 0.15s ease;">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--brand-red)" stroke-width="2.5" style="margin-right:5px; flex-shrink:0;"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+              <input type="text" id="map-places-search-input" 
+                     placeholder="Buscar barrio, zona o dirección..." 
+                     autocomplete="off"
+                     onkeydown="if(event.key==='Enter') executeUnifiedZoneSearch(this.value)"
+                     style="width:100%; border:none; outline:none; background:transparent; font-size:10.5px; font-family:'Outfit',sans-serif; color:var(--text-sheet-title); padding:3px 0;">
+              <button type="button" onclick="executeUnifiedZoneSearch(document.getElementById('map-places-search-input').value)" 
+                      title="Buscar y trazar límites de zona automáticamente" 
+                      style="background:transparent; border:none; color:var(--text-sheet-muted); cursor:pointer; padding:2px; display:inline-flex; align-items:center;">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg>
+              </button>
+            </div>
+
+            <!-- Botón adyacente: Dibujar Polígono a Mano -->
+            <button type="button" id="btn-draw-polygon" class="btn-tool-minimal" style="height:27px; padding:0 7px; gap:4px; flex-shrink:0; font-size:10px; font-weight:700;" onclick="toggleDrawingTool('polygon')" title="Dibujar polígono a mano en el mapa">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>
+              <span>Dibujar</span>
+            </button>
+
+            <!-- Botón Biblioteca de Zonas -->
+            <button type="button" id="btn-open-shared-zones" class="btn-tool-minimal" style="height:27px; padding:0 6px; flex-shrink:0;" onclick="openSharedZonesModal()" title="Biblioteca de zonas guardadas">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+            </button>
+
+            <!-- Botón Limpiar / Eliminar Zona -->
+            <button type="button" id="btn-clear-drawn-zone" class="btn-tool-minimal" style="display:none; height:27px; padding:0 8px; flex-shrink:0; color:#ef4444; border-color:rgba(239,68,68,0.35); background:rgba(239,68,68,0.08); font-weight:700; gap:4px;" onclick="clearCustomDrawnZone()" title="Eliminar polígono marcado">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+              <span>Eliminar</span>
+            </button>
+          </div>
+
+          <div class="shortcut-tip-box tip-left">
+            <div class="shortcut-tip-header">
+              <span class="shortcut-tip-title">Buscador y Trazador</span>
+              <kbd class="shortcut-kbd">/</kbd>
+            </div>
+            <div class="shortcut-tip-desc">Presioná <b>/</b> para buscar y trazar un barrio automáticamente, o tocá <b>Dibujar</b> para trazarlo a mano.</div>
+          </div>
+        </div>
+
         <div class="toolbar-title">
           <span>Capas & Análisis</span>
         </div>
@@ -225,21 +268,35 @@
         </div>
         
         <!-- Toggle Anillos Concéntricos (Desactivados por defecto para vista limpia) -->
-        <div class="toolbar-row" onclick="toggleRingsVisibility()">
+        <div class="toolbar-row has-shortcut-tip" onclick="toggleRingsVisibility()">
           <span>Radios de Entrega (Anillos)</span>
           <label class="toggle-switch" onclick="event.stopPropagation()">
             <input type="checkbox" id="rings-toggle" onchange="toggleRingsVisibility(this.checked)">
             <span class="slider"></span>
           </label>
+          <div class="shortcut-tip-box tip-left">
+            <div class="shortcut-tip-header">
+              <span class="shortcut-tip-title">Radios de Entrega</span>
+              <kbd class="shortcut-kbd">R</kbd>
+            </div>
+            <div class="shortcut-tip-desc">Presioná <b>R</b> para mostrar u ocultar los anillos concéntricos de 1 a 5 km desde cada local.</div>
+          </div>
         </div>
 
         <!-- Toggle Recuadros / Cuadrantes de Cobertura -->
-        <div class="toolbar-row" onclick="toggleGridVisibility()">
+        <div class="toolbar-row has-shortcut-tip" onclick="toggleGridVisibility()">
           <span>Recuadros / Cuadrantes</span>
           <label class="toggle-switch" onclick="event.stopPropagation()">
             <input type="checkbox" id="grid-toggle" onchange="toggleGridVisibility(this.checked)">
             <span class="slider"></span>
           </label>
+          <div class="shortcut-tip-box tip-left">
+            <div class="shortcut-tip-header">
+              <span class="shortcut-tip-title">Cuadrantes de Cobertura</span>
+              <kbd class="shortcut-kbd">G</kbd>
+            </div>
+            <div class="shortcut-tip-desc">Presioná <b>G</b> para proyectar la cuadrícula de análisis territorial por celdas en el mapa.</div>
+          </div>
         </div>
 
         <!-- Selector de Divisiones de Recuadros (Inmediatamente debajo del toggle) -->
@@ -265,46 +322,61 @@
         </div>
 
         <!-- Toggle Ver Shapes Consultados (Biblioteca Comunitaria) -->
-        <div class="toolbar-row" onclick="toggleSharedShapesVisibility()">
+        <div class="toolbar-row has-shortcut-tip" onclick="toggleSharedShapesVisibility()">
           <span>Shapes Consultados (<span id="shared-shapes-count-badge">0</span>)</span>
           <label class="toggle-switch" onclick="event.stopPropagation()">
             <input type="checkbox" id="shared-shapes-toggle" onchange="toggleSharedShapesVisibility(this.checked)">
             <span class="slider"></span>
           </label>
+          <div class="shortcut-tip-box tip-left">
+            <div class="shortcut-tip-header">
+              <span class="shortcut-tip-title">Shapes Consultados</span>
+              <kbd class="shortcut-kbd">S</kbd>
+            </div>
+            <div class="shortcut-tip-desc">Presioná <b>S</b> para alternar la capa comunitaria con los polígonos consultados por el equipo.</div>
+          </div>
         </div>
 
-        <!-- Toggle Zonas en Disputa (Solapamiento Ineficiente) -->
-        <div class="toolbar-row" onclick="toggleDisputeZonesVisibility()">
-          <span title="Detección de solapamiento ineficiente entre darkstores">Zonas en Disputa (Solapamiento)</span>
-          <label class="toggle-switch" onclick="event.stopPropagation()">
-            <input type="checkbox" id="dispute-zones-toggle" onchange="toggleDisputeZonesVisibility(this.checked)">
-            <span class="slider"></span>
-          </label>
-        </div>
-
-        <!-- Herramientas Pro: Botón Nueva Tienda -->
-        <div style="margin-top:6px; padding-top:6px; border-top:1px solid var(--border-sheet);">
-          <button type="button" id="btn-expansion-sim-trigger" class="btn-tool-minimal" style="width:100%; justify-content:center;" onclick="toggleExpansionSimulator()" title="Evaluar apertura de nueva darkstore">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
-            <span>+ Nueva Tienda</span>
-          </button>
-        </div>
+        <!-- Toggle Zonas de Solapamiento -->
+        <!-- Acordeón: Zonas de Solapamiento (Oculto / Colapsado por defecto) -->
+        <details class="toolbar-accordion">
+          <summary class="toolbar-accordion-summary">
+            <div style="display:flex; align-items:center; gap:5px;">
+              <svg class="accordion-arrow" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg>
+              <span>Zonas de Solapamiento</span>
+            </div>
+            <kbd class="shortcut-kbd" style="font-size:9px;">D</kbd>
+          </summary>
+          <div style="padding:4px 2px 2px 2px;">
+            <div class="toolbar-row has-shortcut-tip" onclick="toggleDisputeZonesVisibility()" style="margin-bottom:0;">
+              <span style="font-size:10.5px;">Activar Detección</span>
+              <label class="toggle-switch" onclick="event.stopPropagation()">
+                <input type="checkbox" id="dispute-zones-toggle" onchange="toggleDisputeZonesVisibility(this.checked)">
+                <span class="slider"></span>
+              </label>
+            </div>
+            <div style="font-size:9.5px; color:var(--text-sheet-muted); line-height:1.35; margin-top:4px; padding:4px 6px; background:var(--bg-sheet-bar); border-radius:4px;">
+              Detecta y colorea exclusivamente las áreas de intersección territorial entre 2 o más tiendas.
+            </div>
+          </div>
+        </details>
 
         <!-- Selector Heatmap con Nombres Oficiales de Métricas del Glosario -->
         <div style="display:flex; flex-direction:column; gap:4px; margin-top:8px; padding-top:6px; border-top:1px solid var(--border-sheet);">
           <label class="toolbar-title">Mapa de Calor (Heatmap)</label>
           <select id="heatmap-layer-select" class="toolbar-select" onchange="changeHeatmapLayer(this.value)">
             <option value="none">Sin Heatmap</option>
-            <option value="peya_maus">1. Platform MAUs</option>
-            <option value="dmart_maus">2. Dmart MAUs</option>
-            <option value="penetration">3. Platform MAUs penetration %</option>
-            <option value="seamless_worst">4. Seamless Delivery % Negativo (Bajo SLA / Fricción)</option>
-            <option value="seamless_best">5. Seamless Delivery % Positivo (Alto SLA / Excelente)</option>
-            <option value="afv">6. AFV (Average Order Value)</option>
-            <option value="late_orders">7. Late Orders % (>10m)</option>
-            <option value="orders">8. Confirmed Orders</option>
-            <option value="gmv_dmart">9. GMV Dmarts</option>
-            <option value="cpo">10. Rider CPO Dmarts ($)</option>
+            <option value="peya_maus">1. Platform MAUs (Platform users total)</option>
+            <option value="covered_maus">2. Covered MAUs (User en zona de cobertura de Store)</option>
+            <option value="dmart_maus">3. Dmart MAUs</option>
+            <option value="penetration">4. Platform MAUs penetration % (Dmart / Covered)</option>
+            <option value="seamless_worst">5. Seamless Delivery % Negativo</option>
+            <option value="seamless_best">6. Seamless Delivery % Positivo</option>
+            <option value="afv">7. AFV (net sales / Confirmed orders)</option>
+            <option value="late_orders">8. Late Orders %</option>
+            <option value="orders">9. Confirmed Orders</option>
+            <option value="gmv_dmart">10. GMV Dmarts</option>
+            <option value="cpo">11. Rider CPO Dmarts ($ costo de envío)</option>
           </select>
         </div>
 
@@ -341,44 +413,17 @@
             <!-- Slider de Opacidad -->
             <div style="display:flex; justify-content:space-between; align-items:center; margin-top:4px;">
               <span style="font-size:9px; color:var(--text-sheet-muted);">Opacidad:</span>
-              <span id="heatmap-opacity-val" style="font-weight:800; color:#0284c7;">85%</span>
+              <span id="heatmap-opacity-val" style="font-weight:800; color:#0284c7;">55%</span>
             </div>
-            <input type="range" id="heatmap-opacity-slider" min="20" max="100" value="85" style="width:100%; height:4px; accent-color:#0284c7; cursor:pointer;" oninput="onHeatmapOpacityChange(this.value)">
+            <input type="range" id="heatmap-opacity-slider" min="15" max="100" value="55" style="width:100%; height:4px; accent-color:#0284c7; cursor:pointer;" oninput="onHeatmapOpacityChange(this.value)">
           </div>
         </div>
 
-        <!-- Selector Herramienta de Selección Libre / Simulación de Zona -->
-        <div style="border-top:1px solid var(--border-sheet); margin-top:6px; padding-top:6px;">
-          <div class="toolbar-title" style="margin-bottom:4px; display:flex; align-items:center; justify-content:space-between;">
-            <span>Zona Libre / Simulación</span>
-            <span id="zone-drawing-active-badge" style="display:none; font-size:8.5px; color:#0284c7; font-weight:800; background:rgba(2,132,199,0.12); padding:1px 5px; border-radius:4px;">Dibujando...</span>
-          </div>
-
-          <!-- Buscador Automático de Polígonos de Barrios / Zonas (Catastral) -->
-          <div style="margin-bottom:4px; position:relative;">
-            <div style="display:flex; gap:3px;">
-              <input type="text" id="neighborhood-poly-search-input" class="toolbar-select" style="font-size:10.5px; padding:3px 6px; flex:1;" placeholder="Buscar barrio (ej. Palermo, Tolosa)..." onkeydown="if(event.key==='Enter') searchAndDrawNeighborhoodPolygon()">
-              <button type="button" class="btn-tool-minimal" style="height:25px; padding:0 6px; flex-shrink:0;" onclick="searchAndDrawNeighborhoodPolygon()" title="Buscar y trazar límites oficiales del barrio">
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-              </button>
-            </div>
-            <div id="neighborhood-poly-results" style="display:none; position:absolute; top:28px; left:0; right:0; background:var(--bg-sheet); border:1px solid var(--border-sheet); border-radius:6px; box-shadow:0 8px 20px rgba(0,0,0,0.25); max-height:160px; overflow-y:auto; z-index:250; font-size:10.5px;"></div>
-          </div>
-
-          <div style="margin-bottom:3px;">
-            <button type="button" id="btn-draw-polygon" class="toolbar-select" style="text-align:center; font-size:10.5px; padding:4px 6px; width:100%; display:inline-flex; align-items:center; justify-content:center; gap:4px; cursor:pointer;" onclick="toggleDrawingTool('polygon')">
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>
-              <span>Dibujar Polígono a Mano</span>
-            </button>
-          </div>
-          <button type="button" id="btn-open-shared-zones" class="toolbar-select" style="text-align:center; font-size:10px; padding:3px 4px; width:100%; margin-top:3px; background:rgba(2,132,199,0.08); color:#0284c7; border-color:rgba(2,132,199,0.3); font-weight:700; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:4px;" onclick="openSharedZonesModal()">
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
-            <span>Biblioteca Zonas (<span id="shared-zones-count">0</span>)</span>
-          </button>
-          <button type="button" id="btn-clear-drawn-zone" class="toolbar-select" style="display:none; text-align:center; font-size:10px; padding:2px 4px; width:100%; margin-top:3px; color:#ef4444; border-color:rgba(239,68,68,0.3); cursor:pointer;" onclick="clearCustomDrawnZone()">
-            Limpiar Zona Dibujada
-          </button>
-        </div>
+        <!-- Botón Directo: Simulador de Expansión (+ Nueva Tienda) -->
+        <button type="button" id="btn-expansion-sim-trigger" class="btn-tool-minimal" style="width:100%; justify-content:center; margin-top:6px; border:1px solid rgba(16,185,129,0.3); background:rgba(16,185,129,0.08); color:#10b981; font-weight:700;" onclick="toggleExpansionSimulator()" title="Evaluar apertura de nueva darkstore">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+          <span>+ Nueva Tienda (Simulador)</span>
+        </button>
 
         <button class="toolbar-select has-shortcut-tip" style="text-align:center; font-weight:700; background:var(--bg-sheet-card); border:1px solid var(--border-sheet); color:var(--text-sheet-body); margin-top:4px; display:flex; align-items:center; justify-content:center; gap:6px; cursor:pointer;" onclick="centerMapOnSelected()">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="3"></circle></svg>
@@ -975,29 +1020,34 @@
         window.location.reload();
       }
     };
-    window.toggleLiveDebugPanel = function() {
-      var content = document.getElementById('live-debug-content');
-      if (content) {
-        content.style.display = content.style.display === 'none' ? 'block' : 'none';
+    window.toggleLiveDebugPanel = function(force) {
+      var p = document.getElementById('live-debug-panel');
+      if (!p) return;
+      if (force === true) {
+        p.style.display = 'flex';
+      } else if (force === false) {
+        p.style.display = 'none';
+      } else {
+        p.style.display = (p.style.display === 'none' || !p.style.display) ? 'flex' : 'none';
       }
     };
   </script>
 
-  <!-- ── PANEL DE DIAGNÓSTICO EN VIVO (LIVE DEBUG CONSOLE - Visible con ?page=debug o ?debug=1) ── -->
-  <div id="live-debug-panel" style="<?= (typeof isDebugMode !== 'undefined' && isDebugMode) ? 'display:flex;' : 'display:none;' ?> position:fixed; bottom:14px; right:14px; z-index:9999999; max-width:440px; width:92%; background:#0f172a; color:#f8fafc; border:1px solid #334155; border-radius:10px; box-shadow:0 12px 35px rgba(0,0,0,0.55); font-family:'JetBrains Mono',monospace; font-size:11px; flex-direction:column; overflow:hidden;">
-    <div style="background:#1e293b; padding:7px 12px; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid #334155; user-select:none;">
+  <!-- ── PANEL DE DIAGNÓSTICO EN VIVO (Flotante fijo en esquina inferior derecha, sin cortar la página) ── -->
+  <div id="live-debug-panel" style="<?= (typeof isDebugMode !== 'undefined' && isDebugMode) ? 'display:flex;' : 'display:none;' ?> position:fixed; bottom:42px; right:12px; z-index:999999; width:380px; max-width:calc(100vw - 24px); background:rgba(15,23,42,0.96); backdrop-filter:blur(12px); color:#f8fafc; border:1px solid #334155; border-radius:8px; box-shadow:0 12px 35px rgba(0,0,0,0.6); font-family:'JetBrains Mono',monospace; font-size:11px; flex-direction:column; overflow:hidden;">
+    <div style="background:#1e293b; padding:6px 10px; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid #334155; user-select:none;">
       <div style="display:flex; align-items:center; gap:6px;">
-        <span id="debug-status-dot" style="width:8px; height:8px; border-radius:50%; background:#f59e0b; display:inline-block;"></span>
-        <span style="font-weight:700; color:#38bdf8;">Debug Mapster 2</span>
-        <span id="debug-status-pill" style="font-size:9.5px; background:rgba(56,189,248,0.15); color:#38bdf8; padding:1px 6px; border-radius:4px;">Iniciando...</span>
+        <span id="debug-status-dot" style="width:7px; height:7px; border-radius:50%; background:#10b981; display:inline-block;"></span>
+        <span style="font-weight:700; color:#38bdf8; font-size:10.5px;">Logs de Diagnóstico</span>
+        <span id="debug-status-pill" style="font-size:9px; background:rgba(56,189,248,0.15); color:#38bdf8; padding:1px 5px; border-radius:4px;">Activo</span>
       </div>
-      <div style="display:flex; align-items:center; gap:6px;">
-        <button type="button" onclick="copyLiveDebugLog()" style="background:#334155; color:#f8fafc; border:none; padding:2px 8px; border-radius:4px; font-size:9.5px; cursor:pointer;" title="Copiar logs de diagnóstico">Copiar</button>
-        <button type="button" onclick="forceManualDataReload()" style="background:#ea044e; color:#ffffff; border:none; padding:2px 8px; border-radius:4px; font-size:9.5px; font-weight:700; cursor:pointer;" title="Forzar re-ejecución de carga">Reintentar</button>
-        <button type="button" onclick="toggleLiveDebugPanel()" style="background:transparent; color:#94a3b8; border:none; padding:0 4px; font-size:13px; font-weight:800; cursor:pointer;" title="Minimizar panel">—</button>
+      <div style="display:flex; align-items:center; gap:5px;">
+        <button type="button" onclick="copyLiveDebugLog()" style="background:#334155; color:#f8fafc; border:none; padding:2px 7px; border-radius:4px; font-size:9px; cursor:pointer;" title="Copiar logs de diagnóstico">Copiar</button>
+        <button type="button" onclick="forceManualDataReload()" style="background:#ea044e; color:#ffffff; border:none; padding:2px 7px; border-radius:4px; font-size:9px; font-weight:700; cursor:pointer;" title="Forzar re-ejecución de carga">Reintentar</button>
+        <button type="button" onclick="toggleLiveDebugPanel(false)" style="background:transparent; color:#94a3b8; border:none; padding:0 3px; font-size:14px; font-weight:700; cursor:pointer;" title="Cerrar panel">&times;</button>
       </div>
     </div>
-    <div id="live-debug-content" style="padding:10px 12px; max-height:200px; overflow-y:auto; line-height:1.5; color:#cbd5e1; word-break:break-all;">
+    <div id="live-debug-content" style="padding:8px 10px; max-height:190px; overflow-y:auto; line-height:1.45; color:#cbd5e1; word-break:break-all; font-size:10px;">
       <div>[00:00:00] Iniciando panel de diagnóstico...</div>
       <script>
         (function() {
@@ -1012,6 +1062,12 @@
       </script>
     </div>
   </div>
+
+  <!-- Discreto botón flotante en la esquina inferior derecha para abrir logs solo si se desea -->
+  <button id="debug-floating-trigger" type="button" onclick="toggleLiveDebugPanel()" title="Ver registro de eventos" style="position:fixed; bottom:12px; right:12px; z-index:99999; background:rgba(15,23,42,0.88); color:#94a3b8; border:1px solid #334155; border-radius:20px; padding:3px 9px; font-size:10px; font-weight:700; cursor:pointer; display:flex; align-items:center; gap:5px; backdrop-filter:blur(6px); box-shadow:0 4px 12px rgba(0,0,0,0.3); font-family:'JetBrains Mono',monospace;">
+    <span id="debug-status-dot-mini" style="width:6px; height:6px; border-radius:50%; background:#10b981;"></span>
+    <span>Logs</span>
+  </button>
 
   <script id="mapster-initial-json" type="application/json"><?!= preloadedInitialData || 'null' ?></script>
 

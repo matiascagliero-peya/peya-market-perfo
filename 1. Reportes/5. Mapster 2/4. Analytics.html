@@ -55,18 +55,18 @@
       font-size: 12.5px;
       line-height: 1.4;
       min-height: 100vh;
-      overflow-x: hidden;
+      overflow-x: auto;
     }
 
-    /* Layout Fluido que ocupa el 100% del ancho de pantalla */
+    /* Layout Fluido que ocupa el ancho de pantalla de forma armónica y centrada */
     .analytics-page {
       width: 100%;
-      max-width: 100%;
-      margin: 0;
+      max-width: 1720px;
+      margin: 0 auto;
       padding: 14px 20px 40px;
       display: flex;
       flex-direction: column;
-      gap: 12px;
+      gap: 14px;
     }
 
     /* Cabecera Principal */
@@ -120,10 +120,10 @@
       color: var(--primary);
     }
 
-    /* Grid de KPIs Superiores (Fila Fluida de 5 Columnas) */
+    /* Grid de KPIs Superiores (Totalmente Fluido y Autoajustable a Cualquier Resolución) */
     .kpi-grid {
       display: grid;
-      grid-template-columns: repeat(5, 1fr);
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
       gap: 10px;
     }
     .kpi-card {
@@ -175,15 +175,22 @@
     /* Layout Prolijo de 2 Columnas para Tableros y Auditoría */
     .dashboard-layout {
       display: grid;
-      grid-template-columns: 1.18fr 0.82fr;
-      gap: 12px;
+      grid-template-columns: minmax(0, 1.25fr) minmax(0, 0.95fr);
+      gap: 14px;
       align-items: start;
     }
     .dashboard-col {
       display: flex;
       flex-direction: column;
-      gap: 12px;
+      gap: 14px;
       min-width: 0;
+    }
+
+    /* Subcuadrícula para desgloses (Acciones y Top Tiendas) */
+    .breakdown-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 10px;
     }
 
     /* Tarjetas de Contenido */
@@ -394,22 +401,44 @@
       font-style: italic;
     }
 
-    /* Adaptación Responsiva */
-    @media (max-width: 1200px) {
+    /* Adaptación Responsiva Inteligente */
+    @media (max-width: 1380px) {
       .dashboard-layout {
         grid-template-columns: 1fr;
       }
+      .dashboard-col {
+        width: 100%;
+      }
+    }
+    @media (max-width: 992px) {
       .kpi-grid {
-        grid-template-columns: repeat(3, 1fr);
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
       }
     }
     @media (max-width: 768px) {
-      .kpi-grid {
-        grid-template-columns: repeat(2, 1fr);
+      .analytics-page {
+        padding: 10px 12px 30px;
       }
       .analytics-head {
         flex-direction: column;
         align-items: flex-start;
+        gap: 10px;
+      }
+      .head-actions {
+        width: 100%;
+        justify-content: flex-end;
+      }
+      .card-head {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+      }
+      .card-ctrls {
+        width: 100%;
+        justify-content: flex-start;
+      }
+      .input-filter {
+        flex: 1 1 120px;
       }
     }
     @media (max-width: 480px) {
@@ -566,7 +595,7 @@
         </div>
 
         <!-- Card 4: Desgloses (Acciones y Top Tiendas) -->
-        <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+        <div class="breakdown-grid">
           <!-- Acciones / Páginas -->
           <div class="card">
             <div class="card-head">
@@ -909,20 +938,38 @@
     }
 
     function loadAnalytics() {
-      if (typeof showLoading === 'function') showLoading('Cargando métricas de auditoría...');
+      // 1. Cargar instantáneamente de sessionStorage si existe para render en 5ms
+      try {
+        const cachedRaw = sessionStorage.getItem('mapster_analytics_cache');
+        if (cachedRaw) {
+          const cached = JSON.parse(cachedRaw);
+          if (cached && (cached.totalViews !== undefined || cached.summary)) {
+            ANALYTICS_DATA = cached;
+            renderAnalyticsUI();
+          }
+        }
+      } catch(e) {}
+
+      if (!ANALYTICS_DATA && typeof showLoading === 'function') {
+        showLoading('Cargando métricas de auditoría...');
+      }
+
       google.script.run
         .withSuccessHandler(function(res) {
           if (typeof hideLoading === 'function') hideLoading();
           if (!res || res.error) {
-            alert('Error cargando analíticas: ' + (res ? res.error : 'Sin respuesta'));
+            if (!ANALYTICS_DATA) alert('Error cargando analíticas: ' + (res ? res.error : 'Sin respuesta'));
             return;
           }
           ANALYTICS_DATA = res;
+          try {
+            sessionStorage.setItem('mapster_analytics_cache', JSON.stringify(res));
+          } catch(e) {}
           renderAnalyticsUI();
         })
         .withFailureHandler(function(err) {
           if (typeof hideLoading === 'function') hideLoading();
-          alert('Error de conexión: ' + err.message);
+          if (!ANALYTICS_DATA) alert('Error de conexión: ' + err.message);
         })
         .fetchMapsterAnalytics();
     }
