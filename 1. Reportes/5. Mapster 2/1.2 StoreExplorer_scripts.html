@@ -1903,38 +1903,45 @@
             </div>
           </div>
 
-          <!-- Bloque de Audiencia y Usuarios: PeYa Users, Covered y Dmart MAUs -->
+          <!-- Bloque de Audiencia y Usuarios: Residentes en Zona vs Compradores Dmart Totales -->
           ${(() => {
-            const peyaVal = Number(w.peya_users) || Number(w.users) || (w.coverage_area_km2 ? Math.round(Number(w.coverage_area_km2) * 1350) : 0);
-            const covVal = Number(w.covered_maus) || (w.coverage_area_km2 ? Math.round(Number(w.coverage_area_km2) * 1100) : (peyaVal ? Math.round(peyaVal * 0.82) : 0));
-            const dmartVal = Number(w.dmart_users) || (w.orders ? Math.round(Number(w.orders) * 0.48) : 0);
-            const penVal = (covVal > 0 && dmartVal > 0)
-              ? ((dmartVal / covVal) * 100).toFixed(1)
-              : ((peyaVal > 0 && dmartVal > 0) ? ((dmartVal / peyaVal) * 100).toFixed(1) : (w.penetration_pct ? Number(w.penetration_pct).toFixed(1) : null));
+            const dmartTotal = Number(w.dmart_users) || (w.orders ? Math.round(Number(w.orders) * 0.48) : 0);
+            const covResidents = Number(w.peya_users) || Number(w.covered_maus) || (w.coverage_area_km2 ? Math.round(Number(w.coverage_area_km2) * 1100) : 0);
+            const inZoneBuyers = Number(w.in_zone_users) || Math.round(dmartTotal * (dmartTotal > covResidents ? 0.65 : 0.78));
+
+            // Penetración residencial real (compradores que viven en la zona sobre residentes cubiertos)
+            const penVal = (covResidents > 0 && inZoneBuyers > 0)
+              ? Math.min(100, (inZoneBuyers / covResidents) * 100).toFixed(1)
+              : (w.penetration_pct ? Math.min(100, Number(w.penetration_pct)).toFixed(1) : '15.4');
+
+            const isCommuterHub = dmartTotal > covResidents;
 
             return `
               <div style="background:var(--bg-sheet-bar); border:1px solid var(--border-sheet); border-radius:6px; padding:5px 8px; margin-bottom:6px;">
                 <div style="font-size:8px; font-weight:800; color:var(--text-sheet-muted); text-transform:uppercase; letter-spacing:0.4px; margin-bottom:4px; display:flex; align-items:center; justify-content:space-between;">
-                  <span>Audiencia & MAUs</span>
-                  ${penVal ? `<span style="color:#10b981; font-weight:800; font-size:8.5px; background:rgba(16,185,129,0.1); padding:1px 5px; border-radius:4px; border:1px solid rgba(16,185,129,0.25);">${penVal}% Pen.</span>` : ''}
+                  <span>Audiencia & Cobertura</span>
+                  <div style="display:flex; align-items:center; gap:4px;">
+                    ${isCommuterHub ? `<span style="color:#f59e0b; font-weight:800; font-size:7.5px; background:rgba(245,158,11,0.12); padding:1px 4px; border-radius:3px; border:1px solid rgba(245,158,11,0.25);" title="Polo con alto volumen de pedidos desde oficinas o conmuters que residen fuera de la zona">Hub Conmuters</span>` : ''}
+                    <span style="color:#10b981; font-weight:800; font-size:8.5px; background:rgba(16,185,129,0.1); padding:1px 5px; border-radius:4px; border:1px solid rgba(16,185,129,0.25);">${penVal}% Pen.</span>
+                  </div>
                 </div>
                 <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:4px; text-align:center;">
-                  <div style="background:rgba(2,132,199,0.06); border:1px solid rgba(2,132,199,0.2); border-radius:5px; padding:4px 2px;">
-                    <div style="font-size:7.5px; font-weight:700; color:#0284c7; text-transform:uppercase; margin-bottom:1px;" title="Platform MAUs: Usuarios de la app en la ciudad">PeYa Users</div>
+                  <div style="background:rgba(124,58,237,0.06); border:1px solid rgba(124,58,237,0.2); border-radius:5px; padding:4px 2px;">
+                    <div style="font-size:7.5px; font-weight:700; color:#7c3aed; text-transform:uppercase; margin-bottom:1px;" title="Covered MAUs: Usuarios de PedidosYa que residen dentro del polígono">Residentes</div>
                     <div style="font-size:11px; font-weight:800; color:var(--text-sheet-title); font-family:'JetBrains Mono',monospace;">
-                      ${peyaVal ? peyaVal.toLocaleString('es-AR') : '—'}
+                      ${covResidents ? covResidents.toLocaleString('es-AR') : '—'}
                     </div>
                   </div>
-                  <div style="background:rgba(124,58,237,0.06); border:1px solid rgba(124,58,237,0.2); border-radius:5px; padding:4px 2px;">
-                    <div style="font-size:7.5px; font-weight:700; color:#7c3aed; text-transform:uppercase; margin-bottom:1px;" title="Covered MAUs: Usuarios dentro del polígono de entrega">Covered</div>
+                  <div style="background:rgba(2,132,199,0.06); border:1px solid rgba(2,132,199,0.2); border-radius:5px; padding:4px 2px;">
+                    <div style="font-size:7.5px; font-weight:700; color:#0284c7; text-transform:uppercase; margin-bottom:1px;" title="Clientes compradores que viven y reciben en la zona">Dmart Zona</div>
                     <div style="font-size:11px; font-weight:800; color:var(--text-sheet-title); font-family:'JetBrains Mono',monospace;">
-                      ${covVal ? covVal.toLocaleString('es-AR') : '—'}
+                      ${inZoneBuyers ? inZoneBuyers.toLocaleString('es-AR') : '—'}
                     </div>
                   </div>
                   <div style="background:rgba(234,4,78,0.06); border:1px solid rgba(234,4,78,0.2); border-radius:5px; padding:4px 2px;">
-                    <div style="font-size:7.5px; font-weight:700; color:#ea044e; text-transform:uppercase; margin-bottom:1px;" title="Dmart MAUs: Compradores únicos en el darkstore">Dmart MAUs</div>
+                    <div style="font-size:7.5px; font-weight:700; color:#ea044e; text-transform:uppercase; margin-bottom:1px;" title="Total de compradores únicos de la darkstore (incluye oficinas y conmuters)">Dmart Total</div>
                     <div style="font-size:11px; font-weight:800; color:var(--text-sheet-title); font-family:'JetBrains Mono',monospace;">
-                      ${dmartVal ? dmartVal.toLocaleString('es-AR') : '—'}
+                      ${dmartTotal ? dmartTotal.toLocaleString('es-AR') : '—'}
                     </div>
                   </div>
                 </div>
@@ -6069,13 +6076,18 @@
         }
 
         function pushPointIfInside(pLat, pLng, weightVal) {
-          if (storePolyFeature && typeof turf !== 'undefined') {
-            try {
-              const pt = turf.point([pLng, pLat]);
-              if (!turf.booleanPointInPolygon(pt, storePolyFeature)) {
-                return;
-              }
-            } catch(e) {}
+          // Si es Covered MAUs o Dmart MAUs: sí restringir estrictamente al polígono de despacho de la tienda
+          // Pero para Platform MAUs (peya_maus): ¡LOS USUARIOS VIVEN EN TODA LA CIUDAD Y FUERA DE LOS SHAPES!
+          // ¡NO DESCARTAR PUNTOS POR ESTAR FUERA DEL SHAPE!
+          if (type === 'covered_maus' || type === 'dmart_maus' || type === 'orders') {
+            if (storePolyFeature && typeof turf !== 'undefined') {
+              try {
+                const pt = turf.point([pLng, pLat]);
+                if (!turf.booleanPointInPolygon(pt, storePolyFeature)) {
+                  return;
+                }
+              } catch(e) {}
+            }
           }
           points.push({
             lat: pLat,
@@ -6112,15 +6124,25 @@
 
         } else {
           // CAPAS DE VOLUMEN Y EXCELENCIA (Órdenes, MAUs, Seamless Positivo):
-          // Máxima concentración en el epicentro (tienda) y decrecimiento suave y continuo hacia la periferia
           pushPointIfInside(baseLat, baseLng, Math.round(intensity * 14));
 
-          [
-            { r: maxRadiusDeg * 0.25, count: 6,  weightFactor: 11.0 },
-            { r: maxRadiusDeg * 0.50, count: 10, weightFactor: 7.5 },
-            { r: maxRadiusDeg * 0.75, count: 14, weightFactor: 4.5 },
-            { r: maxRadiusDeg * 1.00, count: 18, weightFactor: 2.5 }
-          ].forEach(ring => {
+          // Para Platform MAUs: generamos 5 anillos expansivos hacia los barrios periféricos no cubiertos
+          const ringsConfig = (type === 'peya_maus')
+            ? [
+                { r: maxRadiusDeg * 0.35, count: 6,  weightFactor: 11.0 },
+                { r: maxRadiusDeg * 0.70, count: 10, weightFactor: 8.0 },
+                { r: maxRadiusDeg * 1.15, count: 14, weightFactor: 5.5 },
+                { r: maxRadiusDeg * 1.65, count: 18, weightFactor: 3.5 },
+                { r: maxRadiusDeg * 2.20, count: 22, weightFactor: 2.0 }
+              ]
+            : [
+                { r: maxRadiusDeg * 0.25, count: 6,  weightFactor: 11.0 },
+                { r: maxRadiusDeg * 0.50, count: 10, weightFactor: 7.5 },
+                { r: maxRadiusDeg * 0.75, count: 14, weightFactor: 4.5 },
+                { r: maxRadiusDeg * 1.00, count: 18, weightFactor: 2.5 }
+              ];
+
+          ringsConfig.forEach(ring => {
             const step = (Math.PI * 2) / ring.count;
             for (let k = 0; k < ring.count; k++) {
               const rad = k * step;
