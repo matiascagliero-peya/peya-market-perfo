@@ -203,7 +203,9 @@
         }
       });
       const input = document.getElementById(`search-filter-${type}`);
-      filterComboboxOptions(type, input ? input.value : '');
+      if (input) input.select();
+      // Mostrar SIEMPRE todas las opciones disponibles sin pre-filtrar por el valor actual
+      filterComboboxOptions(type, '');
     }
 
     function toggleCombobox(type, e) {
@@ -229,6 +231,15 @@
           syncComboboxDisplay(t);
         }
       });
+
+      // Cerrar automáticamente los resultados del buscador unificado si se hace clic fuera
+      const resultsDiv = document.getElementById('neighborhood-poly-results');
+      const searchInput = document.getElementById('map-places-search-input');
+      if (resultsDiv && resultsDiv.style.display !== 'none') {
+        if (!resultsDiv.contains(e.target) && e.target !== searchInput) {
+          resultsDiv.style.display = 'none';
+        }
+      }
     });
 
     function getAppCurrentTheme() {
@@ -7147,11 +7158,8 @@
         }
 
         if (validResults.length === 0) {
-          if (resultsDiv) {
-            resultsDiv.innerHTML = '<div style="padding:8px 10px; color:#ef4444; text-align:center;">No se encontró polígono oficial para ese barrio. Podés trazarlo con "Dibujar Polígono".</div>';
-            setTimeout(() => { if (resultsDiv) resultsDiv.style.display = 'none'; }, 4000);
-          }
-          showToast('No se encontraron límites oficiales para "' + query + '". Podés trazarlo con "Dibujar Polígono".', 'warning');
+          if (resultsDiv) resultsDiv.style.display = 'none';
+          searchGoogleMapsZone(query);
           return;
         }
 
@@ -7163,12 +7171,9 @@
         }
 
       } catch(e) {
-        console.error('Error buscando polígono de barrio:', e);
-        if (resultsDiv) {
-          resultsDiv.innerHTML = '<div style="padding:8px 10px; color:#ef4444; text-align:center;">Error de conexión al buscar límites: ' + e.message + '</div>';
-          setTimeout(() => { if (resultsDiv) resultsDiv.style.display = 'none'; }, 4000);
-        }
-        showToast('Error consultando límites geográficos: ' + e.message, 'error');
+        console.warn('Fallback a geocoder Google Maps tras error en límites:', e.message);
+        if (resultsDiv) resultsDiv.style.display = 'none';
+        searchGoogleMapsZone(query);
       }
     }
 
