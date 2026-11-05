@@ -211,6 +211,8 @@
               <input type="text" id="map-places-search-input" 
                      placeholder="Buscar barrio, zona o dirección..." 
                      autocomplete="off"
+                     oninput="handleMapPlacesSearchInput(this.value)"
+                     onfocus="if(this.value.length>=2) handleMapPlacesSearchInput(this.value)"
                      onkeydown="if(event.key==='Enter') executeUnifiedZoneSearch(this.value)"
                      style="width:100%; border:none; outline:none; background:transparent; font-size:10.5px; font-family:'Outfit',sans-serif; color:var(--text-sheet-title); padding:3px 0;">
               <button type="button" onclick="executeUnifiedZoneSearch(document.getElementById('map-places-search-input').value)" 

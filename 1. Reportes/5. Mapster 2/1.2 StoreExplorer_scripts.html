@@ -721,35 +721,206 @@
 
     // ============================================================
     // BUSCADOR UNIFICADO DE ZONAS, BARRIOS Y DIRECCIONES
-    // Ubica en el mapa Y traza automáticamente los límites del barrio o zona de cobertura
+    // Sugerencias en vivo al tipear (Tiendas, Barrios y Google Geocoder)
     // ============================================================
-    function initMapPlacesSearch() {
-      const input = document.getElementById('map-places-search-input');
-      if (!input || typeof google === 'undefined' || !google.maps) return;
+    let searchDebounceTimer = null;
 
-      if (google.maps.places && google.maps.places.Autocomplete) {
-        try {
-          const autocomplete = new google.maps.places.Autocomplete(input, {
-            fields: ['geometry', 'name', 'formatted_address'],
-            types: ['geocode', 'establishment']
-          });
+    window.handleMapPlacesSearchInput = function(val) {
+      const q = String(val || '').trim();
+      const resultsDiv = document.getElementById('neighborhood-poly-results');
+      if (!resultsDiv) return;
 
-          // Restringir a los países principales de PedidosYa en Latam
-          autocomplete.setComponentRestrictions({
-            country: ['ar', 'cl', 'uy', 'pe', 'ec', 'do', 'pa', 'py', 'bo', 'gt', 'sv', 'hn', 'ni']
-          });
+      if (searchDebounceTimer) clearTimeout(searchDebounceTimer);
 
-          autocomplete.addListener('place_changed', () => {
-            const place = autocomplete.getPlace();
-            const q = (place && place.name) ? place.name : (input.value || '');
-            if (q) {
-              executeUnifiedZoneSearch(q);
-            }
-          });
-        } catch(ePlaces) {
-          console.warn('[Mapster Autocomplete Init Error]:', ePlaces.message);
-        }
+      if (q.length < 2) {
+        resultsDiv.style.display = 'none';
+        resultsDiv.innerHTML = '';
+        return;
       }
+
+      searchDebounceTimer = setTimeout(() => {
+        showUnifiedSearchSuggestions(q);
+      }, 150);
+    };
+
+    function showUnifiedSearchSuggestions(query) {
+      const q = String(query || '').trim();
+      const resultsDiv = document.getElementById('neighborhood-poly-results');
+      if (!resultsDiv || q.length < 2) return;
+
+      const qLower = q.toLowerCase();
+      const countryEl = document.getElementById('filter-country');
+      const activeCountry = (countryEl && countryEl.value) || '';
+
+      // 1. Sugerencias locales instantáneas de Darkstores de PedidosYa (0 ms)
+      const matchingStores = allWarehouses.filter(w => {
+        if (activeCountry && w.country !== activeCountry) return false;
+        const name = (w.warehouse_name || '').toLowerCase();
+        const id = String(w.warehouse_id || '').toLowerCase();
+        const neigh = (w.neighborhood || '').toLowerCase();
+        const city = (w.city || '').toLowerCase();
+        return name.includes(qLower) || id.includes(qLower) || neigh.includes(qLower) || city.includes(qLower);
+      }).slice(0, 4);
+
+      // 2. Sugerencias locales de Barrios únicos en la base de PedidosYa
+      const matchingNeighborhoods = [];
+      const seenNeighs = new Set();
+      allWarehouses.forEach(w => {
+        if (activeCountry && w.country !== activeCountry) return;
+        const n = (w.neighborhood || '').trim();
+        if (n && n.toLowerCase().includes(qLower) && !seenNeighs.has(n.toLowerCase())) {
+          seenNeighs.add(n.toLowerCase());
+          matchingNeighborhoods.push({ name: n, city: w.city, country: w.country });
+        }
+      });
+
+      // Construir cabecera visual y opciones inmediatas
+      resultsDiv.style.display = 'block';
+      resultsDiv.innerHTML = '';
+
+      let itemsCount = 0;
+
+      // Renderizar Tiendas encontradas
+      if (matchingStores.length > 0) {
+        const header = document.createElement('div');
+        header.style.cssText = 'padding:4px 8px; font-size:8px; font-weight:800; color:var(--text-sheet-muted); text-transform:uppercase; letter-spacing:0.5px; background:var(--bg-sheet-bar); border-bottom:1px solid var(--border-sheet);';
+        header.textContent = 'Tiendas PedidosYa';
+        resultsDiv.appendChild(header);
+
+        matchingStores.forEach(w => {
+          itemsCount++;
+          const row = document.createElement('div');
+          row.style.cssText = 'padding:6px 10px; cursor:pointer; border-bottom:1px solid var(--border-sheet); transition:background 0.15s ease; display:flex; align-items:center; gap:6px;';
+          row.innerHTML = `
+            <span style="display:inline-flex; align-items:center; justify-content:center; width:16px; height:16px; border-radius:50%; background:rgba(234,4,78,0.12); color:#ea044e; flex-shrink:0;">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg>
+            </span>
+            <div style="min-width:0; flex:1;">
+              <div style="font-weight:700; color:var(--text-sheet-title); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+                ${w.warehouse_name}
+              </div>
+              <div style="font-size:9px; color:var(--text-sheet-muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+                ${w.neighborhood || w.city} • ${w.country}
+              </div>
+            </div>
+          `;
+          row.onmouseenter = () => { row.style.background = 'var(--bg-sheet-card-hover)'; };
+          row.onmouseleave = () => { row.style.background = 'transparent'; };
+          row.onmousedown = (e) => {
+            e.preventDefault();
+            resultsDiv.style.display = 'none';
+            const input = document.getElementById('map-places-search-input');
+            if (input) input.value = w.warehouse_name;
+            selectedWarehouseIds.clear();
+            selectedWarehouseIds.add(String(w.warehouse_id).trim());
+            manuallyDeselectedIds.clear();
+            renderWarehouseCards();
+            updateSelectionAndRefresh();
+            const pos = getWarehousePosition(w);
+            if (pos && map) {
+              map.panTo(pos);
+              map.setZoom(15);
+              showWarehouseDetailInfoWindow(w, pos);
+            }
+          };
+          resultsDiv.appendChild(row);
+        });
+      }
+
+      // Renderizar Barrios PeYa encontrados
+      if (matchingNeighborhoods.length > 0) {
+        const header = document.createElement('div');
+        header.style.cssText = 'padding:4px 8px; font-size:8px; font-weight:800; color:var(--text-sheet-muted); text-transform:uppercase; letter-spacing:0.5px; background:var(--bg-sheet-bar); border-bottom:1px solid var(--border-sheet);';
+        header.textContent = 'Barrios & Zonas Urbanas';
+        resultsDiv.appendChild(header);
+
+        matchingNeighborhoods.slice(0, 3).forEach(n => {
+          itemsCount++;
+          const row = document.createElement('div');
+          row.style.cssText = 'padding:6px 10px; cursor:pointer; border-bottom:1px solid var(--border-sheet); transition:background 0.15s ease; display:flex; align-items:center; gap:6px;';
+          row.innerHTML = `
+            <span style="display:inline-flex; align-items:center; justify-content:center; width:16px; height:16px; border-radius:50%; background:rgba(2,132,199,0.12); color:#0284c7; flex-shrink:0;">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+            </span>
+            <div style="min-width:0; flex:1;">
+              <div style="font-weight:700; color:var(--text-sheet-title); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+                ${n.name}
+              </div>
+              <div style="font-size:9px; color:var(--text-sheet-muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+                ${n.city} • ${n.country}
+              </div>
+            </div>
+          `;
+          row.onmouseenter = () => { row.style.background = 'var(--bg-sheet-card-hover)'; };
+          row.onmouseleave = () => { row.style.background = 'transparent'; };
+          row.onmousedown = (e) => {
+            e.preventDefault();
+            resultsDiv.style.display = 'none';
+            const input = document.getElementById('map-places-search-input');
+            if (input) input.value = n.name;
+            executeUnifiedZoneSearch(n.name + (n.city ? ', ' + n.city : ''));
+          };
+          resultsDiv.appendChild(row);
+        });
+      }
+
+      // 3. Recomendaciones oficiales de Google Maps Geocoder (para cualquier dirección, calle o punto de la ciudad)
+      if (typeof google !== 'undefined' && google.maps && google.maps.Geocoder) {
+        const geocoder = new google.maps.Geocoder();
+        const geocodeOpts = { address: q };
+        if (activeCountry) {
+          const cc = getCountryCode({ country: activeCountry });
+          if (cc) geocodeOpts.componentRestrictions = { country: cc };
+        }
+
+        geocoder.geocode(geocodeOpts, (geoResults, status) => {
+          if (status === 'OK' && geoResults && geoResults.length > 0) {
+            const googleHeader = document.createElement('div');
+            googleHeader.style.cssText = 'padding:4px 8px; font-size:8px; font-weight:800; color:var(--text-sheet-muted); text-transform:uppercase; letter-spacing:0.5px; background:var(--bg-sheet-bar); border-bottom:1px solid var(--border-sheet);';
+            googleHeader.textContent = 'Lugares de Google Maps';
+            resultsDiv.appendChild(googleHeader);
+
+            geoResults.slice(0, 4).forEach(gr => {
+              itemsCount++;
+              const row = document.createElement('div');
+              row.style.cssText = 'padding:6px 10px; cursor:pointer; border-bottom:1px solid var(--border-sheet); transition:background 0.15s ease; display:flex; align-items:center; gap:6px;';
+              const mainText = gr.address_components && gr.address_components[0] ? gr.address_components[0].long_name : gr.formatted_address.split(',')[0];
+              row.innerHTML = `
+                <span style="display:inline-flex; align-items:center; justify-content:center; width:16px; height:16px; border-radius:50%; background:rgba(16,185,129,0.12); color:#10b981; flex-shrink:0;">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                </span>
+                <div style="min-width:0; flex:1;">
+                  <div style="font-weight:700; color:var(--text-sheet-title); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+                    ${mainText}
+                  </div>
+                  <div style="font-size:9px; color:var(--text-sheet-muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+                    ${gr.formatted_address}
+                  </div>
+                </div>
+              `;
+              row.onmouseenter = () => { row.style.background = 'var(--bg-sheet-card-hover)'; };
+              row.onmouseleave = () => { row.style.background = 'transparent'; };
+              row.onmousedown = (e) => {
+                e.preventDefault();
+                resultsDiv.style.display = 'none';
+                const input = document.getElementById('map-places-search-input');
+                if (input) input.value = mainText;
+                executeUnifiedZoneSearch(gr.formatted_address);
+              };
+              resultsDiv.appendChild(row);
+            });
+          }
+        });
+      }
+
+      // Si no hay resultados de ningún tipo:
+      if (itemsCount === 0) {
+        resultsDiv.innerHTML = '<div style="padding:8px 10px; color:var(--text-sheet-muted); text-align:center; font-style:italic;">Escribí para buscar tiendas, barrios o presiona Enter</div>';
+      }
+    }
+
+    function initMapPlacesSearch() {
+      // Las recomendaciones en vivo se manejan por handleMapPlacesSearchInput (oninput)
     }
 
     window.executeUnifiedZoneSearch = function(query) {
@@ -758,6 +929,8 @@
         showToast('Escribí el nombre de un barrio o dirección (ej. Recoleta, Palermo, Tolosa)', 'warning');
         return;
       }
+      const resultsDiv = document.getElementById('neighborhood-poly-results');
+      if (resultsDiv) resultsDiv.style.display = 'none';
       searchAndDrawNeighborhoodPolygon(q);
     };
 
@@ -7198,15 +7371,18 @@
     // ============================================================
     // BUSCADOR AUTOMÁTICO DE POLÍGONOS DE BARRIOS Y ZONAS (CATASTRAL)
     // ============================================================
-    async function searchAndDrawNeighborhoodPolygon() {
-      const input = document.getElementById('neighborhood-poly-search-input');
+    async function searchAndDrawNeighborhoodPolygon(targetQuery) {
+      const input = document.getElementById('map-places-search-input') || document.getElementById('neighborhood-poly-search-input');
       const resultsDiv = document.getElementById('neighborhood-poly-results');
-      if (!input || !input.value.trim()) {
+      const query = String(targetQuery || (input ? input.value : '')).trim();
+
+      if (!query) {
         showToast('Escribí el nombre de un barrio o zona (ej. Palermo, Tolosa, Caballito)', 'warning');
         return;
       }
 
-      const query = input.value.trim();
+      if (input) input.value = query;
+
       const countryEl = document.getElementById('filter-country');
       const cityEl = document.getElementById('filter-city');
       const activeCountry = (countryEl && countryEl.value) || 'Argentina';
@@ -7235,7 +7411,7 @@
       const ccParam = cc ? ('&countrycodes=' + cc) : '';
 
       try {
-        const url = 'https://nominatim.openstreetmap.org/search?q=' + encodeURIComponent(fullQuery) + '&format=json&polygon_geojson=1&addressdetails=1&limit=5' + ccParam;
+        const url = 'https:' + '//' + 'nominatim.openstreetmap.org/search?q=' + encodeURIComponent(fullQuery) + '&format=json&polygon_geojson=1&addressdetails=1&limit=5' + ccParam;
         const resp = await fetch(url, { headers: { 'Accept': 'application/json' } });
         if (!resp.ok) throw new Error('Servidor de límites no disponible');
         const data = await resp.json();
@@ -7247,7 +7423,7 @@
 
         if (validResults.length === 0) {
           // Búsqueda más amplia por si la ciudad acotó demasiado
-          const broadUrl = 'https://nominatim.openstreetmap.org/search?q=' + encodeURIComponent(query + ', ' + activeCountry) + '&format=json&polygon_geojson=1&limit=5' + ccParam;
+          const broadUrl = 'https:' + '//' + 'nominatim.openstreetmap.org/search?q=' + encodeURIComponent(query + ', ' + activeCountry) + '&format=json&polygon_geojson=1&limit=5' + ccParam;
           const broadResp = await fetch(broadUrl);
           const broadData = await broadResp.json();
           validResults = (broadData || []).filter(item => item.geojson && (item.geojson.type === 'Polygon' || item.geojson.type === 'MultiPolygon'));
