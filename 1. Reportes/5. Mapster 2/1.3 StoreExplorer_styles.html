@@ -1059,18 +1059,20 @@
 
     /* ── InfoWindow de Google Maps: Estructura Dinámica de Tema y Compacta ── */
     .gm-style .gm-style-iw-c {
-      overflow: visible !important;
+      overflow: hidden !important;
       padding: 0 !important;
       border-radius: 10px !important;
-      box-shadow: 0 10px 28px rgba(0, 0, 0, 0.3) !important;
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45) !important;
       background: var(--bg-sheet) !important;
       border: 1px solid var(--border-sheet) !important;
+      max-height: 520px !important;
     }
     .gm-style .gm-style-iw-d {
-      overflow: visible !important;
-      max-height: 380px !important;
+      overflow-y: auto !important;
+      overflow-x: hidden !important;
+      max-height: 520px !important;
       padding: 0 !important;
-      background: transparent !important;
+      background: var(--bg-sheet) !important;
     }
     .gm-style .gm-ui-hover-effect {
       display: none !important;
