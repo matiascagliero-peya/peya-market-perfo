@@ -485,9 +485,6 @@
       }
     }
 
-    window.addEventListener('DOMContentLoaded', bootstrapStoreExplorer);
-    window.addEventListener('load', bootstrapStoreExplorer);
-
     function removePolygonsForWarehouse(whId) {
       const normId = String(whId).trim();
       
@@ -1707,13 +1704,13 @@
     function getCountryFlagImg(w) {
       const code = getCountryCode(w);
       const countryTitle = (w && w.country) ? w.country : code.toUpperCase();
-      return '<img src="https://flagcdn.com/24x18/' + code + '.png" srcset="https://flagcdn.com/48x36/' + code + '.png 2x" width="22" height="16" alt="' + countryTitle + '" title="' + countryTitle + '" class="country-flag-icon" loading="lazy" style="border-radius:2.5px; box-shadow:0 1px 3px rgba(0,0,0,0.22); object-fit:cover; flex-shrink:0; display:inline-block; vertical-align:middle;">';
+      return '<img src="https:' + '\x2F\x2F' + 'flagcdn.com/24x18/' + code + '.png" srcset="https:' + '\x2F\x2F' + 'flagcdn.com/48x36/' + code + '.png 2x" width="22" height="16" alt="' + countryTitle + '" title="' + countryTitle + '" class="country-flag-icon" loading="lazy" style="border-radius:2.5px; box-shadow:0 1px 3px rgba(0,0,0,0.22); object-fit:cover; flex-shrink:0; display:inline-block; vertical-align:middle;">';
     }
 
     // ============================================================
     // MAPEO DE VERTICALES / PARTNERS HABILITADOS (ICONOS VECTORIALES SVG)
     // ============================================================
-    const PARTNER_TYPE_DEFINITIONS = [
+    var PARTNER_TYPE_DEFINITIONS = [
       {
         key: 'market',
         label: 'Market (Supermercado)',
@@ -7411,7 +7408,7 @@
       const ccParam = cc ? ('&countrycodes=' + cc) : '';
 
       try {
-        const url = 'https:' + '//' + 'nominatim.openstreetmap.org/search?q=' + encodeURIComponent(fullQuery) + '&format=json&polygon_geojson=1&addressdetails=1&limit=5' + ccParam;
+        const url = 'https:' + '\x2F\x2F' + 'nominatim.openstreetmap.org/search?q=' + encodeURIComponent(fullQuery) + '&format=json&polygon_geojson=1&addressdetails=1&limit=5' + ccParam;
         const resp = await fetch(url, { headers: { 'Accept': 'application/json' } });
         if (!resp.ok) throw new Error('Servidor de límites no disponible');
         const data = await resp.json();
@@ -7423,7 +7420,7 @@
 
         if (validResults.length === 0) {
           // Búsqueda más amplia por si la ciudad acotó demasiado
-          const broadUrl = 'https:' + '//' + 'nominatim.openstreetmap.org/search?q=' + encodeURIComponent(query + ', ' + activeCountry) + '&format=json&polygon_geojson=1&limit=5' + ccParam;
+          const broadUrl = 'https:' + '\x2F\x2F' + 'nominatim.openstreetmap.org/search?q=' + encodeURIComponent(query + ', ' + activeCountry) + '&format=json&polygon_geojson=1&limit=5' + ccParam;
           const broadResp = await fetch(broadUrl);
           const broadData = await broadResp.json();
           validResults = (broadData || []).filter(item => item.geojson && (item.geojson.type === 'Polygon' || item.geojson.type === 'MultiPolygon'));
