@@ -17,7 +17,7 @@
 
 ## Glosario de Métricas y Google Drive
 - Al crear o modificar métricas:
-  1. Actualizar el archivo `.sql` en `PeYa Market/3. Querys SQL/3. Glosario/` (o `7. Métricas Pendientes/`) con su encabezado estándar (`DECLARE query_name`, `Métrica Nº`, `Nombre`, `Chapter`, `Query bajada en`, `Sheets Name`, `Sheets Link`, `Owner`, `Slack Link`, `Tablas de origen`, `Tipo`, `Fórmula`, `Definición`).
+  1. Actualizar el archivo `.sql` en `PeYa Market/3. Querys SQL/4. Glosario/` (o `7. Métricas Pendientes/`) con su encabezado estándar (`DECLARE query_name`, `Métrica Nº`, `Nombre`, `Chapter`, `Query bajada en`, `Sheets Name`, `Sheets Link`, `Owner`, `Slack Link`, `Tablas de origen`, `Tipo`, `Fórmula`, `Definición`).
   2. Replicar archivos `.sql`, `.csv` o `.md` modificados a `G:\Unidades compartidas\Performance Regional - dMarts\3. Conexiones Bases de datos\Glosario\`.
   3. Actualizar en paralelo `GLOSARIO_METRICAS_OKRS.md` y `Glosario general de métricas - Performance.csv` (local y Drive).
   4. En archivos CSV: no iniciar celdas con `=` (usar URLs directas en HTTPS para hipervínculos).
