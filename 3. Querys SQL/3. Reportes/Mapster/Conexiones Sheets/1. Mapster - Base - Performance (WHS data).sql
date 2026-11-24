@@ -1,4 +1,4 @@
-DECLARE query_name STRING DEFAULT '12. Mapster - Base - Performance (WHS data)';
+DECLARE query_name STRING DEFAULT '1. Mapster - Base - Performance (WHS data)';
 
 -- ==============================================================================
 -- TABLA EN SHEETS 1: 1. WHS data — CATÁLOGO DE LOCALES, PARTNERS Y SHAPES (OPTIMIZADA)

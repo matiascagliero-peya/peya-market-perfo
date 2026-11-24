@@ -12,8 +12,8 @@ Este directorio contiene todo el código SQL del ecosistema Mapster, dividido en
 3. Reportes/Mapster/
 │
 ├── 1. Conexiones Sheets/               <── Conectores directos para la planilla Google Sheets
-│   ├── 12. Mapster - Base - Performance (WHS data).sql
-│   └── 12. Mapster - Base - Performance (WHS orders).sql
+│   ├── 1. Mapster - Base - Performance (WHS data).sql
+│   └── 1. Mapster - Base - Performance (WHS orders).sql
 │
 ├── 2. Core & API/                      <── Suite de inteligencia espacial para la Web App All-Map
 │   ├── 01_geometria_y_shapes_warehouse.sql
@@ -37,12 +37,12 @@ Este directorio contiene todo el código SQL del ecosistema Mapster, dividido en
 ## 📘 Detalle Consulta por Consulta
 
 ### 📁 Capa 1: `Conexiones Sheets/`
-Consultas livianas optimizadas específicamente para Connected Sheets. Alimentan la planilla `12. Mapster - Base - Performance.gsheet` en Google Drive:
+Consultas livianas optimizadas específicamente para Connected Sheets. Alimentan la planilla `1. Mapster - Base - Performance.gsheet` en Google Drive:
 
 | Archivo SQL | Pestaña en Google Sheets | Grano (1 fila por...) | Tablas Principales | Qué resuelve / Lógica clave |
 |---|---|---|---|---|
-| **`12. Mapster - Base - Performance (WHS data).sql`** | `1. WHS data` | `(month_date, warehouse_id, partner_id)` | `dim_partner`, `cl_hurrier.vendors_delivery_areas`, `vendor_delivery_area_shapes`, `fact_orders` | **Catálogo de locales y polígonos Hurrier:** Lista cada almacén físico y todos sus partners asociados. Extrae el polígono real oficial de Hurrier (`shape_geojson`), calcula el área en $km^2$ y genera el flag `same_shape_as_main` (detecta si los partners secundarios cubren exactamente el mismo mapa que la tienda principal). |
-| **`12. Mapster - Base - Performance (WHS orders).sql`** | `2. WHS orders` | `(month_date, warehouse_id)` | `dmart_metrics_by_whs_daily`, `dim_partner`, `fact_orders` | **Rendimiento mensual por almacén:** Agrupa métricas mensuales de ventas y logística (órdenes confirmadas, GMV, ticket promedio, Seamless %, fallas, tiempo de entrega y Open Time %). Consume directamente la tabla oficial `dmart_metrics_by_whs_daily` para coincidir al 100% con los reportes diarios de Ops. |
+| **`1. Mapster - Base - Performance (WHS data).sql`** | `1. WHS data` | `(month_date, warehouse_id, partner_id)` | `dim_partner`, `cl_hurrier.vendors_delivery_areas`, `vendor_delivery_area_shapes`, `fact_orders` | **Catálogo de locales y polígonos Hurrier:** Lista cada almacén físico y todos sus partners asociados. Extrae el polígono real oficial de Hurrier (`shape_geojson`), calcula el área en $km^2$ y genera el flag `same_shape_as_main` (detecta si los partners secundarios cubren exactamente el mismo mapa que la tienda principal). |
+| **`1. Mapster - Base - Performance (WHS orders).sql`** | `2. WHS orders` | `(month_date, warehouse_id)` | `dmart_metrics_by_whs_daily`, `dim_partner`, `fact_orders` | **Rendimiento mensual por almacén:** Agrupa métricas mensuales de ventas y logística (órdenes confirmadas, GMV, ticket promedio, Seamless %, fallas, tiempo de entrega y Open Time %). Consume directamente la tabla oficial `dmart_metrics_by_whs_daily` para coincidir al 100% con los reportes diarios de Ops. |
 
 ---
 
@@ -101,4 +101,4 @@ SELECT
 FROM `peya-food-and-groceries.automated_tables_reports.dmart_metrics_by_whs_daily`
 GROUP BY 1, 2;
 ```
-*(Lógica implementada oficialmente en `12. Mapster - Base - Performance (WHS orders).sql`).*
+*(Lógica implementada oficialmente en `1. Mapster - Base - Performance (WHS orders).sql`).*

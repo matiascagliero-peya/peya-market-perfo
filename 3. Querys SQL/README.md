@@ -45,13 +45,13 @@ Esta estructura divide el repositorio de queries en 4 grandes bloques dentro de 
   - `11. Daily Alerts - Peya Market (WHS all Data).sql` (Check de seamless y fallback por WHS)
 - **`Mapster/`**:
   - **`Conexiones Sheets/`**:
-    - `12. Mapster - Base - Performance (WHS data).sql` (Catálogo de locales, partners y shapes Hurrier para pestaña 1)
-    - `12. Mapster - Base - Performance (WHS orders).sql` (Órdenes, fallas y tiempos por darkstore para pestaña 2)
+    - `1. Mapster - Base - Performance (WHS data).sql` (Catálogo de locales, partners y shapes Hurrier para pestaña 1)
+    - `1. Mapster - Base - Performance (WHS orders).sql` (Órdenes, fallas y tiempos por darkstore para pestaña 2)
   - **`Core & API/`**: Queries espaciales de la aplicación All-Map (`01_geometria_y_shapes_warehouse.sql`, `02_analisis_anillos_concentricos.sql`, etc.).
   - **`Modelos & Datamarts/`**: Modelos maestros espaciales y de tiendas (`dim_warehouse_footprint_master.sql`, `dim_warehouse_all_partners_master.sql`, `datamart_warehouse_shape_analytics.sql`, `crear_tabla_externa_whs_master.sql`, etc.).
 - **`Sales Monitor/`**:
-  - `8. Sales M Data - Base - Performance (Sales).sql`
-  - `8. Sales M Data - Base - Performance (Vertical).sql`
+  - `1. Sales M Data - Base - Performance (Sales).sql`
+  - `1. Sales M Data - Base - Performance (Vertical).sql`
 - **`Unprofitable Dashboard/`**:
   - `1. Unprofitable orders.sql`, `2. Dmarts Unprofitable Promotions.sql`, `3. Dmarts Unprofitable Margin.sql`.
 - **`User Types (Frank)/`:
