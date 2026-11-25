@@ -205,7 +205,8 @@ logistics_orders AS (
     END) AS ept_apt_over_5_min_orders
   FROM `peya-bi-tools-pro.il_logistics.fact_logistic_orders` AS l
   INNER JOIN `peya-bi-tools-pro.il_core.dim_partner` dp
-    ON l.vendor.id = dp.partner_id AND dp.is_darkstore = TRUE
+    ON CAST(l.vendor.vendor_code AS STRING) = CAST(dp.partner_id AS STRING)
+   AND dp.is_darkstore = TRUE
   WHERE l.created_date_local >= fecha_inicio
     AND l.created_date_local <= to_date
     AND l.order_cancelled != 1
