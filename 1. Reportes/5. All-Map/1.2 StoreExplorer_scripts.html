@@ -6750,70 +6750,8 @@
     }
 
     function generateBaselineGridFromStoreHistory(w, flatCoords, N, minLat, maxLat, minLng, maxLng) {
-      const totOrders = Number(w.orders) || 450;
-      const totPeyaMaus = Number(w.peya_users) || Math.round((Number(w.coverage_area_km2) || 15) * 1150);
-      const totDmartMaus = Number(w.dmart_users) || Math.round(totOrders * 0.48);
-      const baseAfv = Number(w.afv_aov_amount) || 15.4;
-      const baseDt = Number(w.avg_delivery_time_min) || 21.0;
-      const basePen = Number(w.penetration_pct) || (totPeyaMaus > 0 ? (totDmartMaus / totPeyaMaus) * 100 : 14.2);
-
-      const storePos = getWarehousePosition(w);
-      const centerLat = storePos ? storePos.lat : (minLat + maxLat) / 2;
-      const centerLng = storePos ? storePos.lng : (minLng + maxLng) / 2;
-      const cosLat = Math.cos(centerLat * Math.PI / 180);
-
-      const stepLat = (maxLat - minLat) / N;
-      const stepLng = (maxLng - minLng) / N;
-
-      const cells = {};
-      let totalWeight = 0;
-      const cellWeights = [];
-
-      for (let r = 0; r < N; r++) {
-        for (let c = 0; c < N; c++) {
-          const cId = `R${r + 1}C${c + 1}`;
-          const cellLat = minLat + (r + 0.5) * stepLat;
-          const cellLng = minLng + (c + 0.5) * stepLng;
-
-          const dLat = (cellLat - centerLat) * 111.32;
-          const dLng = (cellLng - centerLng) * 111.32 * cosLat;
-          const distKm = Math.sqrt(dLat * dLat + dLng * dLng);
-
-          // Ponderación gaussiana según cercanía al WHS
-          const weight = Math.exp(-Math.pow(distKm / 2.8, 1.8));
-          totalWeight += weight;
-          cellWeights.push({ id: cId, distKm: distKm, weight: weight });
-        }
-      }
-
-      cellWeights.forEach(item => {
-        const share = item.weight / Math.max(0.001, totalWeight);
-        const cellOrders = Math.max(1, Math.round(totOrders * share));
-        const cellPeya = Math.max(10, Math.round(totPeyaMaus * share));
-        const cellDmart = Math.max(1, Math.round(totDmartMaus * share));
-        const cellPen = Number((basePen * (1.35 - (item.distKm * 0.18))).toFixed(1));
-        const cellDt = Number((12.2 + item.distKm * 3.3).toFixed(1));
-        const cellSeamless = Number(Math.max(56.0, Math.min(94.5, 93.5 - (item.distKm * 5.8))).toFixed(1));
-        const cellCpo = Number((1.20 + (cellDt * 0.058)).toFixed(2));
-        const cellCpoAfv = Number(((cellCpo / baseAfv) * 100).toFixed(1));
-
-        cells[item.id] = {
-          total_users: cellPeya,
-          peya_users: cellPeya,
-          dmart_users: cellDmart,
-          total_orders: cellOrders,
-          penetration_pct: cellPen,
-          afv: baseAfv.toFixed(2),
-          avg_dt: cellDt,
-          seamless_pct: cellSeamless,
-          plus_users: Math.round(cellPeya * 0.18),
-          rider_cpo_dmarts: cellCpo,
-          cpo_afv_pct: cellCpoAfv,
-          isHistoricalEstimate: true
-        };
-      });
-
-      return cells;
+      // Directiva estricta: Cero números inventados; los datos de celda provienen exclusivamente de BigQuery
+      return {};
     }
 
     function drawGridOnMap() {
@@ -8002,45 +7940,7 @@
         if (currentIdx < totalStores) {
           HEATMAP_PROGRESSIVE_TIMER = setTimeout(processBatch, 25);
         } else {
-          // Si es la capa de Platform MAUs, incorporar los nodos urbanos satélites de la plataforma (ej. Santo Tomé, Rafaela, etc.)
-          if (layerType === 'peya_maus') {
-            const country = document.getElementById('filter-country').value || 'Argentina';
-            const matchingSatellites = PLATFORM_SATELLITE_NODES.filter(n => !country || n.country === country);
-            matchingSatellites.forEach(sat => {
-              const rawVal = sat.peya_users;
-              const logRaw = Math.log(1 + rawVal);
-              const logMin = Math.log(1 + 1000);
-              const logMax = Math.log(1 + (stable.max || 120000));
-              const intensity = Math.max(0.35, Math.min(1.0, (logRaw - logMin) / Math.max(0.01, logMax - logMin)));
-
-              const baseLat = sat.lat;
-              const baseLng = sat.lng;
-              const cosLat = Math.cos(baseLat * Math.PI / 180);
-              const maxRadiusDeg = 0.022;
-
-              accumulatedPoints.push({
-                lat: baseLat,
-                lng: baseLng,
-                latLng: new google.maps.LatLng(baseLat, baseLng),
-                weight: Math.round(intensity * 10),
-                rawVal: rawVal
-              });
-
-              [0, 60, 120, 180, 240, 300].forEach(deg => {
-                const rad = deg * Math.PI / 180;
-                const pLat = Number((baseLat + maxRadiusDeg * 0.65 * Math.cos(rad)).toFixed(6));
-                const pLng = Number((baseLng + (maxRadiusDeg * 0.65 * Math.sin(rad)) / cosLat).toFixed(6));
-                accumulatedPoints.push({
-                  lat: pLat,
-                  lng: pLng,
-                  latLng: new google.maps.LatLng(pLat, pLng),
-                  weight: Math.max(1, Math.round(intensity * 4.5)),
-                  rawVal: rawVal
-                });
-              });
-            });
-            renderGoogleHeatmap(accumulatedPoints, layerType);
-          }
+          renderGoogleHeatmap(accumulatedPoints, layerType);
 
           // Guardar en caché permanente de sesión
           HEATMAP_CACHE.set(cacheKey, accumulatedPoints);
@@ -10420,11 +10320,11 @@
       let dispOrders = totalOrders;
       let dispPen = penPct;
 
-      if (isExpansionZone) {
-        dispPeyaMaus = Math.round(areaKm2 * 1950);
-        dispDmartMaus = Math.round(dispPeyaMaus * 0.145);
-        dispOrders = Math.round(dispDmartMaus * 2.15);
-        dispPen = '14.5% (Target)';
+      if (isExpansionZone && dispPeyaMaus === 0) {
+        dispPeyaMaus = 0;
+        dispDmartMaus = 0;
+        dispOrders = 0;
+        dispPen = '—';
       }
 
       function setElSafe(id, val) {
@@ -10434,19 +10334,19 @@
 
       setElSafe('zone-val-area', `${areaKm2} km²`);
       setElSafe('zone-val-stores', isExpansionZone ? '0 (Expansión)' : intersectingStores.length);
-      setElSafe('zone-val-peya-maus', isExpansionZone ? `${dispPeyaMaus.toLocaleString('es-AR')} (Est.)` : (dispPeyaMaus > 0 ? dispPeyaMaus.toLocaleString('es-AR') : '—'));
-      setElSafe('zone-val-dmart-maus', isExpansionZone ? `${dispDmartMaus.toLocaleString('es-AR')} (Potencial)` : (dispDmartMaus > 0 ? dispDmartMaus.toLocaleString('es-AR') : '—'));
-      setElSafe('zone-val-pen', isExpansionZone ? dispPen : `${dispPen}%`);
-      setElSafe('zone-val-orders', isExpansionZone ? `${dispOrders.toLocaleString('es-AR')} (Potencial)` : (dispOrders > 0 ? dispOrders.toLocaleString('es-AR') : '—'));
-      const freqVal = (dispDmartMaus > 0 && dispOrders > 0) ? (dispOrders / dispDmartMaus).toFixed(1) : '2.1';
-      setElSafe('zone-val-freq', `${freqVal}x`);
+      setElSafe('zone-val-peya-maus', dispPeyaMaus > 0 ? dispPeyaMaus.toLocaleString('es-AR') : '—');
+      setElSafe('zone-val-dmart-maus', dispDmartMaus > 0 ? dispDmartMaus.toLocaleString('es-AR') : '—');
+      setElSafe('zone-val-pen', (dispPen !== '—' && Number(dispPen) > 0) ? `${dispPen}%` : '—');
+      setElSafe('zone-val-orders', dispOrders > 0 ? dispOrders.toLocaleString('es-AR') : '—');
+      const freqVal = (dispDmartMaus > 0 && dispOrders > 0) ? (dispOrders / dispDmartMaus).toFixed(1) : '—';
+      setElSafe('zone-val-freq', freqVal !== '—' ? `${freqVal}x` : '—');
       setElSafe('zone-val-high-income', '—');
       setElSafe('zone-val-core-users', '—');
-      setElSafe('zone-val-afv', `$ ${avgAfv}`);
-      setElSafe('zone-val-dt', `${avgDt} min`);
+      setElSafe('zone-val-afv', avgAfv !== '—' ? `$ ${avgAfv}` : '—');
+      setElSafe('zone-val-dt', avgDt !== '—' ? `${avgDt} min` : '—');
       const zoneCpoEl = document.getElementById('zone-val-cpo');
       if (zoneCpoEl) {
-        zoneCpoEl.textContent = `$ ${(1.25 + (parseFloat(avgDt) * 0.055)).toFixed(2)}`;
+        zoneCpoEl.textContent = '—';
       }
 
       // Actualizar barras de canibalización
@@ -12209,17 +12109,25 @@
 
     function saveSimulatedStoreZone() {
       if (!simProposedCenter) return;
+      const rawMaus = parseInt(document.getElementById('sim-maus-val')?.textContent.replace(/\D/g, ''), 10) || 0;
+      const rawOrders = parseInt(document.getElementById('sim-orders-val')?.textContent.replace(/\D/g, ''), 10) || 0;
+      const rawGmv = parseInt(document.getElementById('sim-gmv-val')?.textContent.replace(/\D/g, ''), 10) || 0;
+      const rawFreq = parseFloat(document.getElementById('sim-freq-val')?.textContent) || 0;
+      const rawDmartMaus = (rawFreq > 0 && rawOrders > 0) ? Math.round(rawOrders / rawFreq) : (rawOrders > 0 ? Math.round(rawOrders / 2.1) : 0);
+      const rawAfv = (rawOrders > 0 && rawGmv > 0) ? Number((rawGmv / rawOrders).toFixed(2)) : 0;
+      const rawPen = (rawMaus > 0 && rawDmartMaus > 0) ? Number(((rawDmartMaus / rawMaus) * 100).toFixed(1)) : 0;
+
       const zoneData = {
         name: `Propuesta Nueva Darkstore (${simProposedRadiusKm} km)`,
         coords: simProposedPolygon ? simProposedPolygon.getPath().getArray().map(p => ({ lat: p.lat(), lng: p.lng() })) : [],
         type: 'polygon',
         area_km2: Number((Math.PI * simProposedRadiusKm * simProposedRadiusKm).toFixed(2)),
-        peya_maus: parseInt(document.getElementById('sim-maus-val').textContent.replace(/\./g, ''), 10) || 0,
-        dmart_maus: Math.round((parseInt(document.getElementById('sim-orders-val').textContent.replace(/\D/g, ''), 10) || 500) * 0.48),
-        orders: parseInt(document.getElementById('sim-orders-val').textContent.replace(/\D/g, ''), 10) || 0,
-        afv: 15.8,
-        avg_dt: 18.5,
-        penetration_pct: 14.5
+        peya_maus: rawMaus,
+        dmart_maus: rawDmartMaus,
+        orders: rawOrders,
+        afv: rawAfv,
+        avg_dt: 0,
+        penetration_pct: rawPen
       };
       triggerAutoSaveCustomZone(zoneData, true);
       showToast('Propuesta de nueva darkstore guardada en biblioteca comunitaria.', 'success');

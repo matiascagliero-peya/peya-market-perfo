@@ -1459,12 +1459,11 @@ function calculateUsersInGridCells(params) {
       const plusUsers = Number(row.plus_users) || 0;
 
       const pen = pUsers > 0 ? ((dUsers / pUsers) * 100).toFixed(1) : '0.0';
-      const freqVal = dUsers > 0 ? (tOrders / dUsers).toFixed(1) : '1.8';
-      const afvVal = tOrders > 0 ? (tGmv / tOrders).toFixed(1) : (14.5 + ((pUsers % 7) * 0.8)).toFixed(1);
+      const freqVal = dUsers > 0 ? (tOrders / dUsers).toFixed(1) : '—';
+      const afvVal = (tOrders > 0 && tGmv > 0) ? (tGmv / tOrders).toFixed(1) : '—';
 
-      // Calcular Delivery Time espacial real según la distancia desde el centro del almacén a la celda
-      let dtVal = 21.0;
-      let distKm = 1.8;
+      // Distancia espacial desde el centroide
+      let distKm = 0;
       const cCoord = cellCoordsMap[row.cell_id];
       if (cCoord) {
         const avgLat = params.cells.reduce((acc, c) => acc + Number(c.minLat), 0) / params.cells.length;
@@ -1472,16 +1471,12 @@ function calculateUsersInGridCells(params) {
         const dLat = (cCoord.lat - avgLat) * 111.32;
         const dLng = (cCoord.lng - avgLng) * 111.32 * Math.cos(avgLat * Math.PI / 180);
         distKm = Math.sqrt(dLat * dLat + dLng * dLng);
-        // Modelo operativo real: 12.0 min base de picking & despacho + 3.2 min por km recorrido
-        dtVal = Number((12.0 + distKm * 3.2).toFixed(1));
       }
 
-      // Seamless Delivery disminuye de forma realista con la distancia y demora de viaje (fricción en la periferia)
-      const seamlessVal = Number(Math.max(56.0, Math.min(94.5, 93.5 - (distKm * 5.8))).toFixed(1));
-
-      // Calcular Rider CPO Dmarts ($ costo de entrega al rider) y % CPO / AFV
-      const cellCpo = Number((1.20 + (dtVal * 0.058)).toFixed(2));
-      const cellCpoAfv = Number(afvVal) > 0 ? Number(((cellCpo / Number(afvVal)) * 100).toFixed(1)) : 14.5;
+      const dtVal = row.avg_delivery_time_min ? Number(row.avg_delivery_time_min).toFixed(1) : '—';
+      const seamlessVal = row.seamless_delivery_pct ? Number(row.seamless_delivery_pct).toFixed(1) : '—';
+      const cellCpo = row.rider_cpo_dmarts ? Number(row.rider_cpo_dmarts).toFixed(2) : '—';
+      const cellCpoAfv = (cellCpo !== '—' && afvVal !== '—' && Number(afvVal) > 0) ? ((Number(cellCpo) / Number(afvVal)) * 100).toFixed(1) : '—';
 
       cellsData[row.cell_id] = {
         total_users: pUsers,
@@ -1751,9 +1746,9 @@ function calculateUsersInCustomPolygon(params) {
 
     const penPct = totalUsers > 0 ? ((dmartUsers / totalUsers) * 100).toFixed(1) : '0.0';
     const realAfv = totalOrders > 0 ? (totalGmv / totalOrders).toFixed(2) : (dmartUsers > 0 ? (totalGmv / dmartUsers).toFixed(2) : '0.00');
-    const simDt = Number((14.0 + (totalOrders % 8) * 1.5).toFixed(1));
-    const simCpo = Number((1.25 + (simDt * 0.055)).toFixed(2));
-    const simCpoAfv = Number(realAfv) > 0 ? Number(((simCpo / Number(realAfv)) * 100).toFixed(1)) : 14.5;
+    const simDt = '—';
+    const simCpo = '—';
+    const simCpoAfv = '—';
 
     try {
       logMapsterTelemetry({
@@ -1973,15 +1968,15 @@ function getStoreTotalMetrics(warehouseIds, monthDate) {
     picking_time: row.picking_time,
     assignment_time: row.assignment_time,
     inaccuracy_rate_pct: row.inaccuracy_rate_pct,
-    rider_cpo_dmarts: Number((1.25 + (row.avg_delivery_time_min * 0.055)).toFixed(2)),
-    cpo_afv_pct: row.afv_aov_amount > 0 ? Number((((1.25 + (row.avg_delivery_time_min * 0.055)) / row.afv_aov_amount) * 100).toFixed(1)) : 14.5
+    rider_cpo_dmarts: Number(row.rider_cpo_dmarts || 0),
+    cpo_afv_pct: Number(row.cpo_afv_pct || 0)
   }));
 
   // 1 Tienda seleccionada: Retornar sus valores exactos de la fila
   if (matched.length === 1) {
     const row = matched[0];
-    const cpoSingle = Number((1.25 + (row.avg_delivery_time_min * 0.055)).toFixed(2));
-    const cpoAfvSingle = row.afv_aov_amount > 0 ? Number(((cpoSingle / row.afv_aov_amount) * 100).toFixed(1)) : 14.5;
+    const cpoSingle = Number(row.rider_cpo_dmarts || 0);
+    const cpoAfvSingle = Number(row.cpo_afv_pct || 0);
 
     return {
       total_whs: 1,
@@ -2099,8 +2094,8 @@ function getStoreTotalMetrics(warehouseIds, monthDate) {
     picking_time: avgPicking,
     assignment_time: avgAssignment,
     inaccuracy_rate_pct: inaccuracyRate,
-    rider_cpo_dmarts: Number((1.25 + (avgDt * 0.055)).toFixed(2)),
-    cpo_afv_pct: aov > 0 ? Number((((1.25 + (avgDt * 0.055)) / aov) * 100).toFixed(1)) : 14.5
+    rider_cpo_dmarts: 0,
+    cpo_afv_pct: 0
   };
 }
 
