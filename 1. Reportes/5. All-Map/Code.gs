@@ -2124,7 +2124,7 @@ function queryBigQueryRings(sql, projectId = 'peya-food-and-groceries') {
 }
 
 /**
- * 4. Análisis por Anillos (Multi-tienda) — Consulta en tiempo real a datamart_store_explorer_rings
+ * 4. Análisis por Anillos (Multi-tienda) — Consulta directa a Google Sheets "3. Rings Data"
  */
 function getMultipleStoreRingsData(warehouseIds, monthDate) {
   if (!warehouseIds || warehouseIds.length === 0) return [];
@@ -2358,7 +2358,7 @@ function getMultipleStoreRingsData(warehouseIds, monthDate) {
       });
     }
   } catch (err) {
-    console.warn('[BigQuery Rings] Error consultando tabla datamart_store_explorer_rings:', err.message);
+    console.warn('[Rings] Error procesando anillos:', err.message);
   }
 
   // Fallback si la tabla no está disponible o no hay conexión
