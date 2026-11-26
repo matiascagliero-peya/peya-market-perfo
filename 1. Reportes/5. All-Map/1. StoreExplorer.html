@@ -347,17 +347,17 @@
         <!-- Selector de Divisiones de Recuadros (Inmediatamente debajo del toggle) -->
         <div id="grid-divisions-row" style="display:none; flex-direction:column; gap:4px; margin:4px 0 6px 0; padding:6px 8px; background:var(--bg-sheet-bar); border:1px solid var(--border-sheet); border-radius:6px;">
           <div style="display:flex; align-items:center; justify-content:space-between; font-size:10px; color:var(--text-sheet-muted); font-weight:700;">
-            <span>Modo de Recuadro:</span>
-            <span id="grid-divisions-label" style="color:var(--brand-red); font-weight:800;">8×8 (64)</span>
+            <span>Resolución de Grilla:</span>
+            <span id="grid-divisions-label" style="color:var(--brand-red); font-weight:800;">Manzanas ~100m</span>
           </div>
           <select id="grid-divisions-select" class="toolbar-select" style="font-size:11px; padding:3px 6px;" onchange="changeGridDivisions(this.value)">
-            <option value="manzanas">⬛ Manzanas Urbanas (Cuadras 100m con Números)</option>
-            <option value="4">4×4 (16 recuadros)</option>
-            <option value="6">6×6 (36 recuadros)</option>
-            <option value="8" selected>8×8 (64 recuadros)</option>
-            <option value="10">10×10 (100 recuadros)</option>
-            <option value="12">12×12 (144 recuadros)</option>
-            <option value="15">15×15 (225 recuadros)</option>
+            <option value="manzanas" selected>⬛ Manzana a Manzana (~100m × 100m)</option>
+            <option value="32">32×32 (1.024 micro-cuadrantes ~300m)</option>
+            <option value="24">24×24 (576 micro-cuadrantes ~400m)</option>
+            <option value="16">16×16 (256 cuadrantes ~600m)</option>
+            <option value="12">12×12 (144 cuadrantes ~800m)</option>
+            <option value="8">8×8 (64 macro-cuadrantes ~1.2km)</option>
+            <option value="4">4×4 (16 macro-zonas)</option>
           </select>
 
           <!-- Botón On-Demand para calcular usuarios con BigQuery (con confirmación) -->

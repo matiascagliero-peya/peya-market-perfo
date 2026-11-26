@@ -383,7 +383,7 @@
     var activeInfoWindowVerticalKey = null;
     var currentDetailWarehouseId = null;
     var isGridVisible = false;
-    var gridDivisionCount = 8;
+    var gridDivisionCount = 'manzanas';
     var gridPolygons = [];
     var gridUsersDataCache = new Map();
     var currentStoreGridCells = [];
@@ -6694,14 +6694,28 @@
       const row = document.getElementById('grid-divisions-row');
       if (row) row.style.display = isGridVisible ? 'flex' : 'none';
 
+      // Si se activa modo manzanas urbanas y el mapa está lejos, acercar a nivel de calle
+      const isManzanas = (gridDivisionCount === 'manzanas');
+      if (isGridVisible && isManzanas && map && map.getZoom() < 15) {
+        map.setZoom(15);
+      }
+
       drawGridOnMap();
-      showToast(isGridVisible ? `Recuadros activados (${gridDivisionCount}×${gridDivisionCount})` : 'Recuadros desactivados', 'info');
+      showToast(isGridVisible ? (isManzanas ? 'Manzanas Urbanas activadas (~100m)' : `Recuadros activados (${gridDivisionCount}×${gridDivisionCount})`) : 'Recuadros desactivados', 'info');
     }
 
     function changeGridDivisions(count) {
-      gridDivisionCount = parseInt(count, 10) || 8;
+      if (count === 'manzanas') {
+        gridDivisionCount = 'manzanas';
+      } else {
+        gridDivisionCount = parseInt(count, 10) || 8;
+      }
       const label = document.getElementById('grid-divisions-label');
-      if (label) label.textContent = `${gridDivisionCount}×${gridDivisionCount} (${gridDivisionCount * gridDivisionCount})`;
+      if (label) {
+        label.textContent = (gridDivisionCount === 'manzanas')
+          ? 'Manzanas ~100m'
+          : `${gridDivisionCount}×${gridDivisionCount} (${gridDivisionCount * gridDivisionCount})`;
+      }
 
       // Asegurar que la cuadrícula esté visible al cambiar la división
       isGridVisible = true;
@@ -6710,16 +6724,16 @@
       const row = document.getElementById('grid-divisions-row');
       if (row) row.style.display = 'flex';
 
-      // Dibujar inmediatamente la cuadrícula con los datos históricos o de caché
+      // Si es modo manzanas urbanas y el zoom está lejos, acercar automáticamente a nivel de calle
+      if (gridDivisionCount === 'manzanas' && map && map.getZoom() < 15) {
+        map.setZoom(15);
+      }
+
+      // Dibujar inmediatamente la cuadrícula
       drawGridOnMap();
 
-      const currentMonth = getCurrentActiveMonth();
-      const currentWhId = selectedWarehouseIds.size > 0 ? Array.from(selectedWarehouseIds)[0] : '';
-      const cacheKey = `${currentWhId}__${currentMonth}__${gridDivisionCount}`;
-      const isCached = gridUsersDataCache.has(cacheKey);
-
-      if (isCached) {
-        showToast(`Cuadrícula ${gridDivisionCount}×${gridDivisionCount}: Datos históricos en pantalla (0 MB)`, 'success');
+      if (gridDivisionCount === 'manzanas') {
+        showToast('Modo Manzana a Manzana (~100m): Proyectado a nivel calle', 'info');
       } else {
         showToast(`Cuadrícula ${gridDivisionCount}×${gridDivisionCount}: Proyectada en el mapa`, 'info');
       }
@@ -6843,19 +6857,35 @@
 
         const whsObj = allWarehouses.find(w => String(w.warehouse_id).trim() === normId) || {};
 
-        // Respetar estrictamente la cantidad de divisiones seleccionada por el usuario (sin trabar el select)
-        const N = parseInt(gridDivisionCount, 10) || 8;
-        const cacheKey = `${normId}__${currentMonth}__${N}`;
+        const isManzanasMode = (gridDivisionCount === 'manzanas');
+        let stepLat, stepLng, totalRows, totalCols;
+
+        const centerLat = (minLat + maxLat) / 2;
+        const cosLat = Math.cos(centerLat * Math.PI / 180);
+
+        if (isManzanasMode) {
+          // Manzana urbana estándar en Latinoamérica: 100m × 100m
+          stepLat = 100 / 111139; // ~0.0008997°
+          stepLng = 100 / (111320 * Math.max(0.1, Math.abs(cosLat))); // ~0.00108°
+          totalRows = Math.ceil((maxLat - minLat) / stepLat);
+          totalCols = Math.ceil((maxLng - minLng) / stepLng);
+        } else {
+          const N = parseInt(gridDivisionCount, 10) || 8;
+          totalRows = N;
+          totalCols = N;
+          stepLat = (maxLat - minLat) / N;
+          stepLng = (maxLng - minLng) / N;
+        }
+
+        const cacheKey = `${normId}__${currentMonth}__${gridDivisionCount}`;
         let usersMap = gridUsersDataCache.get(cacheKey) || null;
 
-        // Si todavía no hay datos de BigQuery calculados para esta división exacta, generar la Línea Base Histórica Espacial instantánea
-        if (!usersMap) {
+        // Si todavía no hay datos de BigQuery calculados y no es modo manzanas masivo, generar línea base
+        if (!usersMap && !isManzanasMode) {
+          const N = parseInt(gridDivisionCount, 10) || 8;
           usersMap = generateBaselineGridFromStoreHistory(whsObj, flatCoords, N, minLat, maxLat, minLng, maxLng);
           gridUsersDataCache.set(cacheKey, usersMap);
         }
-
-        const stepLat = (maxLat - minLat) / N;
-        const stepLng = (maxLng - minLng) / N;
 
         // Escala de calor basada estrictamente en PLATFORM MAUS (densidad total de usuarios de la app en la celda)
         let maxPlatformUsers = 0;
@@ -6889,12 +6919,36 @@
           } catch(err) {}
         }
 
-        for (let r = 0; r < N; r++) {
-          for (let c = 0; c < N; c++) {
+        // Optimización de Viewport para Manzanas (100m):
+        // En modo manzanas urbanas, renderizar únicamente las manzanas dentro de la vista visible del mapa (+15% margen)
+        let startRow = 0, endRow = totalRows;
+        let startCol = 0, endCol = totalCols;
+
+        if (isManzanasMode && map) {
+          const vpBounds = map.getBounds();
+          if (vpBounds) {
+            const ne = vpBounds.getNorthEast();
+            const sw = vpBounds.getSouthWest();
+            const latPad = (ne.lat() - sw.lat()) * 0.15;
+            const lngPad = (ne.lng() - sw.lng()) * 0.15;
+            const vpMinLat = sw.lat() - latPad;
+            const vpMaxLat = ne.lat() + latPad;
+            const vpMinLng = sw.lng() - lngPad;
+            const vpMaxLng = ne.lng() + lngPad;
+
+            startRow = Math.max(0, Math.floor((vpMinLat - minLat) / stepLat));
+            endRow = Math.min(totalRows, Math.ceil((vpMaxLat - minLat) / stepLat));
+            startCol = Math.max(0, Math.floor((vpMinLng - minLng) / stepLng));
+            endCol = Math.min(totalCols, Math.ceil((vpMaxLng - minLng) / stepLng));
+          }
+        }
+
+        for (let r = startRow; r < endRow; r++) {
+          for (let c = startCol; c < endCol; c++) {
             const sLat = minLat + r * stepLat;
-            const nLat = minLat + (r + 1) * stepLat;
+            const nLat = Math.min(maxLat, minLat + (r + 1) * stepLat);
             const wLng = minLng + c * stepLng;
-            const eLng = minLng + (c + 1) * stepLng;
+            const eLng = Math.min(maxLng, minLng + (c + 1) * stepLng);
 
             const cellPath = [
               { lat: sLat, lng: wLng },
@@ -7008,138 +7062,128 @@
               clickable: true
             });
 
-              const approxWidthKm = (eLng - wLng) * 111.32 * Math.cos(sLat * Math.PI / 180);
-              const approxHeightKm = (nLat - sLat) * 110.57;
-              const approxAreaKm2 = (approxWidthKm * approxHeightKm).toFixed(2);
+            const approxWidthKm = isManzanasMode ? 0.10 : (eLng - wLng) * 111.32 * Math.cos(sLat * Math.PI / 180);
+            const approxHeightKm = isManzanasMode ? 0.10 : (nLat - sLat) * 110.57;
+            const approxAreaKm2 = isManzanasMode ? '0.01' : (approxWidthKm * approxHeightKm).toFixed(2);
 
-              cellPoly.addListener('mouseover', function(e) {
-                this.setOptions({
-                  fillOpacity: Math.min(0.75, baseFillOpacity + 0.25),
-                  strokeWeight: 2.4,
-                  strokeColor: '#ffffff'
-                });
+            cellPoly.addListener('mouseover', function(e) {
+              this.setOptions({
+                fillOpacity: Math.min(0.75, baseFillOpacity + 0.25),
+                strokeWeight: isManzanasMode ? 2.0 : 2.4,
+                strokeColor: '#ffffff'
+              });
 
-                let userMetricsHtml = '';
-                if (hasUserData) {
-                  const peyaU = cellUserData.peya_users || cellUserData.total_users || 0;
-                  const dmartU = cellUserData.dmart_users || 0;
-                  const ords = cellUserData.total_orders || 0;
-                  const pen = cellUserData.penetration_pct || (peyaU > 0 ? ((dmartU / peyaU) * 100).toFixed(1) : '0.0');
-                  const afv = cellUserData.afv || (ords > 0 ? (cellUserData.total_gmv ? (cellUserData.total_gmv / ords).toFixed(1) : '15.4') : '—');
-                  let dt = cellUserData.avg_dt;
-                  if (!dt || dt === '21.0' || dt === 21) {
-                    const storePos = getWarehousePosition(whsObj);
-                    if (storePos && centerPt) {
-                      const dLat = (centerPt.lat() - storePos.lat) * 111.32;
-                      const dLng = (centerPt.lng() - storePos.lng) * 111.32 * Math.cos(storePos.lat * Math.PI / 180);
-                      const distKm = Math.sqrt(dLat * dLat + dLng * dLng);
-                      dt = (12.2 + distKm * 3.3).toFixed(1);
-                    } else {
-                      dt = (15.5 + (ords % 7) * 1.8).toFixed(1);
-                    }
+              let userMetricsHtml = '';
+              if (hasUserData) {
+                const peyaU = cellUserData.peya_users || cellUserData.total_users || 0;
+                const dmartU = cellUserData.dmart_users || 0;
+                const ords = cellUserData.total_orders || 0;
+                const pen = cellUserData.penetration_pct || (peyaU > 0 ? ((dmartU / peyaU) * 100).toFixed(1) : '0.0');
+                const afv = cellUserData.afv || (ords > 0 ? (cellUserData.total_gmv ? (cellUserData.total_gmv / ords).toFixed(1) : '15.4') : '—');
+                let dt = cellUserData.avg_dt;
+                if (!dt || dt === '21.0' || dt === 21) {
+                  const storePos = getWarehousePosition(whsObj);
+                  if (storePos && centerPt) {
+                    const dLat = (centerPt.lat() - storePos.lat) * 111.32;
+                    const dLng = (centerPt.lng() - storePos.lng) * 111.32 * Math.cos(storePos.lat * Math.PI / 180);
+                    const distKm = Math.sqrt(dLat * dLat + dLng * dLng);
+                    dt = (12.2 + distKm * 3.3).toFixed(1);
                   } else {
-                    dt = Number(dt).toFixed(1);
+                    dt = (15.5 + (ords % 7) * 1.8).toFixed(1);
                   }
-                  const seamless = cellUserData.seamless_pct || (ords > 0 ? '82.5' : '—');
-                  const plusPct = peyaU > 0 ? ((plusUsers / peyaU) * 100).toFixed(1) : 0;
-
-                  userMetricsHtml = `
-                    <div style="margin-top:6px; padding-top:6px; border-top:1px solid #f1f5f9; display:grid; grid-template-columns:1fr 1fr; gap:5px 10px;">
-                      <div>
-                        <div style="font-size:8px; color:#64748b; font-weight:700; text-transform:uppercase;">Platform MAUs</div>
-                        <div style="font-weight:800; font-size:12.5px; color:#0f172a; font-family:'JetBrains Mono',monospace;">${peyaU.toLocaleString('es-AR')}</div>
-                      </div>
-                      <div>
-                        <div style="font-size:8px; color:#64748b; font-weight:700; text-transform:uppercase;">Dmart MAUs</div>
-                        <div style="font-weight:800; font-size:12.5px; color:#ea044e; font-family:'JetBrains Mono',monospace;">${dmartU.toLocaleString('es-AR')}</div>
-                      </div>
-                      <div>
-                        <div style="font-size:8px; color:#64748b; font-weight:700; text-transform:uppercase;">Penetración %</div>
-                        <div style="font-weight:800; font-size:11.5px; color:#10b981; font-family:'JetBrains Mono',monospace;">${pen}%</div>
-                      </div>
-                      <div>
-                        <div style="font-size:8px; color:#64748b; font-weight:700; text-transform:uppercase;">Pedidos / Mes</div>
-                        <div style="font-weight:800; font-size:11.5px; color:#6366f1; font-family:'JetBrains Mono',monospace;">${ords.toLocaleString('es-AR')}</div>
-                      </div>
-                      <div>
-                        <div style="font-size:8px; color:#64748b; font-weight:700; text-transform:uppercase;">AFV ($)</div>
-                        <div style="font-weight:800; font-size:11.5px; color:#d97706; font-family:'JetBrains Mono',monospace;">$ ${afv}</div>
-                      </div>
-                      <div>
-                        <div style="font-size:8px; color:#64748b; font-weight:700; text-transform:uppercase;">Avg DT (min)</div>
-                        <div style="font-weight:800; font-size:11.5px; color:#0284c7; font-family:'JetBrains Mono',monospace;">${dt} min</div>
-                      </div>
-                      <div>
-                        <div style="font-size:8px; color:#7c3aed; font-weight:700; text-transform:uppercase;">Rider CPO Dmarts</div>
-                        <div style="font-weight:800; font-size:11.5px; color:#7c3aed; font-family:'JetBrains Mono',monospace;">$ ${(cellUserData.rider_cpo_dmarts || (1.20 + (parseFloat(dt) * 0.058))).toFixed(2)}</div>
-                      </div>
-                      <div>
-                        <div style="font-size:8px; color:#6366f1; font-weight:700; text-transform:uppercase;">% CPO / AFV</div>
-                        <div style="font-weight:800; font-size:11.5px; color:#6366f1; font-family:'JetBrains Mono',monospace;">${cellUserData.cpo_afv_pct || (parseFloat(afv) > 0 ? (((cellUserData.rider_cpo_dmarts || (1.20 + (parseFloat(dt) * 0.058))) / parseFloat(afv)) * 100).toFixed(1) : '14.5')}%</div>
-                      </div>
-                      <div>
-                        <div style="font-size:8px; color:#ea044e; font-weight:700; text-transform:uppercase;">Frequency</div>
-                        <div style="font-weight:800; font-size:11.5px; color:#ea044e; font-family:'JetBrains Mono',monospace;">${dmartU > 0 ? (ords / dmartU).toFixed(1) : (cellUserData.frequency || '1.8')}x</div>
-                      </div>
-                    </div>
-                    <div style="display:flex; justify-content:space-between; font-size:8.5px; color:#64748b; margin-top:5px; border-top:1px dashed #e2e8f0; padding-top:3px;">
-                      <span>Seamless: <b style="color:${seamless !== '—' && parseFloat(seamless) < 80 ? '#ef4444' : '#10b981'};">${seamless}%</b></span>
-                      <span>Freq: <b style="color:#ea044e;">${dmartU > 0 ? (ords / dmartU).toFixed(1) : (cellUserData.frequency || '1.8')}x</b></span>
-                      <span>Plus: <b>${plusUsers.toLocaleString('es-AR')}</b> (${plusPct}%)</span>
-                    </div>
-                  `;
                 } else {
-                  userMetricsHtml = `
-                    <div style="font-size:9.5px; color:#64748b; margin-top:3px; font-style:italic;">
-                      Clic en 'Calcular Usuarios (BQ)' para ver usuarios, penetración y órdenes
+                  dt = Number(dt).toFixed(1);
+                }
+                const seamless = cellUserData.seamless_pct || (ords > 0 ? '82.5' : '—');
+                const plusPct = peyaU > 0 ? ((plusUsers / peyaU) * 100).toFixed(1) : 0;
+
+                userMetricsHtml = `
+                  <div style="margin-top:6px; padding-top:6px; border-top:1px solid #f1f5f9; display:grid; grid-template-columns:1fr 1fr; gap:5px 10px;">
+                    <div>
+                      <div style="font-size:8px; color:#64748b; font-weight:700; text-transform:uppercase;">Platform MAUs</div>
+                      <div style="font-weight:800; font-size:12.5px; color:#0f172a; font-family:'JetBrains Mono',monospace;">${peyaU.toLocaleString('es-AR')}</div>
                     </div>
-                  `;
-                }
-
-                const isEst = cellUserData && Boolean(cellUserData.isHistoricalEstimate);
-                const statusTag = isEst 
-                  ? `<span style="font-size:7.5px; font-weight:800; color:#d97706; background:rgba(217,119,6,0.12); border:1px solid rgba(217,119,6,0.3); border-radius:3px; padding:1px 4px; text-transform:uppercase;">Histórico Estimado</span>`
-                  : (hasUserData ? `<span style="font-size:7.5px; font-weight:800; color:#10b981; background:rgba(16,185,129,0.12); border:1px solid rgba(16,185,129,0.3); border-radius:3px; padding:1px 4px; text-transform:uppercase;">Censo BQ Exacto</span>` : '');
-
-                const currentTheme = getAppCurrentTheme();
-                const isDark = (currentTheme === 'dark');
-                const cardBg = isDark ? '#0f172a' : '#ffffff';
-                const cardTitleCol = isDark ? '#f8fafc' : '#0f172a';
-                const cardMutedCol = isDark ? '#94a3b8' : '#64748b';
-                const cardBorderCol = isDark ? 'rgba(255,255,255,0.18)' : strokeCol;
-
-                if (hoverInfoWindow) {
-                  hoverInfoWindow.setContent(`
-                    <div style="font-family:'Outfit',sans-serif; padding:7px 10px; min-width:200px; font-size:11px; background:${cardBg}; border-radius:6px; border:1px solid ${cardBorderCol}; box-shadow:0 6px 20px rgba(0,0,0,0.35);">
-                      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:2px;">
-                        <span style="color:${strokeCol}; font-size:9.5px; text-transform:uppercase; font-weight:800;">Cuadrante ${cellCode}</span>
-                        ${statusTag}
-                      </div>
-                      <div style="font-weight:800; font-size:12px; color:${cardTitleCol};">${whsObj.warehouse_name || 'Almacén'}</div>
-                      <div style="font-size:9.5px; color:${cardMutedCol}; font-family:'JetBrains Mono',monospace;">Área: ~${approxAreaKm2} km² (${approxWidthKm.toFixed(2)} × ${approxHeightKm.toFixed(2)} km)</div>
-                      ${userMetricsHtml}
+                    <div>
+                      <div style="font-size:8px; color:#64748b; font-weight:700; text-transform:uppercase;">Dmart MAUs</div>
+                      <div style="font-weight:800; font-size:12.5px; color:#ea044e; font-family:'JetBrains Mono',monospace;">${dmartU.toLocaleString('es-AR')}</div>
                     </div>
-                  `);
-                  hoverInfoWindow.setPosition(e.latLng || centerPt);
-                  hoverInfoWindow.open(map);
-                }
-              });
+                    <div>
+                      <div style="font-size:8px; color:#64748b; font-weight:700; text-transform:uppercase;">Penetración %</div>
+                      <div style="font-weight:800; font-size:11.5px; color:#10b981; font-family:'JetBrains Mono',monospace;">${pen}%</div>
+                    </div>
+                    <div>
+                      <div style="font-size:8px; color:#64748b; font-weight:700; text-transform:uppercase;">Pedidos / Mes</div>
+                      <div style="font-weight:800; font-size:11.5px; color:#6366f1; font-family:'JetBrains Mono',monospace;">${ords.toLocaleString('es-AR')}</div>
+                    </div>
+                    <div>
+                      <div style="font-size:8px; color:#64748b; font-weight:700; text-transform:uppercase;">AFV ($)</div>
+                      <div style="font-weight:800; font-size:11.5px; color:#d97706; font-family:'JetBrains Mono',monospace;">$ ${afv}</div>
+                    </div>
+                    <div>
+                      <div style="font-size:8px; color:#64748b; font-weight:700; text-transform:uppercase;">Avg DT (min)</div>
+                      <div style="font-weight:800; font-size:11.5px; color:#0284c7; font-family:'JetBrains Mono',monospace;">${dt} min</div>
+                    </div>
+                  </div>
+                `;
+              } else {
+                userMetricsHtml = `
+                  <div style="font-size:9.5px; color:#64748b; margin-top:3px; font-style:italic;">
+                    ${isManzanasMode ? 'Manzana urbana ~100m. Clic en \'Calcular Usuarios (BQ)\' para censar.' : 'Clic en \'Calcular Usuarios (BQ)\' para ver usuarios, penetración y órdenes.'}
+                  </div>
+                `;
+              }
 
-              cellPoly.addListener('click', function(e) {
-                if (hoverInfoWindow) {
-                  hoverInfoWindow.setPosition(e.latLng || centerPt);
-                  hoverInfoWindow.open(map);
-                }
-              });
+              const isEst = cellUserData && Boolean(cellUserData.isHistoricalEstimate);
+              const statusTag = isEst 
+                ? `<span style="font-size:7.5px; font-weight:800; color:#d97706; background:rgba(217,119,6,0.12); border:1px solid rgba(217,119,6,0.3); border-radius:3px; padding:1px 4px; text-transform:uppercase;">Histórico Estimado</span>`
+                : (hasUserData ? `<span style="font-size:7.5px; font-weight:800; color:#10b981; background:rgba(16,185,129,0.12); border:1px solid rgba(16,185,129,0.3); border-radius:3px; padding:1px 4px; text-transform:uppercase;">Censo BQ Exacto</span>` : '');
 
-              cellPoly.addListener('mouseout', function() {
-                this.setOptions({
-                  fillOpacity: baseFillOpacity,
-                  strokeWeight: hasUserData ? 1.4 : 1.2,
-                  strokeColor: strokeCol
-                });
-                if (hoverInfoWindow) hoverInfoWindow.close();
+              const currentTheme = getAppCurrentTheme();
+              const isDark = (currentTheme === 'dark');
+              const cardBg = isDark ? '#0f172a' : '#ffffff';
+              const cardTitleCol = isDark ? '#f8fafc' : '#0f172a';
+              const cardMutedCol = isDark ? '#94a3b8' : '#64748b';
+              const cardBorderCol = isDark ? 'rgba(255,255,255,0.18)' : strokeCol;
+
+              const cellTitle = isManzanasMode 
+                ? `Manzana Urbana ${cellCode} (~100m)`
+                : `Cuadrante ${cellCode}`;
+              const areaLabel = isManzanasMode
+                ? `1 Manzana Urbana (~100m × 100m • 0.01 km²)`
+                : `Área: ~${approxAreaKm2} km² (${approxWidthKm.toFixed(2)} × ${approxHeightKm.toFixed(2)} km)`;
+
+              if (hoverInfoWindow) {
+                hoverInfoWindow.setContent(`
+                  <div style="font-family:'Outfit',sans-serif; padding:7px 10px; min-width:200px; font-size:11px; background:${cardBg}; border-radius:6px; border:1px solid ${cardBorderCol}; box-shadow:0 6px 20px rgba(0,0,0,0.35);">
+                    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:2px;">
+                      <span style="color:${strokeCol}; font-size:9.5px; text-transform:uppercase; font-weight:800;">${cellTitle}</span>
+                      ${statusTag}
+                    </div>
+                    <div style="font-weight:800; font-size:12px; color:${cardTitleCol};">${whsObj.warehouse_name || 'Almacén'}</div>
+                    <div style="font-size:9.5px; color:${cardMutedCol}; font-family:'JetBrains Mono',monospace;">${areaLabel}</div>
+                    ${userMetricsHtml}
+                  </div>
+                `);
+                hoverInfoWindow.setPosition(e.latLng || centerPt);
+                hoverInfoWindow.open(map);
+              }
+            });
+
+            cellPoly.addListener('click', function(e) {
+              if (hoverInfoWindow) {
+                hoverInfoWindow.setPosition(e.latLng || centerPt);
+                hoverInfoWindow.open(map);
+              }
+            });
+
+            cellPoly.addListener('mouseout', function() {
+              this.setOptions({
+                fillOpacity: baseFillOpacity,
+                strokeWeight: isManzanasMode ? 0.8 : (hasUserData ? 1.4 : 1.2),
+                strokeColor: strokeCol
               });
+              if (hoverInfoWindow) hoverInfoWindow.close();
+            });
 
               gridPolygons.push(cellPoly);
           }
