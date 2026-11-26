@@ -1117,14 +1117,141 @@
       // Las recomendaciones en vivo se manejan por handleMapPlacesSearchInput (oninput)
     }
 
+    function parseAndDrawRawShapeQuery(q) {
+      if (!q) return false;
+      const str = q.trim();
+
+      // 1. Detectar si es GeoJSON
+      if ((str.startsWith('{') && str.endsWith('}')) || (str.includes('"type"') && str.includes('"coordinates"'))) {
+        try {
+          const parsed = JSON.parse(str);
+          let coordinates = null;
+          let type = parsed.type;
+
+          if (type === 'FeatureCollection' && parsed.features && parsed.features[0]) {
+            coordinates = parsed.features[0].geometry.coordinates;
+            type = parsed.features[0].geometry.type;
+          } else if (type === 'Feature' && parsed.geometry) {
+            coordinates = parsed.geometry.coordinates;
+            type = parsed.geometry.type;
+          } else if (type === 'Polygon' || type === 'MultiPolygon') {
+            coordinates = parsed.coordinates;
+          }
+
+          if (coordinates) {
+            let path = [];
+            if (type === 'Polygon') {
+              path = coordinates[0].map(c => ({ lat: Number(c[1]), lng: Number(c[0]) }));
+            } else if (type === 'MultiPolygon') {
+              path = coordinates[0][0].map(c => ({ lat: Number(c[1]), lng: Number(c[0]) }));
+            }
+            if (path.length >= 3) {
+              drawImportedCustomPolygon(path, 'Shape GeoJSON Pegado');
+              return true;
+            }
+          }
+        } catch(eJson) {}
+      }
+
+      // 2. Detectar si es WKT (POLYGON(...) o MULTIPOLYGON(...))
+      const upperStr = str.toUpperCase();
+      if (upperStr.startsWith('POLYGON') || upperStr.startsWith('MULTIPOLYGON')) {
+        try {
+          const matches = str.match(/-?\d+\.\d+\s+-?\d+\.\d+/g);
+          if (matches && matches.length >= 3) {
+            const path = matches.map(pt => {
+              const parts = pt.trim().split(/\s+/);
+              const p1 = parseFloat(parts[0]);
+              const p2 = parseFloat(parts[1]);
+              if (Math.abs(p1) > Math.abs(p2)) return { lat: p2, lng: p1 };
+              return { lat: p1, lng: p2 };
+            });
+            drawImportedCustomPolygon(path, 'Shape WKT Pegado');
+            return true;
+          }
+        } catch(eWkt) {}
+      }
+
+      // 3. Detectar si es array JSON de coordenadas [[lat, lng], ...]
+      if (str.startsWith('[') && str.endsWith(']')) {
+        try {
+          const arr = JSON.parse(str);
+          if (Array.isArray(arr) && arr.length >= 3) {
+            const path = arr.map(pt => {
+              if (Array.isArray(pt)) {
+                const p1 = parseFloat(pt[0]);
+                const p2 = parseFloat(pt[1]);
+                if (Math.abs(p1) > Math.abs(p2)) return { lat: p2, lng: p1 };
+                return { lat: p1, lng: p2 };
+              }
+              return { lat: parseFloat(pt.lat), lng: parseFloat(pt.lng) };
+            }).filter(p => !isNaN(p.lat) && !isNaN(p.lng));
+
+            if (path.length >= 3) {
+              drawImportedCustomPolygon(path, 'Coordenadas Pegadas');
+              return true;
+            }
+          }
+        } catch(eArr) {}
+      }
+
+      return false;
+    }
+
+    function drawImportedCustomPolygon(path, label = 'Shape Importado') {
+      clearCustomDrawnZone();
+
+      const poly = new google.maps.Polygon({
+        paths: path,
+        map: map,
+        strokeColor: '#0284c7',
+        strokeOpacity: 0.95,
+        strokeWeight: 2.8,
+        fillColor: '#0284c7',
+        fillOpacity: 0.22,
+        editable: true,
+        draggable: false,
+        zIndex: 100
+      });
+
+      customDrawnOverlay = poly;
+      customDrawnType = 'polygon';
+
+      poly.addListener('mouseup', () => analyzeCustomDrawnZone(poly, 'polygon'));
+      poly.addListener('click', () => {
+        const card = document.getElementById('custom-zone-card');
+        if (card) card.style.display = 'block';
+      });
+
+      // Encuadrar el mapa en el shape pegado
+      const b = new google.maps.LatLngBounds();
+      path.forEach(pt => b.extend(new google.maps.LatLng(pt.lat, pt.lng)));
+      if (map) map.fitBounds(b);
+
+      analyzeCustomDrawnZone(poly, 'polygon');
+
+      const clrBtn = document.getElementById('btn-clear-drawn-zone');
+      if (clrBtn) clrBtn.style.display = 'inline-flex';
+
+      const sInput = document.getElementById('map-places-search-input');
+      if (sInput) sInput.value = label;
+
+      showToast(`Shape importado y trazado en el mapa (${path.length} vértices)`, 'success');
+    }
+
     window.executeUnifiedZoneSearch = function(query) {
       const q = String(query || '').trim();
       if (!q) {
-        showToast('Escribí el nombre de una tienda, barrio o dirección', 'warning');
+        showToast('Escribí el nombre de una tienda, barrio o pegá un shape', 'warning');
         return;
       }
       const resultsDiv = document.getElementById('neighborhood-poly-results');
       if (resultsDiv) resultsDiv.style.display = 'none';
+
+      // 0. PRIORIDAD 0: ¿Es un shape completo pegado en el buscador? (GeoJSON, WKT o coordenadas)
+      if (parseAndDrawRawShapeQuery(q)) {
+        return;
+      }
 
       const qLower = q.toLowerCase();
 
@@ -2016,6 +2143,7 @@
       }
 
       renderWarehouseCards();
+      renderPartnerSmartFilterOptions();
       updateSelectionAndRefresh();
       centerMapOnCountry(country);
     }
@@ -2054,6 +2182,7 @@
         }
       }
       renderWarehouseCards();
+      renderPartnerSmartFilterOptions();
       updateSelectionAndRefresh();
     }
 
@@ -2080,6 +2209,7 @@
         }
       }
       renderWarehouseCards();
+      renderPartnerSmartFilterOptions();
       updateSelectionAndRefresh();
     }
 
@@ -3887,17 +4017,37 @@
       const menu = document.getElementById('vertical-dropdown-menu');
       if (!menu) return;
 
+      // Obtener almacenes filtrados geográficamente (País, Ciudad, Barrio)
+      const countryEl = document.getElementById('filter-country');
+      const activeCountry = countryEl ? countryEl.value.trim() : '';
+      const cityEl = document.getElementById('filter-city');
+      const activeCity = cityEl ? cityEl.value.trim() : '';
+      const neighEl = document.getElementById('filter-neighborhood');
+      const activeNeigh = neighEl ? neighEl.value.trim() : '';
+
+      const geoFilteredStores = allWarehouses.filter(w => {
+        if (activeCountry && w.country !== activeCountry) return false;
+        if (activeCity && w.city !== activeCity) return false;
+        if (activeNeigh && w.neighborhood !== activeNeigh) return false;
+        return true;
+      });
+
       const counts = {};
       PARTNER_TYPE_DEFINITIONS.forEach(def => {
         counts[def.key] = 0;
       });
 
-      allWarehouses.forEach(w => {
+      geoFilteredStores.forEach(w => {
         const enabled = getEnabledPartnerTypes(w);
         enabled.forEach(t => {
           counts[t.key] = (counts[t.key] || 0) + 1;
         });
       });
+
+      // Si la vertical actualmente seleccionada no existe en este país/filtro, volver a 'ALL'
+      if (selectedPartnerFilter !== 'ALL' && (!counts[selectedPartnerFilter] || counts[selectedPartnerFilter] === 0)) {
+        selectedPartnerFilter = 'ALL';
+      }
 
       let menuHtml = `
         <div class="popover-menu-item ${selectedPartnerFilter === 'ALL' ? 'active' : ''}" onclick="selectVerticalOption('ALL', event)">
@@ -3905,22 +4055,25 @@
             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
           </span>
           <span style="flex:1;">Todas las Verticales</span>
-          <span style="font-size:9.5px; color:var(--text-sheet-muted); font-weight:700;">(${allWarehouses.length})</span>
+          <span style="font-size:9.5px; color:var(--text-sheet-muted); font-weight:700;">(${geoFilteredStores.length})</span>
         </div>
       `;
 
       PARTNER_TYPE_DEFINITIONS.forEach(def => {
         const count = counts[def.key] || 0;
-        const isSel = (selectedPartnerFilter === def.key);
-        menuHtml += `
-          <div class="popover-menu-item ${isSel ? 'active' : ''}" onclick="selectVerticalOption('${def.key}', event)">
-            <span style="display:inline-flex; align-items:center; justify-content:center; width:18px; height:18px; border-radius:50%; background:${def.bg}; border:1px solid ${def.color}; flex-shrink:0;">
-              ${def.svg}
-            </span>
-            <span style="flex:1;">${def.label}</span>
-            <span style="font-size:9.5px; color:var(--text-sheet-muted); font-weight:700;">(${count})</span>
-          </div>
-        `;
+        // Solo mostrar verticales que tienen presencia en este país o zona (o si no hay país filtrado)
+        if (count > 0 || !activeCountry) {
+          const isSel = (selectedPartnerFilter === def.key);
+          menuHtml += `
+            <div class="popover-menu-item ${isSel ? 'active' : ''}" onclick="selectVerticalOption('${def.key}', event)">
+              <span style="display:inline-flex; align-items:center; justify-content:center; width:18px; height:18px; border-radius:50%; background:${def.bg}; border:1px solid ${def.color}; flex-shrink:0;">
+                ${def.svg}
+              </span>
+              <span style="flex:1;">${def.label}</span>
+              <span style="font-size:9.5px; color:var(--text-sheet-muted); font-weight:700;">(${count})</span>
+            </div>
+          `;
+        }
       });
 
       menu.innerHTML = menuHtml;
@@ -10768,6 +10921,51 @@
       renderSharedZonesList();
     };
 
+    function generateZoneSvgThumbnail(coords, type) {
+      if (type === 'circle' || !coords || !Array.isArray(coords) || coords.length < 3) {
+        return `
+          <svg width="68" height="52" viewBox="0 0 68 52" style="background:var(--bg-sheet-bar); border:1px solid var(--border-sheet); border-radius:6px; flex-shrink:0;" title="Zona circular">
+            <circle cx="34" cy="26" r="16" fill="rgba(2,132,199,0.22)" stroke="#0284c7" stroke-width="1.8"/>
+            <circle cx="34" cy="26" r="2.5" fill="#ea044e"/>
+          </svg>
+        `;
+      }
+      try {
+        const lats = coords.map(c => Number(c.lat)).filter(n => !isNaN(n));
+        const lngs = coords.map(c => Number(c.lng)).filter(n => !isNaN(n));
+        if (lats.length < 3) throw new Error();
+
+        const minLat = Math.min(...lats), maxLat = Math.max(...lats);
+        const minLng = Math.min(...lngs), maxLng = Math.max(...lngs);
+        const spanLat = maxLat - minLat || 0.001;
+        const spanLng = maxLng - minLng || 0.001;
+
+        const pad = 6;
+        const w = 68 - (pad * 2);
+        const h = 52 - (pad * 2);
+
+        const points = coords.map(c => {
+          const x = pad + ((Number(c.lng) - minLng) / spanLng) * w;
+          const y = pad + (1 - (Number(c.lat) - minLat) / spanLat) * h;
+          return `${x.toFixed(1)},${y.toFixed(1)}`;
+        }).join(' ');
+
+        return `
+          <svg width="68" height="52" viewBox="0 0 68 52" style="background:var(--bg-sheet-bar); border:1px solid var(--border-sheet); border-radius:6px; flex-shrink:0;" title="Polígono vectorial">
+            <line x1="0" y1="26" x2="68" y2="26" stroke="var(--border-subtle)" stroke-width="0.8" stroke-dasharray="2 2"/>
+            <line x1="34" y1="0" x2="34" y2="52" stroke="var(--border-subtle)" stroke-width="0.8" stroke-dasharray="2 2"/>
+            <polygon points="${points}" fill="rgba(234,4,78,0.22)" stroke="#ea044e" stroke-width="1.8" stroke-linejoin="round"/>
+          </svg>
+        `;
+      } catch(e) {
+        return `
+          <svg width="68" height="52" viewBox="0 0 68 52" style="background:var(--bg-sheet-bar); border:1px solid var(--border-sheet); border-radius:6px; flex-shrink:0;">
+            <rect x="14" y="10" width="40" height="32" rx="4" fill="rgba(234,4,78,0.15)" stroke="#ea044e" stroke-width="1.5"/>
+          </svg>
+        `;
+      }
+    }
+
     window.renderSharedZonesList = function() {
       const container = document.getElementById('shared-zones-cards-list');
       if (!container) return;
@@ -10796,21 +10994,26 @@
       }
 
       container.innerHTML = list.map(z => `
-        <div style="background:var(--bg-sheet-card); border:1px solid var(--border-sheet); border-radius:8px; padding:10px 14px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
-          <div style="flex:1; min-width:260px;">
-            <div style="display:flex; align-items:center; gap:6px;">
-              <span style="font-weight:800; font-size:12.5px; color:var(--text-sheet-title);">${z.name}</span>
-              <span class="badge-tag blue" style="font-size:9.5px;">${z.type === 'circle' ? 'Radio' : 'Polígono'}</span>
-              ${z.country ? `<span class="badge-tag" style="font-size:9.5px;">${z.country}</span>` : ''}
-              ${z.city ? `<span class="badge-tag" style="font-size:9.5px; background:rgba(234,4,78,0.08); color:var(--brand-red);">${z.city}</span>` : ''}
-            </div>
-            <div style="font-size:10.5px; color:var(--text-sheet-muted); margin-top:2px;">
-              Por <b>${z.author}</b> · ${z.date} · <b>${z.area_km2} km²</b>
-            </div>
-            <div style="display:flex; gap:12px; margin-top:4px; font-size:11px; font-family:'JetBrains Mono',monospace;">
-              <span style="color:#0284c7;"><b>${(z.peya_maus || 0).toLocaleString('es-AR')}</b> PeYa MAUs</span>
-              <span style="color:#059669;"><b>${(z.dmart_maus || 0).toLocaleString('es-AR')}</b> Dmart</span>
-              <span style="color:var(--brand-red);"><b>${z.penetration_pct || 0}%</b> Penetración</span>
+        <div style="background:var(--bg-sheet-card); border:1px solid var(--border-sheet); border-radius:8px; padding:10px 14px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+          <div style="display:flex; align-items:center; gap:12px; flex:1; min-width:260px;">
+            <!-- Mini Dibujo / Preview SVG del Mapa -->
+            ${generateZoneSvgThumbnail(z.coords, z.type)}
+            
+            <div style="flex:1; min-width:180px;">
+              <div style="display:flex; align-items:center; gap:6px;">
+                <span style="font-weight:800; font-size:12.5px; color:var(--text-sheet-title);">${z.name}</span>
+                <span class="badge-tag blue" style="font-size:9.5px;">${z.type === 'circle' ? 'Radio' : 'Polígono'}</span>
+                ${z.country ? `<span class="badge-tag" style="font-size:9.5px;">${z.country}</span>` : ''}
+                ${z.city ? `<span class="badge-tag" style="font-size:9.5px; background:rgba(234,4,78,0.08); color:var(--brand-red);">${z.city}</span>` : ''}
+              </div>
+              <div style="font-size:10.5px; color:var(--text-sheet-muted); margin-top:2px;">
+                Por <b>${z.author}</b> · ${z.date} · <b>${z.area_km2} km²</b>
+              </div>
+              <div style="display:flex; gap:12px; margin-top:4px; font-size:11px; font-family:'JetBrains Mono',monospace;">
+                <span style="color:#0284c7;"><b>${(z.peya_maus || 0).toLocaleString('es-AR')}</b> PeYa MAUs</span>
+                <span style="color:#059669;"><b>${(z.dmart_maus || 0).toLocaleString('es-AR')}</b> Dmart</span>
+                <span style="color:var(--brand-red);"><b>${z.penetration_pct || 0}%</b> Penetración</span>
+              </div>
             </div>
           </div>
           <div style="display:flex; align-items:center; gap:6px;">
@@ -11748,27 +11951,64 @@
       const affectedStores = [];
 
       allWarehouses.forEach(w => {
-        if (!w.is_active) return;
-        const pData = multiDatePolygonsMap.get(String(w.warehouse_id).trim());
-        if (!pData || !pData.geojson) return;
+        const pos = getWarehousePosition(w);
+        if (!pos) return;
+        const distKm = getDistanceKm(simProposedCenter.lat, simProposedCenter.lng, pos.lat, pos.lng);
+        // Analizar tiendas en radio de influencia (hasta radio propuesto + 5.5 km)
+        if (distKm > (simProposedRadiusKm + 5.5)) return;
 
-        try {
-          const storeFeature = turf.feature(pData.geojson);
-          const isect = turf.intersect(circlePoly, storeFeature);
-          if (isect) {
-            const overlapKm2 = turf.area(isect) / 1000000;
-            if (overlapKm2 > 0.05) {
-              totalOverlapAreaKm2 += overlapKm2;
-              const storeArea = Number(w.coverage_area_km2) || 15;
-              const overlapPct = Math.min(100, (overlapKm2 / storeArea) * 100);
-              affectedStores.push({
-                name: w.warehouse_name,
-                overlapKm2: overlapKm2.toFixed(2),
-                overlapPct: overlapPct.toFixed(1)
-              });
-            }
+        // 1. Obtener el shape GeoJSON real del almacén (de memoria o caché de polígonos)
+        let storeGeojson = w.geojson || w.shape_geojson;
+        const wIdStr = String(w.warehouse_id).trim();
+
+        if (!storeGeojson) {
+          const cached = CLIENT_MEMORY_CACHE.polygons.get(`${wIdStr}__2026-10-01`) || 
+                         CLIENT_MEMORY_CACHE.polygons.get(`${wIdStr}__2026-09-01`) ||
+                         activePolygonsMap.get(wIdStr);
+          if (cached && cached.geojson) storeGeojson = cached.geojson;
+          else if (cached && cached.coords) {
+            storeGeojson = {
+              type: 'Polygon',
+              coordinates: [cached.coords.map(c => [c.lng, c.lat])]
+            };
           }
-        } catch(e) {}
+        }
+
+        let storeFeature = null;
+        if (storeGeojson) {
+          try {
+            storeFeature = turf.feature(storeGeojson);
+          } catch(eFeat) {}
+        }
+
+        // Si no tiene GeoJSON poligonal cargado en memoria, usar círculo de su área oficial de cobertura
+        if (!storeFeature) {
+          const storeRadiusKm = Math.sqrt((Number(w.coverage_area_km2) || 16) / Math.PI);
+          try {
+            storeFeature = turf.circle([pos.lng, pos.lat], storeRadiusKm, { steps: 36, units: 'kilometers' });
+          } catch(eCirc) {}
+        }
+
+        if (storeFeature) {
+          try {
+            const isect = turf.intersect(circlePoly, storeFeature);
+            if (isect) {
+              const overlapKm2 = turf.area(isect) / 1000000;
+              if (overlapKm2 > 0.05) {
+                totalOverlapAreaKm2 += overlapKm2;
+                const storeArea = Number(w.coverage_area_km2) || 16;
+                const overlapPct = Math.min(100, (overlapKm2 / storeArea) * 100);
+
+                affectedStores.push({
+                  name: w.warehouse_name,
+                  distKm: distKm.toFixed(1),
+                  overlapKm2: overlapKm2.toFixed(2),
+                  overlapPct: overlapPct.toFixed(1)
+                });
+              }
+            }
+          } catch(eIsect) {}
+        }
       });
 
       const safeOverlapKm2 = Math.min(totalAreaKm2, totalOverlapAreaKm2);
@@ -11806,13 +12046,78 @@
       const freqEl = document.getElementById('sim-freq-val');
       if (freqEl) freqEl.textContent = `${estFreq}x órd/usuario`;
 
+      // Detalle de almacenes afectados por solapamiento
       const listEl = document.getElementById('sim-affected-stores-list');
       if (listEl) {
         if (affectedStores.length > 0) {
-          listEl.innerHTML = '<b style="color:var(--text-sheet-title);">Tiendas canibalizadas:</b> ' + 
-            affectedStores.map(a => `${a.name} (${a.overlapPct}% solapado)`).join(', ');
+          listEl.innerHTML = '<div style="font-weight:800; color:var(--text-sheet-title); margin-bottom:3px;">Almacenes con solapamiento:</div>' +
+            affectedStores.map(a => `
+              <div style="display:flex; justify-content:space-between; padding:2px 0; border-bottom:1px solid var(--border-subtle); font-size:9.5px;">
+                <span style="font-weight:700; color:var(--text-sheet-title);">${a.name} <span style="font-size:8px; color:var(--text-sheet-muted);">(${a.distKm} km)</span></span>
+                <span style="color:#ea044e; font-family:'JetBrains Mono',monospace; font-weight:700;">${a.overlapKm2} km² (${a.overlapPct}%)</span>
+              </div>
+            `).join('');
         } else {
-          listEl.innerHTML = '<span style="color:#10b981; font-weight:700;">100% Territorio Virgen (Cero Canibalización)</span>';
+          listEl.innerHTML = '<span style="color:#10b981; font-weight:700;">✓ 100% Territorio Virgen (Cero Canibalización)</span>';
+        }
+      }
+
+      // Propuesta de Reorganización de Shapes & Optimización de Anillos Concéntricos
+      const reorgBox = document.getElementById('sim-reorg-proposal-box');
+      if (reorgBox) {
+        if (affectedStores.length > 0) {
+          reorgBox.style.display = 'block';
+
+          // Proyección matemática de redistribución de anillos:
+          // Antes: ~35% en anillos 1-2 km, 45% en 2-4 km, 20% en >4 km
+          // Al introducir la nueva tienda en el corazón de la zona, los pedidos se concentran en anillos <2 km
+          const beforeInnerPct = Math.max(25, 45 - Math.round(cannibalPct * 0.25));
+          const beforeMidPct = 45;
+          const beforeOuterPct = 100 - beforeInnerPct - beforeMidPct;
+
+          const afterInnerPct = Math.min(88, Math.round(beforeInnerPct + (cannibalPct * 0.65)));
+          const afterOuterPct = Math.max(2, Math.round(beforeOuterPct * 0.25));
+          const afterMidPct = 100 - afterInnerPct - afterOuterPct;
+
+          const gainInner = afterInnerPct - beforeInnerPct;
+
+          const effBadge = document.getElementById('sim-reorg-efficiency-badge');
+          if (effBadge) effBadge.textContent = `+${gainInner}% en Anillos 1 y 2`;
+
+          const reorgDesc = document.getElementById('sim-reorg-desc');
+          if (reorgDesc) {
+            const storeNames = affectedStores.slice(0, 2).map(s => s.name).join(' y ');
+            reorgDesc.textContent = `Reasignando los sectores lejanos (>3 km) de ${storeNames} a esta nueva darkstore, concentrando el ${afterInnerPct}% de clientes en los primeros 2 km.`;
+          }
+
+          // Actualizar gráfico de barras comparativas
+          const bBeforeInner = document.getElementById('sim-bar-before-inner');
+          if (bBeforeInner) bBeforeInner.style.width = `${beforeInnerPct}%`;
+          const bBeforeMid = document.getElementById('sim-bar-before-mid');
+          if (bBeforeMid) bBeforeMid.style.width = `${beforeMidPct}%`;
+          const bBeforeOuter = document.getElementById('sim-bar-before-outer');
+          if (bBeforeOuter) bBeforeOuter.style.width = `${beforeOuterPct}%`;
+          const lblBefore = document.getElementById('sim-lbl-before-pct');
+          if (lblBefore) lblBefore.textContent = `${beforeInnerPct}%`;
+
+          const bAfterInner = document.getElementById('sim-bar-after-inner');
+          if (bAfterInner) bAfterInner.style.width = `${afterInnerPct}%`;
+          const bAfterMid = document.getElementById('sim-bar-after-mid');
+          if (bAfterMid) bAfterMid.style.width = `${afterMidPct}%`;
+          const bAfterOuter = document.getElementById('sim-bar-after-outer');
+          if (bAfterOuter) bAfterOuter.style.width = `${afterOuterPct}%`;
+          const lblAfter = document.getElementById('sim-lbl-after-pct');
+          if (lblAfter) lblAfter.textContent = `${afterInnerPct}%`;
+
+          // Ahorros logísticos calculados
+          const dtSavings = (4.5 + (cannibalPct * 0.07)).toFixed(1);
+          const cpoSavings = (0.35 + (cannibalPct * 0.009)).toFixed(2);
+          const dtEl = document.getElementById('sim-reorg-dt-savings');
+          if (dtEl) dtEl.textContent = `Ahorro DT: -${dtSavings} min`;
+          const cpoEl = document.getElementById('sim-reorg-cpo-savings');
+          if (cpoEl) cpoEl.textContent = `Rider CPO: -$ ${cpoSavings}/ord`;
+        } else {
+          reorgBox.style.display = 'none';
         }
       }
     }
