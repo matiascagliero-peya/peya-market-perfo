@@ -3957,15 +3957,45 @@
       renderPartnerSmartFilterOptions();
       renderWarehouseCards();
 
+      // Limpiar y remover todos los polígonos previos del mapa para refrescar según la vertical elegida
+      activePolygonsMap.forEach((entry, key) => {
+        if (entry.polygon) entry.polygon.setMap(null);
+        if (entry.ghostPolygon) entry.ghostPolygon.setMap(null);
+      });
+      activePolygonsMap.clear();
+
+      multiDatePolygonsMap.forEach((entry, key) => {
+        if (entry && entry.polygon) {
+          entry.polygon.setMap(null);
+          google.maps.event.clearInstanceListeners(entry.polygon);
+        }
+      });
+      multiDatePolygonsMap.clear();
+
       const filtered = getCurrentlyFilteredWarehouses();
       if (filtered.length > 0) {
-        const anySelectedVisible = filtered.some(w => selectedWarehouseIds.has(String(w.warehouse_id).trim()));
-        if (!anySelectedVisible) {
-          selectedWarehouseIds.clear();
-          selectedWarehouseIds.add(String(filtered[0].warehouse_id).trim());
-          updateSelectionAndRefresh();
+        // Deseleccionar almacenes que no tengan esta vertical disponible
+        if (val !== 'ALL') {
+          const toDeselect = [];
+          selectedWarehouseIds.forEach(id => {
+            const w = allWarehouses.find(s => String(s.warehouse_id).trim() === id);
+            if (!w || !filtered.some(fw => String(fw.warehouse_id).trim() === id)) {
+              toDeselect.push(id);
+            }
+          });
+          toDeselect.forEach(id => selectedWarehouseIds.delete(id));
+
+          if (selectedWarehouseIds.size === 0) {
+            selectedWarehouseIds.add(String(filtered[0].warehouse_id).trim());
+          }
         }
       }
+
+      updateSelectionAndRefresh();
+
+      const def = PARTNER_TYPE_DEFINITIONS.find(d => d.key === val);
+      const vLabel = def ? def.label : 'Todas las verticales';
+      showToast(`Filtro de vertical: ${vLabel}`, 'info');
     }
 
     function toggleVerticalMenu(e, force) {
@@ -5457,23 +5487,55 @@
       let strokeW = isPrimary ? 2.3 : 2.0;
       let fillOp = isPrimary ? 0.18 : colorDef.fillOp;
 
-      // A. Si el usuario seleccionó un partner específico:
-      const targetPartnerId = selectedPartnerByWarehouse.get(pId);
-      if (isPrimary && targetPartnerId && pData.partners_detail && pData.partners_detail.length > 0) {
-        const found = pData.partners_detail.find(p => String(p.partner_id) === targetPartnerId);
-        if (found) {
-          const rawShape = found.is_main ? pData.geojson : (found.geojson || found.shape_geojson);
-          const valid = getValidCoords(rawShape);
-          if (valid) {
-            activeGeojson = valid.geojson;
-            activeAreaKm2 = found.coverage_area_km2 || activeAreaKm2;
-            activePartnerObj = found;
+      // A. FILTRO DE VERTICALES ACTIVO (Drinks, Pets, Pharmacy, Market, etc.)
+      if (selectedPartnerFilter && selectedPartnerFilter !== 'ALL') {
+        const partnersList = (pData.partners_detail && pData.partners_detail.length > 0)
+          ? pData.partners_detail
+          : (whsObj && whsObj.partners_detail ? whsObj.partners_detail : []);
 
-            const vDef = classifyPartnerVertical(found.partner_name || found.business_type);
-            strokeCol = vDef.color;
-            fillCol = vDef.color;
-            strokeW = 3.0;
-            fillOp = 0.28;
+        const matchedPartner = partnersList.find(p => {
+          const v = classifyPartnerVertical(p.partner_name || p.business_type || p.hurrier_vertical_type);
+          return v.key === selectedPartnerFilter;
+        });
+
+        // Si este almacén NO tiene esta vertical habilitada, NO dibujar polígono para esta vertical
+        if (!matchedPartner) {
+          return;
+        }
+
+        // Si sí tiene la vertical, usar su forma, área y color específicos
+        const rawShape = matchedPartner.is_main ? pData.geojson : (matchedPartner.geojson || matchedPartner.shape_geojson || pData.geojson);
+        const valid = getValidCoords(rawShape) || getValidCoords(pData.geojson) || getValidCoords(whsObj ? whsObj.geojson : null);
+        if (valid) {
+          activeGeojson = valid.geojson;
+          activeAreaKm2 = matchedPartner.coverage_area_km2 || activeAreaKm2;
+          activePartnerObj = matchedPartner;
+
+          const vDef = classifyPartnerVertical(matchedPartner.partner_name || matchedPartner.business_type);
+          strokeCol = vDef.color;
+          fillCol = vDef.color;
+          strokeW = 3.2;
+          fillOp = 0.30;
+        }
+      } else {
+        // A2. Si el usuario seleccionó un partner específico manualmente desde el modal:
+        const targetPartnerId = selectedPartnerByWarehouse.get(pId);
+        if (isPrimary && targetPartnerId && pData.partners_detail && pData.partners_detail.length > 0) {
+          const found = pData.partners_detail.find(p => String(p.partner_id) === targetPartnerId);
+          if (found) {
+            const rawShape = found.is_main ? pData.geojson : (found.geojson || found.shape_geojson);
+            const valid = getValidCoords(rawShape);
+            if (valid) {
+              activeGeojson = valid.geojson;
+              activeAreaKm2 = found.coverage_area_km2 || activeAreaKm2;
+              activePartnerObj = found;
+
+              const vDef = classifyPartnerVertical(found.partner_name || found.business_type);
+              strokeCol = vDef.color;
+              fillCol = vDef.color;
+              strokeW = 3.0;
+              fillOp = 0.28;
+            }
           }
         }
       }
