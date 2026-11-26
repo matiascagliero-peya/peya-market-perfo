@@ -1645,6 +1645,13 @@
         allWarehouses = data.warehouses;
         window.logLiveDebug(`allWarehouses asignado: ${allWarehouses.length} almacenes`, 'success');
 
+        // Mostrar fecha de última actualización del Sheets en la barra de tiendas activas
+        const updateTextEl = document.getElementById('sheet-last-update-text');
+        if (updateTextEl) {
+          const upDate = (data && data.sheetsLastUpdated) ? data.sheetsLastUpdated : '';
+          updateTextEl.textContent = upDate ? `Actualizado: ${upDate}` : 'Actualizado: Reciente';
+        }
+
         syncTelemetryAndAudit(data);
         populateGeographicFilters(data);
         initializeAvailableMonths(data);

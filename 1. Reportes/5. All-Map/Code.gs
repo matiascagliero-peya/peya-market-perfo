@@ -1033,6 +1033,19 @@ function getStoreExplorerInitialData(forceRefresh) {
     });
   });
 
+  let sheetsLastUpdated = '';
+  try {
+    const file = DriveApp.getFileById(WHS_SPREADSHEET_ID);
+    if (file) {
+      const d = file.getLastUpdated();
+      sheetsLastUpdated = Utilities.formatDate(d, 'America/Argentina/Buenos_Aires', 'dd/MM/yyyy HH:mm');
+    }
+  } catch(eDrive) {
+    try {
+      sheetsLastUpdated = Utilities.formatDate(new Date(), 'America/Argentina/Buenos_Aires', 'dd/MM/yyyy HH:mm');
+    } catch(e2) {}
+  }
+
   const payload = {
     dataSource: 'Google Sheets (1. WHS data & 2. WHS orders)',
     months: months,
@@ -1044,7 +1057,8 @@ function getStoreExplorerInitialData(forceRefresh) {
     monthlyStatus: monthlyStatusMap,
     preloadedPolygons: preloadedPolygons,
     savedZones: fetchSavedZones(),
-    monthBytesProcessed: getMonthBytesFromCache()
+    monthBytesProcessed: getMonthBytesFromCache(),
+    sheetsLastUpdated: sheetsLastUpdated
   };
 
   SERVER_CACHE_INITIAL_DATA = payload;
