@@ -2375,40 +2375,8 @@ function getMultipleStoreRingsData(warehouseIds, monthDate) {
     console.warn('[Rings] Error procesando anillos:', err.message);
   }
 
-  // Fallback si la tabla no está disponible o no hay conexión
-  const ringsData = [];
-  const rings = ['< 1 KM', '1-2 KM', '2-3 KM', '3-4 KM', '> 4 KM'];
-  
-  matchedWhs.forEach(w => {
-    const totalOrders = w.monthly_orders || 0;
-    rings.forEach((anillo, idx) => {
-      const share = [0.38, 0.28, 0.18, 0.11, 0.05][idx];
-      const orders = Math.round(totalOrders * share);
-      const coveredMaus = Math.round((w.coverage_area_km2 || 12) * 1200 * share);
-      const dmartMaus = Math.round(orders * 0.48);
-      const pen = coveredMaus > 0 ? Number(((dmartMaus / coveredMaus) * 100).toFixed(1)) : 0;
-      const netSales = Math.round(orders * 14.5);
-
-      ringsData.push({
-        warehouse_id: w.warehouse_id,
-        warehouse_name: w.warehouse_name,
-        anillo_order: idx + 1,
-        anillo: anillo,
-        covered_maus: coveredMaus,
-        dmart_maus_covered: dmartMaus,
-        penetration_pct: pen,
-        dmart_orders: orders,
-        net_sales: netSales,
-        aov: 14.50,
-        frequency: 2.1,
-        units_per_customer: 3.8,
-        avg_dt_min: Number((18 + idx * 3.2).toFixed(1)),
-        pct_late: Number((5.5 + idx * 2.1).toFixed(1))
-      });
-    });
-  });
-
-  return ringsData;
+  // Si no hay datos registrados en Google Sheets ni BigQuery, devolver array vacío sin inventar supuestos
+  return [];
 }
 
 /**

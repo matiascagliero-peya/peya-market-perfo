@@ -1636,8 +1636,10 @@
             w.penetration_pct = Number(((w.dmart_users / w.covered_maus) * 100).toFixed(1));
           } else if (st.penetration_pct) {
             w.penetration_pct = Number(st.penetration_pct);
-          } else if (w.orders && w.peya_users) {
-            w.penetration_pct = Number(((w.orders * 0.48 / Math.max(1, w.peya_users)) * 100).toFixed(1));
+          } else if (w.dmart_users && w.peya_users) {
+            w.penetration_pct = Number(((w.dmart_users / Math.max(1, w.peya_users)) * 100).toFixed(1));
+          } else {
+            w.penetration_pct = 0;
           }
         }
       });
@@ -3029,9 +3031,9 @@
 
           <!-- Bloque de Audiencia y Usuarios: PeYa Users, Covered y Dmart MAUs -->
           ${(() => {
-            const hPeya = Number(w.peya_users) || Number(w.users) || (w.coverage_area_km2 ? Math.round(Number(w.coverage_area_km2) * 1350) : 0);
-            const hCov = Number(w.covered_maus) || (w.coverage_area_km2 ? Math.round(Number(w.coverage_area_km2) * 1100) : (hPeya ? Math.round(hPeya * 0.82) : 0));
-            const hDmart = Number(w.dmart_users) || (w.orders ? Math.round(Number(w.orders) * 0.48) : 0);
+            const hPeya = Number(w.peya_users) || Number(w.users) || 0;
+            const hCov = Number(w.covered_maus) || 0;
+            const hDmart = Number(w.dmart_users) || 0;
             return `
               <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:3px; text-align:center; margin-bottom:5px;">
                 <div style="background:rgba(2,132,199,0.08); border:1px solid rgba(2,132,199,0.22); border-radius:4px; padding:2px;">
@@ -3059,18 +3061,16 @@
           <!-- Tabla Vertical: Comportamiento por Residencia (Viven en Cobertura vs Fuera de Zona) -->
           ${(() => {
             const totOrd = Number(w.orders) || 0;
-            const totDmartUsers = Number(w.dmart_users) || (totOrd ? Math.round(totOrd * 0.48) : 0);
-            const nameLower = ((w.warehouse_name || '') + ' ' + (w.neighborhood || '')).toLowerCase();
-            const isDowntown = nameLower.includes('centro') || nameLower.includes('downtown') || nameLower.includes('ciudad vieja') || nameLower.includes('microcentro') || nameLower.includes('providencia');
-            const defaultResRate = isDowntown ? 0.65 : 0.80;
+            const totDmartUsers = Number(w.dmart_users) || 0;
 
-            const inOrders = Number(w.in_zone_orders) || Math.round(totOrd * defaultResRate);
-            const outOrders = Number(w.out_zone_orders) || Math.max(0, totOrd - inOrders);
-            const inUsers = Number(w.in_zone_users) || Math.round(totDmartUsers * Math.min(0.92, defaultResRate + 0.04));
-            const outUsers = Number(w.out_zone_users) || Math.max(0, totDmartUsers - inUsers);
+            const inOrders = Number(w.in_zone_orders) || 0;
+            const outOrders = Number(w.out_zone_orders) || 0;
+            const inUsers = Number(w.in_zone_users) || 0;
+            const outUsers = Number(w.out_zone_users) || 0;
 
-            const inOrdersPct = totOrd > 0 ? ((inOrders / totOrd) * 100).toFixed(1) : '0.0';
-            const outOrdersPct = totOrd > 0 ? ((outOrders / totOrd) * 100).toFixed(1) : '0.0';
+            const hasRes = (inOrders > 0 || outOrders > 0 || inUsers > 0 || outUsers > 0);
+            const inOrdersPct = (hasRes && totOrd > 0 && inOrders > 0) ? ((inOrders / totOrd) * 100).toFixed(1) : '—';
+            const outOrdersPct = (hasRes && totOrd > 0 && outOrders > 0) ? ((outOrders / totOrd) * 100).toFixed(1) : '—';
 
             return `
               <div style="background:${cardInnerBg}; border:1px solid ${cardInnerBorder}; border-radius:6px; padding:4px 6px; margin-bottom:5px;">
@@ -3200,12 +3200,12 @@
       const ringDmartFromQuads = allCardinalRowsInRing.reduce((sum, r) => sum + Number(r.dmart_maus || r.dmart_maus_covered || 0), 0);
       const ringOrdersFromQuads = allCardinalRowsInRing.reduce((sum, r) => sum + Number(r.orders || r.dmart_orders || 0), 0);
 
-      const ringUsers = ringUsersFromQuads > 0 ? ringUsersFromQuads : Number(ringData?.covered_maus || ringData?.peya_users || 4000);
-      const ringDmart = ringDmartFromQuads > 0 ? ringDmartFromQuads : Number(ringData?.dmart_maus_covered || ringData?.dmart_maus || 380);
-      const ringOrders = ringOrdersFromQuads > 0 ? ringOrdersFromQuads : Number(ringData?.dmart_orders || ringData?.orders || 950);
-      const ringPen = Number(ringUsers > 0 ? ((ringDmart / ringUsers) * 100).toFixed(1) : (ringData?.penetration_pct || 0)).toFixed(1);
-      const aov = Number(ringData?.aov || 15.4).toFixed(1);
-      const dt = Number(ringData?.avg_dt_min || ringData?.avg_dt || 21.0).toFixed(1);
+      const ringUsers = ringUsersFromQuads > 0 ? ringUsersFromQuads : Number(ringData?.covered_maus || ringData?.peya_users || 0);
+      const ringDmart = ringDmartFromQuads > 0 ? ringDmartFromQuads : Number(ringData?.dmart_maus_covered || ringData?.dmart_maus || 0);
+      const ringOrders = ringOrdersFromQuads > 0 ? ringOrdersFromQuads : Number(ringData?.dmart_orders || ringData?.orders || 0);
+      const ringPen = ringUsers > 0 ? ((ringDmart / ringUsers) * 100).toFixed(1) : (ringData?.penetration_pct ? Number(ringData.penetration_pct).toFixed(1) : '—');
+      const aov = ringData?.aov ? Number(ringData.aov).toFixed(1) : '—';
+      const dt = (ringData?.avg_dt_min || ringData?.avg_dt) ? Number(ringData.avg_dt_min || ringData.avg_dt).toFixed(1) : '—';
 
       // ── DIVISIÓN 2 (MEDIA): EJE CARDINAL (NORTE / SUR / ESTE / OESTE) ──
       const cardinalKey = (sector && (sector.cardinalKey || sector.key)) || 'N';
@@ -3217,11 +3217,11 @@
         (r.sectorKey === cardinalKey || r.cuadrante_key === cardinalKey || (r.cuadrante && r.cuadrante.toLowerCase().includes(cardinalName.toLowerCase())))
       );
 
-      const cardUsers = cardinalRow ? Number(cardinalRow.covered_maus || 0) : Math.round(ringUsers / 4);
-      const cardDmart = cardinalRow ? Number(cardinalRow.dmart_maus || cardinalRow.dmart_maus_covered || 0) : Math.round(ringDmart / 4);
-      const cardOrders = cardinalRow ? Number(cardinalRow.orders || cardinalRow.dmart_orders || 0) : Math.round(ringOrders / 4);
-      const cardPen = cardinalRow ? Number(cardinalRow.penetration_pct || 0).toFixed(1) : (cardUsers > 0 ? ((cardDmart / cardUsers) * 100).toFixed(1) : '0.0');
-      const cardMixRingPct = ringOrders > 0 ? ((cardOrders / ringOrders) * 100).toFixed(1) : '25.0';
+      const cardUsers = cardinalRow ? Number(cardinalRow.covered_maus || 0) : 0;
+      const cardDmart = cardinalRow ? Number(cardinalRow.dmart_maus || cardinalRow.dmart_maus_covered || 0) : 0;
+      const cardOrders = cardinalRow ? Number(cardinalRow.orders || cardinalRow.dmart_orders || 0) : 0;
+      const cardPen = cardinalRow ? Number(cardinalRow.penetration_pct || 0).toFixed(1) : (cardUsers > 0 ? ((cardDmart / cardUsers) * 100).toFixed(1) : '—');
+      const cardMixRingPct = (ringOrders > 0 && cardOrders > 0) ? ((cardOrders / ringOrders) * 100).toFixed(1) : '—';
 
       // ── DIVISIÓN 3 (INFERIOR): SUBDIVISIÓN (EL CARDINAL CORTADO EN DOS) ──
       const subKey = (sector && sector.subKey) || (sector && sector.key) || 'N1';
@@ -7719,22 +7719,25 @@
         let intensity = 0.5;
 
         if (type === 'peya_maus') {
-          rawVal = Number(s.peya_users) || Math.round(areaVal * 1100);
-          // Normalización logarítmica: evita que megaciudades como CABA aplasten ciudades medianas como Santo Tomé
+          rawVal = Number(s.peya_users) || 0;
+          if (rawVal <= 0) return;
           const logRaw = Math.log(1 + rawVal);
           const logMin = Math.log(1 + Math.min(1000, minVal || 1000));
           const logMax = Math.log(1 + (maxVal || 120000));
           intensity = Math.max(0.35, Math.min(1.0, (logRaw - logMin) / Math.max(0.01, logMax - logMin)));
         } else if (type === 'covered_maus') {
-          rawVal = Number(s.covered_maus) || Number(s.peya_users) || Math.round(areaVal * 950);
+          rawVal = Number(s.covered_maus) || Number(s.peya_users) || 0;
+          if (rawVal <= 0) return;
           const logRaw = Math.log(1 + rawVal);
           const logMin = Math.log(1 + Math.min(800, minVal || 800));
           const logMax = Math.log(1 + (maxVal || 100000));
           intensity = Math.max(0.35, Math.min(1.0, (logRaw - logMin) / Math.max(0.01, logMax - logMin)));
         } else if (type === 'dmart_maus') {
-          rawVal = Number(s.dmart_users) || Math.round(ordersVal * 0.48);
+          rawVal = Number(s.dmart_users) || 0;
+          if (rawVal <= 0) return;
         } else if (type === 'penetration') {
-          rawVal = Number(s.penetration_pct) || 14.5;
+          rawVal = Number(s.penetration_pct) || 0;
+          if (rawVal <= 0) return;
         } else if (type === 'seamless_worst') {
           const seamless = Number(s.seamless_delivery_pct) || 78;
           rawVal = seamless;
@@ -9411,20 +9414,18 @@
       let max = -Infinity;
 
       stores.forEach(s => {
-        const areaVal = Number(s.coverage_area_km2) || 12;
-        const ordersVal = Number(s.orders) || 200;
         let val = 0;
 
-        if (type === 'peya_maus') val = Number(s.peya_users) || Math.round(areaVal * 1100);
-        else if (type === 'covered_maus') val = Number(s.covered_maus) || Number(s.peya_users) || Math.round(areaVal * 950);
-        else if (type === 'dmart_maus') val = Number(s.dmart_users) || Math.round(ordersVal * 0.48);
-        else if (type === 'penetration') val = Number(s.penetration_pct) || 14.5;
-        else if (type === 'seamless_worst' || type === 'seamless_best') val = Number(s.seamless_delivery_pct) || 80;
-        else if (type === 'afv') val = Number(s.afv_aov_amount) || 15.2;
-        else if (type === 'late_orders') val = Number(s.order_late_pct) || 7.5;
-        else if (type === 'orders') val = ordersVal;
-        else if (type === 'gmv_dmart') val = Number(s.total_net_sales) || (ordersVal * 15);
-        else if (type === 'cpo') val = Number(s.rider_cpo_dmarts) || Number((1.25 + ((Number(s.avg_delivery_time_min) || 21) * 0.055)).toFixed(2));
+        if (type === 'peya_maus') val = Number(s.peya_users) || 0;
+        else if (type === 'covered_maus') val = Number(s.covered_maus) || Number(s.peya_users) || 0;
+        else if (type === 'dmart_maus') val = Number(s.dmart_users) || 0;
+        else if (type === 'penetration') val = Number(s.penetration_pct) || 0;
+        else if (type === 'seamless_worst' || type === 'seamless_best') val = Number(s.seamless_delivery_pct) || 0;
+        else if (type === 'afv') val = Number(s.afv_aov_amount) || 0;
+        else if (type === 'late_orders') val = Number(s.order_late_pct) || 0;
+        else if (type === 'orders') val = Number(s.orders) || 0;
+        else if (type === 'gmv_dmart') val = Number(s.total_net_sales) || 0;
+        else if (type === 'cpo') val = Number(s.rider_cpo_dmarts) || 0;
 
         if (!isNaN(val) && val > 0) {
           if (val < min) min = val;
@@ -10270,22 +10271,30 @@
       let totalDmartMaus = 0;
       let totalOrders = 0;
       let sumAfv = 0;
+      let countAfv = 0;
       let sumDt = 0;
+      let countDt = 0;
 
       intersectingStores.forEach(w => {
-        const orders = Number(w.monthly_orders || w.orders || 150);
-        const dmart = Number(w.dmart_users || Math.round(orders * 0.48));
-        const peya = Number(w.peya_users || Math.round(dmart * 3.2));
+        const orders = Number(w.monthly_orders || w.orders || 0);
+        const dmart = Number(w.dmart_users || 0);
+        const peya = Number(w.peya_users || w.covered_maus || 0);
         totalPeyaMaus += peya;
         totalDmartMaus += dmart;
         totalOrders += orders;
-        sumAfv += 14.2;
-        sumDt += 21.5;
+        if (Number(w.afv_aov_amount) > 0) {
+          sumAfv += Number(w.afv_aov_amount);
+          countAfv++;
+        }
+        if (Number(w.avg_delivery_time_min) > 0) {
+          sumDt += Number(w.avg_delivery_time_min);
+          countDt++;
+        }
       });
 
-      const avgAfv = intersectingStores.length > 0 ? (sumAfv / intersectingStores.length).toFixed(2) : '14.20';
-      const avgDt = intersectingStores.length > 0 ? (sumDt / intersectingStores.length).toFixed(1) : '21.0';
-      const penPct = totalPeyaMaus > 0 ? ((totalDmartMaus / totalPeyaMaus) * 100).toFixed(1) : '0.0';
+      const avgAfv = countAfv > 0 ? (sumAfv / countAfv).toFixed(2) : '—';
+      const avgDt = countDt > 0 ? (sumDt / countDt).toFixed(1) : '—';
+      const penPct = (totalPeyaMaus > 0 && totalDmartMaus > 0) ? ((totalDmartMaus / totalPeyaMaus) * 100).toFixed(1) : '—';
 
       customZoneLastMetrics = {
         areaKm2: areaKm2,
@@ -11604,54 +11613,8 @@
     }
 
     function generateFallbackRingsForStore(w) {
-      const totOrders = Number(w.orders) || 450;
-      const totMaus = Number(w.covered_maus) || Number(w.peya_users) || Math.round((Number(w.coverage_area_km2) || 15) * 1150);
-      const totDmartMaus = Number(w.dmart_users) || Math.round(totOrders * 0.48);
-      const avgDt = Number(w.avg_delivery_time_min) || 21.0;
-      const aov = Number(w.afv_aov_amount) || 15.4;
-
-      // Penetración calculada dinámicamente según usuarios y órdenes reales del almacén en este mes
-      const basePen = (totMaus > 0 && totDmartMaus > 0)
-        ? ((totDmartMaus / totMaus) * 100)
-        : (Number(w.penetration_pct) || 14.2);
-
-      // Factores de distribución por radio concéntrico:
-      // En < 1 KM la adopción es máxima y disminuye conforme aumenta la distancia a la darkstore
-      const ringDefs = [
-        { label: '< 1 KM', pctOrd: 0.38, pctMaus: 0.22, penFactor: 1.45, dtDelta: -4.5, latePct: 4.2 },
-        { label: '1-2 KM', pctOrd: 0.32, pctMaus: 0.30, penFactor: 1.15, dtDelta: -1.8, latePct: 6.8 },
-        { label: '2-3 KM', pctOrd: 0.18, pctMaus: 0.26, penFactor: 0.85, dtDelta: +1.5, latePct: 10.5 },
-        { label: '3-4 KM', pctOrd: 0.08, pctMaus: 0.14, penFactor: 0.55, dtDelta: +4.8, latePct: 15.2 },
-        { label: '> 4 KM', pctOrd: 0.04, pctMaus: 0.08, penFactor: 0.30, dtDelta: +8.5, latePct: 22.0 }
-      ];
-
-      return ringDefs.map((rd, i) => {
-        const ords = Math.max(1, Math.round(totOrders * rd.pctOrd));
-        const maus = Math.max(1, Math.round(totMaus * rd.pctMaus));
-        const dmaus = Math.max(1, Math.round(totDmartMaus * rd.pctOrd));
-        const rPen = Number((maus > 0 ? (dmaus / maus) * 100 : (basePen * rd.penFactor)).toFixed(1));
-        const rDt = Number((avgDt + rd.dtDelta).toFixed(1));
-        const rSales = Math.round(ords * aov);
-
-        return {
-          warehouse_id: w.warehouse_id,
-          warehouse_name: w.warehouse_name,
-          country: w.country || 'Argentina',
-          anillo: rd.label,
-          anillo_order: i + 1,
-          covered_maus: maus,
-          dmart_maus_covered: dmaus,
-          penetration_pct: rPen,
-          dmart_orders: ords,
-          orders: ords,
-          net_sales: rSales,
-          aov: aov,
-          frequency: 2.1,
-          avg_dt_min: rDt,
-          avg_dt: rDt,
-          pct_late: rd.latePct
-        };
-      });
+      // Directiva estricta: No inventar supuestos ni anillos artificiales si no existen en la base de datos
+      return [];
     }
 
     function populateRingsStoreCombobox() {
@@ -11700,23 +11663,11 @@
             allRingsData = rings;
           } else {
             allRingsData = [];
-            idsArray.forEach(id => {
-              const w = allWarehouses.find(item => String(item.warehouse_id).trim() === id);
-              if (w) {
-                allRingsData = allRingsData.concat(generateFallbackRingsForStore(w));
-              }
-            });
           }
           applyRingsFilterAndSyncMap();
         })
         .withFailureHandler(err => {
           allRingsData = [];
-          idsArray.forEach(id => {
-            const w = allWarehouses.find(item => String(item.warehouse_id).trim() === id);
-            if (w) {
-              allRingsData = allRingsData.concat(generateFallbackRingsForStore(w));
-            }
-          });
           applyRingsFilterAndSyncMap();
         })
         .getMultipleStoreRingsData(idsArray, currentMonth);
@@ -12021,9 +11972,37 @@
       const cannibalPct = Math.min(100, Math.round((safeOverlapKm2 / totalAreaKm2) * 100));
       const whiteSpacePct = 100 - cannibalPct;
 
-      const estMausInRadio = Math.round(totalAreaKm2 * 1150);
-      const estNewOrders = Math.round(whiteSpaceKm2 * 210 + safeOverlapKm2 * 65);
-      const estGmv = Math.round(estNewOrders * 15.8);
+      // Obtener medias reales de las tiendas circundantes o del país activo
+      let realDensity = 0, sumArea = 0, sumUsers = 0;
+      let realOrdersPerKm2 = 0, sumOrd = 0;
+      let realAfv = 0, countAfv = 0;
+      let realCpo = 0, countCpo = 0;
+      let realFreq = 0, countFreq = 0;
+
+      const sampleStores = affectedStores.length > 0 
+        ? allWarehouses.filter(w => affectedStores.some(a => a.name === w.warehouse_name))
+        : allWarehouses.filter(w => w.country === (affectedStores[0]?.country || 'Argentina'));
+
+      sampleStores.forEach(w => {
+        const a = Number(w.coverage_area_km2) || 0;
+        const u = Number(w.peya_users || w.covered_maus) || 0;
+        const o = Number(w.orders) || 0;
+        if (a > 0 && u > 0) { sumArea += a; sumUsers += u; }
+        if (a > 0 && o > 0) { sumOrd += o; }
+        if (Number(w.afv_aov_amount) > 0) { realAfv += Number(w.afv_aov_amount); countAfv++; }
+        if (Number(w.rider_cpo_dmarts) > 0) { realCpo += Number(w.rider_cpo_dmarts); countCpo++; }
+        if (Number(w.dmart_users) > 0 && o > 0) { realFreq += (o / Number(w.dmart_users)); countFreq++; }
+      });
+
+      const densityKm2 = sumArea > 0 ? (sumUsers / sumArea) : 950;
+      const orderDensityKm2 = sumArea > 0 ? (sumOrd / sumArea) : 150;
+      const avgAfvVal = countAfv > 0 ? (realAfv / countAfv) : 15.0;
+      const avgCpoVal = countCpo > 0 ? (realCpo / countCpo) : 1.85;
+      const avgFreqVal = countFreq > 0 ? (realFreq / countFreq) : 2.2;
+
+      const estMausInRadio = Math.round(totalAreaKm2 * densityKm2);
+      const estNewOrders = Math.round(whiteSpaceKm2 * orderDensityKm2 + safeOverlapKm2 * (orderDensityKm2 * 0.35));
+      const estGmv = Math.round(estNewOrders * avgAfvVal);
 
       const wsVal = document.getElementById('sim-whitespace-val');
       if (wsVal) wsVal.textContent = `${whiteSpacePct}%`;
@@ -12042,14 +12021,11 @@
       const gmvEl = document.getElementById('sim-gmv-val');
       if (gmvEl) gmvEl.textContent = `$ ${estGmv.toLocaleString('es-AR')}`;
 
-      const estCpo = (1.25 + (18.5 * 0.055)).toFixed(2);
       const cpoEl = document.getElementById('sim-cpo-val');
-      if (cpoEl) cpoEl.textContent = `$ ${estCpo}`;
+      if (cpoEl) cpoEl.textContent = `$ ${avgCpoVal.toFixed(2)}`;
 
-      const estDmartMaus = Math.round(estNewOrders * 0.48);
-      const estFreq = estDmartMaus > 0 ? (estNewOrders / estDmartMaus).toFixed(1) : '2.1';
       const freqEl = document.getElementById('sim-freq-val');
-      if (freqEl) freqEl.textContent = `${estFreq}x órd/usuario`;
+      if (freqEl) freqEl.textContent = `${avgFreqVal.toFixed(1)}x órd/usuario`;
 
       // Detalle de almacenes afectados por solapamiento
       const listEl = document.getElementById('sim-affected-stores-list');
