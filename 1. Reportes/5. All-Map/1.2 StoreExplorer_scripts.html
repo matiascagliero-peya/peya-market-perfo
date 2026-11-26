@@ -1466,13 +1466,19 @@
     // ── Mini Indicador de Carga de Shape ──
     let activeShapeRequestsCount = 0;
 
-    function showShapeLoading(show) {
+    function showShapeLoading(show, customText) {
       if (show) {
         activeShapeRequestsCount++;
       } else {
         activeShapeRequestsCount = Math.max(0, activeShapeRequestsCount - 1);
       }
       const pill = document.getElementById('shape-loading-pill');
+      const textEl = document.getElementById('shape-loading-text');
+      if (textEl && customText) {
+        textEl.textContent = customText;
+      } else if (textEl && !customText && show) {
+        textEl.textContent = 'Cargando shape...';
+      }
       if (pill) {
         pill.style.display = (activeShapeRequestsCount > 0) ? 'flex' : 'none';
       }
@@ -3954,6 +3960,12 @@
       updateVerticalTriggerView();
       toggleVerticalMenu(null, false);
 
+      const def = PARTNER_TYPE_DEFINITIONS.find(d => d.key === val);
+      const vLabel = def ? def.label.split(' ')[0] : 'coberturas';
+
+      // Mostrar píldora flotante de cargando shapes inmediatamente en pantalla
+      showShapeLoading(true, `Cargando shapes de ${vLabel}...`);
+
       renderPartnerSmartFilterOptions();
       renderWarehouseCards();
 
@@ -3972,30 +3984,32 @@
       });
       multiDatePolygonsMap.clear();
 
-      const filtered = getCurrentlyFilteredWarehouses();
-      if (filtered.length > 0) {
-        // Deseleccionar almacenes que no tengan esta vertical disponible
-        if (val !== 'ALL') {
-          const toDeselect = [];
-          selectedWarehouseIds.forEach(id => {
-            const w = allWarehouses.find(s => String(s.warehouse_id).trim() === id);
-            if (!w || !filtered.some(fw => String(fw.warehouse_id).trim() === id)) {
-              toDeselect.push(id);
-            }
-          });
-          toDeselect.forEach(id => selectedWarehouseIds.delete(id));
+      setTimeout(() => {
+        const filtered = getCurrentlyFilteredWarehouses();
+        if (filtered.length > 0) {
+          // Deseleccionar almacenes que no tengan esta vertical disponible
+          if (val !== 'ALL') {
+            const toDeselect = [];
+            selectedWarehouseIds.forEach(id => {
+              const w = allWarehouses.find(s => String(s.warehouse_id).trim() === id);
+              if (!w || !filtered.some(fw => String(fw.warehouse_id).trim() === id)) {
+                toDeselect.push(id);
+              }
+            });
+            toDeselect.forEach(id => selectedWarehouseIds.delete(id));
 
-          if (selectedWarehouseIds.size === 0) {
-            selectedWarehouseIds.add(String(filtered[0].warehouse_id).trim());
+            if (selectedWarehouseIds.size === 0) {
+              selectedWarehouseIds.add(String(filtered[0].warehouse_id).trim());
+            }
           }
         }
-      }
 
-      updateSelectionAndRefresh();
+        updateSelectionAndRefresh();
+        showShapeLoading(false);
+      }, 150);
 
-      const def = PARTNER_TYPE_DEFINITIONS.find(d => d.key === val);
-      const vLabel = def ? def.label : 'Todas las verticales';
-      showToast(`Filtro de vertical: ${vLabel}`, 'info');
+      const toastLabel = def ? def.label : 'Todas las verticales';
+      showToast(`Filtro de vertical: ${toastLabel}`, 'info');
     }
 
     function toggleVerticalMenu(e, force) {
