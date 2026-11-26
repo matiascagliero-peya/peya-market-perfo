@@ -1525,9 +1525,9 @@ function fetchRealHeatmapPoints(params) {
 
   let countryFilter = '';
   if (countryId && !isNaN(countryId)) {
-    countryFilter = `AND cl.country_id = ${countryId}`;
+    countryFilter = `AND (cl.country_id = ${countryId} OR (ST_Y(cl.customer_geogpoint) BETWEEN ${minLat} AND ${maxLat} AND ST_X(cl.customer_geogpoint) BETWEEN ${minLng} AND ${maxLng}))`;
   } else if (countryCode) {
-    countryFilter = `AND LOWER(cl.country_code) = '${countryCode}'`;
+    countryFilter = `AND (LOWER(cl.country_code) = '${countryCode}' OR (ST_Y(cl.customer_geogpoint) BETWEEN ${minLat} AND ${maxLat} AND ST_X(cl.customer_geogpoint) BETWEEN ${minLng} AND ${maxLng}))`;
   }
 
   const sql = `

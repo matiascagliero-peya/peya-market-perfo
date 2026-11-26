@@ -2439,12 +2439,32 @@
 
     function classifyPartnerVertical(name) {
       const lower = (name || '').toLowerCase();
-      // Evaluar primero todas las verticales específicas excluyendo 'market'
-      const specific = PARTNER_TYPE_DEFINITIONS.filter(d => d.key !== 'market').find(d => 
-        d.match.some(m => lower.includes(m))
-      );
-      if (specific) return specific;
-      // Si no coincide con ninguna vertical específica, evaluar market
+      
+      // Si el nombre contiene PedidosYa Market, Supermercado o D-Mart y no tiene palabras explícitas de otra vertical: es MARKET
+      const isExplicitMarket = /\b(market|supermercado|dmart|d-mart)\b/i.test(lower);
+      
+      // Evaluar verticales específicas con límites de palabra (\b) para evitar que 'equipetrol' machee con 'pet'
+      const specificRegexes = [
+        { key: 'mascotas', regex: /\b(pets?|mascotas?|patitas)\b/i },
+        { key: 'drinks', regex: /\b(drinks?|bebidas?|botiller[ií]as?|chelas?|beers?|coctel|c[oó]ctel)\b/i },
+        { key: 'kiosco', regex: /\b(kioscos?|golosinas?|snacks?)\b/i },
+        { key: 'beauty', regex: /\b(beauty|care|cosm[eé]tica|cuidado personal)\b/i },
+        { key: 'green', regex: /\b(green|frescos?|frutas?|verduras?)\b/i },
+        { key: 'farmacia', regex: /\b(farmacias?|pharma|droguer[ií]as?)\b/i }
+      ];
+
+      for (const def of specificRegexes) {
+        if (def.regex.test(lower)) {
+          // Si tiene explícitamente "PedidosYa Market" o "Dmart", solo ceder si explícitamente es la vertical secundaria
+          if (isExplicitMarket && def.key === 'mascotas' && !/\b(pet|pets|mascota|mascotas|patitas)\b/i.test(lower.replace(/equipetrol/gi, ''))) {
+            continue;
+          }
+          const found = PARTNER_TYPE_DEFINITIONS.find(d => d.key === def.key);
+          if (found) return found;
+        }
+      }
+
+      // Por defecto es Market
       return PARTNER_TYPE_DEFINITIONS.find(d => d.key === 'market') || PARTNER_TYPE_DEFINITIONS[0];
     }
 
@@ -7022,22 +7042,28 @@
                 const dmartU = cellUserData.dmart_users || 0;
                 const ords = cellUserData.total_orders || 0;
                 const pen = cellUserData.penetration_pct || (peyaU > 0 ? ((dmartU / peyaU) * 100).toFixed(1) : '0.0');
-                const afv = cellUserData.afv || (ords > 0 ? (cellUserData.total_gmv ? (cellUserData.total_gmv / ords).toFixed(1) : '15.4') : '—');
-                let dt = cellUserData.avg_dt;
-                if (!dt || dt === '21.0' || dt === 21) {
+                let afv = '—';
+                const rawAfv = cellUserData.afv;
+                if (rawAfv && rawAfv !== '—' && !isNaN(Number(rawAfv)) && Number(rawAfv) > 0) {
+                  afv = `$ ${Number(rawAfv).toFixed(1)}`;
+                } else if (ords > 0 && cellUserData.total_gmv && !isNaN(Number(cellUserData.total_gmv))) {
+                  afv = `$ ${(Number(cellUserData.total_gmv) / ords).toFixed(1)}`;
+                }
+
+                let dt = '—';
+                const rawDt = cellUserData.avg_dt;
+                if (rawDt && rawDt !== '—' && !isNaN(Number(rawDt)) && Number(rawDt) > 0) {
+                  dt = `${Number(rawDt).toFixed(1)} min`;
+                } else {
                   const storePos = getWarehousePosition(whsObj);
-                  if (storePos && centerPt) {
+                  if (storePos && centerPt && typeof centerPt.lat === 'function') {
                     const dLat = (centerPt.lat() - storePos.lat) * 111.32;
                     const dLng = (centerPt.lng() - storePos.lng) * 111.32 * Math.cos(storePos.lat * Math.PI / 180);
                     const distKm = Math.sqrt(dLat * dLat + dLng * dLng);
-                    dt = (12.2 + distKm * 3.3).toFixed(1);
-                  } else {
-                    dt = (15.5 + (ords % 7) * 1.8).toFixed(1);
+                    dt = `${(12.2 + distKm * 3.3).toFixed(1)} min`;
                   }
-                } else {
-                  dt = Number(dt).toFixed(1);
                 }
-                const seamless = cellUserData.seamless_pct || (ords > 0 ? '82.5' : '—');
+                const seamless = (cellUserData.seamless_pct && cellUserData.seamless_pct !== '—') ? `${cellUserData.seamless_pct}%` : '—';
                 const plusPct = peyaU > 0 ? ((plusUsers / peyaU) * 100).toFixed(1) : 0;
 
                 userMetricsHtml = `
@@ -7060,11 +7086,11 @@
                     </div>
                     <div>
                       <div style="font-size:8px; color:#64748b; font-weight:700; text-transform:uppercase;">AFV ($)</div>
-                      <div style="font-weight:800; font-size:11.5px; color:#d97706; font-family:'JetBrains Mono',monospace;">$ ${afv}</div>
+                      <div style="font-weight:800; font-size:11.5px; color:#d97706; font-family:'JetBrains Mono',monospace;">${afv}</div>
                     </div>
                     <div>
                       <div style="font-size:8px; color:#64748b; font-weight:700; text-transform:uppercase;">Avg DT (min)</div>
-                      <div style="font-weight:800; font-size:11.5px; color:#0284c7; font-family:'JetBrains Mono',monospace;">${dt} min</div>
+                      <div style="font-weight:800; font-size:11.5px; color:#0284c7; font-family:'JetBrains Mono',monospace;">${dt}</div>
                     </div>
                   </div>
                 `;
@@ -8373,6 +8399,24 @@
       const activeCity = document.getElementById('filter-city').value || '';
       const activeNeigh = document.getElementById('filter-neighborhood').value || '';
 
+      // Inferir automáticamente el país real a partir de las coordenadas del encuadre
+      let detectedCountry = activeCountry;
+      const centerLat = (minLat + maxLat) / 2;
+      const centerLng = (minLng + maxLng) / 2;
+      const nearestStore = allWarehouses.find(w => {
+        const pos = getWarehousePosition(w);
+        return pos && Math.abs(pos.lat - centerLat) < 0.8 && Math.abs(pos.lng - centerLng) < 0.8;
+      });
+      if (nearestStore && nearestStore.country) {
+        detectedCountry = nearestStore.country;
+        const countryEl = document.getElementById('filter-country');
+        if (countryEl && countryEl.value !== detectedCountry) {
+          countryEl.value = detectedCountry;
+          syncComboboxDisplay('country');
+        }
+      }
+
+      const resolvedCountryCode = getCountryCode({ country: detectedCountry });
       const cacheKey = `${currentMonth}__${minLat}_${maxLat}_${minLng}_${maxLng}`;
 
       PENDING_HEATMAP_PAYLOAD = {
@@ -8381,7 +8425,7 @@
         max_lat: maxLat,
         min_lng: minLng,
         max_lng: maxLng,
-        country_code: getCountryCode({ country: activeCountry }),
+        country_code: resolvedCountryCode,
         cacheKey: cacheKey
       };
 
