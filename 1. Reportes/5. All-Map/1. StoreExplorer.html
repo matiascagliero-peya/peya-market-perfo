@@ -1191,6 +1191,12 @@
           </div>
         </div>
 
+        <!-- Botón para Calcular Datos Reales con BigQuery en la zona propuesta -->
+        <button type="button" id="btn-sim-calc-bq" class="btn-zone-calc" style="background:rgba(2,132,199,0.12); border:1px solid #0284c7; color:#0284c7; width:100%; font-size:10.5px; font-weight:700; padding:6px 10px; border-radius:6px; margin-bottom:6px; display:flex; align-items:center; justify-content:center; gap:6px; cursor:pointer;" onclick="calculateSimulatedStoreBigQuery()">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+          <span id="btn-sim-calc-bq-text">Calcular datos reales con BigQuery (~35 MB)</span>
+        </button>
+
         <button type="button" class="btn-zone-calc" style="background:linear-gradient(135deg, #10b981, #059669); border:none; width:100%; font-size:11.5px; font-weight:800; padding:8px 12px; border-radius:6px; box-shadow:0 4px 14px rgba(16,185,129,0.35); color:#ffffff; display:flex; align-items:center; justify-content:center; gap:6px; cursor:pointer; transition:transform 0.15s ease;" onclick="saveSimulatedStoreZone()">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
           <span>Guardar Propuesta de Expansión</span>
