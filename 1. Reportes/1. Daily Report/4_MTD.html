@@ -60,15 +60,15 @@
   .tgt-loading-dot { display:inline-block; width:6px; height:6px; border-radius:50%; background:var(--text-light); animation:pulse 1.2s ease-in-out infinite; margin-left:4px; vertical-align:middle;}
   @keyframes pulse{0%,100%{opacity:0.3;}50%{opacity:1;}}
 
-  .fbar{background:rgba(255,255,255,0.98);backdrop-filter:blur(8px);border-bottom:1px solid var(--border);padding:9px 20px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;position:sticky;top:52px;z-index:290;}
-  .fg{display:flex;align-items:center;gap:8px;}
-  .fl{font-size:11px;font-weight:700;color:var(--text-sub);text-transform:uppercase;letter-spacing:0.5px;}
-  .fs{border:1px solid var(--border);background:#fff;border-radius:6px;padding:8px 12px;font-size:12px;font-weight:600;color:var(--text-main);font-family:'Inter';cursor:pointer;outline:none;transition:all 0.2s;min-width:120px;text-align:center;}
+  .fbar{background:rgba(255,255,255,0.98);backdrop-filter:blur(8px);border-bottom:1px solid var(--border);padding:8px 20px;display:flex;align-items:center;gap:10px;flex-wrap:nowrap;overflow-x:auto;position:sticky;top:52px;z-index:290;}
+  .fg{display:flex;align-items:center;gap:8px;flex-shrink:0;}
+  .fl{font-size:11px;font-weight:700;color:var(--text-sub);text-transform:uppercase;letter-spacing:0.5px;white-space:nowrap;}
+  .fs{border:1px solid var(--border);background:#fff;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:600;color:var(--text-main);font-family:'Inter';cursor:pointer;outline:none;transition:all 0.2s;width:115px;min-width:110px;text-align:center;height:34px;}
   .fs:focus{border-color:var(--primary);box-shadow:0 0 0 2px rgba(229,0,68,0.15);}
-  .btn-mtd{height:36px;padding:0 14px;border:1px solid var(--border);border-radius:6px;background:#fff;color:var(--text-sub);font-family:'Inter';font-size:11px;font-weight:700;cursor:pointer;transition:all .15s;text-transform:uppercase;letter-spacing:.4px;}
+  .btn-mtd{height:34px;padding:0 14px;border:1px solid var(--border);border-radius:6px;background:#fff;color:var(--text-sub);font-family:'Inter';font-size:11px;font-weight:700;cursor:pointer;transition:all .15s;text-transform:uppercase;letter-spacing:.4px;flex-shrink:0;}
   .btn-mtd.active,.btn-mtd:hover{background:var(--primary);border-color:var(--primary);color:#fff;}
-  .minimal-toggle{display:flex;align-items:center;background:var(--bg-main);padding:3px;border-radius:6px;gap:2px;border:1px solid var(--border);}
-  .min-btn{padding:6px 12px;border-radius:4px;font-size:11px;font-weight:600;cursor:pointer;border:none;background:transparent;color:var(--text-sub);transition:all .2s;}
+  .minimal-toggle{display:flex;align-items:center;background:var(--bg-main);padding:3px;border-radius:6px;gap:2px;border:1px solid var(--border);flex-shrink:0;}
+  .min-btn{padding:6px 12px;height:28px;border-radius:4px;font-size:11px;font-weight:600;cursor:pointer;border:none;background:transparent;color:var(--text-sub);transition:all .2s;white-space:nowrap;}
   .min-btn.active{background:#fff;color:var(--text-main);box-shadow:var(--shadow-sm);}
 
   .page{padding:20px;max-width:1100px;margin:0 auto;display:flex;flex-direction:column;gap:14px;}
@@ -139,10 +139,10 @@
 <?!= include('_nav'); ?>
 
 <div class="fbar">
-  <div class="fg"><span class="fl">Periodo:</span><input type="text" class="fs" id="f-start" placeholder="Cargando..."></div>
-  <div class="fg"><span class="fl">Hasta:</span><input type="text" class="fs" id="f-end" placeholder="Cargando..."></div>
+  <div class="fg"><span class="fl">Periodo:</span><input type="text" class="fs" id="f-start" placeholder="Desde"></div>
+  <div class="fg"><span class="fl">Hasta:</span><input type="text" class="fs" id="f-end" placeholder="Hasta"></div>
   <button id="btn-mtd" type="button" class="btn-mtd" onclick="setMTD()" title="Mes a la fecha: del 1° del mes al último día con datos">MTD</button>
-  <div class="n-divider"></div>
+  <div class="n-divider" style="margin:0 4px;height:18px;"></div>
   <div class="fg">
     <span class="fl">Ordenar:</span>
     <div class="minimal-toggle">
@@ -151,7 +151,7 @@
       <button class="min-btn active" id="st-confirmed" onclick="setGlobalSort('confirmed')">≡ Confirmed Orders</button>
     </div>
   </div>
-  <div style="margin-left:auto;display:flex;align-items:center;gap:6px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:20px;padding:4px 10px;font-size:11px;font-weight:600;color:#1d4ed8;white-space:nowrap">
+  <div id="be-badge-btn" onclick="toggleDateUnlock()" style="margin-left:auto;display:flex;align-items:center;gap:6px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:20px;padding:4px 10px;font-size:11px;font-weight:600;color:#1d4ed8;white-space:nowrap;cursor:default;flex-shrink:0;">
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
     <span class="be-label"></span>
   </div>
@@ -222,6 +222,61 @@
     return v.toFixed(1);
   }
 
+  function rawNum(v) {
+    if (v == null || isNaN(v)) return null;
+    if (Math.abs(v % 1) > 1e-4) return Number(v.toFixed(2));
+    return Math.round(v);
+  }
+
+  function rawNumStr(v, fmt) {
+    if (v == null || isNaN(v)) return '';
+    if (fmt === 'pct') return Number((v * 100).toFixed(8)) + '%';
+    if (fmt === 'pct_pre') return Number(v.toFixed(8)) + '%';
+    if (fmt === 'time') return Number(v.toFixed(4));
+    if (Math.abs(v % 1) > 1e-4) return String(Number(v.toFixed(2)));
+    return String(Math.round(v));
+  }
+
+  function formulaVar(cur, prev, fmt) {
+    if (cur == null || prev == null || prev === 0 || isNaN(cur) || isNaN(prev)) return '';
+    const c = rawNum(cur);
+    const p = rawNum(prev);
+    if (c == null || p == null || p === 0) return '';
+    if (fmt === 'pct' || fmt === 'pct_pre' || fmt === 'time') return `=${c}-${p}`;
+    return `=(${c}-${p})/${Math.abs(p)}`;
+  }
+
+  function formulaRR(beMes, cur, tgt) {
+    const b = rawNum(beMes);
+    const c = rawNum(cur);
+    const t = rawNum(tgt);
+    if (b == null || c == null || t == null || t === 0) return '';
+    return `=${b}*(${c}/${t})`;
+  }
+
+  function formulaVarBe(rr, beMes) {
+    const r = rawNum(rr);
+    const b = rawNum(beMes);
+    if (r == null || b == null || b === 0) return '';
+    return `=(${r}-${b})/${Math.abs(b)}`;
+  }
+
+  function rawVarStr(cur, prev, fmt) {
+    if (cur == null || prev == null || prev === 0) return '';
+    let d;
+    if      (fmt === 'pct')     d = (cur - prev) * 100;
+    else if (fmt === 'pct_pre') d = cur - prev;
+    else if (fmt === 'time')    d = cur - prev;
+    else                        d = ((cur - prev) / Math.abs(prev)) * 100;
+    const sfx = (fmt === 'pct' || fmt === 'pct_pre') ? '%' : (fmt === 'time' ? '' : '%');
+    return Number(d.toFixed(8)) + sfx;
+  }
+
+  function rawPctStr(val) {
+    if (val == null || isNaN(val)) return '';
+    return Number(val.toFixed(8)) + '%';
+  }
+
   function badge(cur, prev, fmt, tc) {
     if (cur==null||prev==null||prev===0) return '<span class="badge badge-neu">—</span>';
     let d, sfx;
@@ -290,8 +345,10 @@
   // por DETRÁS del día de corte (último de Confirmed Orders) → ahí su RR/Var salen vacíos.
   function dataThroughBadge(m){
     const dt=(CURRENT_DATA.dataThroughByMetric||{})[m];
-    if(!dt) return '';
     const cut=CURRENT_DATA.maxDemandDate;
+    if(!dt) {
+      return ` <span title="Sin registros para esta métrica en este período" style="font-size:9px;font-weight:700;padding:2px 7px;border-radius:20px;background:#fff1f2;color:#e11d48;border:1px solid #fecdd3;vertical-align:middle;white-space:nowrap;text-transform:none;letter-spacing:0">sin datos ⚠️</span>`;
+    }
     const behind = cut && dt < cut;
     const dm = dt.slice(8,10)+'/'+dt.slice(5,7);
     const st = behind ? 'background:#fff1f2;color:#e11d48;border:1px solid #fecdd3'
@@ -341,7 +398,20 @@
         if(s.col==='tvar'){va=rows[a].target?(rows[a].current-rows[a].target)/Math.abs(rows[a].target):-Infinity;vb=rows[b].target?(rows[b].current-rows[b].target)/Math.abs(rows[b].target):-Infinity;}
         if(s.col==='tpct'){va=rows[a].target?(rows[a].current/rows[a].target):-Infinity;vb=rows[b].target?(rows[b].current/rows[b].target):-Infinity;}
         if(s.col==='y1var'){va=rows[a].y1?(rows[a].current-rows[a].y1)/Math.abs(rows[a].y1):-Infinity;vb=rows[b].y1?(rows[b].current-rows[b].y1)/Math.abs(rows[b].y1):-Infinity;}
-        if(['rr','rr_be','rr_varbe','rr_varly','rr_varlm'].includes(s.col)&&rrMetricData){const getRR=c=>{const e=rrMetricData[c];if(!e)return-Infinity;return s.col==='rr'?(e.rr??-Infinity):s.col==='rr_be'?(e.be??-Infinity):s.col==='rr_varbe'?(e.varBe??-Infinity):s.col==='rr_varly'?(e.rrVsLy??-Infinity):(e.rrVsLm??-Infinity);};va=getRR(a);vb=getRR(b);}
+        if(['rr','rr_be','rr_varbe','rr_varly','rr_varlm'].includes(s.col)&&rrMetricData){
+          const getRR=c=>{
+            const e=rrMetricData[c]; if(!e) return -Infinity;
+            const d=rows[c];
+            let cRR = e.rr;
+            let cVarBe = e.varBe;
+            if(e.be != null && d && d.target && d.target !== 0 && d.current != null){
+              cRR = e.be * (d.current / d.target);
+              cVarBe = ((cRR - e.be) / Math.abs(e.be)) * 100;
+            }
+            return s.col==='rr'?(cRR??-Infinity):s.col==='rr_be'?(e.be??-Infinity):s.col==='rr_varbe'?(cVarBe??-Infinity):s.col==='rr_varly'?(e.rrVsLy??-Infinity):(e.rrVsLm??-Infinity);
+          };
+          va=getRR(a); vb=getRR(b);
+        }
         return s.dir==='asc'?va-vb:vb-va;
       });
     } else if(SORT_MODE==='confirmed'&&CURRENT_DATA.metrics['Confirmed Orders']){
@@ -358,6 +428,13 @@
     const panelClass = isHero && tgtPending ? 'target-loading' : '';
 
     let tbody='';
+    if (ctries.length === 0) {
+      const colSpan = isHero ? (rrMetricData ? 12 : 7) : 6;
+      tbody = `<tr><td colspan="${colSpan}" style="text-align:center;padding:28px 16px;color:#e11d48;font-size:11.5px;font-weight:600;">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-3px;margin-right:5px;"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        Sin datos registrados para esta métrica en el período seleccionado (posible desactualización o demora en tabla de origen)
+      </td></tr>`;
+    }
     function pctCell(cur,tgt,pending){
       if(pending) return `<td class="tgt-cell"><span class="badge badge-neu"><span class="tgt-loading-dot"></span></span></td>`;
       if(!tgt||tgt===0) return `<td class="tgt-cell"><span class="badge badge-neu">—</span></td>`;
@@ -371,15 +448,43 @@
 
     ctries.forEach(c=>{
       const d=rows[c];
-      let tr=`<tr><td>${COUNTRY_NAMES[c]||c}</td><td><span class="number">${fv(d.current,fmt,isFull)}</span></td>`;
+      const acts = (CURRENT_DATA.dailyActuals && CURRENT_DATA.dailyActuals[m] && CURRENT_DATA.dailyActuals[m][c]) || (d.current != null ? [d.current] : []);
+      const tgts = (CURRENT_DATA.dailyTargets && CURRENT_DATA.dailyTargets[m] && CURRENT_DATA.dailyTargets[m][c]) || (d.target != null ? [d.target] : []);
+      const actRaw = acts.length > 1 ? `=${acts.map(v => rawNum(v)).join('+')}` : rawNumStr(d.current, fmt);
+      const tgtRaw = tgts.length > 1 ? `=${tgts.map(v => rawNum(v)).join('+')}` : rawNumStr(d.target, fmt);
+      let tr=`<tr><td>${COUNTRY_NAMES[c]||c}</td><td data-raw="${actRaw}"><span class="number">${fv(d.current,fmt,isFull)}</span></td>`;
       if(isHero){
         const tgtHtml = tgtPending ? `<span class="number dim">—<span class="tgt-loading-dot"></span></span>` : `<span class="number dim tgt-cell">${fv(d.target,fmt,isFull)}</span>`;
         const varHtml = tgtPending ? `<span class="badge badge-neu"><span class="tgt-loading-dot"></span></span>` : badge(d.current,d.target,fmt,tc);
-        tr+=`<td class="sep-l tgt-cell">${tgtHtml}</td><td class="tgt-cell">${varHtml}</td>`;
+        tr+=`<td class="sep-l tgt-cell" data-raw="${tgtRaw}">${tgtHtml}</td><td class="tgt-cell" data-raw="${formulaVar(d.current,d.target,fmt)}">${varHtml}</td>`;
       }
-      tr+=`<td class="sep-l"><span class="number dim">${fv(d.m1,fmt,isFull)}</span></td><td>${badge(d.current,d.m1,fmt,tc)}</td>`;
-      tr+=`<td class="sep-l">${badge(d.current,d.y1,fmt,tc)}</td>`;
-      if(isHero&&rrMetricData){const e=rrMetricData[c];tr+=`<td class="sep-l" style="background:#fdfcff"><span class="number dim">${fv(e?.rr,fmt,isFull)}</span></td><td style="background:#fdfcff"><span class="number dim">${fv(e?.be,fmt,isFull)}</span></td><td style="background:#fdfcff">${badgePct(e?.varBe,tc)}</td><td class="sep-l" style="background:#fff7ed">${badgePct(e?.rrVsLm,tc)}</td><td style="background:#fff7ed">${badgePct(e?.rrVsLy,tc)}</td>`;}
+      tr+=`<td class="sep-l" data-raw="${rawNumStr(d.m1,fmt)}"><span class="number dim">${fv(d.m1,fmt,isFull)}</span></td><td data-raw="${formulaVar(d.current,d.m1,fmt)}">${badge(d.current,d.m1,fmt,tc)}</td>`;
+      tr+=`<td class="sep-l" data-raw="${formulaVar(d.current,d.y1,fmt)}">${badge(d.current,d.y1,fmt,tc)}</td>`;
+      if(isHero&&rrMetricData){
+        const e=rrMetricData[c];
+        let cRR = e?.rr;
+        let cVarBe = e?.varBe;
+        let cRRForm = '';
+        if(e && e.be != null && d.target && d.target !== 0 && d.current != null){
+          cRR = e.be * (d.current / d.target);
+          cVarBe = ((cRR - e.be) / Math.abs(e.be)) * 100;
+          if(acts.length > 0 && tgts.length > 0){
+            const aP = acts.length > 1 ? `(${acts.map(v => rawNum(v)).join('+')})` : String(rawNum(acts[0]));
+            const tP = tgts.length > 1 ? `(${tgts.map(v => rawNum(v)).join('+')})` : String(rawNum(tgts[0]));
+            cRRForm = `=${rawNum(e.be)}*(${aP}/${tP})`;
+          } else {
+            cRRForm = formulaRR(e.be, d.current, d.target);
+          }
+        }
+        const varBeForm = (cRR != null && e && e.be != null) ? formulaVarBe(cRR, e.be) : '';
+        const varLmForm = (cRR != null && e && e.lmFull != null) ? formulaVarBe(cRR, e.lmFull) : (e?.rrVsLm != null ? Number(e.rrVsLm.toFixed(8)) + '%' : '');
+        const varLyForm = (cRR != null && e && e.lyFull != null) ? formulaVarBe(cRR, e.lyFull) : (e?.rrVsLy != null ? Number(e.rrVsLy.toFixed(8)) + '%' : '');
+        tr+=`<td class="sep-l" style="background:#fdfcff" data-raw="${cRRForm || rawNumStr(cRR,fmt)}"><span class="number dim">${fv(cRR,fmt,isFull)}</span></td>` +
+            `<td style="background:#fdfcff" data-raw="${rawNumStr(e?.be,fmt)}"><span class="number dim">${fv(e?.be,fmt,isFull)}</span></td>` +
+            `<td style="background:#fdfcff" data-raw="${varBeForm || rawPctStr(cVarBe)}">${badgePct(cVarBe,tc)}</td>` +
+            `<td class="sep-l" style="background:#fff7ed" data-raw="${varLmForm}">${badgePct(e?.rrVsLm,tc)}</td>` +
+            `<td style="background:#fff7ed" data-raw="${varLyForm}">${badgePct(e?.rrVsLy,tc)}</td>`;
+      }
       tr+=`</tr>`;
       tbody+=tr;
     });
@@ -404,7 +509,11 @@
         }
         const r=rrMetricData?rrMetricData[c]:null;
         if(r){
-          if(r.rr!=null){ rR+=r.rr; hRr=true; }
+          let cRR = r.rr;
+          if(r.be != null && e && e.target && e.target !== 0 && e.current != null){
+            cRR = r.be * (e.current / e.target);
+          }
+          if(cRR!=null){ rR+=cRR; hRr=true; }
           if(r.be!=null){ rBe+=r.be; hRbe=true; }
           if(r.lmFull!=null){ rLm+=r.lmFull; hRlm=true; }
           if(r.lyFull!=null){ rLy+=r.lyFull; hRly=true; }
@@ -415,19 +524,45 @@
         rr:hRr?rR:null, be:hRbe?rBe:null,
         varBe:(hRr&&hRbe&&rBe!==0)?((rR-rBe)/Math.abs(rBe))*100:null,
         rrVsLm:(hRr&&hRlm&&rLm!==0)?((rR-rLm)/Math.abs(rLm))*100:null,
-        rrVsLy:(hRr&&hRly&&rLy!==0)?((rR-rLy)/Math.abs(rLy))*100:null
+        rrVsLy:(hRr&&hRly&&rLy!==0)?((rR-rLy)/Math.abs(rLy))*100:null,
+        lmFull:hRlm?rLm:null,
+        lyFull:hRly?rLy:null
       };
     }
     if(L&&L.current!=null){
-      let tr=`<tr style="background:#f8fafc;font-weight:800;border-top:2px solid var(--border);"><td>LATAM</td><td><span class="number"${isHero?' style="color:var(--primary)"':''}>${fv(L.current,fmt,isFull)}</span></td>`;
+      const actsL = (CURRENT_DATA.dailyActuals && CURRENT_DATA.dailyActuals[m] && CURRENT_DATA.dailyActuals[m]['LATAM']) || (L.current != null ? [L.current] : []);
+      const tgtsL = (CURRENT_DATA.dailyTargets && CURRENT_DATA.dailyTargets[m] && CURRENT_DATA.dailyTargets[m]['LATAM']) || (L.target != null ? [L.target] : []);
+      const actRawL = actsL.length > 1 ? `=${actsL.map(v => rawNum(v)).join('+')}` : rawNumStr(L.current, fmt);
+      const tgtRawL = tgtsL.length > 1 ? `=${tgtsL.map(v => rawNum(v)).join('+')}` : rawNumStr(L.target, fmt);
+      let tr=`<tr style="background:#f8fafc;font-weight:800;border-top:2px solid var(--border);"><td>LATAM</td><td data-raw="${actRawL}"><span class="number"${isHero?' style="color:var(--primary)"':''}>${fv(L.current,fmt,isFull)}</span></td>`;
       if(isHero){
         const tgtHtml = tgtPending ? `<span class="number dim">—<span class="tgt-loading-dot"></span></span>` : `<span class="number dim tgt-cell">${fv(L.target,fmt,isFull)}</span>`;
         const varHtml = tgtPending ? `<span class="badge badge-neu"><span class="tgt-loading-dot"></span></span>` : badge(L.current,L.target,fmt,tc);
-        tr+=`<td class="sep-l tgt-cell">${tgtHtml}</td><td class="tgt-cell">${varHtml}</td>`;
+        tr+=`<td class="sep-l tgt-cell" data-raw="${tgtRawL}">${tgtHtml}</td><td class="tgt-cell" data-raw="${formulaVar(L.current,L.target,fmt)}">${varHtml}</td>`;
       }
-      tr+=`<td class="sep-l"><span class="number dim">${fv(L.m1,fmt,isFull)}</span></td><td>${badge(L.current,L.m1,fmt,tc)}</td>`;
-      tr+=`<td class="sep-l">${badge(L.current,L.y1,fmt,tc)}</td>`;
-      if(isHero&&rrMetricData){const e=latamRR;tr+=`<td class="sep-l" style="background:#fdfcff"><span class="number dim">${fv(e?.rr,fmt,isFull)}</span></td><td style="background:#fdfcff"><span class="number dim">${fv(e?.be,fmt,isFull)}</span></td><td style="background:#fdfcff">${badgePct(e?.varBe,tc)}</td><td class="sep-l" style="background:#fff7ed">${badgePct(e?.rrVsLm,tc)}</td><td style="background:#fff7ed">${badgePct(e?.rrVsLy,tc)}</td>`;}
+      tr+=`<td class="sep-l" data-raw="${rawNumStr(L.m1,fmt)}"><span class="number dim">${fv(L.m1,fmt,isFull)}</span></td><td data-raw="${formulaVar(L.current,L.m1,fmt)}">${badge(L.current,L.m1,fmt,tc)}</td>`;
+      tr+=`<td class="sep-l" data-raw="${formulaVar(L.current,L.y1,fmt)}">${badge(L.current,L.y1,fmt,tc)}</td>`;
+      if(isHero&&rrMetricData){
+        const e=latamRR;
+        let cRRFormL = '';
+        if(e && e.be != null && L.target && L.target !== 0 && L.current != null){
+          if(actsL.length > 0 && tgtsL.length > 0){
+            const aP = actsL.length > 1 ? `(${actsL.map(v => rawNum(v)).join('+')})` : String(rawNum(actsL[0]));
+            const tP = tgtsL.length > 1 ? `(${tgtsL.map(v => rawNum(v)).join('+')})` : String(rawNum(tgtsL[0]));
+            cRRFormL = `=${rawNum(e.be)}*(${aP}/${tP})`;
+          } else {
+            cRRFormL = formulaRR(e.be, L.current, L.target);
+          }
+        }
+        const varBeForm = (e?.rr != null && e?.be != null) ? formulaVarBe(e.rr, e.be) : '';
+        const varLmForm = (e?.rr != null && e?.lmFull != null) ? formulaVarBe(e.rr, e.lmFull) : (e?.rrVsLm != null ? Number(e.rrVsLm.toFixed(8)) + '%' : '');
+        const varLyForm = (e?.rr != null && e?.lyFull != null) ? formulaVarBe(e.rr, e.lyFull) : (e?.rrVsLy != null ? Number(e.rrVsLy.toFixed(8)) + '%' : '');
+        tr+=`<td class="sep-l" style="background:#fdfcff" data-raw="${cRRFormL || rawNumStr(e?.rr,fmt)}"><span class="number dim">${fv(e?.rr,fmt,isFull)}</span></td>` +
+            `<td style="background:#fdfcff" data-raw="${rawNumStr(e?.be,fmt)}"><span class="number dim">${fv(e?.be,fmt,isFull)}</span></td>` +
+            `<td style="background:#fdfcff" data-raw="${varBeForm || rawPctStr(e?.varBe)}">${badgePct(e?.varBe,tc)}</td>` +
+            `<td class="sep-l" style="background:#fff7ed" data-raw="${varLmForm}">${badgePct(e?.rrVsLm,tc)}</td>` +
+            `<td style="background:#fff7ed" data-raw="${varLyForm}">${badgePct(e?.rrVsLy,tc)}</td>`;
+      }
       tr+=`</tr>`;
       tbody+=tr;
     }
@@ -492,11 +627,11 @@
     const isFull = !!PANEL_NUM_FULL['panel-' + mid];
     const L=rows['LATAM'];
     if(L&&L.current!=null){
-      tbody+=`<tr style="background:#f8fafc;font-weight:800;border-top:2px solid var(--border);"><td>LATAM</td><td><span class="number">${fv(L.current,fmt,isFull)}</span></td><td class="sep-l"><span class="number dim">${fv(L.prev,fmt,isFull)}</span></td><td>${badge(L.current,L.prev,fmt,tc)}</td></tr>`;
+      tbody+=`<tr style="background:#f8fafc;font-weight:800;border-top:2px solid var(--border);"><td>LATAM</td><td data-raw="${rawNumStr(L.current,fmt)}"><span class="number">${fv(L.current,fmt,isFull)}</span></td><td class="sep-l" data-raw="${rawNumStr(L.prev,fmt)}"><span class="number dim">${fv(L.prev,fmt,isFull)}</span></td><td data-raw="${formulaVar(L.current,L.prev,fmt)}">${badge(L.current,L.prev,fmt,tc)}</td></tr>`;
     }
     ctries.forEach(c=>{
       const d=rows[c];
-      tbody+=`<tr><td>${COUNTRY_NAMES[c]||c}</td><td><span class="number">${fv(d.current,fmt,isFull)}</span></td><td class="sep-l"><span class="number dim">${fv(d.prev,fmt,isFull)}</span></td><td>${badge(d.current,d.prev,fmt,tc)}</td></tr>`;
+      tbody+=`<tr><td>${COUNTRY_NAMES[c]||c}</td><td data-raw="${rawNumStr(d.current,fmt)}"><span class="number">${fv(d.current,fmt,isFull)}</span></td><td class="sep-l" data-raw="${rawNumStr(d.prev,fmt)}"><span class="number dim">${fv(d.prev,fmt,isFull)}</span></td><td data-raw="${formulaVar(d.current,d.prev,fmt)}">${badge(d.current,d.prev,fmt,tc)}</td></tr>`;
     });
     const wkTxt = cfg.week
       ? `${cfg.weekNum!=null?`Semana ${cfg.weekNum} · `:''}del ${cfg.week}${cfg.weekEnd?` al ${cfg.weekEnd}`:''} · fijo (no suma)`
@@ -544,11 +679,11 @@
     const isFull = !!PANEL_NUM_FULL['panel-' + mid];
     const L=rows['LATAM'];
     if(L&&L.current!=null){
-      tbody+=`<tr style="background:#f8fafc;font-weight:800;border-top:2px solid var(--border);"><td>LATAM</td><td><span class="number">${fv(L.current,fmt,isFull)}</span></td><td class="sep-l"><span class="number dim">${fv(L.prev,fmt,isFull)}</span></td><td>${badge(L.current,L.prev,fmt,tc)}</td></tr>`;
+      tbody+=`<tr style="background:#f8fafc;font-weight:800;border-top:2px solid var(--border);"><td>LATAM</td><td data-raw="${rawNumStr(L.current,fmt)}"><span class="number">${fv(L.current,fmt,isFull)}</span></td><td class="sep-l" data-raw="${rawNumStr(L.prev,fmt)}"><span class="number dim">${fv(L.prev,fmt,isFull)}</span></td><td data-raw="${formulaVar(L.current,L.prev,fmt)}">${badge(L.current,L.prev,fmt,tc)}</td></tr>`;
     }
     ctries.forEach(c=>{
       const d=rows[c];
-      tbody+=`<tr><td>${COUNTRY_NAMES[c]||c}</td><td><span class="number">${fv(d.current,fmt,isFull)}</span></td><td class="sep-l"><span class="number dim">${fv(d.prev,fmt,isFull)}</span></td><td>${badge(d.current,d.prev,fmt,tc)}</td></tr>`;
+      tbody+=`<tr><td>${COUNTRY_NAMES[c]||c}</td><td data-raw="${rawNumStr(d.current,fmt)}"><span class="number">${fv(d.current,fmt,isFull)}</span></td><td class="sep-l" data-raw="${rawNumStr(d.prev,fmt)}"><span class="number dim">${fv(d.prev,fmt,isFull)}</span></td><td data-raw="${formulaVar(d.current,d.prev,fmt)}">${badge(d.current,d.prev,fmt,tc)}</td></tr>`;
     });
     const pl = cfg.prevLabel ? ` (${cfg.prevLabel})` : '';
     const thead=`<tr>
@@ -603,7 +738,11 @@
   function injectTargets(targetsData) {
     TARGETS_LOADED = true;
     if(!CURRENT_DATA) return;
+    if(targetsData && targetsData._daily) {
+      CURRENT_DATA.dailyTargets = targetsData._daily;
+    }
     Object.keys(targetsData).forEach(function(metricKey) {
+      if(metricKey === '_daily') return;
       const tByCountry = targetsData[metricKey];
       if(!CURRENT_DATA.metrics[metricKey]) return;
       Object.keys(tByCountry).forEach(function(c) {
@@ -634,14 +773,58 @@
     const tsvRows = [];
     const htmlRows = [];
 
-    const getCellText = (cell) => {
-      const clone = cell.cloneNode(true);
-      clone.querySelectorAll('.sort-icon, svg, .tgt-loading-dot').forEach(el => el.remove());
-      const range = clone.querySelector('.th-range');
-      if (range) {
-        range.textContent = ' (' + range.textContent.trim() + ')';
+    const getCellText = (cell, isHeader) => {
+      if (isHeader) {
+        const clone = cell.cloneNode(true);
+        clone.querySelectorAll('.sort-icon, svg, .tgt-loading-dot').forEach(el => el.remove());
+        const range = clone.querySelector('.th-range');
+        if (range) {
+          range.textContent = ' (' + range.textContent.trim() + ')';
+        }
+        return (clone.innerText || clone.textContent || '').replace(/\s+/g, ' ').trim();
       }
-      return (clone.innerText || clone.textContent || '').replace(/\s+/g, ' ').trim();
+
+      // Si es la columna de País (primera columna), devolver texto limpio
+      if (cell.cellIndex === 0) {
+        return (cell.innerText || cell.textContent || '').replace(/\s+/g, ' ').trim();
+      }
+
+      // 1. Si la celda tiene data-raw (valor numérico exacto sin formato), usarlo prioritariamente
+      if (cell.hasAttribute('data-raw')) {
+        const raw = cell.getAttribute('data-raw');
+        if (raw !== '') return raw;
+      }
+
+      // 2. Parsear el contenido textual de la celda para que Sheets lo entienda como número
+      let txt = (cell.innerText || cell.textContent || '').trim();
+      if (!txt || txt === '—' || txt === '–') return '';
+
+      txt = txt.replace(/\s+/g, ' ').trim();
+
+      // Porcentaje: quitar '+' inicial si lo tiene (ej: '+88.1%' -> '88.1%')
+      if (txt.includes('%')) {
+        return txt.replace(/^\+/, '').replace(/\s*pp/g, '%').trim();
+      }
+      if (txt.includes('pp')) {
+        return txt.replace(/^\+/, '').replace(/pp/g, '').trim() + '%';
+      }
+      if (txt.includes('min')) {
+        return txt.replace(/min/g, '').replace(/^\+/, '').trim();
+      }
+
+      // Número con puntos de miles español: '3.068.733' -> '3068733'
+      if (/^-?\d{1,3}(\.\d{3})+$/.test(txt)) {
+        return txt.replace(/\./g, '');
+      }
+
+      // Número abreviado k o M: '82.6k' -> 82600, '3.07M' -> 3070000
+      if (/^-?\d+(\.\d+)?[kM]$/i.test(txt)) {
+        const mult = txt.slice(-1).toLowerCase() === 'm' ? 1e6 : 1e3;
+        const val = parseFloat(txt.slice(0, -1)) * mult;
+        return String(Math.round(val));
+      }
+
+      return txt.replace(/^\+/, '');
     };
 
     table.querySelectorAll('thead tr').forEach(tr => {
@@ -650,9 +833,9 @@
       const tsvCols = [];
       const htmlCols = [];
       cells.forEach(th => {
-        const txt = getCellText(th);
+        const txt = getCellText(th, true);
         tsvCols.push(txt);
-        htmlCols.push(`<th style="border:1px solid #cbd5e1;padding:6px 10px;background:#f8fafc;font-weight:700;text-align:${th.style.textAlign || 'right'}">${escapeHtml(txt)}</th>`);
+        htmlCols.push(`<th style="border:1px solid #cbd5e1;padding:6px 10px;background:#f1f5f9;color:#0f172a;font-weight:700;text-align:center;vertical-align:middle;white-space:normal;word-wrap:break-word;">${escapeHtml(txt)}</th>`);
       });
       tsvRows.push(tsvCols.join('\t'));
       htmlRows.push(`<tr>${htmlCols.join('')}</tr>`);
@@ -664,9 +847,9 @@
       const tsvCols = [];
       const htmlCols = [];
       cells.forEach(td => {
-        const txt = getCellText(td);
+        const txt = getCellText(td, false);
         tsvCols.push(txt);
-        htmlCols.push(`<td style="border:1px solid #e2e8f0;padding:6px 10px;text-align:${td.style.textAlign || 'center'}">${escapeHtml(txt)}</td>`);
+        htmlCols.push(`<td style="border:1px solid #e2e8f0;padding:6px 10px;text-align:center;vertical-align:middle;">${escapeHtml(txt)}</td>`);
       });
       tsvRows.push(tsvCols.join('\t'));
       htmlRows.push(`<tr>${htmlCols.join('')}</tr>`);
@@ -736,6 +919,70 @@
     copyTable('panel-' + mid, btn);
   }
 
+  // ── MANEJO DE PARÁMETROS EN URL (Compartir enlace con rango filtrado) ──
+  function getInitialUrlDates() {
+    var s = '', e = '';
+    try {
+      var p = new URLSearchParams(window.location.search);
+      s = p.get('start') || p.get('inicio') || '';
+      e = p.get('end') || p.get('fin') || '';
+    } catch(err){}
+    if (!s || !e) {
+      try {
+        if (window.top && window.top !== window) {
+          var pt = new URLSearchParams(window.top.location.search);
+          s = s || pt.get('start') || pt.get('inicio') || '';
+          e = e || pt.get('end') || pt.get('fin') || '';
+        }
+      } catch(errTop){}
+    }
+    return { start: s, end: e };
+  }
+
+  // En entorno Google Apps Script (iframe), leer parámetros de la URL padre de forma asíncrona
+  if (typeof google !== 'undefined' && google.script && google.script.url && google.script.url.getLocation) {
+    google.script.url.getLocation(function(loc) {
+      if (loc && loc.parameter) {
+        var us = loc.parameter.start || loc.parameter.inicio || '';
+        var ue = loc.parameter.end || loc.parameter.fin || '';
+        if (us && ue) {
+          if (us.slice(0, 7) !== ue.slice(0, 7)) {
+            UNLOCKED_RANGE = true;
+          }
+          if (CURRENT_DATA && (CURRENT_DATA.currentStart !== us || CURRENT_DATA.currentEnd !== ue)) {
+            fetchPhase1(us, ue);
+          }
+        }
+      }
+    });
+  }
+
+  function updateUrlDates(s, e) {
+    if (!s || !e) return;
+    try {
+      // 1. Google Apps Script Web App (actualiza la barra de URL del navegador padre)
+      if (typeof google !== 'undefined' && google.script && google.script.history) {
+        google.script.history.replace(null, { pagina: 'mtd', start: s, end: e }, '?pagina=mtd&start=' + s + '&end=' + e);
+      }
+      // 2. Navegador directo / local
+      var sp = new URLSearchParams(window.location.search);
+      sp.set('pagina', 'mtd');
+      sp.set('start', s);
+      sp.set('end', e);
+      var newUrl = window.location.pathname + '?' + sp.toString();
+      window.history.replaceState(null, '', newUrl);
+      if (window.top && window.top !== window) {
+        try {
+          var topSp = new URLSearchParams(window.top.location.search);
+          topSp.set('pagina', 'mtd');
+          topSp.set('start', s);
+          topSp.set('end', e);
+          window.top.history.replaceState(null, '', window.top.location.pathname + '?' + topSp.toString());
+        } catch(eTop){}
+      }
+    } catch(err){}
+  }
+
   window.addEventListener('load', () => {
     console.log('[MTD] build: LATAM = suma de visibles + red de seguridad en el splash');
     const splash = document.getElementById('splash');
@@ -753,14 +1000,22 @@
         '<div style="color:var(--text-light);font-size:12px;margin-bottom:16px;max-width:340px;text-align:center;line-height:1.5;">La primera carga (con la caché vacía) es la más lenta. Reintentá — después queda cacheada y abre al instante.</div>' +
         '<button onclick="doRefresh()" style="font-size:13px;font-weight:700;padding:9px 20px;border:none;border-radius:8px;background:var(--primary);color:#fff;cursor:pointer;">↻ Reintentar</button>';
     }, 75000);
-    fetchPhase1('', '', () => { clearTimeout(safety); open(); });
+
+    const initDates = getInitialUrlDates();
+    if (initDates.start && initDates.end) {
+      if (initDates.start.slice(0, 7) !== initDates.end.slice(0, 7)) {
+        UNLOCKED_RANGE = true;
+      }
+    }
+    fetchPhase1(initDates.start, initDates.end, () => { clearTimeout(safety); open(); });
   });
 
   // RR DESACOPLADO: se pide aparte para no bloquear la carga del MTD. Cuando
   // llega, se inyecta en CURRENT_DATA.rrData y se re-renderiza (las columnas de
   // RR de los hero hasta entonces muestran "—").
-  function loadRRData() {
+  function loadRRData(asOfDate) {
     if (typeof google === 'undefined' || !google.script || !google.script.run) return;
+    const targetDate = asOfDate || (CURRENT_DATA ? CURRENT_DATA.currentEnd : null);
     google.script.run
       .withSuccessHandler(function(rr){
         if (!rr || !CURRENT_DATA) return;
@@ -769,7 +1024,7 @@
         renderPanels(CURRENT_DATA);
       })
       .withFailureHandler(function(){})
-      .fetchRRData();
+      .fetchRRData(targetDate);
   }
 
   function fetchPhase1(s, e, callback) {
@@ -779,10 +1034,13 @@
       const cached=getMtdCache();
       if(cached){
         CURRENT_DATA=cached;
+        if(CURRENT_DATA.currentStart && CURRENT_DATA.currentEnd){
+          updateUrlDates(CURRENT_DATA.currentStart, CURRENT_DATA.currentEnd);
+        }
         initDatepickers(); renderPanels(CURRENT_DATA);
         if(callback) callback();
         fetchPhase2(CURRENT_DATA.currentStart, CURRENT_DATA.currentEnd);
-        loadRRData();
+        loadRRData(CURRENT_DATA.currentEnd);
         return;
       }
     }
@@ -790,12 +1048,18 @@
       .withSuccessHandler(function(res) {
         CURRENT_DATA = res.payload;
         if(CURRENT_DATA && !CURRENT_DATA.error) {
+          if(res.payload && res.payload.dailyActuals) {
+            CURRENT_DATA.dailyActuals = res.payload.dailyActuals;
+          }
           if(isDefault) setMtdCache(CURRENT_DATA);
+          if(CURRENT_DATA.currentStart && CURRENT_DATA.currentEnd){
+            updateUrlDates(CURRENT_DATA.currentStart, CURRENT_DATA.currentEnd);
+          }
           initDatepickers(); renderPanels(CURRENT_DATA);
         }
         if(callback) callback();
         fetchPhase2(CURRENT_DATA.currentStart, CURRENT_DATA.currentEnd);
-        loadRRData();
+        loadRRData(CURRENT_DATA.currentEnd);
       })
       .withFailureHandler(function(err) {
         document.getElementById('main-container').innerHTML='<div style="padding:24px;color:var(--negative)">Error al cargar: '+err+'</div>';
@@ -837,6 +1101,7 @@
   function triggerDateChange() {
     const s=document.getElementById('f-start').value, e=document.getElementById('f-end').value;
     if(!s||!e) return;
+    updateUrlDates(s, e);
     // Mostrar loading
     document.getElementById('date-loading-bar').classList.add('visible');
     document.getElementById('main-container').classList.add('date-loading');
@@ -865,7 +1130,32 @@
     triggerDateChange();
   }
 
-  // ── Helpers de mes (el rango debe estar dentro de un único mes) ──
+  // ── DESBLOQUEO SECRETO DE FECHAS (Al tocar BE09) ──
+  let UNLOCKED_RANGE = false;
+
+  function toggleDateUnlock() {
+    UNLOCKED_RANGE = !UNLOCKED_RANGE;
+    const maxD = (CURRENT_DATA && CURRENT_DATA.maxDemandDate) || null;
+    const fStart = document.getElementById('f-start');
+    const startVal = (fStart && fStart.value) || (CURRENT_DATA && CURRENT_DATA.currentStart) || '';
+    if (fpEnd) {
+      if (UNLOCKED_RANGE) {
+        fpEnd.set('minDate', startVal || undefined);
+        fpEnd.set('maxDate', maxD || undefined);
+      } else {
+        const cap = (maxD && maxD < monthEndOf(startVal)) ? maxD : monthEndOf(startVal);
+        fpEnd.set('minDate', startVal || undefined);
+        fpEnd.set('maxDate', cap);
+        let ce = (fpEnd.selectedDates[0]) ? fpEnd.selectedDates[0].toISOString().slice(0, 10) : null;
+        if (ce && ce > cap) {
+          fpEnd.setDate(cap, false);
+          triggerDateChange();
+        }
+      }
+    }
+  }
+
+  // ── Helpers de mes (el rango debe estar dentro de un único mes si no está desbloqueado) ──
   function monthEndOf(d){ const p=d.split('-'); const last=new Date(+p[0],+p[1],0).getDate(); return d.slice(0,7)+'-'+('0'+last).slice(-2); }
 
   // ── Rango comparado (M-1 / LY) ──
@@ -893,6 +1183,12 @@
   function initDatepickers() {
     if(!CURRENT_DATA) return;
     const fStart=document.getElementById('f-start'), fEnd=document.getElementById('f-end');
+
+    // Si las fechas del dataset cruzan meses (ej. del 26 al domingo de otro mes), desbloquear rango automáticamente
+    if(CURRENT_DATA.currentStart && CURRENT_DATA.currentEnd && CURRENT_DATA.currentStart.slice(0,7) !== CURRENT_DATA.currentEnd.slice(0,7)) {
+      UNLOCKED_RANGE = true;
+    }
+
     // Capamos el fin al último día con datos reales
     if(CURRENT_DATA.maxDemandDate && CURRENT_DATA.maxDemandDate < CURRENT_DATA.currentEnd) {
       CURRENT_DATA.currentEnd = CURRENT_DATA.maxDemandDate;
@@ -904,8 +1200,9 @@
       .filter(d => !maxD || d <= maxD)
       .sort();   // 'yyyy-MM-dd' → orden lexicográfico = cronológico
 
-    // Fin permitido: mismo mes que el inicio (capado al último día con datos)
+    // Fin permitido: mismo mes que el inicio (capado al último día con datos), salvo en modo desbloqueado
     function endCapFor(startStr){
+      if(UNLOCKED_RANGE) return maxD || undefined;
       let cap = monthEndOf(startStr);
       if (maxD && maxD < cap) cap = maxD;
       return cap;
@@ -915,13 +1212,20 @@
     // Permitir ver datos desde 2025 en adelante (o la primera fecha con datos si es anterior)
     const minAllowed = '2025-01-01';
     let calcMinDate = (enableDates.length > 0 && enableDates[0] < minAllowed) ? enableDates[0] : minAllowed;
-    if(enableDates.length > 0 && enableDates[0] <= minAllowed) baseCfg.enable = enableDates;
+    if(!UNLOCKED_RANGE && enableDates.length > 0 && enableDates[0] <= minAllowed) baseCfg.enable = enableDates;
     if(fpStart) fpStart.destroy();
     if(fpEnd)   fpEnd.destroy();
 
-    // El INICIO es el que manda: al cambiarlo, el FIN queda limitado al mismo mes
+    const curS = CURRENT_DATA.currentStart || (fStart && fStart.value);
+    const curE = CURRENT_DATA.currentEnd || (fEnd && fEnd.value);
+
+    // Asegurar que los inputs reflejen de inmediato la fecha y no queden en blanco
+    if(fStart && curS) fStart.value = curS;
+    if(fEnd && curE) fEnd.value = curE;
+
+    // El INICIO es el que manda: al cambiarlo, el FIN queda limitado al mismo mes (o libre si UNLOCKED_RANGE)
     fpStart=flatpickr(fStart,{...baseCfg,
-      defaultDate:CURRENT_DATA.currentStart,
+      defaultDate:curS,
       minDate:calcMinDate||undefined,
       maxDate:maxD||undefined,
       onChange:function(sel,dateStr){
@@ -929,22 +1233,30 @@
         const cap=endCapFor(dateStr);
         if(fpEnd){ fpEnd.set('minDate',dateStr); fpEnd.set('maxDate',cap); }
         let ce=(fpEnd&&fpEnd.selectedDates[0])?fpEnd.selectedDates[0].toISOString().slice(0,10):null;
-        if(!ce||ce>cap){ fpEnd.setDate(cap,false); ce=cap; }
-        else if(ce<dateStr){ fpEnd.setDate(dateStr,false); ce=dateStr; }
+        if(UNLOCKED_RANGE){
+          if(!ce || (maxD && ce > maxD)){ fpEnd.setDate(maxD || dateStr, false); ce = maxD || dateStr; }
+          else if(ce < dateStr){ fpEnd.setDate(dateStr, false); ce = dateStr; }
+        } else {
+          if(!ce||ce>cap){ fpEnd.setDate(cap,false); ce=cap; }
+          else if(ce<dateStr){ fpEnd.setDate(dateStr,false); ce=dateStr; }
+        }
         if(dateStr===CURRENT_DATA.currentStart && ce===CURRENT_DATA.currentEnd) return;
         triggerDateChange();
       }
     });
     fpEnd=flatpickr(fEnd,{...baseCfg,
-      defaultDate:CURRENT_DATA.currentEnd,
-      minDate:CURRENT_DATA.currentStart||undefined,
-      maxDate:endCapFor(CURRENT_DATA.currentStart),
+      defaultDate:curE,
+      minDate:curS||undefined,
+      maxDate:endCapFor(curS),
       onChange:function(sel,dateStr){
         if(!dateStr) return;
         if(dateStr===CURRENT_DATA.currentEnd) return;
         triggerDateChange();
       }
     });
+
+    if(fpStart && curS) fpStart.setDate(curS, false);
+    if(fpEnd && curE) fpEnd.setDate(curE, false);
   }
 
   // Recargar SIN recargar toda la página: antes hacía window.top.location.reload(),

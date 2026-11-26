@@ -8,11 +8,185 @@ const MINUTO_ENVIO = 30;
 const VENTANA_MIN  = 270; // 4.5 horas: de 09:30 a 14:00 para reintentar cada 10 min si BigQuery/OKRs vienen demorados
 const PROP_KEY     = 'ULTIMO_ENVIO_EMAIL';
 
-// Verifica si Pedidos confirmados y Facturación (GMV) en la hoja de actuals
-// están cargados al menos hasta la fecha que reporta la página daily.
-// Si no están actualizados, no se debe enviar el correo.
-function verificarDatosActualizadosParaEmail(payload) {
+// =================================================================
+// VALIDACIÓN DE RUN RATE (RR) PARA ENVÍO DE EMAIL
+// =================================================================
+
+/**
+ * Evalúa si el objeto de Run Rate (rrData) contiene datos válidos y completos
+ * para Orders y Facturación GMV acordes a la fecha esperada.
+ */
+function _evaluarValidezRR(rrData, targetDateStr) {
+  if (!rrData || typeof rrData !== 'object') {
+    return { ok: false, motivo: 'Objeto de Run Rate no disponible' };
+  }
+  if (rrData.meta && rrData.meta.asOfLabel === 'Sin datos') {
+    return { ok: false, motivo: 'Run Rate sin datos para el período actual' };
+  }
+  if (rrData.meta && rrData.meta.incomplete) {
+    if (rrData.meta.incomplete.orders && rrData.meta.incomplete.gmv) {
+      return { ok: false, motivo: 'Orders y Facturación GMV no alcanzan la fecha de corte requerida' };
+    }
+    if (rrData.meta.incomplete.orders) {
+      return { ok: false, motivo: 'Orders no alcanza la fecha de corte requerida' };
+    }
+    if (rrData.meta.incomplete.gmv) {
+      return { ok: false, motivo: 'Facturación GMV no alcanza la fecha de corte requerida' };
+    }
+  }
+
+  function kpiTieneRRValido(kpiObj) {
+    if (!kpiObj) return false;
+    // Si LATAM tiene un valor válido numérico > 0
+    if (kpiObj['LATAM'] && kpiObj['LATAM'].rr != null && !isNaN(kpiObj['LATAM'].rr) && Number(kpiObj['LATAM'].rr) > 0) {
+      return true;
+    }
+    // O si al menos un país visible tiene un valor válido numérico > 0
+    var count = 0;
+    for (var k in kpiObj) {
+      if (k === 'LATAM') continue;
+      var item = kpiObj[k];
+      if (item && item.rr != null && !isNaN(item.rr) && Number(item.rr) > 0) {
+        count++;
+      }
+    }
+    return count > 0;
+  }
+
+  var tieneOrders = kpiTieneRRValido(rrData.orders);
+  var tieneGmv    = kpiTieneRRValido(rrData.gmv);
+
+  if (!tieneOrders && !tieneGmv) {
+    return { ok: false, motivo: 'Sin valores calculados de Run Rate ni en Orders ni en Facturación GMV' };
+  }
+  if (!tieneOrders) {
+    return { ok: false, motivo: 'Sin valores calculados de Run Rate en Orders' };
+  }
+  if (!tieneGmv) {
+    return { ok: false, motivo: 'Sin valores calculados de Run Rate en Facturación GMV' };
+  }
+
+  if (targetDateStr && rrData.meta && rrData.meta.cutoff && rrData.meta.cutoff < targetDateStr) {
+    return {
+      ok: false,
+      motivo: 'Run Rate cortado al ' + rrData.meta.cutoff + ', esperando datos al ' + targetDateStr
+    };
+  }
+
+  return { ok: true, motivo: 'Run Rate disponible y completo' };
+}
+
+// Envía un correo de alerta a matias.cagliero@pedidosya.com cuando el Daily Report
+// no puede despacharse automáticamente por falta de datos de Run Rate (RR).
+function _enviarAlertaFaltaRR(preCheck, horaStr) {
+  const destinatario = 'matias.cagliero@pedidosya.com';
   const zona = Session.getScriptTimeZone();
+  const fechaDmy = preCheck.targetDateDmy || preCheck.dailyDateDmy || Utilities.formatDate(new Date(), zona, 'dd/MM/yyyy');
+  const subject = `[ALERTA] Daily Report demorado: Falta Run Rate (RR) | ${fechaDmy}`;
+
+  const rrSource = (typeof getRRSource === 'function') ? getRRSource() : 'export';
+  const horaDetectada = horaStr || Utilities.formatDate(new Date(), zona, 'HH:mm');
+
+  const htmlBody = `
+    <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;max-width:620px;margin:0 auto;padding:24px;background:#ffffff;border:1px solid #e2e8f0;border-radius:12px;color:#1e293b;">
+      <div style="margin-bottom:16px;">
+        <span style="display:inline-block;background:#fef2f2;color:#dc2626;padding:6px 12px;border-radius:20px;font-size:12px;font-weight:700;letter-spacing:0.5px;text-transform:uppercase;">⚠️ Reporte Retenido</span>
+        <span style="float:right;font-size:12px;color:#64748b;">${horaDetectada} hs (${zona})</span>
+      </div>
+
+      <h2 style="margin:0 0 8px 0;font-size:18px;color:#0f172a;">El Daily Report no fue enviado por falta de Run Rate (RR)</h2>
+      <p style="margin:0 0 20px 0;font-size:13.5px;line-height:1.5;color:#475569;">
+        El proceso automático detectó que la hoja <strong>Daily Data</strong> ya cuenta con los datos del día, pero los valores de <strong>Run Rate (RR)</strong> para <em>Orders</em> y/o <em>Facturación GMV</em> aún no están disponibles o completos para la fecha <strong>${fechaDmy}</strong>.
+      </p>
+
+      <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:16px;margin-bottom:20px;">
+        <div style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:12px;">Diagnóstico de Fuentes</div>
+        <table style="width:100%;border-collapse:collapse;font-size:13px;">
+          <tr>
+            <td style="padding:6px 0;color:#475569;width:55%;">Hoja Daily Data:</td>
+            <td style="padding:6px 0;font-weight:600;color:${preCheck.dailyOk ? '#16a34a' : '#dc2626'};text-align:right;">${preCheck.dailyDateDmy} ${preCheck.dailyOk ? '✓' : '✗'}</td>
+          </tr>
+          <tr>
+            <td style="padding:6px 0;color:#475569;border-top:1px solid #f1f5f9;">Actuals Confirmed Orders:</td>
+            <td style="padding:6px 0;font-weight:600;color:${preCheck.ordersOk ? '#16a34a' : '#dc2626'};text-align:right;">${preCheck.ordersDateDmy || '—'} ${preCheck.ordersOk ? '✓' : '✗'}</td>
+          </tr>
+          <tr>
+            <td style="padding:6px 0;color:#475569;border-top:1px solid #f1f5f9;">Actuals Facturación GMV:</td>
+            <td style="padding:6px 0;font-weight:600;color:${preCheck.gmvOk ? '#16a34a' : '#dc2626'};text-align:right;">${preCheck.gmvDateDmy || '—'} ${preCheck.gmvOk ? '✓' : '✗'}</td>
+          </tr>
+          <tr>
+            <td style="padding:6px 0;color:#475569;border-top:1px solid #f1f5f9;">Origen activo de RR:</td>
+            <td style="padding:6px 0;font-weight:600;color:#0f172a;text-align:right;">Modo ${rrSource.toUpperCase()}</td>
+          </tr>
+          <tr>
+            <td style="padding:6px 0;color:#475569;border-top:1px solid #f1f5f9;">Estado Run Rate (RR):</td>
+            <td style="padding:6px 0;font-weight:700;color:#dc2626;text-align:right;">${preCheck.rrMotivo || preCheck.motivo}</td>
+          </tr>
+        </table>
+      </div>
+
+      <div style="background:#eff6ff;border-left:4px solid #3b82f6;padding:12px 14px;border-radius:4px;font-size:12.5px;color:#1e40af;line-height:1.5;margin-bottom:20px;">
+        <strong>Comportamiento del sistema:</strong><br>
+        • El trigger automático continuará comprobando el estado cada <strong>10 minutos</strong> dentro de la ventana de envío (hasta las 14:00 hs).<br>
+        • En cuanto impacten los datos de RR (por ejemplo, tras la corrida del proceso de OKRs), el Daily Report se despachará <strong>automáticamente</strong> a toda la lista de distribución.<br>
+        • Si deseás despacharlo de todas formas sin el RR, podés forzar el envío desde la pestaña <strong>Email</strong> del panel web.
+      </div>
+
+      <div style="font-size:11px;color:#94a3b8;border-top:1px solid #f1f5f9;padding-top:12px;text-align:center;">
+        Notificación automática de monitoreo · PeYa Market Performance
+      </div>
+    </div>
+  `;
+
+  MailApp.sendEmail({
+    to: destinatario,
+    subject: subject,
+    htmlBody: htmlBody,
+    name: 'PeYa Market Performance - Alertas'
+  });
+}
+
+/**
+ * Función de prueba para verificar el envío del correo de alerta por falta de RR.
+ */
+function testAlertaFaltaRR() {
+  const dummyCheck = {
+    ok: false,
+    dailyOk: true,
+    ordersOk: true,
+    gmvOk: false,
+    rrOk: false,
+    dailyDateDmy: '15/11/2026',
+    ordersDateDmy: '15/11/2026',
+    gmvDateDmy: '14/11/2026',
+    targetDateDmy: '15/11/2026',
+    rrMotivo: 'Facturación GMV no alcanza la fecha de corte requerida',
+    motivo: 'Datos de Run Rate (RR) no disponibles (Facturación GMV no alcanza la fecha de corte requerida)'
+  };
+  _enviarAlertaFaltaRR(dummyCheck, '09:35');
+  Logger.log('Alerta de prueba enviada a matias.cagliero@pedidosya.com');
+}
+
+// Verifica si Pedidos confirmados, Facturación (GMV) y Run Rate (RR)
+// están cargados y completos para la fecha que reporta la página daily y la fecha esperada.
+// Si no están actualizados o falta el RR, no se debe enviar el correo.
+function verificarDatosActualizadosParaEmail(payload, fechaObjetivoYmd) {
+  const zona = Session.getScriptTimeZone();
+
+  function fmtDmy(ymd) {
+    if (!ymd) return '—';
+    const p = String(ymd).split('-');
+    return (p.length === 3) ? `${p[2]}/${p[1]}/${p[0]}` : ymd;
+  }
+
+  // Fecha esperada / objetivo (por defecto: ayer D-1)
+  let targetDateStr = fechaObjetivoYmd;
+  if (!targetDateStr) {
+    const ayer = new Date();
+    ayer.setDate(ayer.getDate() - 1);
+    targetDateStr = Utilities.formatDate(ayer, zona, 'yyyy-MM-dd');
+  }
+  const targetDateDmy = fmtDmy(targetDateStr);
 
   // 1) Fecha del daily (fechaReferencia / d1Date)
   let d1Date;
@@ -24,42 +198,75 @@ function verificarDatosActualizadosParaEmail(payload) {
     d1Date = new Date(hoy); d1Date.setDate(hoy.getDate() - 1);
   }
   const dailyDateStr = Utilities.formatDate(d1Date, zona, 'yyyy-MM-dd');
+  const dailyDateDmy = fmtDmy(dailyDateStr);
 
   // 2) Fechas reales cargadas en "A. TI - Actuals OKRs"
   const actuals = (typeof _getFechasActuals === 'function') ? _getFechasActuals() : { orders: null, gmv: null };
   const ordersDateStr = actuals.orders;
   const gmvDateStr = actuals.gmv;
+  const ordersDateDmy = fmtDmy(ordersDateStr);
+  const gmvDateDmy = fmtDmy(gmvDateStr);
 
-  const ordersOk = Boolean(ordersDateStr && ordersDateStr >= dailyDateStr);
-  const gmvOk    = Boolean(gmvDateStr && gmvDateStr >= dailyDateStr);
-  const ok = Boolean(ordersOk && gmvOk);
-
-  function fmtDmy(ymd) {
-    if (!ymd) return '—';
-    const p = ymd.split('-');
-    return (p.length === 3) ? `${p[2]}/${p[1]}/${p[0]}` : ymd;
+  // 3) Verificación de Run Rate (RR)
+  let checkRR = { ok: false, motivo: 'No evaluado' };
+  try {
+    if (typeof _getRRDataFromSheet === 'function') {
+      const rrData = _getRRDataFromSheet(false, targetDateStr);
+      checkRR = _evaluarValidezRR(rrData, targetDateStr);
+    } else {
+      checkRR = { ok: true, motivo: '_getRRDataFromSheet no disponible' };
+    }
+  } catch (errRR) {
+    checkRR = { ok: false, motivo: 'Error al verificar Run Rate: ' + errRR.message };
   }
 
+  // Validaciones:
+  // - dailyOk: la hoja Daily Data debe llegar al menos a la fecha esperada (ayer).
+  // - ordersOk: Confirmed Orders debe llegar a la fecha del daily y a la fecha esperada.
+  // - gmvOk: Facturación GMV debe llegar a la fecha del daily y a la fecha esperada.
+  // - rrOk: Run Rate debe contar con datos válidos y completos para Orders y GMV.
+  const rrOk     = Boolean(checkRR.ok);
+  const dailyOk  = Boolean(dailyDateStr && dailyDateStr >= targetDateStr);
+  const ordersOk = Boolean(ordersDateStr && ordersDateStr >= dailyDateStr && ordersDateStr >= targetDateStr);
+  const gmvOk    = Boolean(gmvDateStr && gmvDateStr >= dailyDateStr && gmvDateStr >= targetDateStr);
+  const ok       = Boolean(dailyOk && ordersOk && gmvOk && rrOk);
+
   let motivo = '';
-  if (!ordersOk && !gmvOk) {
-    motivo = `Pedidos confirmados (cargado hasta el ${fmtDmy(ordersDateStr)}) y Facturación (GMV) (cargada hasta el ${fmtDmy(gmvDateStr)}) no están actualizados con la fecha del daily (${fmtDmy(dailyDateStr)})`;
+  if (actuals && actuals.error) {
+    motivo = `Error leyendo Actuals OKRs (${actuals.error})`;
+  } else if (!dailyOk && !ordersOk && !gmvOk) {
+    motivo = `Hoja Daily (${dailyDateDmy}), Pedidos confirmados (${ordersDateDmy}) y Facturación GMV (${gmvDateDmy}) no están actualizados con la fecha esperada (${targetDateDmy})`;
+  } else if (!dailyOk) {
+    motivo = `Hoja Daily tiene fecha ${dailyDateDmy}, esperando datos de ayer (${targetDateDmy})`;
+  } else if (!ordersOk && !gmvOk) {
+    motivo = `Pedidos confirmados (${ordersDateDmy}) y Facturación GMV (${gmvDateDmy}) no están actualizados con la fecha requerida (${targetDateDmy})`;
   } else if (!ordersOk) {
-    motivo = `Pedidos confirmados (cargado hasta el ${fmtDmy(ordersDateStr)}) no está actualizado con la fecha del daily (${fmtDmy(dailyDateStr)})`;
+    motivo = `Pedidos confirmados (${ordersDateDmy}) no está actualizado con la fecha requerida (${targetDateDmy})`;
   } else if (!gmvOk) {
-    motivo = `Facturación (GMV) (cargada hasta el ${fmtDmy(gmvDateStr)}) no está actualizada con la fecha del daily (${fmtDmy(dailyDateStr)})`;
+    motivo = `Facturación GMV (${gmvDateDmy}) no está actualizada con la fecha requerida (${targetDateDmy})`;
+  } else if (!rrOk) {
+    motivo = `Datos de Run Rate (RR) no disponibles (${checkRR.motivo})`;
+  } else {
+    motivo = `Todos los datos están actualizados al ${targetDateDmy} (Daily: ${dailyDateDmy}, Orders: ${ordersDateDmy}, GMV: ${gmvDateDmy}, RR: OK)`;
   }
 
   return {
     ok: ok,
+    targetDate: targetDateStr,
+    targetDateDmy: targetDateDmy,
     dailyDate: dailyDateStr,
     ordersDate: ordersDateStr,
     gmvDate: gmvDateStr,
-    dailyDateDmy: fmtDmy(dailyDateStr),
-    ordersDateDmy: fmtDmy(ordersDateStr),
-    gmvDateDmy: fmtDmy(gmvDateStr),
+    dailyDateDmy: dailyDateDmy,
+    ordersDateDmy: ordersDateDmy,
+    gmvDateDmy: gmvDateDmy,
+    dailyOk: dailyOk,
     ordersOk: ordersOk,
     gmvOk: gmvOk,
-    motivo: motivo
+    rrOk: rrOk,
+    rrMotivo: checkRR.motivo,
+    motivo: motivo,
+    actualsError: actuals && actuals.error ? actuals.error : null
   };
 }
 
@@ -71,25 +278,32 @@ function checkYEnviarEmail() {
 
   const zona  = Session.getScriptTimeZone();
   const ahora = new Date();
-  const hh       = parseInt(Utilities.formatDate(ahora, zona, 'H'));
-  const mm       = parseInt(Utilities.formatDate(ahora, zona, 'm'));
+  const hh       = parseInt(Utilities.formatDate(ahora, zona, 'H'), 10);
+  const mm       = parseInt(Utilities.formatDate(ahora, zona, 'm'), 10);
   const minAhora = hh * 60 + mm;
   const minObj   = HORA_ENVIO * 60 + MINUTO_ENVIO;
   const hoyStr   = Utilities.formatDate(ahora, zona, 'yyyy-MM-dd');
   const horaStr  = Utilities.formatDate(ahora, zona, 'HH:mm');
 
+  const ayer = new Date(ahora);
+  ayer.setDate(ahora.getDate() - 1);
+  const ayerStr = Utilities.formatDate(ayer, zona, 'yyyy-MM-dd');
+  const ayerDmy = Utilities.formatDate(ayer, zona, 'dd/MM/yyyy');
+
   const props    = PropertiesService.getScriptProperties();
 
   Logger.log('=== checkYEnviarEmail ===');
-  Logger.log('Hora actual     : ' + horaStr + ' (' + zona + ')');
+  Logger.log('Hora actual               : ' + horaStr + ' (' + zona + ')');
   const finMinTotal = minObj + VENTANA_MIN;
   const finHoraStr = String(Math.floor(finMinTotal / 60)).padStart(2, '0') + ':' + String(finMinTotal % 60).padStart(2, '0');
-  Logger.log('Ventana de envío: ' + String(HORA_ENVIO).padStart(2, '0') + ':' + String(MINUTO_ENVIO).padStart(2, '0') + ' → ' + finHoraStr);
-  Logger.log('Hoy             : ' + hoyStr);
+  Logger.log('Ventana de envío          : ' + String(HORA_ENVIO).padStart(2, '0') + ':' + String(MINUTO_ENVIO).padStart(2, '0') + ' → ' + finHoraStr);
+  Logger.log('Fecha de hoy              : ' + hoyStr);
+  Logger.log('Fecha esperada (Ayer D-1) : ' + ayerDmy + ' (' + ayerStr + ')');
 
   if (minAhora < minObj || minAhora > minObj + VENTANA_MIN) {
-    Logger.log('Último envío    : ' + (props.getProperty(PROP_KEY) || 'nunca'));
-    Logger.log('Estado          : FUERA DE VENTANA — no se envía');
+    Logger.log('Último envío registrado   : ' + (props.getProperty(PROP_KEY) || 'nunca'));
+    Logger.log('Resultado comparación    : [FUERA DE VENTANA]');
+    Logger.log('Resultado final           : [NO SE ENVÍA] Hora actual fuera de ventana de envío (' + String(HORA_ENVIO).padStart(2, '0') + ':' + String(MINUTO_ENVIO).padStart(2, '0') + ' → ' + finHoraStr + ').');
     Logger.log('========================');
     return;
   }
@@ -98,27 +312,66 @@ function checkYEnviarEmail() {
   // Comprueba que la hoja del daily tenga al menos la fecha de ayer y que
   // Pedidos confirmados y GMV hayan sido cargados hasta esa fecha. Si aún no
   // están listos, sale rápido sin reservar ni enviar, esperando el próximo tick.
-  const ayer = new Date(ahora);
-  ayer.setDate(ahora.getDate() - 1);
-  const ayerStr = Utilities.formatDate(ayer, zona, 'yyyy-MM-dd');
-
+  var fastRes;
   try {
-    var fastRes = _readSheetFast();
-    if (fastRes && fastRes.payload) {
-      var preCheck = verificarDatosActualizadosParaEmail(fastRes.payload);
-      if (preCheck.dailyDate < ayerStr) {
-        Logger.log('Estado          : ESPERANDO DAILY — Hoja daily tiene fecha ' + preCheck.dailyDateDmy + ', esperando datos de ayer (' + Utilities.formatDate(ayer, zona, 'dd/MM/yyyy') + '). Reintentará en el próximo tick.');
-        Logger.log('========================');
-        return;
-      }
-      if (!preCheck.ok) {
-        Logger.log('Estado          : ESPERANDO ACTUALIZACIÓN — ' + preCheck.motivo + '. Reintentará en el próximo tick.');
-        Logger.log('========================');
-        return;
+    fastRes = _readSheetFast();
+  } catch (eFast) {
+    fastRes = { error: eFast.message };
+  }
+
+  if (!fastRes || !fastRes.payload) {
+    var errFast = (fastRes && fastRes.error) || 'Payload no disponible';
+    Logger.log('Lectura de datos          : [ERROR] ' + errFast);
+    Logger.log('Resultado comparación    : [ERROR AL LEER DAILY]');
+    Logger.log('Resultado final           : [NO SE ENVÍA] Falló la lectura de la hoja Daily Data (' + errFast + '). Se reintentará en el próximo tick.');
+    Logger.log('========================');
+    return;
+  }
+
+  var preCheck;
+  try {
+    preCheck = verificarDatosActualizadosParaEmail(fastRes.payload, ayerStr);
+  } catch (eCheck) {
+    Logger.log('Verificación datos        : [ERROR] ' + eCheck.message);
+    Logger.log('Resultado comparación    : [ERROR EN COMPARACIÓN]');
+    Logger.log('Resultado final           : [NO SE ENVÍA] Excepción al verificar datos (' + eCheck.message + '). Se reintentará en el próximo tick.');
+    Logger.log('========================');
+    return;
+  }
+
+  // Detalle explícito de la comparación en el log
+  Logger.log('--- Comparación de Fechas ---');
+  Logger.log('• Hoja Daily Data         : ' + preCheck.dailyDateDmy + ' (' + preCheck.dailyDate + ') → ' + (preCheck.dailyOk ? '[OK]' : '[PENDIENTE - esperando ' + ayerDmy + ']'));
+  Logger.log('• Actuals Confirmed Orders: ' + preCheck.ordersDateDmy + ' (' + (preCheck.ordersDate || '—') + ') → ' + (preCheck.ordersOk ? '[OK]' : '[PENDIENTE - desactualizado]'));
+  Logger.log('• Actuals Facturación GMV : ' + preCheck.gmvDateDmy + ' (' + (preCheck.gmvDate || '—') + ') → ' + (preCheck.gmvOk ? '[OK]' : '[PENDIENTE - desactualizado]'));
+  Logger.log('• Run Rate (RR)           : ' + (preCheck.rrOk ? '[OK]' : ('[PENDIENTE - ' + preCheck.rrMotivo + ']')));
+  Logger.log('Resultado comparación    : ' + (preCheck.ok ? '[ACTUALIZADO] Todos los datos al día' : ('[NO ACTUALIZADO] ' + preCheck.motivo)));
+  Logger.log('-----------------------------');
+
+  if (!preCheck.ok) {
+    Logger.log('Resultado final           : [NO SE ENVÍA] Esperando actualización de datos (' + preCheck.motivo + '). Se reintentará en el próximo tick (cada 10 min).');
+
+    // Si Daily Data ya tiene los datos del día pero el envío se retiene por falta de Run Rate (RR),
+    // se despacha una alerta al correo del administrador avisando la situación.
+    // Solo se envía UNA alerta por día para no saturar la casilla.
+    if (preCheck.dailyOk && !preCheck.rrOk) {
+      const PROP_ALERTA_RR = 'ULTIMA_ALERTA_RR_EMAIL';
+      const ultimaAlerta = props.getProperty(PROP_ALERTA_RR);
+      if (ultimaAlerta !== hoyStr) {
+        try {
+          _enviarAlertaFaltaRR(preCheck, horaStr);
+          props.setProperty(PROP_ALERTA_RR, hoyStr);
+          Logger.log('Alerta RR                 : [ENVIADA] Notificación enviada a matias.cagliero@pedidosya.com');
+        } catch (eAlert) {
+          Logger.log('Alerta RR                 : [ERROR] Falló el envío de alerta: ' + eAlert.message);
+        }
+      } else {
+        Logger.log('Alerta RR                 : [OMITIDA] Ya se envió alerta el día de hoy (' + hoyStr + ').');
       }
     }
-  } catch (eCheck) {
-    Logger.log('[checkYEnviarEmail] Advertencia en pre-chequeo: ' + eCheck.message);
+
+    Logger.log('========================');
+    return;
   }
 
   // ── Anti DOBLE ENVÍO ────────────────────────────────────────────────────────
@@ -132,7 +385,8 @@ function checkYEnviarEmail() {
   //   3) Si el envío falla, revertimos la marca para reintentar en el próximo tick.
   const lock = LockService.getScriptLock();
   if (!lock.tryLock(2000)) {
-    Logger.log('Estado          : OTRA EJECUCIÓN EN CURSO (lock) — se omite para no duplicar');
+    Logger.log('Lock de ejecución         : OTRA EJECUCIÓN EN CURSO (lock activo)');
+    Logger.log('Resultado final           : [NO SE ENVÍA] Se omite este tick porque ya hay otro proceso en curso.');
     Logger.log('========================');
     return;
   }
@@ -140,8 +394,8 @@ function checkYEnviarEmail() {
   var yaEnviado;
   try {
     yaEnviado = (props.getProperty(PROP_KEY) === hoyStr);
-    Logger.log('Último envío    : ' + (props.getProperty(PROP_KEY) || 'nunca'));
-    Logger.log('¿Ya enviado hoy?: ' + (yaEnviado ? 'SÍ — se omite' : 'NO'));
+    Logger.log('Último envío registrado   : ' + (props.getProperty(PROP_KEY) || 'nunca'));
+    Logger.log('¿Ya enviado hoy?          : ' + (yaEnviado ? 'SÍ' : 'NO'));
     if (!yaEnviado) {
       props.setProperty(PROP_KEY, hoyStr);   // RESERVA: el próximo tick ya verá "hoy" y saldrá
     }
@@ -150,32 +404,70 @@ function checkYEnviarEmail() {
   }
 
   if (yaEnviado) {
-    Logger.log('Estado          : YA ENVIADO HOY — se omite');
+    Logger.log('Resultado final           : [NO SE ENVÍA] El reporte de hoy (' + hoyStr + ') ya fue enviado previamente.');
     Logger.log('========================');
     return;
   }
 
-  Logger.log('Estado          : DENTRO DE VENTANA — enviando... (día ' + hoyStr + ' ya reservado)');
+  Logger.log('Resultado final           : [ENVIANDO] Datos actualizados, dentro de ventana y no enviado hoy. Iniciando envío del Daily Report (día ' + hoyStr + ' reservado)...');
 
   var result;
   try {
     result = sendDailyEmail();
   } catch (err) {
     props.deleteProperty(PROP_KEY);   // rollback: ni terminó → permitir reintento en el próximo tick
-    Logger.log('Resultado       : [ERROR] Excepción al enviar — ' + (err && err.message) + ' (reserva revertida)');
+    Logger.log('Envío diario              : [ERROR] Excepción al enviar — ' + (err && err.message) + ' (reserva revertida)');
+    Logger.log('Resultado final           : [FALLÓ EL ENVÍO] Se reintentará en el próximo tick.');
     Logger.log('========================');
     return;
   }
 
   if (result && result.ok) {
-    Logger.log('Resultado       : [OK] Email enviado OK a ' + result.sent + ' destinatarios');
-    Logger.log('Registrado      : fecha ' + hoyStr + ' confirmada en Properties');
+    Logger.log('Envío diario              : [OK] Email enviado correctamente a ' + result.sent + ' destinatarios en ' + (result.batches || 1) + ' lote(s)');
+    Logger.log('Registrado                : Fecha ' + hoyStr + ' confirmada en Properties');
+    Logger.log('Resultado final           : [ENVÍO EXITOSO] El Daily Report fue despachado.');
   } else {
     props.deleteProperty(PROP_KEY);   // rollback: falló → permitir reintento en el próximo tick
-    Logger.log('Resultado       : [ERROR] Error al enviar — ' + ((result && result.error) || 'desconocido') + ' (reserva revertida)');
+    Logger.log('Envío diario              : [ERROR] Error al enviar — ' + ((result && (result.error || result.motivo)) || 'desconocido') + ' (reserva revertida)');
+    Logger.log('Resultado final           : [FALLÓ EL ENVÍO] Se reintentará en el próximo tick.');
   }
 
   Logger.log('========================');
+}
+
+// Test manual del chequeo de actualización. Ejecutar desde el editor de Apps Script para
+// verificar en consola el estado de las fechas de Daily, Orders y GMV sin enviar mail.
+function testCheckActualizacionEmail() {
+  Logger.log('=== TEST MANUAL DE ACTUALIZACIÓN (Daily Email) ===');
+  const zona = Session.getScriptTimeZone();
+  const ahora = new Date();
+  const ayer = new Date(ahora);
+  ayer.setDate(ahora.getDate() - 1);
+  const ayerStr = Utilities.formatDate(ayer, zona, 'yyyy-MM-dd');
+  const ayerDmy = Utilities.formatDate(ayer, zona, 'dd/MM/yyyy');
+
+  Logger.log('Hora actual               : ' + Utilities.formatDate(ahora, zona, 'HH:mm') + ' (' + zona + ')');
+  Logger.log('Fecha esperada (Ayer D-1) : ' + ayerDmy + ' (' + ayerStr + ')');
+
+  var fastRes;
+  try {
+    fastRes = _readSheetFast();
+  } catch (eFast) {
+    fastRes = { error: eFast.message };
+  }
+
+  if (!fastRes || !fastRes.payload) {
+    Logger.log('Lectura de datos          : [ERROR] ' + ((fastRes && fastRes.error) || 'Payload no disponible'));
+    return;
+  }
+
+  var check = verificarDatosActualizadosParaEmail(fastRes.payload, ayerStr);
+  Logger.log('• Hoja Daily Data         : ' + check.dailyDateDmy + ' (' + check.dailyDate + ') → ' + (check.dailyOk ? '[OK]' : '[PENDIENTE - esperando ' + ayerDmy + ']'));
+  Logger.log('• Actuals Confirmed Orders: ' + check.ordersDateDmy + ' (' + (check.ordersDate || '—') + ') → ' + (check.ordersOk ? '[OK]' : '[PENDIENTE - desactualizado]'));
+  Logger.log('• Actuals Facturación GMV : ' + check.gmvDateDmy + ' (' + (check.gmvDate || '—') + ') → ' + (check.gmvOk ? '[OK]' : '[PENDIENTE - desactualizado]'));
+  Logger.log('• Run Rate (RR)           : ' + (check.rrOk ? '[OK]' : ('[PENDIENTE - ' + check.rrMotivo + ']')));
+  Logger.log('Resultado comparación    : ' + (check.ok ? '[ACTUALIZADO] Todos los datos al día' : ('[NO ACTUALIZADO] ' + check.motivo)));
+  Logger.log('==================================================');
 }
 
 // Estado del envío para mostrar en la página "Email": a qué hora sale el mail
@@ -346,6 +638,22 @@ function sendDailyEmail(previewMode, testMode, force) {
   // targets se haya re-subido después de que alguna caché se calentara.
   const targets = _readTargets(d1Date, true);
   const rrData  = _getRRDataFromSheet(true);
+
+  // Salvaguarda final: si no es preview ni envío forzado manualmente,
+  // validar que rrData cuente con datos efectivos de Run Rate antes de armar el correo.
+  if (!previewMode && !force) {
+    const valRR = _evaluarValidezRR(rrData, Utilities.formatDate(d1Date, zona, 'yyyy-MM-dd'));
+    if (!valRR.ok) {
+      Logger.log('[sendDailyEmail] ENVÍO CANCELADO por falta de RR: ' + valRR.motivo);
+      return {
+        ok: false,
+        error: 'Envío cancelado: ' + valRR.motivo,
+        motivo: valRR.motivo,
+        check: { ok: false, motivo: valRR.motivo }
+      };
+    }
+  }
+
   // "Cierre de mes": si el mes ya cerró (corte del RR = último día del mes), las
   // etiquetas de RR pasan a "Cierre de mes" (flag isMonthClose en Code.gs).
   const RR_CLOSE   = !!(rrData && rrData.meta && rrData.meta.isMonthClose);
@@ -702,6 +1010,11 @@ function sendDailyEmail(previewMode, testMode, force) {
   .cxt { font-family:Arial,sans-serif; font-size:7px; color:#94a3b8; font-weight:600; white-space:nowrap; padding-top:1px; text-align:center; }
   .cxa { font-family:Arial,sans-serif; font-size:7.5px; color:#0f172a; font-weight:800; white-space:nowrap; padding-top:2.5px; text-align:center; }
   .cxv { font-family:Arial,sans-serif; font-size:7.5px; font-weight:700; white-space:nowrap; padding-top:1.5px; text-align:center; }
+  .cxd-r { font-family:Arial,sans-serif; font-size:8px; color:#334155; font-weight:700; text-align:right; padding:4px 3px 2px 0; }
+  .cxt-r { font-family:Arial,sans-serif; font-size:7px; color:#94a3b8; font-weight:600; height:18px; vertical-align:middle; text-align:right; padding-right:3px; }
+  .cxa-r { font-family:Arial,sans-serif; font-size:7.5px; color:#0f172a; font-weight:800; height:18px; vertical-align:middle; text-align:right; padding-right:3px; }
+  .cxv-r { font-family:Arial,sans-serif; font-size:7.5px; font-weight:700; height:22px; vertical-align:middle; text-align:right; padding-right:3px; }
+  .cx-rot { display:inline-block; white-space:nowrap; transform:rotate(-20deg); -webkit-transform:rotate(-20deg); transform-origin:right center; }
   .z { background:#fbfcfe; }
 </style>
 </head>
@@ -1117,22 +1430,29 @@ function _buildDailyChartsEmail(d1Date, forPdf, rrData, rangeOpt) {
 
       // Celdas del gráfico (estilo página): barra con el valor adentro y, abajo,
       // día · target del día · variación vs target (flecha ▲/▼ coloreada).
-      // Con muchas fechas (mes avanzado) las barras se angostan y el valor ADENTRO
-      // (que es el ACTUAL) se amontona. A partir de 28 días lo sacamos de la barra y
-      // lo mostramos en su propia fila abajo, así no se pierde el dato (ojo: el gris
-      // de abajo es el BE_LABEL, distinto del actual).
-      var manyDays = days.length >= 28;
-      var barCells = '', dayCells = '', actCells = '', tarCells = '', varCells = '';
+      // El valor actual va SIEMPRE adentro de la barra. Con mes avanzado (>= 16 días)
+      // las etiquetas inferiores de target y variación se inclinan a -20° (arrancando abajo
+      // y subiendo a la derecha /) y se compactan para que nunca se solapen.
+      var rotDays  = days.length >= 16;
+      var rotStyle = 'display:inline-block;white-space:nowrap;transform:rotate(-20deg);-webkit-transform:rotate(-20deg);transform-origin:right center;';
+      var barCells = '', dayCells = '', tarCells = '', varCells = '';
       days.forEach(function(d){
         var a = d[valKey], t = d[tarKey] || 0;
         var v = (t > 0 && a != null) ? ((a - t) / t) * 100 : null;
         var vCol = v == null ? '#94a3b8' : (v >= 0 ? '#16a34a' : '#dc2626');
-        var vTxt = v == null ? '' : ((v >= 0 ? '▲+' : '▼') + v.toFixed(1) + '%');
-        barCells += '<td class="bcw" valign="bottom">' + barCol(a, d[tarKey], maxVal, manyDays ? '' : fmtC(a, fmt)) + '</td>';
-        dayCells += '<td class="cxd">' + (rangeOpt ? (d.day + '-' + ('0'+d.mo).slice(-2)) : d.day) + '</td>';
-        actCells += '<td class="cxa">' + (a != null ? fmtC(a, fmt) : '—') + '</td>';
-        tarCells += '<td class="cxt">' + (t > 0 ? fmtC(t, fmt) : '—') + '</td>';
-        varCells += '<td class="cxv" style="color:' + vCol + ';">' + vTxt + '</td>';
+        var vTxt = v == null ? '' : ((v >= 0 ? '▲+' : '▼') + (rotDays ? v.toFixed(0) : v.toFixed(1)) + '%');
+        var tTxt = t > 0 ? fmtC(t, fmt) : '—';
+
+        barCells += '<td class="bcw" valign="bottom">' + barCol(a, d[tarKey], maxVal, fmtC(a, fmt)) + '</td>';
+        dayCells += '<td class="' + (rotDays ? 'cxd-r' : 'cxd') + '">' + (rangeOpt ? (d.day + '-' + ('0'+d.mo).slice(-2)) : d.day) + '</td>';
+
+        if (rotDays) {
+          tarCells += '<td class="cxt-r"><span class="cx-rot" style="' + rotStyle + '">' + tTxt + '</span></td>';
+          varCells += '<td class="cxv-r" style="color:' + vCol + ';"><span class="cx-rot" style="' + rotStyle + '">' + vTxt + '</span></td>';
+        } else {
+          tarCells += '<td class="cxt">' + tTxt + '</td>';
+          varCells += '<td class="cxv" style="color:' + vCol + ';">' + vTxt + '</td>';
+        }
       });
 
       // Período tipo "LATAM · 1 → 9 Junio" (o el override que pase el semanal).
@@ -1180,7 +1500,7 @@ function _buildDailyChartsEmail(d1Date, forPdf, rrData, rangeOpt) {
       var chart =
         '<table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#fbfcfe;border:1px solid #eef2f7;border-radius:8px;"><tr><td style="padding:14px 12px 10px;">' +
           '<table width="100%" cellpadding="0" cellspacing="0" border="0" style="table-layout:fixed;border-bottom:2px solid #cbd5e1;"><tr>' + barCells + '</tr></table>' +
-          '<table width="100%" cellpadding="0" cellspacing="0" border="0" style="table-layout:fixed;"><tr>' + dayCells + '</tr>' + (manyDays ? ('<tr>' + actCells + '</tr>') : '') + '<tr>' + tarCells + '</tr><tr>' + varCells + '</tr></table>' +
+          '<table width="100%" cellpadding="0" cellspacing="0" border="0" style="table-layout:fixed;"><tr>' + dayCells + '</tr><tr>' + tarCells + '</tr><tr>' + varCells + '</tr></table>' +
         '</td></tr></table>';
 
       // Versión PDF-safe: el conversor de Google Docs no renderiza las barras

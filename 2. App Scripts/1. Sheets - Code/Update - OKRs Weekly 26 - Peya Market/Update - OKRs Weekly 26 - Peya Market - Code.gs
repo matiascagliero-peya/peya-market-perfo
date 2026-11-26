@@ -5,6 +5,150 @@ const ID_ARCHIVO_UNICO = "1eNegsxjvy8MRsPjId7uQpdOdEvHgRxRnM6tjuTR3Dro";
 const ID_DESTINO       = "10CBChAymE8k09cb_-D_ECD9KriZ0SbSve75IYBU7ZzM";
 
 // ====================================================================================
+// CONFIGURACIÓN DE BIGQUERY (Sincronización Directa - Estilo Mensual)
+// ====================================================================================
+const BQ_PROJECT_ID       = "peya-food-and-groceries";
+const BQ_DATASET_ID       = "automated_tables_reports";
+const BQ_TABLE_ID         = "Weekly_ActualsOKR";          // Tabla de producción espejo de Monthly_ActualsOKR
+const BQ_TABLE_ID_PRUEBAS = "Weekly_ActualsOKR_pruebas";  // Tabla de pruebas
+
+// ====================================================================================
+// 🚀 FUNCIONES PRINCIPALES (EJECUCIÓN MANUAL Y TRIGGERS)
+// ====================================================================================
+
+/**
+ * 1. PROCESO COMPLETO:
+ *    - Importa tablas externas desde sus fuentes.
+ *    - Consolida métricas estructurando semanas ISO correctas.
+ *    - Envía el consolidado a Google Sheets (A. TI - Actuals OKRs).
+ *    - Sube a BigQuery (peya-food-and-groceries.automated_tables_reports.Weekly_ActualsOKR).
+ */
+function importar_consolidar_enviar() {
+  try {
+    Logger.log("🚀 INICIANDO: importar_consolidar_enviar...");
+
+    Logger.log("👉 Paso 1/4: Importando tablas externas...");
+    GeneralData_ImportarTablas();
+
+    SpreadsheetApp.flush();
+    Utilities.sleep(2500);
+    delete _ssCache[ID_ARCHIVO_UNICO.trim()];
+
+    Logger.log("👉 Paso 2/4: Calculando y consolidando métricas...");
+    const datosConsolidados = GeneralData_ConsolidarMetricas();
+
+    SpreadsheetApp.flush();
+    Utilities.sleep(1000);
+
+    Logger.log("👉 Paso 3/4: 📤 Enviando 'Consolidado General Data' a Google Sheets (A. TI - Actuals OKRs)...");
+    try {
+      enviar_consolidado(datosConsolidados);
+    } catch (errSheets) {
+      Logger.log(`⚠️ Advertencia al enviar a Google Sheets: ${errSheets.message}`);
+    }
+
+    SpreadsheetApp.flush();
+    Utilities.sleep(1000);
+
+    Logger.log("👉 Paso 4/4: 🚀 Subiendo a BigQuery (Producción)...");
+    try {
+      enviar_a_bigquery(datosConsolidados);
+    } catch (errBQ) {
+      Logger.log(`⚠️ Advertencia al subir a BigQuery: ${errBQ.message}`);
+    }
+
+    Logger.log("🏆 ¡PROCESO 'importar_consolidar_enviar' FINALIZADO CON ÉXITO!");
+  } catch (e) {
+    Logger.log(`❌ ERROR CRÍTICO en importar_consolidar_enviar: ${e.message}\n${e.stack}`);
+  }
+}
+
+/**
+ * 2. PROCESO ABREVIADO A BIGQUERY:
+ *    - Recalcula y consolida métricas (si las tablas origen ya están descargadas).
+ *    - Sube a BigQuery.
+ *    (Nota: NO envía a Sheets para evitar Timeout).
+ */
+function consolidar_enviar() {
+  try {
+    Logger.log("🔄 INICIANDO: consolidar_enviar...");
+
+    Logger.log("👉 Paso 1/2: Calculando y consolidando métricas...");
+    const datosConsolidados = GeneralData_ConsolidarMetricas();
+
+    Logger.log("👉 Paso 2/2: 🚀 Subiendo a BigQuery (Producción)...");
+    try {
+      enviar_a_bigquery(datosConsolidados);
+    } catch (errBQ) {
+      Logger.log(`⚠️ Advertencia al subir a BigQuery: ${errBQ.message}`);
+    }
+
+    Logger.log("🏆 ¡PROCESO 'consolidar_enviar' FINALIZADO CON ÉXITO!");
+  } catch (e) {
+    Logger.log(`❌ ERROR CRÍTICO en consolidar_enviar: ${e.message}\n${e.stack}`);
+  }
+}
+
+/**
+ * 3. SOLO ENVÍO A BIGQUERY:
+ *    - Toma lo que ya existe en la hoja 'Consolidado General Data'.
+ *    - Lo sube a BigQuery.
+ *    (Nota: NO envía a Sheets para evitar Timeout).
+ */
+function enviar() {
+  try {
+    Logger.log("📤 INICIANDO: enviar...");
+
+    Logger.log("👉 Paso 1/1: 🚀 Subiendo 'Consolidado General Data' a BigQuery...");
+    try {
+      enviar_a_bigquery();
+    } catch (errBQ) {
+      Logger.log(`⚠️ Advertencia al subir a BigQuery: ${errBQ.message}`);
+    }
+
+    Logger.log("🏆 ¡PROCESO 'enviar' FINALIZADO CON ÉXITO!");
+  } catch (e) {
+    Logger.log(`❌ ERROR CRÍTICO en enviar: ${e.message}\n${e.stack}`);
+  }
+}
+
+/**
+ * 4. ENVIAR ÚNICA Y EXCLUSIVAMENTE A GOOGLE SHEETS:
+ *    - Esta función está desacoplada para evitar el límite de 6 min.
+ *    - Lee de 'Consolidado General Data' y pega en 'A. TI - Actuals OKRs'.
+ */
+function enviar_solo_a_sheets() {
+  try {
+    Logger.log("📤 INICIANDO: enviar_solo_a_sheets...");
+    
+    Logger.log("👉 Enviando 'Consolidado General Data' a Google Sheets (A. TI - Actuals OKRs)...");
+    enviar_consolidado();
+
+    Logger.log("🏆 ¡PROCESO 'enviar_solo_a_sheets' FINALIZADO CON ÉXITO!");
+  } catch (e) {
+    Logger.log(`❌ ERROR CRÍTICO en enviar_solo_a_sheets: ${e.message}\n${e.stack}`);
+  }
+}
+
+/**
+ * 5. REFRESCO TOTAL DE FUENTES + PROCESO COMPLETO (Solo BigQuery):
+ *    - Refresca extractos de BigQuery en las 4 planillas de origen.
+ *    - Luego corre 'importar_consolidar_enviar'.
+ */
+function refrescar_importar_consolidar_enviar() {
+  Logger.log("🔄 INICIO: Refrescando extractos conectados a BigQuery...");
+  RefreshAllSources();
+  importar_consolidar_enviar();
+}
+
+// --- ALIASES DE COMPATIBILIDAD CON TRIGGERS HISTÓRICOS ---
+function Importar_Consolidar_Y_Enviar() { importar_consolidar_enviar(); }
+function Consolidar_Y_Enviar()          { consolidar_enviar(); }
+function GeneralData_ConsolidarYEnviar() { consolidar_enviar(); }
+function subir_okrs_weekly_a_bigquery()  { enviar_a_bigquery(); }
+function Refrescar_Importar_Consolidar_Y_Enviar() { refrescar_importar_consolidar_enviar(); }
+
+// ====================================================================================
 // CACHÉ DE HOJAS DE CÁLCULO (Evita latencias de red repetitivas)
 // ====================================================================================
 const _ssCache = {};
@@ -445,11 +589,11 @@ function obtenerDiasDelMes(fechaRaw) {
 function getISOWeekNumber(fechaRaw) {
    const d = GeneralData_Helper_NormalizarFecha(fechaRaw);
    if (!d) return null;
-   const thursday = new Date(d);
-   thursday.setDate(d.getDate() - ((d.getDay() + 6) % 7) + 3);
-   const firstThursday = new Date(thursday.getFullYear(), 0, 4);
-   firstThursday.setDate(4 - ((firstThursday.getDay() + 6) % 7));
-   return 1 + Math.round((thursday - firstThursday) / 604800000);
+   const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+   const dayNum = date.getUTCDay() || 7;
+   date.setUTCDate(date.getUTCDate() + 4 - dayNum);
+   const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+   return Math.ceil((((date - yearStart) / 86400000) + 1) / 7);
 }
 
 function GeneralData_Helper_QuitarFiltros(sheet) {
@@ -1016,13 +1160,13 @@ function enviar_consolidado(datosEnMemoria) {
        targetSheet.insertColumnsAfter(maxCols, data[0].length - maxCols);
      }
 
-     Logger.log("   ⚡ [Paso 4/4] Escribiendo nuevos datos en destino (" + data.length + " filas en lotes)...");
-     const BATCH_SIZE = 15000;
+     Logger.log("   ⚡ [Paso 4/4] Escribiendo nuevos datos en destino (" + data.length + " filas)...");
+     const BATCH_SIZE = 50000;
      for (let startRow = 0; startRow < data.length; startRow += BATCH_SIZE) {
        const batch = data.slice(startRow, Math.min(startRow + BATCH_SIZE, data.length));
        targetSheet.getRange(startRow + 1, 1, batch.length, data[0].length).setValues(batch);
-       SpreadsheetApp.flush();
      }
+     SpreadsheetApp.flush();
 
      // Optimización 4: Recorte seguro de filas sobrantes por lotes
      GeneralData_Helper_RecortarFilasSeguro(targetSheet, data.length);
@@ -1038,34 +1182,106 @@ function enviar_consolidado(datosEnMemoria) {
 }
 
 // ====================================================================================
-// 4. FUNCIONES MAESTRAS DE EJECUCIÓN
+// 3.B. SUBIR DIRECTAMENTE A BIGQUERY (Estilo OKRs Mensual)
 // ====================================================================================
+function enviar_a_bigquery(datos, tableId) {
+  const bqService = (typeof BigQuery !== 'undefined' && BigQuery.Jobs) 
+    ? BigQuery 
+    : (typeof Bigquery !== 'undefined' && Bigquery.Jobs) 
+      ? Bigquery 
+      : null;
 
-/**
- * Proceso Completo: Importa las tablas externas, consolida las métricas y las envía a la hoja final.
- * Se ejecuta por el trigger automatizado.
- */
-function Importar_Consolidar_Y_Enviar() {
-   Logger.log("🚀 INICIANDO PROCESO COMPLETO: IMPORTAR, CONSOLIDAR Y ENVIAR...");
+  if (!bqService) {
+    Logger.log("⚠️ El servicio avanzado 'BigQuery' no está habilitado en este proyecto de Apps Script.");
+    throw new Error("El servicio avanzado de BigQuery no está habilitado en este proyecto de Apps Script. Por favor activalo en la sección Servicios > BigQuery API.");
+  }
 
-   Logger.log("👉 Paso 1/3: Importando tablas externas (Orders, OPS, Supply, Open Time)...");
-   GeneralData_ImportarTablas();
+  const targetTableId = tableId || BQ_TABLE_ID;
+  let rows = datos;
 
-   // Pausa breve y flush para que el servidor de Google Sheets asiente los datos importados
-   SpreadsheetApp.flush();
-   Utilities.sleep(2500);
-   delete _ssCache[ID_ARCHIVO_UNICO.trim()]; // Renovar conexión fresca
+  if (!rows || rows.length === 0) {
+    const ss = getSpreadsheet(ID_ARCHIVO_UNICO);
+    const hojaConsolidada = ss.getSheetByName("Consolidado General Data");
+    if (!hojaConsolidada) {
+      Logger.log("⚠️ No se encontró la hoja 'Consolidado General Data' para subir a BigQuery.");
+      return;
+    }
+    const rawData = hojaConsolidada.getDataRange().getValues();
+    if (rawData.length <= 1) {
+      Logger.log("⚠️ 'Consolidado General Data' no tiene datos suficientes para BigQuery.");
+      return;
+    }
+    rows = rawData.slice(1);
+  } else if (rows.length > 1 && rows[0][0] === "Metric") {
+    rows = rows.slice(1); // Excluir encabezados
+  }
 
-   Logger.log("👉 Paso 2/3: Calculando métricas y estructurando consolidado general...");
-   const datosConsolidados = GeneralData_ConsolidarMetricas();
+  Logger.log(`🚀 Preparando carga de ${rows.length} filas a BigQuery (${BQ_PROJECT_ID}.${BQ_DATASET_ID}.${targetTableId})...`);
 
-   SpreadsheetApp.flush();
-   Utilities.sleep(1000);
+  // 1. Construir CSV en memoria
+  let csv = "Metric,Country,Date,Week_Number,Value,Color_Formatting\n";
+  for (let i = 0; i < rows.length; i++) {
+    let [metric, country, rawDate, week, value, color] = rows[i];
+    if (!metric || String(metric).trim() === "") continue;
 
-   Logger.log("👉 Paso 3/3: Enviando datos finales a la hoja de OKRs...");
-   enviar_consolidado(datosConsolidados);
+    metric = `"${String(metric).replace(/"/g, '""')}"`;
+    country = `"${String(country || '').replace(/"/g, '""')}"`;
 
-   Logger.log("🏆 ¡PROCESO COMPLETO COMPLETADO CON ÉXITO!");
+    let dateStr = "";
+    if (rawDate instanceof Date) {
+      dateStr = Utilities.formatDate(rawDate, "GMT-3", "yyyy-MM-dd");
+    } else if (rawDate) {
+      const d = GeneralData_Helper_NormalizarFecha(rawDate);
+      dateStr = d ? Utilities.formatDate(d, "GMT-3", "yyyy-MM-dd") : String(rawDate).substring(0, 10);
+    }
+
+    const weekNum = (week !== null && week !== undefined && week !== "" && !isNaN(week)) ? parseInt(week, 10) : "";
+    const valNum = (value === null || value === undefined || value === "" || isNaN(value) || !isFinite(value)) ? 0 : Number(value);
+    const colorNum = (color !== null && color !== undefined && color !== "") ? (parseInt(color, 10) || 0) : 1;
+
+    csv += `${metric},${country},${dateStr},${weekNum},${valNum},${colorNum}\n`;
+  }
+
+  // 2. Crear Blob de archivo Virtual
+  const blob = Utilities.newBlob(csv, "text/csv; charset=utf-8");
+
+  // 3. Configurar trabajo de carga de BigQuery
+  const job = {
+    configuration: {
+      load: {
+        destinationTable: {
+          projectId: BQ_PROJECT_ID,
+          datasetId: BQ_DATASET_ID,
+          tableId: targetTableId
+        },
+        sourceFormat: 'CSV',
+        skipLeadingRows: 1, // Salta la cabecera del CSV
+        writeDisposition: 'WRITE_TRUNCATE', // REEMPLAZA todos los datos de la tabla
+        autodetect: false,
+        schema: {
+          fields: [
+            { name: 'Metric', type: 'STRING' },
+            { name: 'Country', type: 'STRING' },
+            { name: 'Date', type: 'DATE' },
+            { name: 'Week_Number', type: 'INTEGER' },
+            { name: 'Value', type: 'FLOAT' },
+            { name: 'Color_Formatting', type: 'INTEGER' }
+          ]
+        }
+      }
+    }
+  };
+
+  // 4. Iniciar la carga
+  try {
+    const runJob = bqService.Jobs.insert(job, BQ_PROJECT_ID, blob);
+    const jobId = runJob.id || (runJob.jobReference && runJob.jobReference.jobId);
+    Logger.log(`✅ Carga a BigQuery iniciada correctamente. ID de Trabajo: ${jobId}`);
+    return runJob;
+  } catch (err) {
+    Logger.log(`❌ Error al subir a BigQuery: ${err.message}`);
+    throw err;
+  }
 }
 
 /**
@@ -1082,28 +1298,6 @@ function Test_Importar_Solo_OpenTime() {
   const ssDestino = getSpreadsheet(ID_ARCHIVO_UNICO);
   GeneralData_Helper_Importar(confOpenTime, ssDestino);
   Logger.log("🏁 Fin de la prueba de importación de '5 - Open Time'.");
-}
-
-/**
- * Proceso Abreviado: Calcula las métricas y las envía directamente a la hoja de OKRs,
- * omitiendo el paso de importación externa (útil si los de origen ya están actualizados).
- */
-function Consolidar_Y_Enviar() {
-   Logger.log("🔄 INICIANDO PROCESO ABREVIADO: CONSOLIDAR Y ENVIAR...");
-
-   Logger.log("👉 Paso 1/2: Calculando métricas y estructurando consolidado general...");
-   const datosConsolidados = GeneralData_ConsolidarMetricas();
-
-   Logger.log("👉 Paso 2/2: Enviando datos finales a la hoja de OKRs...");
-   enviar_consolidado(datosConsolidados);
-
-   Logger.log("🏆 ¡CONSOLIDACIÓN Y ENVÍO COMPLETADOS CON ÉXITO!");
-}
-
-// --- ALIAS DE COMPATIBILIDAD ---
-// Mantenemos los nombres antiguos por si se llaman desde otros scripts, botones o triggers antiguos.
-function GeneralData_ConsolidarYEnviar() {
-  Consolidar_Y_Enviar();
 }
 
 // ====================================================================================

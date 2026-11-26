@@ -1,6 +1,14 @@
 // 1. CONFIGURACIÓN GLOBAL
 const ID_ARCHIVO_UNICO = "1oGrGlkUxSeuW2CInKxpGSJQpkA_SJL-uqEF5nDx6FiI";
 
+// ====================================================================================
+// CONFIGURACIÓN DE BIGQUERY (Sincronización Directa)
+// ====================================================================================
+const BQ_PROJECT_ID       = "peya-food-and-groceries";
+const BQ_DATASET_ID       = "automated_tables_reports";
+const BQ_TABLE_ID         = "Monthly_ActualsOKR";          // Tabla de producción
+const BQ_TABLE_ID_PRUEBAS = "Monthly_ActualsOKR_pruebas";  // Tabla de pruebas
+
 // Cache global para SpreadsheetApp.openById para evitar latencias de red repetitivas
 const CACHE_SS = {};
 function obtenerSpreadsheetConCache(id) {
@@ -200,6 +208,7 @@ const CONFIG_GD_METRICAS = [
 
       // --- INDEX 10 ---
       { name: 'Units Sold', index: 10, colorFormating: 1 },
+      { name: 'Units Sold / # stores', calculo: (f) => safeDiv(f[10], f[2]), usarComponentes: true, indicesLatam: [10, 2], calculoLatam: (c) => safeDiv(c[0], c[1]), format: '0.00', colorFormating: 1 },
       { name: 'Basket Size', calculo: (f) => safeDiv(f[10], f[7]), usarComponentes: true, indicesLatam: [10, 7], calculoLatam: (c) => safeDiv(c[0], c[1]), format: '0.00', colorFormating: 1 },
 
       // --- INDEX 11 ---
@@ -657,6 +666,11 @@ const CONFIG_GD_METRICAS = [
       // ==========================================
       // 4. PEYA PLATFORM METRICS
       // ==========================================
+      { 
+        name: 'PeYa MAUs', 
+        calculo: (f) => (String(f[2]).trim() === 'PeYa' && ['New User', 'M1 Return', 'Reorder', 'Recurring Return', 'Re-Activation'].includes(String(f[3]).trim())) ? (parseFloat(f[4])||0) : 0, 
+        colorFormating: 1 
+      },
       { name: 'New Users - PeYa',           calculo: (f) => (String(f[2]).trim() === 'PeYa' && String(f[3]).trim() === 'New User') ? (parseFloat(f[4])||0) : 0, colorFormating: 1 },
       { name: 'M1 Return Users - PeYa',     calculo: (f) => (String(f[2]).trim() === 'PeYa' && String(f[3]).trim() === 'M1 Return') ? (parseFloat(f[4])||0) : 0, colorFormating: 1 },
       { name: 'Reorder Users - PeYa',       calculo: (f) => (String(f[2]).trim() === 'PeYa' && String(f[3]).trim() === 'Reorder') ? (parseFloat(f[4])||0) : 0, colorFormating: 1 },
@@ -666,7 +680,6 @@ const CONFIG_GD_METRICAS = [
       { name: 'Churned Users - PeYa',       calculo: (f) => (String(f[2]).trim() === 'PeYa' && String(f[3]).trim() === 'Churned') ? (parseFloat(f[4])||0) : 0, colorFormating: 0 },
       { name: 'Inactive < 6m - PeYa',       calculo: (f) => (String(f[2]).trim() === 'PeYa' && String(f[3]).trim() === 'Inactive < 6 month') ? (parseFloat(f[4])||0) : 0, colorFormating: 0 },
       { name: 'Inactive > 6m - PeYa',       calculo: (f) => (String(f[2]).trim() === 'PeYa' && String(f[3]).trim() === 'Inactive > 6 month') ? (parseFloat(f[4])||0) : 0, colorFormating: 0 },
-      { name: 'Never Active - PeYa',        calculo: (f) => (String(f[2]).trim() === 'PeYa' && String(f[3]).trim() === 'Never Active') ? (parseFloat(f[4])||0) : 0, colorFormating: 0 },
 
       // ====================================================================================
       // Total Churned Users calculado directamente en la hoja 4 - Users
@@ -773,7 +786,7 @@ const CONFIG_GD_METRICAS = [
         colorFormating: 1 
       },
       { 
-        name: 'Total Stock EUR', 
+        name: 'Total Active Stock EUR', 
         index: 4, 
         format: '#,##0.00', 
         colorFormating: 1 
@@ -785,8 +798,26 @@ const CONFIG_GD_METRICAS = [
         colorFormating: 1 
       },
       { 
-        name: '% SM & ZM Stock Value', 
-        calculo: (f) => String(f[1]).trim().toUpperCase() === 'LATAM' ? (parseFloat(f[5]) || 0) : safeDiv(f[5], f[4]), 
+        name: 'Active Stock Value SZM', 
+        index: 6, 
+        format: '0.00%', 
+        colorFormating: 0 
+      },
+      { 
+        name: 'Total Inventory EUR', 
+        index: 7, 
+        format: '#,##0.00', 
+        colorFormating: 1 
+      },
+      { 
+        name: 'Inactive Stock EUR', 
+        index: 8, 
+        format: '#,##0.00', 
+        colorFormating: 0 
+      },
+      { 
+        name: '% Inactive Stock Value', 
+        index: 9, 
         format: '0.00%', 
         colorFormating: 0 
       },
@@ -1073,7 +1104,7 @@ const CONFIG_GD_METRICAS = [
     calcularLatam: true, 
     metricas: [
 
-    { name: 'PeYa MAUs', index: 2, colorFormating: 1 },
+      // { name: 'PeYa MAUs', index: 2, colorFormating: 1 }, // Comentado: ahora PeYa MAUs se calcula desde Frank L1 en '4 - Users'
 
       // --- VOLÚMENES BASE ---
       { name: 'Covered MAUs', index: 3, colorFormating: 1 },
@@ -4152,6 +4183,106 @@ function unificarTodasLasTablas() {
     Logger.log("⚠️ No se encontraron datos válidos.");
   }
   Logger.log("--- FIN UNIFICACIÓN ---");
+  return filasParaPegar;
+}
+
+// ====================================================================================
+// SUBIR A BIGQUERY (Sincronización Directa de OKRs Mensuales)
+// ====================================================================================
+function enviar_a_bigquery(datos, tableId) {
+  if (typeof BigQuery === 'undefined' || !BigQuery.Jobs) {
+    Logger.log("⚠️ El servicio avanzado 'BigQuery' no está habilitado en este proyecto de Apps Script.");
+    throw new Error("El servicio avanzado de BigQuery no está habilitado en este proyecto de Apps Script. Por favor activalo en la sección Servicios > BigQuery API.");
+  }
+
+  const targetTableId = tableId || BQ_TABLE_ID;
+  let rows = datos;
+
+  if (!rows || rows.length === 0) {
+    const ss = obtenerSpreadsheetConCache(ID_ARCHIVO_UNICO);
+    const hojaMaestra = ss.getSheetByName("1. MasterConsolidatedData");
+    if (!hojaMaestra) {
+      Logger.log("⚠️ No se encontró la hoja '1. MasterConsolidatedData' para subir a BigQuery.");
+      return;
+    }
+    const rawData = hojaMaestra.getDataRange().getValues();
+    if (rawData.length <= 1) {
+      Logger.log("⚠️ '1. MasterConsolidatedData' no tiene datos suficientes para BigQuery.");
+      return;
+    }
+    rows = rawData.slice(1); // Excluir encabezados de Sheets
+  }
+
+  Logger.log(`🚀 Preparando carga de ${rows.length} filas a BigQuery (${BQ_PROJECT_ID}.${BQ_DATASET_ID}.${targetTableId})...`);
+
+  // 1. Construir CSV en memoria
+  let csv = "Metric,Country,Month,Value,Color_Formatting\n";
+  for (let i = 0; i < rows.length; i++) {
+    let [metric, country, rawMonth, value, color] = rows[i];
+    if (!metric || String(metric).trim() === "") continue;
+
+    metric = `"${String(metric).replace(/"/g, '""')}"`;
+    country = `"${String(country || '').replace(/"/g, '""')}"`;
+
+    let dateStr = "";
+    if (rawMonth instanceof Date) {
+      dateStr = Utilities.formatDate(rawMonth, "GMT-3", "yyyy-MM-01");
+    } else if (rawMonth) {
+      const d = GeneralData_Helper_NormalizarFecha(rawMonth);
+      dateStr = d ? Utilities.formatDate(d, "GMT-3", "yyyy-MM-01") : String(rawMonth).substring(0, 10);
+    }
+
+    const valNum = (value === null || value === undefined || value === "" || isNaN(value) || !isFinite(value)) ? 0 : Number(value);
+    const colorNum = (color !== null && color !== undefined && color !== "") ? (parseInt(color, 10) || 0) : 1;
+
+    csv += `${metric},${country},${dateStr},${valNum},${colorNum}\n`;
+  }
+
+  // 2. Crear Blob de archivo Virtual
+  const blob = Utilities.newBlob(csv, "text/csv; charset=utf-8");
+
+  // 3. Configurar trabajo de carga de BigQuery
+  const job = {
+    configuration: {
+      load: {
+        destinationTable: {
+          projectId: BQ_PROJECT_ID,
+          datasetId: BQ_DATASET_ID,
+          tableId: targetTableId
+        },
+        sourceFormat: 'CSV',
+        skipLeadingRows: 1, // Salta la cabecera del CSV
+        writeDisposition: 'WRITE_TRUNCATE', // REEMPLAZA todos los datos de la tabla
+        autodetect: false,
+        schema: {
+          fields: [
+            { name: 'Metric', type: 'STRING' },
+            { name: 'Country', type: 'STRING' },
+            { name: 'Month', type: 'DATE' },
+            { name: 'Value', type: 'FLOAT' },
+            { name: 'Color_Formatting', type: 'INTEGER' }
+          ]
+        }
+      }
+    }
+  };
+
+  // 4. Iniciar la carga
+  try {
+    const runJob = BigQuery.Jobs.insert(job, BQ_PROJECT_ID, blob);
+    const jobId = runJob.id || (runJob.jobReference && runJob.jobReference.jobId);
+    Logger.log(`✅ Carga a BigQuery iniciada correctamente. ID de Trabajo: ${jobId}`);
+    return runJob;
+  } catch (err) {
+    Logger.log(`❌ Error al subir a BigQuery: ${err.message}`);
+    throw err;
+  }
+}
+
+function subir_okrs_mensual_a_bigquery() {
+  Logger.log("🚀 Subiendo '1. MasterConsolidatedData' directamente a BigQuery...");
+  enviar_a_bigquery();
+  Logger.log("🏆 Carga a BigQuery finalizada con éxito.");
 }
 
 // Funciones de envíar
@@ -4318,7 +4449,10 @@ function importar_consolidad_unificar_enviar() {
         GeneralData_ConsolidarMetricas();
         
         Logger.log("--- Unificando la informacón (Métricas + Targets)");
-        unificarTodasLasTablas();
+        const datosUnificados = unificarTodasLasTablas();
+
+        Logger.log("--- 🚀 Subiendo datos unificados a BigQuery (Producción)...");
+        enviar_a_bigquery(datosUnificados);
 
         Logger.log("--- Enviando la información a los paises (Parte 1)");
         EnviarParte1()
@@ -4345,7 +4479,10 @@ function consolidad_unificar_enviar() {
         GeneralData_ConsolidarMetricas();
         
         Logger.log("--- Unificando la informacón (Métricas + Targets)");
-        unificarTodasLasTablas();
+        const datosUnificados = unificarTodasLasTablas();
+
+        Logger.log("--- 🚀 Subiendo datos unificados a BigQuery (Producción)...");
+        enviar_a_bigquery(datosUnificados);
 
         Logger.log("--- Enviando la información a los paises (Parte 1)");
         EnviarParte1()
@@ -4367,7 +4504,10 @@ function consolidad_unificar_enviar() {
 function unificar_enviar() {
     try {
         Logger.log("--- Unificando la informacón (Métricas + Targets)");
-        unificarTodasLasTablas();
+        const datosUnificados = unificarTodasLasTablas();
+
+        Logger.log("--- 🚀 Subiendo datos unificados a BigQuery (Producción)...");
+        enviar_a_bigquery(datosUnificados);
 
         Logger.log("--- Enviando la información a los paises (Parte 1)");
         EnviarParte1()
@@ -4387,6 +4527,9 @@ function unificar_enviar() {
 }
 
 function enviartodo () { 
+  Logger.log("--- 🚀 Subiendo datos unificados a BigQuery (Producción)...");
+  enviar_a_bigquery();
+
   Logger.log("--- Enviando la información a los paises (Parte 1)");
   EnviarParte1();
 
@@ -4408,7 +4551,10 @@ function EnviarAlSheetDePrueba() {
     GeneralData_ConsolidarMetricas();
 
     Logger.log("--- [PRUEBA] Unificando tablas...");
-    unificarTodasLasTablas();
+    const datosUnificados = unificarTodasLasTablas();
+
+    Logger.log("--- [PRUEBA] 🚀 Subiendo a BigQuery (Tabla de Pruebas)...");
+    enviar_a_bigquery(datosUnificados, BQ_TABLE_ID_PRUEBAS);
 
     Logger.log("--- [PRUEBA] Enviando al Sheet de Prueba...");
 

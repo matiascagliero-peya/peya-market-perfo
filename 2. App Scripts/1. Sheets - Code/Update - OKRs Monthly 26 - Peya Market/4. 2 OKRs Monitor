@@ -43,7 +43,6 @@ function _okrsMonitorWorker(targetCountry) {
 function copiarOKRsMonitor_Para_Argentina() { _okrsMonitorWorker(PAISES_DE_DESTINO.find(p => p.country === "Argentina")); }
 function copiarOKRsMonitor_Para_Bolivia() { _okrsMonitorWorker(PAISES_DE_DESTINO.find(p => p.country === "Bolivia")); }
 function copiarOKRsMonitor_Para_Chile() { _okrsMonitorWorker(PAISES_DE_DESTINO.find(p => p.country === "Chile")); }
-function copiarOKRsMonitor_Para_Costa_Rica() { _okrsMonitorWorker(PAISES_DE_DESTINO.find(p => p.country === "Costa Rica")); }
 function copiarOKRsMonitor_Para_Republica_Dominicana() { _okrsMonitorWorker(PAISES_DE_DESTINO.find(p => p.country === "Republica Dominicana")); }
 function copiarOKRsMonitor_Para_Ecuador() { _okrsMonitorWorker(PAISES_DE_DESTINO.find(p => p.country === "Ecuador")); }
 function copiarOKRsMonitor_Para_El_Salvador() { _okrsMonitorWorker(PAISES_DE_DESTINO.find(p => p.country === "El Salvador")); }
@@ -73,4 +72,11 @@ function copiarOKRsMonitor_PRUEBAS() {
   });
 
   Logger.log("🧪 [PRUEBA] FIN.");
+}
+
+function ActualizaPaginasTodos() {
+  copiarDemand_Para_TODOS();         // 8. 6 Demand Stimulation
+  copiarAssortment_Para_TODOS();     // 9. 7 Assortment, Pricing & Promo
+  copiarOperational_Para_TODOS();    // 10. 8 Operational Excellence
+  copiarSustainability_Para_TODOS(); // 11. 9 Sustainability
 }

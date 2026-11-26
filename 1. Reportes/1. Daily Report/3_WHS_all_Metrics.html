@@ -366,7 +366,7 @@
         <span class="ph-sub" id="ph-date"></span>
         <span class="ph-count" id="ph-count"></span>
         <button class="copy-btn btn-num-toggle" id="btn-num-toggle" style="padding:0 6px" title="Ver números completos" onclick="toggleNumFormat()"><svg viewBox="0 0 24 24" style="width:10px;height:10px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round"><line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="20" y2="15"/><line x1="10" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="14" y2="21"/></svg></button>
-        <button class="copy-btn" onclick="copyTable()"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/></svg> Tabla</button>
+        <button class="copy-btn" onclick="copyTable(this)"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/></svg> Tabla</button>
       </div>
     </div>
     <div class="tw" id="table-wrap">
@@ -406,6 +406,39 @@ const fI=(v,full)=>{if(v==null||isNaN(v))return null;const isF=(full!==undefined
 const fE=(v,full)=>{if(v==null||isNaN(v))return null;const isF=(full!==undefined)?full:IS_FULL_NUM;if(isF)return Math.round(v).toLocaleString('es-AR')+' €';const a=Math.abs(v);if(a>=1e6)return(v/1e6).toFixed(2)+'M €';if(a>=1e3)return(v/1e3).toFixed(1)+'k €';return Math.round(v)+'€';};
 const fP=v=>v==null||isNaN(v)?null:v.toFixed(1)+'%';
 const fM=v=>v==null||isNaN(v)?null:v.toFixed(1)+'m';
+function rawNum(v) {
+  if (v == null || isNaN(v)) return null;
+  if (Math.abs(v % 1) > 1e-4) return Number(v.toFixed(2));
+  return Math.round(v);
+}
+
+function rawNumStr(v, fmt) {
+  if (v == null || isNaN(v)) return '';
+  if (fmt === 'pct' || fmt === 'pct_pre' || fmt === 'pp') return rawNum(v) + '%';
+  if (fmt === 'min' || fmt === 'min_abs') return Number(v.toFixed(4));
+  if (Math.abs(v % 1) > 1e-4) return String(Number(v.toFixed(2)));
+  return String(Math.round(v));
+}
+
+function formulaVar(cur, prev, varFmt) {
+  if (cur == null || prev == null || prev === 0 || isNaN(cur) || isNaN(prev)) return '';
+  const c = rawNum(cur);
+  const p = rawNum(prev);
+  if (c == null || p == null || p === 0) return '';
+  if (varFmt === 'pp') return `=${c}%-${p}%`;
+  if (varFmt === 'min_abs') return `=${c}-${p}`;
+  return `=(${c}-${p})/${Math.abs(p)}`;
+}
+
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 function fV(v,f,full){const r=f==='eur'?fE(v,full):f==='pct'?fP(v):f==='min'?fM(v):fI(v,full);return r!==null?r:'—';}
 
 function toggleNumFormat(){
@@ -513,8 +546,8 @@ function buildTable(){
         cells+=`<td class="${colClass}" id="c-${row.warehouse_id}-${m.key}-var" style="${bg}"><span class="skel"></span></td>`;
       } else {
         const varVal=calcVar(d1,d8,m.varFmt);
-        cells+=`<td class="${colClass} grp-sep" id="c-${row.warehouse_id}-${m.key}-d1" style="${sep};${bg}"><span class="v">${fV(d1,m.fmt)}</span></td>`;
-        cells+=`<td class="${colClass}" id="c-${row.warehouse_id}-${m.key}-var" style="${bg}">${badge(varVal,m)}</td>`;
+        cells+=`<td class="${colClass} grp-sep" id="c-${row.warehouse_id}-${m.key}-d1" data-raw="${rawNumStr(d1,m.fmt)}" style="${sep};${bg}"><span class="v">${fV(d1,m.fmt)}</span></td>`;
+        cells+=`<td class="${colClass}" id="c-${row.warehouse_id}-${m.key}-var" data-raw="${formulaVar(d1,d8,m.varFmt)}" style="${bg}">${badge(varVal,m)}</td>`;
       }
     });
     return`<tr>${cells}</tr>`;
@@ -548,8 +581,14 @@ function updateMetricCells(key){
     const cellD1=document.getElementById(`c-${row.warehouse_id}-${key}-d1`);
     const cellVar=document.getElementById(`c-${row.warehouse_id}-${key}-var`);
 
-    if(cellD1)cellD1.innerHTML=`<span class="v">${fV(d1,m.fmt)}</span>`;
-    if(cellVar)cellVar.innerHTML=badge(varVal,m);
+    if(cellD1){
+      cellD1.innerHTML=`<span class="v">${fV(d1,m.fmt)}</span>`;
+      cellD1.setAttribute('data-raw', rawNumStr(d1, m.fmt));
+    }
+    if(cellVar){
+      cellVar.innerHTML=badge(varVal,m);
+      cellVar.setAttribute('data-raw', formulaVar(d1, d8, m.varFmt));
+    }
   });
 
   // Update header sort arrow if this is the sorted metric
@@ -611,14 +650,125 @@ function loadMetricsBatch(startIdx){
   });
 }
 
-function copyTable(){
+function copyTable(btn){
   const tbl=document.querySelector('.mx'); if(!tbl)return;
-  const rows=[];
-  tbl.querySelectorAll('thead tr').forEach(tr=>{rows.push([...tr.querySelectorAll('th')].map(th=>th.innerText.replace(/\n/g,' ').trim()).join('\t'));});
-  tbl.querySelectorAll('tbody tr').forEach(tr=>{rows.push([...tr.querySelectorAll('td')].map(td=>td.innerText.replace(/\n/g,' ').trim()).join('\t'));});
-  navigator.clipboard.writeText(rows.join('\n')).then(()=>{
-    const btn=document.querySelector('.copy-btn');if(btn){const orig=btn.innerHTML;btn.innerHTML='<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="vertical-align:-1px;margin-right:4px;"><polyline points="20 6 9 17 4 12"/></svg>Copiado';setTimeout(()=>btn.innerHTML=orig,2000);}
+
+  const orig = btn ? btn.innerHTML : '';
+  if (btn) btn.innerHTML = 'Copiando...';
+
+  const tsvRows = [];
+  const htmlRows = [];
+
+  const getCellText = (cell, isHeader) => {
+    if (isHeader) {
+      const clone = cell.cloneNode(true);
+      clone.querySelectorAll('.sort-arr, svg').forEach(el => el.remove());
+      return (clone.innerText || clone.textContent || '').replace(/\s+/g, ' ').trim();
+    }
+
+    if (cell.cellIndex === 0) {
+      const name = cell.querySelector('.wh-name');
+      return (name ? name.textContent : (cell.innerText || cell.textContent || '')).replace(/\s+/g, ' ').trim();
+    }
+
+    if (cell.hasAttribute('data-raw')) {
+      const raw = cell.getAttribute('data-raw');
+      if (raw !== '') return raw;
+    }
+
+    let txt = (cell.innerText || cell.textContent || '').trim();
+    if (!txt || txt === '—' || txt === '–') return '';
+    txt = txt.replace(/\s+/g, ' ').trim();
+    if (txt.includes('%')) return txt.replace(/^\+/, '').replace(/\s*pp/g, '%').trim();
+    if (txt.includes('pp')) return txt.replace(/^\+/, '').replace(/pp/g, '').trim() + '%';
+    if (txt.includes('m') || txt.includes('min')) return txt.replace(/[a-zA-Z]/g, '').replace(/^\+/, '').trim();
+    if (txt.includes('€')) return txt.replace(/€/g, '').replace(/\./g, '').replace(/,/g, '.').replace(/^\+/, '').trim();
+    if (/^-?\d{1,3}(\.\d{3})+$/.test(txt)) return txt.replace(/\./g, '');
+    if (/^-?\d+(\.\d+)?[kM]$/i.test(txt)) {
+      const mult = txt.slice(-1).toLowerCase() === 'm' ? 1e6 : 1e3;
+      return String(Math.round(parseFloat(txt.slice(0, -1)) * mult));
+    }
+    return txt.replace(/^\+/, '');
+  };
+
+  tbl.querySelectorAll('thead tr').forEach(tr => {
+    const cells = tr.querySelectorAll('th:not(.collapsed)');
+    if (!cells.length) return;
+    const tsvCols = [];
+    const htmlCols = [];
+    cells.forEach(th => {
+      const txt = getCellText(th, true);
+      const cs = th.getAttribute('colspan') ? ` colspan="${th.getAttribute('colspan')}"` : '';
+      const rs = th.getAttribute('rowspan') ? ` rowspan="${th.getAttribute('rowspan')}"` : '';
+      tsvCols.push(txt);
+      htmlCols.push(`<th${cs}${rs} style="border:1px solid #cbd5e1;padding:6px 10px;background:#f1f5f9;color:#0f172a;font-weight:700;text-align:center;vertical-align:middle;white-space:normal;word-wrap:break-word;">${escapeHtml(txt)}</th>`);
+    });
+    tsvRows.push(tsvCols.join('\t'));
+    htmlRows.push(`<tr>${htmlCols.join('')}</tr>`);
   });
+
+  tbl.querySelectorAll('tbody tr').forEach(tr => {
+    const cells = tr.querySelectorAll('td:not(.collapsed)');
+    if (!cells.length) return;
+    const tsvCols = [];
+    const htmlCols = [];
+    cells.forEach(td => {
+      const txt = getCellText(td, false);
+      tsvCols.push(txt);
+      htmlCols.push(`<td style="border:1px solid #e2e8f0;padding:6px 10px;text-align:center;vertical-align:middle;">${escapeHtml(txt)}</td>`);
+    });
+    tsvRows.push(tsvCols.join('\t'));
+    htmlRows.push(`<tr>${htmlCols.join('')}</tr>`);
+  });
+
+  const tsv = tsvRows.join('\n');
+  const html = `<table style="border-collapse:collapse;font-family:'Inter',system-ui,sans-serif;font-size:12px;">${htmlRows.join('')}</table>`;
+
+  const onSuccess = () => {
+    if (btn) {
+      btn.innerHTML = '✓ Copiado';
+      btn.style.color = '#16a34a';
+      setTimeout(() => { btn.innerHTML = orig; btn.style.color = ''; }, 2000);
+    }
+  };
+
+  const onError = () => {
+    if (btn) {
+      btn.innerHTML = 'Error';
+      btn.style.color = '#dc2626';
+      setTimeout(() => { btn.innerHTML = orig; btn.style.color = ''; }, 2000);
+    }
+  };
+
+  if (navigator.clipboard && window.ClipboardItem) {
+    try {
+      const item = new ClipboardItem({
+        'text/plain': new Blob([tsv], { type: 'text/plain' }),
+        'text/html': new Blob([html], { type: 'text/html' })
+      });
+      navigator.clipboard.write([item]).then(onSuccess).catch(() => {
+        navigator.clipboard.writeText(tsv).then(onSuccess).catch(onError);
+      });
+    } catch (e) {
+      navigator.clipboard.writeText(tsv).then(onSuccess).catch(onError);
+    }
+  } else if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(tsv).then(onSuccess).catch(onError);
+  } else {
+    const ta = document.createElement('textarea');
+    ta.value = tsv;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    try {
+      document.execCommand('copy');
+      onSuccess();
+    } catch (e) {
+      onError();
+    }
+    document.body.removeChild(ta);
+  }
 }
 
 // ── Caché local (30 min TTL) — carga instantánea en segunda visita ──

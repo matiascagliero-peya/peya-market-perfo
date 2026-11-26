@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <title>Store Explorer — Mapster 2</title>
+  <title>Store Explorer — All-Map</title>
   <script>
     window.__EARLY_ERRORS__ = [];
     window.addEventListener('error', function(e) {
@@ -42,6 +42,26 @@
 
     window.handleMapPlacesSearchInput = window.handleMapPlacesSearchInput || function() {};
     window.executeUnifiedZoneSearch = window.executeUnifiedZoneSearch || function() {};
+
+    // Definición global e inmutable de showToast en el HEAD
+    window.showToast = window.showToast || function(message, type = 'info') {
+      try {
+        console.log('[Toast ' + type + '] ' + message);
+        var container = document.getElementById('toast-container');
+        if (!container) return;
+        container.innerHTML = '';
+        var toast = document.createElement('div');
+        toast.className = 'toast toast-' + type;
+        toast.textContent = message;
+        container.appendChild(toast);
+        setTimeout(function() {
+          toast.style.opacity = '0';
+          toast.style.transform = 'translateY(-10px)';
+          setTimeout(function() { toast.remove(); }, 250);
+        }, 2200);
+      } catch(e) {}
+    };
+    var showToast = window.showToast;
   </script>
   <?!= include('1.3 StoreExplorer_styles'); ?>
 </head>
@@ -93,6 +113,18 @@
 
     <!-- ── MAPA GRANDE A PANTALLA COMPLETA ── -->
     <div id="main-map"></div>
+
+    <!-- ── PÍLDORA FLOTANTE ON-DEMAND: CALCULAR PUNTOS REALES EN ESTA VISTA (BIGQUERY) ── -->
+    <button type="button" id="map-heatmap-bq-pill" style="display:none; position:absolute; top:14px; left:50%; transform:translateX(-50%); z-index:100; background:var(--bg-sheet-card); border:1.5px solid #0284c7; border-radius:24px; padding:6px 16px; font-size:11.5px; font-weight:800; color:#0284c7; cursor:pointer; box-shadow:0 8px 24px rgba(0,0,0,0.35); align-items:center; gap:7px; backdrop-filter:blur(8px); font-family:'Outfit',sans-serif; transition:all 0.2s ease;" onclick="calculateRealHeatmapForCurrentView()">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#0284c7" stroke-width="2.5"><path d="M12 2a8 8 0 0 0-8 8c0 5.25 8 12 8 12s8-6.75 8-12a8 8 0 0 0-8-8z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+      <span id="map-heatmap-bq-pill-text">Calcular Puntos Reales en esta Vista (BQ)</span>
+    </button>
+
+    <!-- ── INDICADOR SUPERIOR CLARO DE MODO: ESTIMACIÓN VS DATOS REALES BQ ── -->
+    <div id="map-heatmap-mode-banner" style="display:none; position:absolute; top:48px; left:50%; transform:translateX(-50%); z-index:99; background:rgba(15,23,42,0.92); border:1px solid rgba(245,158,11,0.5); border-radius:18px; padding:3px 12px; font-size:10px; font-weight:700; color:#f59e0b; box-shadow:0 4px 14px rgba(0,0,0,0.3); align-items:center; gap:6px; backdrop-filter:blur(6px); font-family:'Outfit',sans-serif; pointer-events:none;">
+      <span id="map-heatmap-mode-dot" style="width:6px; height:6px; border-radius:50%; background:#f59e0b;"></span>
+      <span id="map-heatmap-mode-text">MODO ESTIMACIÓN: Proyección aproximada de densidad urbana</span>
+    </div>
 
     <!-- ── CARD FLOTANTE DE INTELIGENCIA DE ZONA SELECCIONADA ── -->
     <div id="custom-zone-card" class="custom-zone-card" style="display:none;">
@@ -287,7 +319,7 @@
               <span class="shortcut-tip-title">Radios de Entrega</span>
               <kbd class="shortcut-kbd">R</kbd>
             </div>
-            <div class="shortcut-tip-desc">Presioná <b>R</b> para mostrar u ocultar los anillos concéntricos de 1 a 5 km desde cada local.</div>
+            <div class="shortcut-tip-desc">Presioná <b>R</b> para mostrar u ocultar los anillos concéntricos divididos por cuadrantes (N, E, S, O).</div>
           </div>
         </div>
 
@@ -303,17 +335,18 @@
               <span class="shortcut-tip-title">Cuadrantes de Cobertura</span>
               <kbd class="shortcut-kbd">G</kbd>
             </div>
-            <div class="shortcut-tip-desc">Presioná <b>G</b> para proyectar la cuadrícula de análisis territorial por celdas en el mapa.</div>
+            <div class="shortcut-tip-desc">Presioná <b>G</b> para proyectar la cuadrícula o manzanas urbanas de 100m.</div>
           </div>
         </div>
 
         <!-- Selector de Divisiones de Recuadros (Inmediatamente debajo del toggle) -->
         <div id="grid-divisions-row" style="display:none; flex-direction:column; gap:4px; margin:4px 0 6px 0; padding:6px 8px; background:var(--bg-sheet-bar); border:1px solid var(--border-sheet); border-radius:6px;">
           <div style="display:flex; align-items:center; justify-content:space-between; font-size:10px; color:var(--text-sheet-muted); font-weight:700;">
-            <span>Divisiones:</span>
+            <span>Modo de Recuadro:</span>
             <span id="grid-divisions-label" style="color:var(--brand-red); font-weight:800;">8×8 (64)</span>
           </div>
           <select id="grid-divisions-select" class="toolbar-select" style="font-size:11px; padding:3px 6px;" onchange="changeGridDivisions(this.value)">
+            <option value="manzanas">⬛ Manzanas Urbanas (Cuadras 100m con Números)</option>
             <option value="4">4×4 (16 recuadros)</option>
             <option value="6">6×6 (36 recuadros)</option>
             <option value="8" selected>8×8 (64 recuadros)</option>
@@ -345,74 +378,72 @@
           </div>
         </div>
 
-        <!-- Toggle Zonas de Solapamiento -->
-        <!-- Acordeón: Zonas de Solapamiento (Oculto / Colapsado por defecto) -->
-        <details class="toolbar-accordion">
-          <summary class="toolbar-accordion-summary">
-            <div style="display:flex; align-items:center; gap:5px;">
-              <svg class="accordion-arrow" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg>
-              <span>Zonas de Solapamiento</span>
+        <!-- Botón Directo: Zonas de Solapamiento -->
+        <button type="button" id="btn-toggle-dispute-zones" class="toolbar-select has-shortcut-tip" style="text-align:center; font-weight:700; background:var(--bg-sheet-card); border:1px solid var(--border-sheet); color:var(--text-sheet-body); margin-top:4px; display:flex; align-items:center; justify-content:center; gap:6px; cursor:pointer;" onclick="toggleDisputeZonesVisibility()" title="Detectar y colorear áreas de intersección territorial entre 2 o más tiendas">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="9" cy="12" r="6"></circle><circle cx="15" cy="12" r="6"></circle></svg>
+          <span id="btn-dispute-zones-label">Zonas de Solapamiento</span>
+          <div class="shortcut-tip-box tip-left">
+            <div class="shortcut-tip-header">
+              <span class="shortcut-tip-title">Zonas de Solapamiento</span>
+              <kbd class="shortcut-kbd">D</kbd>
             </div>
-            <kbd class="shortcut-kbd" style="font-size:9px;">D</kbd>
-          </summary>
-          <div style="padding:4px 2px 2px 2px;">
-            <div class="toolbar-row has-shortcut-tip" onclick="toggleDisputeZonesVisibility()" style="margin-bottom:0;">
-              <span style="font-size:10.5px;">Activar Detección</span>
-              <label class="toggle-switch" onclick="event.stopPropagation()">
-                <input type="checkbox" id="dispute-zones-toggle" onchange="toggleDisputeZonesVisibility(this.checked)">
-                <span class="slider"></span>
-              </label>
-            </div>
-            <div style="font-size:9.5px; color:var(--text-sheet-muted); line-height:1.35; margin-top:4px; padding:4px 6px; background:var(--bg-sheet-bar); border-radius:4px;">
-              Detecta y colorea exclusivamente las áreas de intersección territorial entre 2 o más tiendas.
-            </div>
+            <div class="shortcut-tip-desc">Presioná <b>D</b> para detectar y colorear en el mapa las áreas de intersección territorial entre 2 o más tiendas.</div>
           </div>
-        </details>
+        </button>
 
         <!-- Selector Heatmap con Nombres Oficiales de Métricas del Glosario -->
         <div style="display:flex; flex-direction:column; gap:4px; margin-top:8px; padding-top:6px; border-top:1px solid var(--border-sheet);">
           <label class="toolbar-title">Mapa de Calor (Heatmap)</label>
           <select id="heatmap-layer-select" class="toolbar-select" onchange="changeHeatmapLayer(this.value)">
             <option value="none">Sin Heatmap</option>
-            <option value="peya_maus">1. Platform MAUs (Platform users total)</option>
-            <option value="covered_maus">2. Covered MAUs (User en zona de cobertura de Store)</option>
-            <option value="dmart_maus">3. Dmart MAUs</option>
-            <option value="penetration">4. Platform MAUs penetration % (Dmart / Covered)</option>
-            <option value="seamless_worst">5. Seamless Delivery % Negativo</option>
-            <option value="seamless_best">6. Seamless Delivery % Positivo</option>
-            <option value="afv">7. AFV (net sales / Confirmed orders)</option>
-            <option value="late_orders">8. Late Orders %</option>
-            <option value="orders">9. Confirmed Orders</option>
-            <option value="gmv_dmart">10. GMV Dmarts</option>
-            <option value="cpo">11. Rider CPO Dmarts ($ costo de envío)</option>
+            <option value="peya_maus">1. Domicilios de Usuarios (Platform MAUs - Dónde viven)</option>
+            <option value="covered_maus">2. Domicilios en Cobertura (Covered MAUs - Viven en zona)</option>
+            <option value="dmart_maus">3. Clientes Registrados D-Mart (Dmart MAUs)</option>
+            <option value="orders">4. Entregas de Pedidos (Confirmed Orders - Dónde se entregaron)</option>
+            <option value="penetration">5. Penetración % (Dmart / Covered)</option>
+            <option value="seamless_worst">6. Fricción Operativa (Seamless % Negativo)</option>
+            <option value="seamless_best">7. Excelencia Operativa (Seamless % Positivo)</option>
+            <option value="afv">8. Ticket Promedio AFV ($)</option>
+            <option value="late_orders">9. Retrasos de Entrega (Late Orders %)</option>
+            <option value="gmv_dmart">10. Facturación Neta GMV</option>
+            <option value="cpo">11. Rider CPO ($ costo de envío)</option>
           </select>
         </div>
 
-        <!-- ── CAJA DE VERIFICACIÓN Y CALIBRACIÓN DE HEATMAP EN VIVO ── -->
-        <div id="heatmap-status-box" style="display:none; margin-top:5px; background:rgba(2,132,199,0.06); border:1px solid rgba(2,132,199,0.25); border-radius:6px; padding:6px 8px; font-size:10px; font-family:'JetBrains Mono',monospace;">
-          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:3px;">
-            <span style="font-weight:800; color:var(--text-sheet-title);">Verificación Heatmap:</span>
-            <span id="heatmap-status-badge" class="badge-tag green">Verificando...</span>
-          </div>
-          <div style="display:flex; justify-content:space-between; color:var(--text-sheet-muted); margin-bottom:2px;">
-            <span>Librería Google Maps:</span>
-            <span id="heatmap-lib-status" style="font-weight:700;">—</span>
-          </div>
-          <div style="display:flex; justify-content:space-between; color:var(--text-sheet-muted); margin-bottom:2px;">
-            <span>Puntos Renderizados:</span>
-            <span id="heatmap-points-count" style="font-weight:700; color:#0284c7;">—</span>
-          </div>
-          <div style="display:flex; justify-content:space-between; color:var(--text-sheet-muted); margin-bottom:4px;">
-            <span>Métrica Activa:</span>
-            <span id="heatmap-active-metric" style="font-weight:700; color:var(--brand-red);">—</span>
-          </div>
-          <!-- ── ESCALA DE COLOR Y CONCENTRACIÓN REAL ── -->
-          <div id="heatmap-legend-container" style="border-top:1px dashed rgba(2,132,199,0.25); padding-top:6px; margin-top:4px; display:flex; flex-direction:column; gap:3px;">
+        <!-- Botón On-Demand: Calcular Puntos Reales con BigQuery para esta vista -->
+        <button type="button" id="btn-calc-real-heatmap" class="btn-tool-minimal" style="width:100%; justify-content:center; margin-top:5px; border:1px solid rgba(2,132,199,0.35); background:rgba(2,132,199,0.08); color:#0284c7; font-weight:700; font-size:10.5px; padding:5px 8px; display:none; gap:5px;" onclick="calculateRealHeatmapForCurrentView()" title="Escanear coordenadas GPS reales de clientes y órdenes en esta zona desde BigQuery">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 2a8 8 0 0 0-8 8c0 5.25 8 12 8 12s8-6.75 8-12a8 8 0 0 0-8-8z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+          <span id="btn-calc-real-heatmap-label">Calcular Puntos Reales (BQ)</span>
+        </button>
+
+        <!-- ── LEYENDA Y ESCALA DE CALOR DISCRETA ── -->
+        <div id="heatmap-status-box" style="display:none; margin-top:5px; background:var(--bg-sheet-card); border:1px solid var(--border-sheet); border-radius:6px; padding:6px 8px; font-size:10px; font-family:'JetBrains Mono',monospace;">
+          <div id="heatmap-legend-container" style="display:flex; flex-direction:column; gap:3px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:2px;">
+              <span id="heatmap-data-source-badge" style="font-size:8px; font-weight:800; padding:1px 6px; border-radius:3px; background:rgba(16,185,129,0.12); color:#10b981; border:1px solid rgba(16,185,129,0.3); text-transform:uppercase;">Censo 100% Real (BigQuery)</span>
+              <span id="heatmap-points-count" style="font-size:8.5px; color:var(--text-sheet-muted); font-weight:700;">—</span>
+            </div>
+
+            <!-- Checkbox: Nivel Usuario vs Nivel Pedidos -->
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-top:4px; margin-bottom:4px; padding:4px 8px; background:var(--bg-sheet-bar); border:1px solid var(--border-sheet); border-radius:6px;">
+              <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:10px; font-weight:700; color:var(--text-sheet-title);">
+                <input type="checkbox" id="chk-heatmap-user-level" checked onchange="toggleHeatmapUserLevel(this.checked)" style="accent-color:#0284c7; width:14px; height:14px; cursor:pointer;">
+                <span id="lbl-heatmap-user-level">Ver a Nivel Usuario (Platform MAUs)</span>
+              </label>
+              <span id="badge-heatmap-user-level" style="font-size:8px; font-weight:800; color:#0284c7; background:rgba(2,132,199,0.12); padding:1px 5px; border-radius:3px; text-transform:uppercase;">Usuarios</span>
+            </div>
+
+            <!-- Indicador de Transición Automática de Zoom -->
+            <div style="font-size:8.5px; color:var(--text-sheet-muted); margin-bottom:5px; display:flex; align-items:center; justify-content:space-between; font-weight:600;">
+              <span style="color:#0284c7;">🔍 Cerca (Zoom &ge; 15): <b>Por Cuadra</b></span>
+              <span style="color:#ea044e;">🌐 Lejos (Zoom &le; 14): <b>Térmico</b></span>
+            </div>
+
             <div style="display:flex; justify-content:space-between; align-items:center; font-size:9px; font-weight:700; color:var(--text-sheet-title);">
               <span>Escala de Densidad:</span>
               <span id="heatmap-scale-metric-name" style="color:var(--brand-red); font-weight:800;">Platform MAUs</span>
             </div>
-            <div id="heatmap-gradient-bar" style="height:8px; border-radius:4px; background:linear-gradient(to right, rgba(0,255,255,0.2), #00ffff, #007fff, #6366f1, #4f46e5); box-shadow:inset 0 1px 2px rgba(0,0,0,0.15);"></div>
+            <div id="heatmap-gradient-bar" style="height:8px; border-radius:4px; background:linear-gradient(to right, #06b6d4, #10b981, #f59e0b, #ea044e); box-shadow:inset 0 1px 2px rgba(0,0,0,0.15);"></div>
             <div style="display:flex; justify-content:space-between; font-size:8px; font-weight:700; color:var(--text-sheet-muted); font-family:'JetBrains Mono',monospace;">
               <span id="heatmap-legend-min">Baja</span>
               <span id="heatmap-legend-mid">Media</span>
@@ -424,6 +455,57 @@
               <span id="heatmap-opacity-val" style="font-weight:800; color:#0284c7;">55%</span>
             </div>
             <input type="range" id="heatmap-opacity-slider" min="15" max="100" value="55" style="width:100%; height:4px; accent-color:#0284c7; cursor:pointer;" oninput="onHeatmapOpacityChange(this.value)">
+
+            <!-- ── GUÍA VISUAL DE ESCALA DE COLORES CLAROS ── -->
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:5px; padding-top:4px; border-top:1px dashed var(--border-sheet); font-size:8.5px;">
+              <span style="display:flex; align-items:center; gap:3px; color:#06b6d4;" title="1 a 4 usuarios por cuadra">
+                <span style="display:inline-block; width:6.5px; height:6.5px; border-radius:2px; background:#06b6d4;"></span>
+                <span>1-4</span>
+              </span>
+              <span style="display:flex; align-items:center; gap:3px; color:#10b981;" title="5 a 12 usuarios por cuadra">
+                <span style="display:inline-block; width:6.5px; height:6.5px; border-radius:2px; background:#10b981;"></span>
+                <span>5-12</span>
+              </span>
+              <span style="display:flex; align-items:center; gap:3px; color:#f59e0b;" title="13 a 30 usuarios por cuadra">
+                <span style="display:inline-block; width:6.5px; height:6.5px; border-radius:2px; background:#f59e0b;"></span>
+                <span>13-30</span>
+              </span>
+              <span style="display:flex; align-items:center; gap:3px; color:#ea044e; font-weight:800;" title="31 o más usuarios por cuadra (Hotspot)">
+                <span style="display:inline-block; width:6.5px; height:6.5px; border-radius:2px; background:#ea044e;"></span>
+                <span>31+ Hotspot</span>
+              </span>
+            </div>
+
+            <!-- ── REGISTRO PERMANENTE DE CONSUMO BIGQUERY ── -->
+            <div id="heatmap-last-bq-box" style="display:none; margin-top:6px; padding:5px 7px; background:rgba(16,185,129,0.08); border:1px solid rgba(16,185,129,0.25); border-radius:5px; font-size:9px; color:#10b981; font-family:'JetBrains Mono',monospace;">
+              <div style="font-weight:800; font-size:9.5px; margin-bottom:2px; display:flex; justify-content:space-between; align-items:center;">
+                <span>✓ Última Query BigQuery:</span>
+                <span id="heatmap-last-bq-time" style="font-size:8px; opacity:0.8;">—</span>
+              </div>
+              <div id="heatmap-last-bq-details">—</div>
+            </div>
+
+            <!-- ── CAJA DE MEMORIA INTERNA / CACHÉ LOCAL DE DOMICILIOS ── -->
+            <div id="heatmap-local-memory-box" style="margin-top:6px; padding:6px 8px; background:rgba(2,132,199,0.08); border:1px solid rgba(2,132,199,0.25); border-radius:6px; font-size:9px;">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:3px;">
+                <span style="font-weight:800; color:#0284c7; display:flex; align-items:center; gap:4px;">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                  Memoria Interna (Caché):
+                </span>
+                <span id="heatmap-memory-count-badge" style="font-size:8px; font-weight:800; padding:1px 5px; border-radius:3px; background:rgba(2,132,199,0.15); color:#0284c7;">0 zonas</span>
+              </div>
+              <div id="heatmap-memory-status-text" style="color:var(--text-sheet-muted); font-size:8.5px; line-height:1.3; margin-bottom:4px;">
+                Sin datos censados guardados en este navegador.
+              </div>
+              <div style="display:flex; gap:4px;">
+                <button type="button" id="btn-load-saved-zone-memory" onclick="loadCachedPointsInCurrentView()" style="display:none; flex:1; padding:3px 6px; font-size:8.5px; font-weight:800; border-radius:4px; border:1px solid #0284c7; background:#0284c7; color:#ffffff; cursor:pointer;" title="Proyectar puntos guardados de esta zona sin consultar BigQuery">
+                  ⚡ Proyectar desde Memoria (0 MB)
+                </button>
+                <button type="button" id="btn-clear-heatmap-memory" onclick="clearAllHeatmapMemory()" style="display:none; padding:3px 6px; font-size:8.5px; font-weight:700; border-radius:4px; border:1px solid rgba(239,68,68,0.3); background:transparent; color:#ef4444; cursor:pointer;" title="Borrar datos cacheados para liberar espacio">
+                  🗑️ Vaciar
+                </button>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -689,6 +771,11 @@
                     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M20 16.58A5 5 0 0 0 18 7h-1.26A8 8 0 1 0 4 15.25"></path><line x1="8" y1="19" x2="8" y2="21"></line><line x1="8" y1="13" x2="8" y2="15"></line><line x1="16" y1="19" x2="16" y2="21"></line><line x1="16" y1="13" x2="16" y2="15"></line></svg>
                     <span id="toggle-rain-text">Solo Lluvias</span>
                   </button>
+                  <!-- Botón Ver Todos los WHS (Quitar filtros geográficos restrictivos) -->
+                  <button type="button" class="ring-pill-btn" onclick="showAllWarehousesGlobal(false)" title="Mostrar todos los almacenes de todos los países en el mapa y quitar filtros" style="background:rgba(2,132,199,0.12); color:#0284c7; border-color:rgba(2,132,199,0.4); font-weight:700; display:inline-flex; align-items:center; gap:4px; padding:2px 9px; font-size:10.5px;">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                    Ver Todos los WHS
+                  </button>
                   <button type="button" class="ring-pill-btn" onclick="selectAllWarehouses(true)" style="background:var(--brand-red); color:#ffffff; border-color:var(--brand-red); font-weight:700; display:inline-flex; align-items:center; gap:4px; padding:2px 9px; font-size:10.5px;">
                     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
                     Seleccionar Todo
@@ -709,34 +796,62 @@
 
         <!-- PESTAÑA 2: MÉTRICAS BY WHS (MATRIZ COMPARATIVA POR COLUMNAS) -->
         <div id="tab-kpis" class="tab-panel">
-          <!-- Barra de Gestión Rápida: Buscador desplegable + Acciones directas -->
-          <div class="kpi-whs-banner" style="margin-bottom:6px; padding:6px 10px; flex-shrink:0;">
-            <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:6px;">
-              <div style="display:flex; align-items:center; gap:6px; flex:1; min-width:280px; flex-wrap:wrap;">
-                <span style="font-weight:700; font-size:11px; color:var(--text-sheet-title); white-space:nowrap; display:flex; align-items:center; gap:5px;">
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--brand-red)" stroke-width="2.5"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline></svg>
+          <!-- Barra de Gestión Rápida: Buscador desplegable + Categorías + Acciones directas -->
+          <div class="kpi-whs-banner" style="margin-bottom:8px; padding:8px 12px; flex-shrink:0;">
+            <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px;">
+              <div style="display:flex; align-items:center; gap:8px; flex:1; min-width:300px; flex-wrap:wrap;">
+                <span style="font-weight:800; font-size:12px; color:var(--text-sheet-title); white-space:nowrap; display:flex; align-items:center; gap:6px;">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--brand-red)" stroke-width="2.5"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline></svg>
                   Comparador:
                 </span>
                 <!-- Selector explícito de Mes para Métricas -->
-                <select id="kpi-month-select" class="filter-input" onchange="onKpiMonthChange(this.value)" style="max-width:130px; padding:2px 7px; font-size:10.5px; height:24px; border-radius:5px; font-weight:700; color:var(--brand-red);" title="Mes analizado en la tabla de métricas"></select>
-                <select id="quick-add-whs-select" class="filter-input" onchange="onQuickAddWarehouse(this.value)" style="max-width:210px; padding:2px 7px; font-size:10.5px; height:24px; border-radius:5px;">
+                <select id="kpi-month-select" class="filter-input" onchange="onKpiMonthChange(this.value)" style="max-width:140px; padding:3px 9px; font-size:11px; height:28px; border-radius:6px; font-weight:700; color:var(--brand-red);" title="Mes analizado en la tabla de métricas"></select>
+                <select id="quick-add-whs-select" class="filter-input" onchange="onQuickAddWarehouse(this.value)" style="max-width:240px; padding:3px 9px; font-size:11px; height:28px; border-radius:6px;">
                   <option value="">+ Agregar almacén al comparador...</option>
                 </select>
-                <span id="kpi-whs-count-badge" style="font-size:10.5px; font-weight:700; color:var(--text-sheet-muted);">
+                <span id="kpi-whs-count-badge" style="font-size:11px; font-weight:700; color:var(--text-sheet-muted); background:var(--bg-sheet-card); border:1px solid var(--border-sheet); padding:2px 8px; border-radius:12px;">
                   <span id="kpi-total-whs">0</span> tiendas
                 </span>
               </div>
 
-              <div style="display:flex; align-items:center; gap:5px;">
-                <button type="button" class="ring-pill-btn" onclick="quickClearAllKpiWarehouses()" style="font-weight:700; font-size:10px; padding:2px 8px; color:#ef4444; border-color:rgba(239,68,68,0.3); display:inline-flex; align-items:center; gap:4px;" title="Quitar todas las tiendas de la comparación">
-                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+              <div style="display:flex; align-items:center; gap:6px;">
+                <button type="button" class="ring-pill-btn" onclick="quickClearAllKpiWarehouses()" style="font-weight:700; font-size:10.5px; padding:3px 10px; color:#ef4444; border-color:rgba(239,68,68,0.3); display:inline-flex; align-items:center; gap:4px; height:28px;" title="Quitar todas las tiendas de la comparación">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
                   <span>Limpiar todas</span>
                 </button>
               </div>
             </div>
 
+            <!-- Selector de Categorías / Bloques de Métricas -->
+            <div class="kpi-category-pills" id="kpi-category-pills" style="margin-top:6px; display:flex; align-items:center; gap:6px; overflow-x:auto; padding-bottom:2px;">
+              <button type="button" class="kpi-cat-pill active" onclick="filterKpiCategory('ALL', this)">
+                <span>Todas las métricas</span>
+                <span class="kpi-cat-count">25</span>
+              </button>
+              <button type="button" class="kpi-cat-pill" onclick="filterKpiCategory('TRANSACCIONAL', this)">
+                <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#ea044e;"></span>
+                <span>Transaccionales</span>
+                <span class="kpi-cat-count">9</span>
+              </button>
+              <button type="button" class="kpi-cat-pill" onclick="filterKpiCategory('USUARIOS', this)">
+                <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#2563eb;"></span>
+                <span>Usuarios & Penetración</span>
+                <span class="kpi-cat-count">9</span>
+              </button>
+              <button type="button" class="kpi-cat-pill" onclick="filterKpiCategory('OPERACIONES', this)">
+                <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#16a34a;"></span>
+                <span>Operaciones & Calidad</span>
+                <span class="kpi-cat-count">9</span>
+              </button>
+              <button type="button" class="kpi-cat-pill" onclick="filterKpiCategory('UNIT_ECONOMICS', this)">
+                <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#7c3aed;"></span>
+                <span>Unit Economics</span>
+                <span class="kpi-cat-count">2</span>
+              </button>
+            </div>
+
             <!-- Chips de tiendas seleccionadas con boton para remover al instante -->
-            <div class="kpi-whs-chips-wrap" id="kpi-whs-chips-list" style="margin-top:5px; max-height:48px; overflow-y:auto;">
+            <div class="kpi-whs-chips-wrap" id="kpi-whs-chips-list" style="margin-top:6px; max-height:48px; overflow-y:auto;">
               <!-- Se inyecta dinámicamente -->
             </div>
           </div>
@@ -753,10 +868,17 @@
         <div id="tab-anillos" class="tab-panel">
           <div class="rings-view-header" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px;">
             <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-              <!-- Selector de Tienda a visualizar -->
+              <!-- Selector de Tienda a visualizar con buscador predictivo -->
               <div style="display:flex; align-items:center; gap:5px;">
                 <span style="font-size:11px; font-weight:700; color:var(--text-sheet-title);">Tienda:</span>
-                <select id="rings-store-filter-select" class="filter-input" onchange="onRingsStoreFilterChange(this.value)" style="max-width:185px; padding:2px 7px; font-size:10.5px; height:24px; border-radius:5px; font-weight:700;">
+                <div class="searchable-combobox-wrap" id="wrap-filter-rings-store" style="min-width:190px; max-width:260px;">
+                  <input type="text" id="search-filter-rings-store" class="filter-input search-input-combo" placeholder="Todas las tiendas" autocomplete="off" onfocus="openCombobox('rings-store')" oninput="filterComboboxOptions('rings-store', this.value)" style="height:25px; font-size:10.5px; font-weight:700; padding:2px 22px 2px 7px;">
+                  <button type="button" class="combo-arrow-btn" onclick="toggleCombobox('rings-store', event)">
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                  </button>
+                  <div class="combo-dropdown-menu" id="menu-filter-rings-store" style="display:none;"></div>
+                </div>
+                <select id="rings-store-filter-select" class="filter-input" style="display:none;" onchange="onRingsStoreFilterChange(this.value)">
                   <option value="ALL">Todas las tiendas</option>
                 </select>
               </div>
@@ -805,6 +927,7 @@
                 <tr>
                   <th>Almacén</th>
                   <th>Radio / Anillo</th>
+                  <th>Cuadrante</th>
                   <th>Platform MAUs</th>
                   <th>DMart MAUs</th>
                   <th>Penetración %</th>
@@ -817,7 +940,7 @@
                 </tr>
               </thead>
               <tbody id="rings-table-body">
-                <tr><td colspan="11" style="text-align:center; padding:30px; color:var(--text-muted);">Seleccioná almacenes para analizar sus anillos</td></tr>
+                <tr><td colspan="12" style="text-align:center; padding:30px; color:var(--text-muted);">Seleccioná almacenes para analizar sus anillos</td></tr>
               </tbody>
             </table>
           </div>
@@ -838,7 +961,7 @@
         <span class="bq-modal-close" onclick="closeBqConfirmModal()">&times;</span>
       </div>
       <div class="bq-modal-body">
-        <p style="margin-bottom:10px; font-size:12px; color:var(--text-secondary); line-height:1.45;">
+        <p id="bq-modal-desc-text" style="margin-bottom:10px; font-size:12px; color:var(--text-secondary); line-height:1.45;">
           Se ejecutará una consulta directa en BigQuery contra la tabla <code>qc_coverage_customer_location</code> para geolocalizar y cuantificar los usuarios únicos dentro de cada recuadro.
         </p>
         <div class="bq-modal-info-box">
@@ -854,16 +977,20 @@
             <span style="color:var(--text-muted);">Cuadrantes a procesar:</span>
             <span id="bq-modal-cells-count" style="font-weight:700; color:#0284c7;">—</span>
           </div>
-          <div style="display:flex; justify-content:space-between; border-top:1px dashed var(--border-color); padding-top:5px; margin-top:5px;">
-            <span style="color:var(--text-muted);">Consumo exacto a procesar:</span>
-            <span id="bq-modal-bytes-estimate" style="color:#16a34a; font-weight:800; font-family:'JetBrains Mono',monospace;">Calculando medición BQ...</span>
+          <div style="display:flex; justify-content:space-between; border-top:1px dashed var(--border-sheet); padding-top:5px; margin-top:5px;">
+            <span style="color:var(--text-sheet-muted);">Datos proyectados (BigQuery):</span>
+            <span id="bq-modal-bytes-estimate" style="color:#10b981; font-weight:800; font-family:'JetBrains Mono',monospace;">Calculando medición BQ...</span>
+          </div>
+          <div style="display:flex; justify-content:space-between; margin-top:3px;">
+            <span style="color:var(--text-sheet-muted);">Slots proyectados:</span>
+            <span id="bq-modal-slots-estimate" style="color:#0284c7; font-weight:700; font-family:'JetBrains Mono',monospace;">~12 a 24 Slots</span>
           </div>
           <div style="font-size:9.5px; color:#10b981; font-weight:600; margin-top:3px; text-align:right;">
             * Medición exacta pre-calculada directamente por Google BigQuery.
           </div>
         </div>
-        <div style="font-size:11px; color:#64748b; margin-top:10px; display:flex; align-items:center; gap:5px;">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2.2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+        <div style="font-size:11px; color:var(--text-sheet-muted); margin-top:10px; display:flex; align-items:center; gap:5px;">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
           <span>Solo se ejecuta con tu confirmación para proteger el límite de datos.</span>
         </div>
       </div>
@@ -871,6 +998,56 @@
         <button type="button" class="btn-modal-cancel" onclick="closeBqConfirmModal()">Cancelar</button>
         <button type="button" id="btn-modal-confirm-bq" class="btn-modal-confirm" onclick="executeGridUsersBigQuery()">
           Confirmar y Calcular
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal de Proyección de Datos y Slots para Heatmap de Puntos Reales BigQuery -->
+  <div id="heatmap-bq-confirm-modal" class="bq-modal-backdrop" style="display:none; z-index:1000000;">
+    <div class="bq-modal-card">
+      <div class="bq-modal-header">
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span class="live-dot" style="width:9px; height:9px;"></span>
+          <span style="font-size:13.5px; font-weight:800; color:var(--text-sheet-title);">Calcular Domicilios Reales (BigQuery GPS)</span>
+        </div>
+        <span class="bq-modal-close" onclick="closeHeatmapBqConfirmModal()">&times;</span>
+      </div>
+      <div class="bq-modal-body">
+        <p id="heatmap-bq-modal-desc" style="margin-bottom:10px; font-size:12px; color:var(--text-sheet-muted); line-height:1.45;">
+          Se ejecutará una consulta espacial directa en BigQuery contra <code>qc_coverage_customer_location</code> y <code>fact_orders</code> para geolocalizar las coordenadas GPS exactas en este encuadre.
+        </p>
+        <div class="bq-modal-info-box">
+          <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+            <span style="color:var(--text-sheet-muted);">Zona / Encuadre visible:</span>
+            <span id="heatmap-bq-modal-zone-name" style="font-weight:700; color:var(--text-sheet-title);">Vista actual del mapa</span>
+          </div>
+          <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+            <span style="color:var(--text-sheet-muted);">Métrica a calcular:</span>
+            <span id="heatmap-bq-modal-metric-name" style="font-weight:700; color:#0284c7;">Platform MAUs (Domicilios)</span>
+          </div>
+          <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+            <span style="color:var(--text-sheet-muted);">Mes a consultar:</span>
+            <span id="heatmap-bq-modal-month-name" style="font-weight:700; color:var(--text-sheet-title);">—</span>
+          </div>
+          <div style="display:flex; justify-content:space-between; border-top:1px dashed var(--border-sheet); padding-top:6px; margin-top:6px;">
+            <span style="color:var(--text-sheet-muted);">Datos proyectados (BigQuery):</span>
+            <span id="heatmap-bq-modal-bytes-estimate" style="color:#10b981; font-weight:800; font-family:'JetBrains Mono',monospace;">~380 MB a 680 MB</span>
+          </div>
+          <div style="display:flex; justify-content:space-between; margin-top:3px;">
+            <span style="color:var(--text-sheet-muted);">Slots proyectados:</span>
+            <span id="heatmap-bq-modal-slots-estimate" style="color:#0284c7; font-weight:700; font-family:'JetBrains Mono',monospace;">~8 a 16 Slots</span>
+          </div>
+        </div>
+        <div style="font-size:11px; color:var(--text-sheet-muted); margin-top:10px; display:flex; align-items:center; gap:5px;">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+          <span>Los puntos quedarán cacheados en memoria para que no vuelvas a gastar datos al moverte.</span>
+        </div>
+      </div>
+      <div class="bq-modal-footer">
+        <button type="button" class="btn-modal-cancel" onclick="closeHeatmapBqConfirmModal()">Cancelar</button>
+        <button type="button" id="btn-confirm-heatmap-bq" class="btn-modal-confirm" onclick="executeRealHeatmapBigQuery()">
+          Confirmar y Extraer Puntos Reales
         </button>
       </div>
     </div>
@@ -1028,51 +1205,10 @@
         window.location.reload();
       }
     };
-    window.toggleLiveDebugPanel = function(force) {
-      var p = document.getElementById('live-debug-panel');
-      if (!p) return;
-      if (force === true) {
-        p.style.display = 'flex';
-      } else if (force === false) {
-        p.style.display = 'none';
-      } else {
-        p.style.display = (p.style.display === 'none' || !p.style.display) ? 'flex' : 'none';
-      }
-    };
   </script>
 
-  <!-- ── PANEL DE DIAGNÓSTICO EN VIVO (Flotante fijo en esquina inferior derecha, sin cortar la página) ── -->
-  <div id="live-debug-panel" style="<?= (typeof isDebugMode !== 'undefined' && isDebugMode) ? 'display:flex;' : 'display:none;' ?> position:fixed; bottom:42px; right:12px; z-index:999999; width:380px; max-width:calc(100vw - 24px); background:rgba(15,23,42,0.96); backdrop-filter:blur(12px); color:#f8fafc; border:1px solid #334155; border-radius:8px; box-shadow:0 12px 35px rgba(0,0,0,0.6); font-family:'JetBrains Mono',monospace; font-size:11px; flex-direction:column; overflow:hidden;">
-    <div style="background:#1e293b; padding:6px 10px; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid #334155; user-select:none;">
-      <div style="display:flex; align-items:center; gap:6px;">
-        <span id="debug-status-dot" style="width:7px; height:7px; border-radius:50%; background:#10b981; display:inline-block;"></span>
-        <span style="font-weight:700; color:#38bdf8; font-size:10.5px;">Logs de Diagnóstico</span>
-        <span id="debug-status-pill" style="font-size:9px; background:rgba(56,189,248,0.15); color:#38bdf8; padding:1px 5px; border-radius:4px;">Activo</span>
-      </div>
-      <div style="display:flex; align-items:center; gap:5px;">
-        <button type="button" onclick="copyLiveDebugLog()" style="background:#334155; color:#f8fafc; border:none; padding:2px 7px; border-radius:4px; font-size:9px; cursor:pointer;" title="Copiar logs de diagnóstico">Copiar</button>
-        <button type="button" onclick="forceManualDataReload()" style="background:#ea044e; color:#ffffff; border:none; padding:2px 7px; border-radius:4px; font-size:9px; font-weight:700; cursor:pointer;" title="Forzar re-ejecución de carga">Reintentar</button>
-        <button type="button" onclick="toggleLiveDebugPanel(false)" style="background:transparent; color:#94a3b8; border:none; padding:0 3px; font-size:14px; font-weight:700; cursor:pointer;" title="Cerrar panel">&times;</button>
-      </div>
-    </div>
-    <div id="live-debug-content" style="padding:8px 10px; max-height:190px; overflow-y:auto; line-height:1.45; color:#cbd5e1; word-break:break-all; font-size:10px;">
-      <div>[00:00:00] Iniciando panel de diagnóstico...</div>
-      <script>
-        (function() {
-          var c = document.getElementById('live-debug-content');
-          if (c) {
-            var d = document.createElement('div');
-            d.style.color = '#38bdf8';
-            d.textContent = '[' + new Date().toTimeString().split(' ')[0] + '] HTML base cargado correctamente.';
-            c.appendChild(d);
-          }
-        })();
-      </script>
-    </div>
-  </div>
-
-  <!-- Discreto botón flotante en la esquina inferior derecha para abrir logs solo si se desea -->
-  <button id="debug-floating-trigger" type="button" onclick="toggleLiveDebugPanel()" title="Ver registro de eventos" style="position:fixed; bottom:12px; right:12px; z-index:99999; background:rgba(15,23,42,0.88); color:#94a3b8; border:1px solid #334155; border-radius:20px; padding:3px 9px; font-size:10px; font-weight:700; cursor:pointer; display:flex; align-items:center; gap:5px; backdrop-filter:blur(6px); box-shadow:0 4px 12px rgba(0,0,0,0.3); font-family:'JetBrains Mono',monospace;">
+  <!-- Botón flotante oculto por defecto (solo accesible mediante los 5 toques en "BigQuery" en el nav) -->
+  <button id="debug-floating-trigger" type="button" onclick="toggleLiveDebugPanel()" title="Ver registro de eventos" style="display:none !important; position:fixed; bottom:12px; right:12px; z-index:99999; background:rgba(15,23,42,0.88); color:#94a3b8; border:1px solid #334155; border-radius:20px; padding:3px 9px; font-size:10px; font-weight:700; cursor:pointer; align-items:center; gap:5px; backdrop-filter:blur(6px); box-shadow:0 4px 12px rgba(0,0,0,0.3); font-family:'JetBrains Mono',monospace;">
     <span id="debug-status-dot-mini" style="width:6px; height:6px; border-radius:50%; background:#10b981;"></span>
     <span>Logs</span>
   </button>
@@ -1086,9 +1222,10 @@
       var c = document.getElementById('live-debug-content');
       if (!c) return;
 
+      var currentScriptEl = document.currentScript;
       var scripts = Array.from(document.querySelectorAll('script'));
       var largeScript = scripts.find(function(s) {
-        return s.textContent && (s.textContent.includes('bootstrapStoreExplorer') || s.textContent.includes('COMBOBOX_ITEMS') || s.textContent.includes('StoreExplorer_scripts'));
+        return s !== currentScriptEl && s.textContent && (s.textContent.includes('function bootstrapStoreExplorer') || s.textContent.includes('var COMBOBOX_ITEMS'));
       });
 
       var d = document.createElement('div');
@@ -1101,12 +1238,11 @@
         d.style.color = '#ef4444';
         d.style.fontWeight = 'bold';
         var sLines = largeScript.textContent.split('\n');
-        var l2307Txt = (sLines.length >= 2307) ? (' | Texto en L2307: "' + sLines[2306].trim().slice(0, 75) + '"') : '';
-        d.textContent = '[' + now + '] [ERROR SINTAXIS] Descargados ' + largeScript.textContent.length + ' chars (' + sLines.length + ' líneas)' + l2307Txt;
+        d.textContent = '[' + now + '] [ERROR EVALUACIÓN JS] Script descargado (' + largeScript.textContent.length + ' chars, ' + sLines.length + ' líneas) pero bootstrapStoreExplorer no se ejecutó. ' + ((window.__EARLY_ERRORS__ && window.__EARLY_ERRORS__[0]) || '');
       } else {
         d.style.color = '#ef4444';
         d.style.fontWeight = 'bold';
-        d.textContent = '[' + now + '] [ERROR NOMBRE ARCHIVO] Google Apps Script no incluyó el archivo "1.2 StoreExplorer_scripts". Revisa en el panel izquierdo de Apps Script que el archivo se llame exactamente "1.2 StoreExplorer_scripts" (sin duplicar .html).';
+        d.textContent = '[' + now + '] [ERROR DE ARCHIVO EN APPS SCRIPT] El archivo "1.2 StoreExplorer_scripts" NO fue incluido por Google Apps Script. Verificá en el editor de Apps Script (panel izquierdo) que exista el archivo "1.2 StoreExplorer_scripts" y que hayas copiado y pegado su contenido.';
       }
       c.appendChild(d);
     })();

@@ -1357,29 +1357,13 @@
     });
     
     slider.addEventListener('mousemove', function(e) {
-      if (!isDown) return;
-      e.preventDefault();
-      var x = e.pageX - slider.offsetLeft;
-      var walk = (x - startX) * 1.5;
-      slider.scrollLeft = scrollLeft - walk;
+    if (!isDown) return;
+    e.preventDefault();
+    var x = e.pageX - slider.offsetLeft;
+    var walk = (x - startX) * 1.5;
+    slider.scrollLeft = scrollLeft - walk;
     });
-
-    // Soporte para scroll horizontal con rueda del mouse
-    slider.addEventListener('wheel', function(e) {
-      if (Math.abs(e.deltaX) > 0) return; // Ya es horizontal nativo
-      if (e.shiftKey) return; // El navegador ya lo maneja
-      // Desplazar horizontalmente si se mueve la rueda en la zona de la tabla
-      if (Math.abs(e.deltaY) > 0 && slider.scrollWidth > slider.clientWidth) {
-        // Solo interceptar si el usuario no llegó al extremo
-        var atStart = (slider.scrollLeft === 0 && e.deltaY < 0);
-        var atEnd = (slider.scrollLeft + slider.clientWidth >= slider.scrollWidth && e.deltaY > 0);
-        if (!atStart && !atEnd) {
-          e.preventDefault();
-          slider.scrollLeft += e.deltaY;
-        }
-      }
-    }, { passive: false });
-  }
+    }
 
   window.addEventListener('resize', function() {
     syncScrollbars();

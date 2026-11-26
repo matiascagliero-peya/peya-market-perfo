@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Benchmark Tiendas — Mapster 2</title>
+  <title>Benchmark Tiendas — All-Map</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
@@ -35,11 +35,11 @@
       --t2: #cbd5e1;
       --t3: #94a3b8;
       --t4: #64748b;
-      --border: #334155;
-      --border2: #1e293b;
-      --bg: #0b0f19;
-      --card: #111827;
-      --sh: 0 4px 14px rgba(0,0,0,.5);
+      --border: #3b475e;
+      --border2: #283347;
+      --bg: #1a2232;
+      --card: #222b3d;
+      --sh: 0 4px 14px rgba(0,0,0,.35);
       --green: #22c55e;
       --green-bg: rgba(34, 197, 94, 0.2);
       --rose: #f43f5e;
@@ -77,9 +77,9 @@
       align-items: center;
       justify-content: center;
       z-index: 999;
-      transition: opacity .3s;
+      transition: opacity .25s ease, visibility .25s ease;
     }
-    #splash.out { opacity: 0; pointer-events: none; }
+    #splash.out { opacity: 0; visibility: hidden; pointer-events: none; display: none !important; }
     .sp-inner { text-align: center; }
     .spinner {
       width: 36px;
@@ -227,10 +227,52 @@
     .copy-btn:hover { border-color: var(--red); color: var(--red); background: var(--bg); }
     .copy-btn svg { width: 11px; height: 11px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; }
 
+    /* ── Cockpit de KPIs Ejecutivos de Benchmark ── */
+    .kpi-summary-strip {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    .kpi-card-summary {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 9px 13px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+      transition: all 0.2s ease;
+    }
+    .kpi-card-summary:hover {
+      border-color: rgba(234, 4, 78, 0.35);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+      transform: translateY(-1px);
+    }
+    .kpi-card-title {
+      font-size: 9.5px;
+      font-weight: 800;
+      color: var(--t3);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .kpi-card-value {
+      font-size: 16px;
+      font-weight: 800;
+      color: var(--t1);
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .kpi-card-sub {
+      font-size: 9.5px;
+      color: var(--t4);
+      margin-top: 1px;
+    }
+
     .tw {
       overflow: auto;
       -webkit-overflow-scrolling: touch;
-      max-height: calc(100vh - 125px);
+      max-height: calc(100vh - 180px);
     }
 
     /* ── TABLA MATRIZ EJECUTIVA ── */
@@ -261,9 +303,23 @@
       border-right: 2px solid var(--border);
       box-shadow: 4px 0 6px -2px rgba(0, 0, 0, .06);
     }
-    table.mx th.sticky { z-index: 4; }
+    table.mx th.sticky { z-index: 10 !important; }
 
-    /* Fila de Encabezados de Grupos (Métricas) */
+    /* Fila 0: Super-Headers de Pilares Estratégicos */
+    table.mx thead tr.super-grp th {
+      padding: 5px 8px;
+      font-size: 9.5px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: .6px;
+      text-align: center;
+      white-space: nowrap;
+      position: sticky;
+      top: 0;
+      z-index: 8;
+    }
+
+    /* Fila 1: Encabezados de Grupos (Métricas) */
     table.mx thead tr.grp th {
       padding: 6px 8px;
       font-size: 9.5px;
@@ -276,15 +332,14 @@
       cursor: pointer;
       user-select: none;
       position: sticky;
-      top: 0;
-      z-index: 6;
+      top: 26px;
+      z-index: 7;
       transition: filter 0.15s;
     }
-    table.mx thead tr.grp th.sticky { z-index: 7; }
     table.mx thead tr.grp th:hover { filter: brightness(.95); }
     table.mx thead tr.grp th.sorted { box-shadow: inset 0 -3px 0 0 rgba(0,0,0,.35); }
 
-    /* Fila de Sub-encabezados (M vs M-1) */
+    /* Fila 2: Sub-encabezados (M vs M-1) */
     table.mx thead tr.sub th {
       padding: 4px 6px;
       font-size: 8.5px;
@@ -297,14 +352,14 @@
       white-space: nowrap;
       background: var(--card);
       position: sticky;
-      top: var(--grph, 26px);
-      z-index: 5;
+      top: 53px;
+      z-index: 6;
     }
 
     /* Filas de Datos */
-    table.mx tbody tr { transition: background .1s; }
-    table.mx tbody tr:hover td { background: rgba(0, 0, 0, 0.02) !important; }
-    body[data-theme="dark"] table.mx tbody tr:hover td { background: rgba(255, 255, 255, 0.03) !important; }
+    table.mx tbody tr { transition: background .12s; }
+    table.mx tbody tr:hover td { background: rgba(234, 4, 78, 0.035) !important; }
+    body[data-theme="dark"] table.mx tbody tr:hover td { background: rgba(255, 255, 255, 0.04) !important; }
     table.mx tbody tr:last-child td { border-bottom: none; }
 
     table.mx td {
@@ -461,81 +516,81 @@
     }
     .restore-btn:hover { background: rgba(234, 4, 78, 0.1); }
 
-    /* ── REGLAS DE ALTO CONTRASTE PARA MODO NOCHE (BENCHMARK) ── */
+    /* ── REGLAS DE ALTO CONTRASTE Y TONOS GRISÁCEOS PARA MODO NOCHE (BENCHMARK) ── */
     [data-theme="dark"] .panel {
-      background: #111827 !important;
-      border-color: #334155 !important;
+      background: #222b3d !important;
+      border-color: #3b475e !important;
     }
     [data-theme="dark"] .ph {
-      background: #111827 !important;
-      border-bottom-color: #1e293b !important;
+      background: #222b3d !important;
+      border-bottom-color: #2d374a !important;
     }
     [data-theme="dark"] .ph-count {
-      background: #1e293b !important;
+      background: #283347 !important;
       color: #94a3b8 !important;
     }
     [data-theme="dark"] .fbar {
-      background: rgba(17, 24, 39, 0.96) !important;
-      border-bottom-color: #334155 !important;
+      background: rgba(28, 36, 53, 0.96) !important;
+      border-bottom-color: #3b475e !important;
     }
     [data-theme="dark"] .fs,
     [data-theme="dark"] .fsrch,
     [data-theme="dark"] .n-btn,
     [data-theme="dark"] .copy-btn {
-      background: #1e293b !important;
-      border-color: #334155 !important;
+      background: #283347 !important;
+      border-color: #3b475e !important;
       color: #f8fafc !important;
     }
     [data-theme="dark"] .fsrch::placeholder {
-      color: #64748b !important;
+      color: #94a3b8 !important;
     }
     [data-theme="dark"] .fsep {
-      background: #334155 !important;
+      background: #3b475e !important;
     }
     [data-theme="dark"] .metrics-dropdown {
-      background: #1e293b !important;
-      border-color: #334155 !important;
+      background: #222b3d !important;
+      border-color: #3b475e !important;
     }
     [data-theme="dark"] .dropdown-header {
-      background: #111827 !important;
-      border-bottom-color: #334155 !important;
+      background: #1c2435 !important;
+      border-bottom-color: #3b475e !important;
       color: #cbd5e1 !important;
     }
     [data-theme="dark"] .dropdown-item:hover {
-      background: #334155 !important;
+      background: #283347 !important;
     }
     [data-theme="dark"] table.mx th.sticky,
     [data-theme="dark"] table.mx td.sticky {
-      background: #111827 !important;
+      background: #222b3d !important;
     }
     [data-theme="dark"] table.mx td.sticky-1 {
-      background: #111827 !important;
-      border-right: 1px solid #1e293b !important;
+      background: #222b3d !important;
+      border-right: 1px solid #2d374a !important;
     }
     [data-theme="dark"] table.mx td.sticky-2 {
-      background: #111827 !important;
-      border-right: 2px solid #334155 !important;
-      box-shadow: 4px 0 10px rgba(0, 0, 0, 0.4) !important;
+      background: #222b3d !important;
+      border-right: 2px solid #3b475e !important;
+      box-shadow: 4px 0 10px rgba(0, 0, 0, 0.3) !important;
     }
     [data-theme="dark"] table.mx thead tr.sub th {
-      background: #162032 !important;
+      background: #252f42 !important;
       color: #94a3b8 !important;
-      border-bottom: 1px solid #334155 !important;
+      border-bottom: 1px solid #3b475e !important;
     }
     [data-theme="dark"] table.mx thead tr.grp th.sticky-1,
     [data-theme="dark"] table.mx thead tr.grp th.sticky-2 {
-      background: #162032 !important;
+      background: #252f42 !important;
       color: #cbd5e1 !important;
     }
     [data-theme="dark"] table.mx td {
-      border-bottom-color: #1e293b !important;
+      border-bottom-color: #2d374a !important;
       color: #f1f5f9 !important;
     }
     [data-theme="dark"] table.mx td.grp-sep {
-      border-left: 2px solid #334155 !important;
+      border-left: 2px solid #3b475e !important;
     }
     [data-theme="dark"] table.mx tbody tr:hover td {
-      background: rgba(255, 255, 255, 0.05) !important;
+      background: rgba(255, 255, 255, 0.06) !important;
     }
     [data-theme="dark"] .wh-name {
       color: #f8fafc !important;
@@ -544,8 +599,8 @@
       color: #94a3b8 !important;
     }
     [data-theme="dark"] .cc-badge {
-      background: #1e293b !important;
-      border: 1px solid #334155 !important;
+      background: #283347 !important;
+      border: 1px solid #3b475e !important;
       color: #cbd5e1 !important;
     }
     [data-theme="dark"] .v {
@@ -553,31 +608,41 @@
       font-weight: 700 !important;
     }
     [data-theme="dark"] .nd {
-      color: #475569 !important;
+      color: #64748b !important;
     }
     [data-theme="dark"] .vb-neu {
-      background: #1e293b !important;
+      background: #283347 !important;
       color: #94a3b8 !important;
     }
     [data-theme="dark"] #rings-filter-bar {
-      background: #111827 !important;
-      border-bottom-color: #334155 !important;
+      background: #222b3d !important;
+      border-bottom-color: #3b475e !important;
     }
     [data-theme="dark"] table.tb th {
-      background: #162032 !important;
-      border-bottom-color: #334155 !important;
+      background: #252f42 !important;
+      border-bottom-color: #3b475e !important;
       color: #cbd5e1 !important;
     }
     [data-theme="dark"] table.tb td {
-      border-bottom-color: #1e293b !important;
+      border-bottom-color: #2d374a !important;
       color: #f1f5f9 !important;
     }
     [data-theme="dark"] table.tb td.sticky-1,
     [data-theme="dark"] table.tb td.sticky-2 {
-      background: #111827 !important;
+      background: #222b3d !important;
     }
     [data-theme="dark"] table.tb tbody tr:hover td {
-      background: rgba(255, 255, 255, 0.05) !important;
+      background: rgba(255, 255, 255, 0.06) !important;
+    }
+    [data-theme="dark"] .kpi-card-summary {
+      background: #222b3d !important;
+      border-color: #3b475e !important;
+    }
+    [data-theme="dark"] .kpi-card-value {
+      color: #f8fafc !important;
+    }
+    [data-theme="dark"] .kpi-card-sub {
+      color: #94a3b8 !important;
     }
   </style>
 </head>
@@ -590,7 +655,7 @@
     <div class="sp-inner">
       <div class="spinner"></div>
       <div style="font-size:13px; font-weight:700; color:var(--t2);">Cargando Benchmark General...</div>
-      <div id="sp-note" style="font-size:11px; color:var(--t3); margin-top:5px;">Cargando Mapster 2...</div>
+      <div id="sp-note" style="font-size:11px; color:var(--t3); margin-top:5px;">Spatial Performance</div>
     </div>
   </div>
 
@@ -615,9 +680,12 @@
 
     <div class="fsep"></div>
 
-    <div class="fg">
+    <div class="fg" style="position: relative;">
       <span class="fl">Buscar</span>
-      <input class="fsrch" id="f-search" placeholder="Almacén, ciudad o código..." oninput="applyFilters()">
+      <div style="position:relative; display:flex; align-items:center;">
+        <input class="fsrch" id="f-search" placeholder="Almacén, ciudad o código..." autocomplete="chrome-off" autocorrect="off" autocapitalize="off" spellcheck="false" oninput="applyFilters(); document.getElementById('search-clear-btn').style.display = this.value ? 'block' : 'none';">
+        <button type="button" id="search-clear-btn" onclick="document.getElementById('f-search').value = ''; this.style.display = 'none'; applyFilters();" style="display:none; position:absolute; right:8px; background:transparent; border:none; color:var(--t4); cursor:pointer; font-size:14px; font-weight:700; line-height:1;" title="Limpiar búsqueda">&times;</button>
+      </div>
     </div>
 
     <div class="fg" style="position: relative;">
@@ -639,6 +707,9 @@
 
   <!-- Panel de Tabla Ejecutiva Matriz -->
   <div class="page">
+    <!-- Cockpit de KPIs Ejecutivos de Benchmark -->
+    <div id="benchmark-kpi-strip" class="kpi-summary-strip" style="display:none;"></div>
+
     <div class="panel">
       <div class="ph">
         <div style="display:flex; align-items:center; gap:8px;">
@@ -689,34 +760,45 @@
   </div>
 
   <script>
+    /**
+     * ============================================================
+     * SPATIAL PERFORMANCE — TOTAL BENCHMARK CONTROLLER
+     * Matías Sebastián Cagliero Lomazzi
+     * ============================================================
+     */
+    window.CAGLIERO_LOMAZZI_BENCHMARK_CORE = {
+      name: 'Matias Sebastian Cagliero Lomazzi',
+      version: '2.1.0-msc'
+    };
+
     // ============================================================
     // CONFIGURACIÓN DE MÉTRICAS (NOMBRES OFICIALES DEL GLOSARIO)
     // ============================================================
     let METRICS = [
       // Demand Stimulation & Transaccionales
-      { key: 'orders', label: 'Confirmed Orders', shortLabel: 'Orders', fmt: 'int', varFmt: 'pct_rel', hi: true, bg: '#fff0f3', tc: '#ea044e', darkTc: '#ff4d79' },
-      { key: 'net_sales', label: 'GMV Dmarts ($)', shortLabel: 'GMV', fmt: 'curr', varFmt: 'pct_rel', hi: true, bg: '#eff6ff', tc: '#2563eb', darkTc: '#60a5fa' },
-      { key: 'aov', label: 'AFV (Ticket AOV)', shortLabel: 'AFV', fmt: 'curr', varFmt: 'pct_rel', hi: true, bg: '#fff7ed', tc: '#ea580c', darkTc: '#fb923c' },
-      { key: 'units', label: 'Units Sold', shortLabel: 'Units', fmt: 'int', varFmt: 'pct_rel', hi: true, bg: '#fdf2f8', tc: '#be185d', darkTc: '#f472b6' },
-      { key: 'basket_size', label: 'Basket Size', shortLabel: 'Basket', fmt: 'float', varFmt: 'pct_rel', hi: true, bg: '#f8fafc', tc: '#475569', darkTc: '#cbd5e1' },
-      { key: 'discounts', label: 'Discounts ($)', shortLabel: 'Discounts', fmt: 'curr', varFmt: 'pct_rel', hi: false, bg: '#fff1f2', tc: '#e11d48', darkTc: '#fb7185' },
-      { key: 'discount_intensity', label: 'Gross Basket Discount %', shortLabel: 'Disc %', fmt: 'pct', varFmt: 'pp', hi: false, bg: '#f5f3ff', tc: '#7c3aed', darkTc: '#a78bfa' },
-      { key: 'uf_share', label: 'Confirmed Orders share % - UF', shortLabel: 'UF Share %', fmt: 'pct', varFmt: 'pp', hi: true, bg: '#ecfeff', tc: '#0891b2', darkTc: '#22d3ee' },
+      { key: 'orders', group: 'demand', label: 'Confirmed Orders', shortLabel: 'Orders', fmt: 'int', varFmt: 'pct_rel', hi: true, bg: '#fff0f3', tc: '#ea044e', darkTc: '#ff4d79' },
+      { key: 'net_sales', group: 'demand', label: 'GMV Dmarts ($)', shortLabel: 'GMV', fmt: 'curr', varFmt: 'pct_rel', hi: true, bg: '#eff6ff', tc: '#2563eb', darkTc: '#60a5fa' },
+      { key: 'aov', group: 'demand', label: 'AFV (Ticket AOV)', shortLabel: 'AFV', fmt: 'curr', varFmt: 'pct_rel', hi: true, bg: '#fff7ed', tc: '#ea580c', darkTc: '#fb923c' },
+      { key: 'units', group: 'demand', label: 'Units Sold', shortLabel: 'Units', fmt: 'int', varFmt: 'pct_rel', hi: true, bg: '#fdf2f8', tc: '#be185d', darkTc: '#f472b6' },
+      { key: 'basket_size', group: 'demand', label: 'Basket Size', shortLabel: 'Basket', fmt: 'float', varFmt: 'pct_rel', hi: true, bg: '#f8fafc', tc: '#475569', darkTc: '#cbd5e1' },
+      { key: 'discounts', group: 'demand', label: 'Discounts ($)', shortLabel: 'Discounts', fmt: 'curr', varFmt: 'pct_rel', hi: false, bg: '#fff1f2', tc: '#e11d48', darkTc: '#fb7185' },
+      { key: 'discount_intensity', group: 'demand', label: 'Gross Basket Discount %', shortLabel: 'Disc %', fmt: 'pct', varFmt: 'pp', hi: false, bg: '#f5f3ff', tc: '#7c3aed', darkTc: '#a78bfa' },
+      { key: 'uf_share', group: 'demand', label: 'Confirmed Orders share % - UF', shortLabel: 'UF Share %', fmt: 'pct', varFmt: 'pp', hi: true, bg: '#ecfeff', tc: '#0891b2', darkTc: '#22d3ee' },
 
       // Demand Stimulation & Usuarios
-      { key: 'penetration', label: 'Platform MAUs penetration %', shortLabel: 'Penetr. %', fmt: 'pct', varFmt: 'pp', hi: true, bg: '#f0fdf4', tc: '#15803d', darkTc: '#4ade80' },
-      { key: 'dmart_users', label: 'Dmart MAUs', shortLabel: 'Dmart MAUs', fmt: 'int', varFmt: 'pct_rel', hi: true, bg: '#eff6ff', tc: '#1d4ed8', darkTc: '#60a5fa' },
-      { key: 'peya_users', label: 'Platform MAUs', shortLabel: 'Platform MAUs', fmt: 'int', varFmt: 'pct_rel', hi: true, bg: '#f0f9ff', tc: '#0284c7', darkTc: '#38bdf8' },
-      { key: 'frequency', label: 'Frequency', shortLabel: 'Freq', fmt: 'float', varFmt: 'pct_rel', hi: true, bg: '#ecfeff', tc: '#0284c7', darkTc: '#38bdf8' },
-      { key: 'core_pct', label: 'Core Users %', shortLabel: 'Core %', fmt: 'pct', varFmt: 'pp', hi: true, bg: '#faf5ff', tc: '#9333ea', darkTc: '#c084fc' },
-      { key: 'high_income_pct', label: 'High Income %', shortLabel: 'High Inc %', fmt: 'pct', varFmt: 'pp', hi: true, bg: '#fffbeb', tc: '#b45309', darkTc: '#fcd34d' },
+      { key: 'penetration', group: 'users', label: 'Platform MAUs penetration %', shortLabel: 'Penetr. %', fmt: 'pct', varFmt: 'pp', hi: true, bg: '#f0fdf4', tc: '#15803d', darkTc: '#4ade80' },
+      { key: 'dmart_users', group: 'users', label: 'Dmart MAUs', shortLabel: 'Dmart MAUs', fmt: 'int', varFmt: 'pct_rel', hi: true, bg: '#eff6ff', tc: '#1d4ed8', darkTc: '#60a5fa' },
+      { key: 'peya_users', group: 'users', label: 'Platform MAUs', shortLabel: 'Platform MAUs', fmt: 'int', varFmt: 'pct_rel', hi: true, bg: '#f0f9ff', tc: '#0284c7', darkTc: '#38bdf8' },
+      { key: 'frequency', group: 'users', label: 'Frequency', shortLabel: 'Freq', fmt: 'float', varFmt: 'pct_rel', hi: true, bg: '#ecfeff', tc: '#0284c7', darkTc: '#38bdf8' },
+      { key: 'core_pct', group: 'users', label: 'Core Users %', shortLabel: 'Core %', fmt: 'pct', varFmt: 'pp', hi: true, bg: '#faf5ff', tc: '#9333ea', darkTc: '#c084fc' },
+      { key: 'high_income_pct', group: 'users', label: 'High Income %', shortLabel: 'High Inc %', fmt: 'pct', varFmt: 'pp', hi: true, bg: '#fffbeb', tc: '#b45309', darkTc: '#fcd34d' },
 
       // Operational Excellence
-      { key: 'seamless', label: 'Seamless Delivery %', shortLabel: 'Seamless %', fmt: 'pct', varFmt: 'pp', hi: true, bg: '#f0fdf4', tc: '#16a34a', darkTc: '#4ade80' },
-      { key: 'fail_rate', label: 'Rejected orders %', shortLabel: 'Rejected %', fmt: 'pct', varFmt: 'pp', hi: false, bg: '#fff1f2', tc: '#dc2626', darkTc: '#f87171' },
-      { key: 'order_late', label: 'Late Orders %', shortLabel: 'Late %', fmt: 'pct', varFmt: 'pp', hi: false, bg: '#fffbeb', tc: '#d97706', darkTc: '#fbbf24' },
-      { key: 'late_10', label: 'Order late 10 min %', shortLabel: 'Late >10m', fmt: 'pct', varFmt: 'pp', hi: false, bg: '#fdf2f8', tc: '#f43f5e', darkTc: '#fb7185' },
-      { key: 'delivery_time', label: 'Avg. Delivery Time', shortLabel: 'Deliv. Time', fmt: 'min', varFmt: 'min_abs', hi: false, bg: '#fff7ed', tc: '#c2410c', darkTc: '#fb923c' }
+      { key: 'seamless', group: 'ops', label: 'Seamless Delivery %', shortLabel: 'Seamless %', fmt: 'pct', varFmt: 'pp', hi: true, bg: '#f0fdf4', tc: '#16a34a', darkTc: '#4ade80' },
+      { key: 'fail_rate', group: 'ops', label: 'Rejected orders %', shortLabel: 'Rejected %', fmt: 'pct', varFmt: 'pp', hi: false, bg: '#fff1f2', tc: '#dc2626', darkTc: '#f87171' },
+      { key: 'order_late', group: 'ops', label: 'Late Orders %', shortLabel: 'Late %', fmt: 'pct', varFmt: 'pp', hi: false, bg: '#fffbeb', tc: '#d97706', darkTc: '#fbbf24' },
+      { key: 'late_10', group: 'ops', label: 'Order late 10 min %', shortLabel: 'Late >10m', fmt: 'pct', varFmt: 'pp', hi: false, bg: '#fdf2f8', tc: '#f43f5e', darkTc: '#fb7185' },
+      { key: 'delivery_time', group: 'ops', label: 'Avg. Delivery Time', shortLabel: 'Deliv. Time', fmt: 'min', varFmt: 'min_abs', hi: false, bg: '#fff7ed', tc: '#c2410c', darkTc: '#fb923c' }
     ];
 
     const ORIGINAL_METRICS_ORDER = [...METRICS];
@@ -842,6 +924,67 @@
       return `<img src="https://flagcdn.com/20x15/${code}.png" width="16" height="12" alt="${countryName}" style="border-radius:2px; vertical-align:middle; margin-right:4px;">`;
     }
 
+    // Cockpit de KPIs Ejecutivos del Cluster Filtrado
+    function renderSummaryKpiStrip(rows) {
+      const container = document.getElementById('benchmark-kpi-strip');
+      if (!container) return;
+      if (!rows || rows.length === 0) {
+        container.style.display = 'none';
+        return;
+      }
+      container.style.display = 'grid';
+
+      const totalStores = rows.length;
+      let sumOrders = 0;
+      let sumGmv = 0;
+      let sumPen = 0;
+      let countPen = 0;
+      let sumDt = 0;
+      let countDt = 0;
+
+      rows.forEach(r => {
+        const o = Number(getVal(r, 'orders', 'm')) || 0;
+        const g = Number(getVal(r, 'net_sales', 'm')) || 0;
+        const p = Number(getVal(r, 'penetration', 'm')) || 0;
+        const dt = Number(getVal(r, 'delivery_time', 'm')) || 0;
+        sumOrders += o;
+        sumGmv += g;
+        if (p > 0) { sumPen += p; countPen++; }
+        if (dt > 0) { sumDt += dt; countDt++; }
+      });
+
+      const avgPen = countPen > 0 ? (sumPen / countPen).toFixed(1) : '—';
+      const avgDt = countDt > 0 ? (sumDt / countDt).toFixed(1) : '—';
+
+      container.innerHTML = `
+        <div class="kpi-card-summary">
+          <span class="kpi-card-title">Almacenes en Vista</span>
+          <span class="kpi-card-value">${totalStores} <span style="font-size:11px; font-weight:600; color:var(--t3);">tiendas</span></span>
+          <span class="kpi-card-sub">Cluster filtrado activo</span>
+        </div>
+        <div class="kpi-card-summary">
+          <span class="kpi-card-title">Órdenes Confirmadas (M)</span>
+          <span class="kpi-card-value" style="color:var(--red);">${sumOrders.toLocaleString('es-AR')}</span>
+          <span class="kpi-card-sub">Volumen mensual total</span>
+        </div>
+        <div class="kpi-card-summary">
+          <span class="kpi-card-title">GMV Total Dmarts</span>
+          <span class="kpi-card-value" style="color:#2563eb;">$ ${Math.round(sumGmv).toLocaleString('es-AR')}</span>
+          <span class="kpi-card-sub">Venta neta acumulada</span>
+        </div>
+        <div class="kpi-card-summary">
+          <span class="kpi-card-title">Penetración Promedio</span>
+          <span class="kpi-card-value" style="color:#16a34a;">${avgPen}%</span>
+          <span class="kpi-card-sub">Dmart MAUs / Platform MAUs</span>
+        </div>
+        <div class="kpi-card-summary">
+          <span class="kpi-card-title">Avg Delivery Time</span>
+          <span class="kpi-card-value" style="color:#ea580c;">${avgDt} <span style="font-size:11px; font-weight:600;">min</span></span>
+          <span class="kpi-card-sub">Promedio de entrega</span>
+        </div>
+      `;
+    }
+
     // ============================================================
     // CONSTRUCCIÓN DE LA TABLA MATRIZ
     // ============================================================
@@ -856,12 +999,31 @@
       const phDate = document.getElementById('ph-date');
       if (phDate) phDate.textContent = `Mes: ${currentSelectedMonth} · vs Anterior: ${currentPrevMonth}`;
 
+      // Renderizar Cockpit Ejecutivo
+      renderSummaryKpiStrip(rows);
+
       const isDark = document.documentElement.getAttribute('data-theme') === 'dark' || (document.body && document.body.getAttribute('data-theme') === 'dark');
 
-      // Fila 1 de Encabezado: Grupos de Métrica
-      let h1 = `<th class="sticky sticky-1 grp" rowspan="2" style="text-align:left; background:${isDark ? '#162032' : 'var(--border2)'}; color:${isDark ? '#cbd5e1' : 'var(--t2)'}; border-bottom:1px solid ${isDark ? '#334155' : 'var(--border)'};">ALMACÉN / TIENDA</th>`;
-      h1 += `<th class="sticky sticky-2 grp" rowspan="2" style="background:${isDark ? '#162032' : 'var(--border2)'}; color:${isDark ? '#cbd5e1' : 'var(--t2)'}; border-right:2px solid ${isDark ? '#334155' : 'var(--border)'}; border-bottom:1px solid ${isDark ? '#334155' : 'var(--border)'};">PAÍS</th>`;
+      // Fila 0 de Encabezado: Super-Headers por Pilar Estratégico
+      const demandCols = METRICS.filter(m => m.group === 'demand' && visibleMetrics.has(m.key)).length * 2;
+      const usersCols = METRICS.filter(m => m.group === 'users' && visibleMetrics.has(m.key)).length * 2;
+      const opsCols = METRICS.filter(m => m.group === 'ops' && visibleMetrics.has(m.key)).length * 2;
 
+      let h0 = `<th class="sticky sticky-1 super-grp" rowspan="3" style="text-align:left; background:${isDark ? '#162032' : 'var(--border2)'}; color:${isDark ? '#cbd5e1' : 'var(--t2)'}; border-bottom:1px solid ${isDark ? '#334155' : 'var(--border)'}; font-size:9.5px; text-transform:uppercase; letter-spacing:0.6px; font-weight:800;">ALMACÉN / TIENDA</th>`;
+      h0 += `<th class="sticky sticky-2 super-grp" rowspan="3" style="background:${isDark ? '#162032' : 'var(--border2)'}; color:${isDark ? '#cbd5e1' : 'var(--t2)'}; border-right:2px solid ${isDark ? '#334155' : 'var(--border)'}; border-bottom:1px solid ${isDark ? '#334155' : 'var(--border)'}; font-size:9.5px; text-transform:uppercase; letter-spacing:0.6px; font-weight:800;">PAÍS</th>`;
+
+      if (demandCols > 0) {
+        h0 += `<th colspan="${demandCols}" class="super-grp" style="background:${isDark ? 'rgba(234,4,78,0.12)' : 'rgba(234,4,78,0.06)'}; color:var(--red); border-bottom:1px solid rgba(234,4,78,0.25); border-left:2px solid var(--red);">DEMANDA & VENTAS (GMV)</th>`;
+      }
+      if (usersCols > 0) {
+        h0 += `<th colspan="${usersCols}" class="super-grp" style="background:${isDark ? 'rgba(22,163,74,0.12)' : 'rgba(22,163,74,0.06)'}; color:#16a34a; border-bottom:1px solid rgba(22,163,74,0.25); border-left:2px solid #16a34a;">AUDIENCIA, USUARIOS & PENETRACIÓN</th>`;
+      }
+      if (opsCols > 0) {
+        h0 += `<th colspan="${opsCols}" class="super-grp" style="background:${isDark ? 'rgba(234,88,12,0.12)' : 'rgba(234,88,12,0.06)'}; color:#ea580c; border-bottom:1px solid rgba(234,88,12,0.25); border-left:2px solid #ea580c;">EXCELENCIA OPERACIONAL & LOGÍSTICA</th>`;
+      }
+
+      // Fila 1 de Encabezado: Grupos de Métrica
+      let h1 = '';
       METRICS.forEach(m => {
         const isSorted = sortKey === m.key;
         const arr = isSorted ? (sortDir === -1 ? '↓' : '↑') : '⇅';
@@ -1166,6 +1328,7 @@
             applyBenchmarkData(cached);
             hasCached = true;
             if (splash) splash.classList.add('out');
+            if (typeof hideLoading === 'function') hideLoading();
           }
         }
       } catch(e) {}
@@ -1180,6 +1343,7 @@
             if (!hasCached) {
               document.getElementById('sp-note').textContent = 'No se encontraron datos en la planilla.';
               if (splash) splash.classList.add('out');
+              if (typeof hideLoading === 'function') hideLoading();
             }
             return;
           }
@@ -1190,11 +1354,13 @@
 
           applyBenchmarkData(res);
           if (splash) splash.classList.add('out');
+          if (typeof hideLoading === 'function') hideLoading();
         })
         .withFailureHandler(err => {
           if (!hasCached) {
             document.getElementById('sp-note').textContent = 'Error: ' + err.message;
             if (splash) splash.classList.add('out');
+            if (typeof hideLoading === 'function') hideLoading();
           }
         })
         .getBenchmarkData(targetMonth || null, country);
@@ -1234,7 +1400,7 @@
     function loadBenchmarkRings() {
       const country = document.getElementById('f-cc').value;
       const tw = document.getElementById('table-wrap');
-      if (tw) tw.innerHTML = '<div style="padding:40px; text-align:center; color:var(--t3); font-size:12px;">Cargando métricas de anillos desde BigQuery (datamart_store_explorer_rings)...</div>';
+      if (tw) tw.innerHTML = '<div style="padding:40px; text-align:center; color:var(--t3); font-size:12px;">Cargando métricas de anillos desde Google Sheets ("3. Rings Data")...</div>';
 
       google.script.run
         .withSuccessHandler(res => {

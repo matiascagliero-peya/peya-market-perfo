@@ -1,7 +1,8 @@
 /**
  * =========================================================================================
- * TAREA: "3 EXTRA DATA (MANUAL)"
- * Replica la hoja de datos manuales desde el Máster a los Países.
+ * TAREA: "3 EXTRA DATA (MANUAL)" - OPTIMIZADA
+ * Replica la hoja de datos manuales desde el Máster a los Países sin romper referencias #REF!.
+ * Incluye precarga del Máster en memoria RAM y protección contra timeout de 6 minutos.
  * =========================================================================================
  */
 
@@ -10,11 +11,62 @@ const CONFIG_EXTRA_DATA = {
   nombreHoja: "Extra Data (Manual)"
 };
 
+// Caché en memoria para datos del Máster (evita abrir y leer el archivo maestro 16 veces)
+let _cacheMasterExtraData = null;
+
 /**
- * Worker que realiza la copia de la hoja Extra Data.
+ * Abre el archivo Máster y precarga en memoria RAM:
+ * - El objeto hoja de origen
+ * - La matriz bidimensional limpia de valores
+ * - Las dimensiones exactas (filas y columnas)
+ * - Los anchos de todas las columnas (en una única pasada)
  */
-function _extraDataWorker(targetCountry) {
-  // Ajuste: Si viene un 'alias' (del MPC) lo usamos como nombre, si no, usamos 'country'
+function _obtenerMasterExtraData() {
+  if (_cacheMasterExtraData) return _cacheMasterExtraData;
+
+  const ssId = typeof SOURCE_SPREADSHEET_ID !== 'undefined' 
+    ? SOURCE_SPREADSHEET_ID 
+    : "1H_gDXL9IQ9HCHSAzzDT8oGBNwPIw4rHmbjtqcqKJikc";
+
+  const sourceSpreadsheet = typeof obtenerSpreadsheetConCache === 'function'
+    ? obtenerSpreadsheetConCache(ssId)
+    : SpreadsheetApp.openById(ssId);
+
+  const sourceSheet = sourceSpreadsheet.getSheetByName(CONFIG_EXTRA_DATA.nombreHoja);
+  if (!sourceSheet) {
+    throw new Error(`La hoja de origen '${CONFIG_EXTRA_DATA.nombreHoja}' no existe en el Máster.`);
+  }
+
+  const sourceRange = sourceSheet.getDataRange();
+  const sourceValues = sourceRange.getValues();
+  const numRows = sourceValues.length;
+  const numCols = sourceValues[0] ? sourceValues[0].length : 0;
+
+  // Leer anchos de columnas del Máster una única vez en memoria
+  const colWidths = [];
+  for (let c = 1; c <= numCols; c++) {
+    colWidths.push(sourceSheet.getColumnWidth(c));
+  }
+
+  _cacheMasterExtraData = {
+    sourceSpreadsheet: sourceSpreadsheet,
+    sourceSheet: sourceSheet,
+    sourceRange: sourceRange,
+    sourceValues: sourceValues,
+    numRows: numRows,
+    numCols: numCols,
+    colWidths: colWidths
+  };
+
+  return _cacheMasterExtraData;
+}
+
+/**
+ * Worker optimizado que realiza la copia de la hoja Extra Data.
+ * @param {Object} targetCountry Objeto con id y nombre/alias del país destino.
+ * @param {Object} [optMasterCache] Caché opcional de los datos del máster.
+ */
+function _extraDataWorker(targetCountry, optMasterCache) {
   const nombrePais = targetCountry.country || targetCountry.alias || "Desconocido";
 
   if (!targetCountry || !targetCountry.id) {
@@ -23,104 +75,196 @@ function _extraDataWorker(targetCountry) {
   }
 
   // VALIDACIÓN DE SEGURIDAD
-  if (targetCountry.id === SOURCE_SPREADSHEET_ID) { 
-      Logger.log(`⚠️ SALTO DE SEGURIDAD: Se omitió 'Extra Data' para ${nombrePais} (Es el archivo Maestro).`);
-      return;
+  const ssIdMaster = typeof SOURCE_SPREADSHEET_ID !== 'undefined' ? SOURCE_SPREADSHEET_ID : "1H_gDXL9IQ9HCHSAzzDT8oGBNwPIw4rHmbjtqcqKJikc";
+  if (targetCountry.id === ssIdMaster) { 
+    Logger.log(`⚠️ SALTO DE SEGURIDAD: Se omitió 'Extra Data' para ${nombrePais} (Es el archivo Maestro).`);
+    return;
   }
-  
+
   try {
+    const t0 = new Date().getTime();
     Logger.log(`--- [TAREA Extra Data] Iniciando para ${nombrePais.toUpperCase()} ---`);
 
-    // 1. Abrir Origen (Máster) y LEER VALORES
-    const sourceSpreadsheet = SpreadsheetApp.openById(SOURCE_SPREADSHEET_ID);
-    const sourceSheet = sourceSpreadsheet.getSheetByName(CONFIG_EXTRA_DATA.nombreHoja);
-    
-    if (!sourceSheet) throw new Error(`La hoja de origen '${CONFIG_EXTRA_DATA.nombreHoja}' no existe en el Máster.`);
-
-    // --- Capturamos los datos LIMPIOS del origen ---
-    const sourceRange = sourceSheet.getDataRange();
-    const sourceValues = sourceRange.getValues(); 
-    // -----------------------------------------------
-
-    // 2. Abrir Destino
-    const targetSpreadsheet = SpreadsheetApp.openById(targetCountry.id);
-    const existingSheet = targetSpreadsheet.getSheetByName(CONFIG_EXTRA_DATA.nombreHoja);
-
-    // 3. Actualizar en lugar de borrar (para no romper referencias/fórmulas #REF! en otras pestañas)
-    if (existingSheet) {
-      Logger.log("   > Actualizando hoja existente en su lugar para no romper #REF!...");
-      
-      // 3.1 Copiar la hoja temporalmente al destino para poder usar copyTo entre rangos del mismo archivo
-      const tempSheet = sourceSheet.copyTo(targetSpreadsheet);
-      
-      // Limpiamos la hoja existente completamente
-      existingSheet.clear();
-      existingSheet.clearNotes();
-      
-      // 3.2 Copiar el formato desde la hoja temporal (mismo archivo)
-      const tempRange = tempSheet.getDataRange();
-      tempRange.copyTo(existingSheet.getRange(1, 1), SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false);
-      
-      // 3.3 Copiar anchos de columna desde la hoja temporal
-      const maxCols = tempSheet.getLastColumn();
-      for (let col = 1; col <= maxCols; col++) {
-        existingSheet.setColumnWidth(col, tempSheet.getColumnWidth(col));
-      }
-      
-      // 3.4 Pegar los valores (rompiendo fórmulas como antes)
-      if (sourceValues.length > 0 && sourceValues[0].length > 0) {
-        existingSheet.getRange(1, 1, sourceValues.length, sourceValues[0].length)
-                     .setValues(sourceValues);
-      }
-      
-      // 3.5 Borrar la hoja temporal
-      targetSpreadsheet.deleteSheet(tempSheet);
-    } else {
-      // Si no existe, crearla y copiarla normalmente
-      Logger.log("   > Creando nueva hoja...");
-      const newSheet = sourceSheet.copyTo(targetSpreadsheet);
-      newSheet.setName(CONFIG_EXTRA_DATA.nombreHoja);
-      
-      if (sourceValues.length > 0 && sourceValues[0].length > 0) {
-        newSheet.getRange(1, 1, sourceValues.length, sourceValues[0].length)
-                .setValues(sourceValues);
-      }
+    // 1. Obtener datos del Máster (en memoria RAM, instantáneo)
+    const master = optMasterCache || _obtenerMasterExtraData();
+    if (!master || !master.sourceSheet || master.numRows === 0 || master.numCols === 0) {
+      throw new Error("Datos del Máster vacíos o inválidos.");
     }
 
-    Logger.log(`>>> [TAREA Extra Data] Completado para ${nombrePais.toUpperCase()}.`);
+    // 2. Abrir Destino con caché
+    const targetSpreadsheet = typeof obtenerSpreadsheetConCache === 'function'
+      ? obtenerSpreadsheetConCache(targetCountry.id)
+      : SpreadsheetApp.openById(targetCountry.id);
+
+    const existingSheet = targetSpreadsheet.getSheetByName(CONFIG_EXTRA_DATA.nombreHoja);
+
+    // 3. Actualizar hoja existente en su lugar (preservando el ID/gid de la hoja para NO romper #REF!)
+    if (existingSheet) {
+      Logger.log(`   > Actualizando en su lugar para preservar fórmulas #REF!...`);
+
+      // 3.1 Copiar temporalmente la hoja del máster en el destino para transferir estilos nativos
+      const tempSheet = master.sourceSheet.copyTo(targetSpreadsheet);
+
+      // Limpiar contenido y formatos viejos
+      existingSheet.clear();
+
+      // Asegurar dimensiones suficientes antes de pegar formato y valores
+      const curRows = existingSheet.getMaxRows();
+      const curCols = existingSheet.getMaxColumns();
+      if (curRows < master.numRows) {
+        existingSheet.insertRowsAfter(curRows, master.numRows - curRows);
+      }
+      if (curCols < master.numCols) {
+        existingSheet.insertColumnsAfter(curCols, master.numCols - curCols);
+      }
+
+      // 3.2 Copiar formato completo desde la temporal en una sola llamada nativa
+      const tempRange = tempSheet.getDataRange();
+      tempRange.copyTo(existingSheet.getRange(1, 1), SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false);
+
+      // 3.3 Pegar los valores limpios en memoria (rompiendo fórmulas)
+      existingSheet.getRange(1, 1, master.numRows, master.numCols).setValues(master.sourceValues);
+
+      // 3.4 Aplicar anchos de columna desde el caché del máster (sin llamar a getColumnWidth remoto)
+      if (master.colWidths && master.colWidths.length > 0) {
+        for (let col = 1; col <= master.colWidths.length; col++) {
+          existingSheet.setColumnWidth(col, master.colWidths[col - 1]);
+        }
+      }
+
+      // 3.5 Borrar hoja temporal
+      targetSpreadsheet.deleteSheet(tempSheet);
+    } else {
+      // Si no existe, crearla directamente
+      Logger.log(`   > Creando nueva hoja '${CONFIG_EXTRA_DATA.nombreHoja}'...`);
+      const newSheet = master.sourceSheet.copyTo(targetSpreadsheet);
+      newSheet.setName(CONFIG_EXTRA_DATA.nombreHoja);
+
+      // Asegurar que los valores queden pegados como valores estáticos
+      newSheet.getRange(1, 1, master.numRows, master.numCols).setValues(master.sourceValues);
+    }
+
+    SpreadsheetApp.flush();
+    const elapsed = ((new Date().getTime() - t0) / 1000).toFixed(1);
+    Logger.log(`>>> [TAREA Extra Data] Completado para ${nombrePais.toUpperCase()} en ${elapsed}s.`);
 
   } catch (error) {
     Logger.log(`❌ ERROR en [TAREA Extra Data] para ${nombrePais}: ${error.toString()}`);
   }
 }
 
-// --- Función Masiva CON PRIORIDAD ---
+// --- Función Masiva CON PRIORIDAD Y PROTECCIÓN DE TIEMPO (Máx 5 min) ---
 function copiarExtraData_Para_TODOS() {
+  const tiempoInicio = new Date().getTime();
+  const TIEMPO_MAX_TOTAL_MS = 5 * 60 * 1000; // 5 minutos (margen de 1 min antes del corte de GAS de 6 min)
+
   Logger.log("🚀 INICIANDO REPLICACIÓN DE 'EXTRA DATA (MANUAL)'");
-  
-  // 1. FASE PRIORITARIA: MPC S TEAM (Usando DESTINOS_ADICIONALES)
+
+  // Pre-cargar el Máster UNA SOLA VEZ para todas las ejecuciones
+  let masterCache = null;
+  try {
+    masterCache = _obtenerMasterExtraData();
+    Logger.log(`   📦 Máster precargado en memoria: ${masterCache.numRows} filas x ${masterCache.numCols} columnas.`);
+  } catch (errMaster) {
+    Logger.log(`❌ Error al precargar Máster: ${errMaster.message}`);
+    return;
+  }
+
+  // 1. FASE PRIORITARIA: MPC / ADICIONALES
   if (typeof DESTINOS_ADICIONALES !== 'undefined' && DESTINOS_ADICIONALES.length > 0) {
-      Logger.log("=== 1️⃣ FASE PRIORITARIA: MPC / ADICIONALES ===");
-      DESTINOS_ADICIONALES.forEach(destino => {
-        // Pasamos el objeto tal cual, el Worker ahora sabe leer 'alias'
-        _extraDataWorker(destino); 
-      });
+    Logger.log("=== 1️⃣ FASE PRIORITARIA: MPC / ADICIONALES ===");
+    for (let i = 0; i < DESTINOS_ADICIONALES.length; i++) {
+      if ((new Date().getTime() - tiempoInicio) > TIEMPO_MAX_TOTAL_MS) {
+        Logger.log("⚠️ Límite de tiempo preventivo alcanzado. Deteniendo ejecución para evitar timeout de 6m.");
+        return;
+      }
+      _extraDataWorker(DESTINOS_ADICIONALES[i], masterCache);
+    }
   }
 
-  // 2. FASE ESTÁNDAR: RESTO DE PAÍSES
+  // 2. FASE ESTÁNDAR: RESTO DE PAÍSES LATAM
   if (typeof PAISES_DE_DESTINO !== 'undefined' && PAISES_DE_DESTINO.length > 0) {
-      Logger.log("=== 2️⃣ FASE ESTÁNDAR: PAÍSES LATAM ===");
-      PAISES_DE_DESTINO.forEach(pais => _extraDataWorker(pais));
+    Logger.log("=== 2️⃣ FASE ESTÁNDAR: PAÍSES LATAM ===");
+    for (let j = 0; j < PAISES_DE_DESTINO.length; j++) {
+      if ((new Date().getTime() - tiempoInicio) > TIEMPO_MAX_TOTAL_MS) {
+        Logger.log("⚠️ Límite de tiempo preventivo alcanzado. Deteniendo ejecución para evitar timeout de 6m.");
+        return;
+      }
+      _extraDataWorker(PAISES_DE_DESTINO[j], masterCache);
+    }
   } else {
-      Logger.log("❌ ERROR: La variable global 'PAISES_DE_DESTINO' no está definida.");
+    Logger.log("❌ ERROR: La variable global 'PAISES_DE_DESTINO' no está definida.");
   }
 
-  copiarTemplate_Para_TODOS()
-  copiarOKRsMonitor_Para_TODOS()
-  copiarSustainability_Para_TODOS()
-  
-  
-  Logger.log("🏁 TAREA 'EXTRA DATA' FINALIZADA");
+  const duracionExtraData = ((new Date().getTime() - tiempoInicio) / 1000).toFixed(1);
+  Logger.log(`🏁 TAREA 'EXTRA DATA' FINALIZADA en ${duracionExtraData}s.`);
+
+  // 3. FASE ENCADENADA SEGURA (Template -> OKRs Monitor -> Sustainability)
+  // Se evalúa el tiempo restante antes de cada tarea para garantizar que NUNCA se superen los 6m
+  if ((new Date().getTime() - tiempoInicio) < (4.2 * 60 * 1000)) {
+    if (typeof copiarTemplate_Para_TODOS === 'function') {
+      Logger.log("⏩ Ejecutando tarea encadenada: 2 Template...");
+      try { copiarTemplate_Para_TODOS(); } catch (eT) { Logger.log("⚠️ Error en Template: " + eT.message); }
+    }
+  } else {
+    Logger.log("ℹ️ Tiempo restante insuficiente para encadenar Template. Ejecutalo de forma independiente.");
+    return;
+  }
+
+  if ((new Date().getTime() - tiempoInicio) < (4.8 * 60 * 1000)) {
+    if (typeof copiarOKRsMonitor_Para_TODOS === 'function') {
+      Logger.log("⏩ Ejecutando tarea encadenada: 3 OKRs Monitor...");
+      try { copiarOKRsMonitor_Para_TODOS(); } catch (eM) { Logger.log("⚠️ Error en OKRs Monitor: " + eM.message); }
+    }
+  } else {
+    Logger.log("ℹ️ Tiempo restante insuficiente para encadenar OKRs Monitor. Ejecutalo de forma independiente.");
+    return;
+  }
+
+  if ((new Date().getTime() - tiempoInicio) < (5.2 * 60 * 1000)) {
+    if (typeof copiarSustainability_Para_TODOS === 'function') {
+      Logger.log("⏩ Ejecutando tarea encadenada: 9 Sustainability...");
+      try { copiarSustainability_Para_TODOS(); } catch (eS) { Logger.log("⚠️ Error en Sustainability: " + eS.message); }
+    }
+  } else {
+    Logger.log("ℹ️ Tiempo restante insuficiente para encadenar Sustainability. Ejecutalo de forma independiente.");
+    return;
+  }
+
+  const duracionTotal = ((new Date().getTime() - tiempoInicio) / 1000).toFixed(1);
+  Logger.log(`🏆 PROCESO COMPLETO FINALIZADO CON ÉXITO en ${duracionTotal}s.`);
+}
+
+/**
+ * Función dedicada para replicar ÚNICAMENTE Extra Data en todos los países,
+ * sin disparar las tareas encadenadas (Template, Monitor, Sustainability).
+ * Ideal cuando solo se modificaron datos manuales de Extra Data y se busca velocidad máxima (~30s).
+ */
+function copiarSoloExtraData_Para_TODOS() {
+  const tiempoInicio = new Date().getTime();
+  Logger.log("🚀 INICIANDO REPLICACIÓN EXCLUSIVA DE 'EXTRA DATA (MANUAL)'");
+
+  let masterCache = null;
+  try {
+    masterCache = _obtenerMasterExtraData();
+    Logger.log(`   📦 Máster precargado: ${masterCache.numRows} filas x ${masterCache.numCols} columnas.`);
+  } catch (errMaster) {
+    Logger.log(`❌ Error al precargar Máster: ${errMaster.message}`);
+    return;
+  }
+
+  if (typeof DESTINOS_ADICIONALES !== 'undefined' && DESTINOS_ADICIONALES.length > 0) {
+    Logger.log("=== 1️⃣ DESTINOS ADICIONALES ===");
+    DESTINOS_ADICIONALES.forEach(destino => _extraDataWorker(destino, masterCache));
+  }
+
+  if (typeof PAISES_DE_DESTINO !== 'undefined' && PAISES_DE_DESTINO.length > 0) {
+    Logger.log("=== 2️⃣ PAÍSES LATAM ===");
+    PAISES_DE_DESTINO.forEach(pais => _extraDataWorker(pais, masterCache));
+  }
+
+  const duracion = ((new Date().getTime() - tiempoInicio) / 1000).toFixed(1);
+  Logger.log(`🏁 TAREA 'SOLO EXTRA DATA' FINALIZADA en ${duracion}s.`);
 }
 
 // --- FUNCIONES POR PAÍS (INDIVIDUALES) ---

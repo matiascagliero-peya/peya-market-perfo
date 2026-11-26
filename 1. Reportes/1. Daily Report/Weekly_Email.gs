@@ -421,6 +421,11 @@ function _buildWeeklyMtdHtml(rng, forPdf) {
     '.cxt{font-family:Arial,sans-serif;font-size:7px;color:#94a3b8;font-weight:600;white-space:nowrap;padding-top:1px;text-align:center}' +
     '.cxa{font-family:Arial,sans-serif;font-size:7.5px;color:#0f172a;font-weight:800;white-space:nowrap;padding-top:2.5px;text-align:center}' +
     '.cxv{font-family:Arial,sans-serif;font-size:7.5px;font-weight:700;white-space:nowrap;padding-top:1.5px;text-align:center}' +
+    '.cxd-r{font-family:Arial,sans-serif;font-size:8px;color:#334155;font-weight:700;text-align:right;padding:4px 3px 2px 0}' +
+    '.cxt-r{font-family:Arial,sans-serif;font-size:7px;color:#94a3b8;font-weight:600;height:18px;vertical-align:middle;text-align:right;padding-right:3px}' +
+    '.cxa-r{font-family:Arial,sans-serif;font-size:7.5px;color:#0f172a;font-weight:800;height:18px;vertical-align:middle;text-align:right;padding-right:3px}' +
+    '.cxv-r{font-family:Arial,sans-serif;font-size:7.5px;font-weight:700;height:22px;vertical-align:middle;text-align:right;padding-right:3px}' +
+    '.cx-rot{display:inline-block;white-space:nowrap;transform:rotate(-20deg);-webkit-transform:rotate(-20deg);transform-origin:right center}' +
     // Grilla de 2 columnas para las métricas no-hero (celdas un poco más compactas).
     // Usamos table-layout: fixed para obligar a que las dos columnas midan exactamente 50% y no se estiren si hay overflow.
     '.grid2{table-layout:fixed;width:100%;border-collapse:separate}' +
@@ -509,15 +514,24 @@ function verificarDatosActualizadosSemanal(rng) {
   var startMs = (typeof parseDateToMs === 'function') ? parseDateToMs(rng.start) : new Date(rng.start + 'T00:00:00').getTime();
   var endMs   = (typeof parseDateToMs === 'function') ? parseDateToMs(rng.end)   : new Date(rng.end   + 'T00:00:00').getTime();
 
+  function fmtDmy(ymd) {
+    if (!ymd) return '—';
+    var p = String(ymd).split('-');
+    return (p.length === 3) ? (p[2] + '/' + p[1] + '/' + p[0]) : ymd;
+  }
+
   var faltantes = [];
 
   // 1) Actuals en "A. TI - Actuals OKRs" (Orders y GMV deben llegar al menos hasta el domingo rng.end)
   var act = (typeof _getFechasActuals === 'function') ? _getFechasActuals() : { orders: null, gmv: null };
-  if (!act.orders || act.orders < rng.end) {
-    faltantes.push('Confirmed Orders en Actuals llega hasta ' + (act.orders || 'sin dato') + ' (la semana cierra el ' + rng.end + ')');
+  var ordersOk = Boolean(act.orders && act.orders >= rng.end);
+  var gmvOk    = Boolean(act.gmv && act.gmv >= rng.end);
+
+  if (!ordersOk) {
+    faltantes.push('Confirmed Orders en Actuals llega hasta ' + (act.orders ? fmtDmy(act.orders) : 'sin dato') + ' (la semana cierra el domingo ' + fmtDmy(rng.end) + ')');
   }
-  if (!act.gmv || act.gmv < rng.end) {
-    faltantes.push('GMV User Dmarts en Actuals llega hasta ' + (act.gmv || 'sin dato') + ' (la semana cierra el ' + rng.end + ')');
+  if (!gmvOk) {
+    faltantes.push('GMV User Dmarts en Actuals llega hasta ' + (act.gmv ? fmtDmy(act.gmv) : 'sin dato') + ' (la semana cierra el domingo ' + fmtDmy(rng.end) + ')');
   }
 
   // 2) Pestaña "C. Weekly users": debe existir la fila de la semana cerrada
@@ -544,7 +558,7 @@ function verificarDatosActualizadosSemanal(rng) {
         }
       }
       if (!hasWeek) {
-        faltantes.push('Pestaña "' + sh.getName() + '": falta cargar la semana ' + rng.labelShort + ' (' + rng.start + ' al ' + rng.end + ')');
+        faltantes.push('Pestaña "' + sh.getName() + '": falta cargar la semana ' + rng.labelShort + ' (' + fmtDmy(rng.start) + ' al ' + fmtDmy(rng.end) + ')');
       } else {
         hasWeeklyUsersSheetOk = true;
       }
@@ -554,14 +568,18 @@ function verificarDatosActualizadosSemanal(rng) {
   }
 
   // 3) Targets diarios de la semana (weeklyBE)
+  var hasTargetsOk = false;
   try {
     var be = _readWeeklyBE(rng.start, rng.end);
-    if (!be.orders || !be.orders['LATAM'] || be.orders['LATAM'] <= 0) {
+    var beOrdersOk = Boolean(be.orders && be.orders['LATAM'] && be.orders['LATAM'] > 0);
+    var beGmvOk    = Boolean(be.gmv && be.gmv['LATAM'] && be.gmv['LATAM'] > 0);
+    if (!beOrdersOk) {
       faltantes.push('Targets (BE) de Confirmed Orders no disponibles para la semana ' + rng.labelShort);
     }
-    if (!be.gmv || !be.gmv['LATAM'] || be.gmv['LATAM'] <= 0) {
+    if (!beGmvOk) {
       faltantes.push('Targets (BE) de GMV no disponibles para la semana ' + rng.labelShort);
     }
+    hasTargetsOk = beOrdersOk && beGmvOk;
   } catch (eBe) {
     faltantes.push('Error leyendo targets semanales: ' + eBe.message);
   }
@@ -589,10 +607,19 @@ function verificarDatosActualizadosSemanal(rng) {
         }
       });
 
+      // Métricas a validar: incluimos todas las visuales del mail Y métricas operacionales críticas
+      // (ej: 'Assignment Time' y 'Assignment Time > 6 min %', para detectar caídas en qc_picker_shift_orders)
+      var metricKeysToCheck = metricKeys.slice();
+      ['Assignment Time', 'Assignment Time > 6 min %'].forEach(function(reqM){
+        if (metricKeysToCheck.indexOf(reqM) < 0 && metrics[reqM]) {
+          metricKeysToCheck.push(reqM);
+        }
+      });
+
       var metricsByLagDate = {}; // dt -> [displayName, ...]
       var metricsSinDatos = [];
 
-      metricKeys.forEach(function(m){
+      metricKeysToCheck.forEach(function(m){
         var cfg = config[m] || {};
         var mRows = metrics[m];
         var displayName = WK_METRIC_DISPLAY[m] || m;
@@ -625,7 +652,7 @@ function verificarDatosActualizadosSemanal(rng) {
       // Agrupar métricas retrasadas en una sola línea clara por fecha
       Object.keys(metricsByLagDate).forEach(function(dt){
         var list = metricsByLagDate[dt];
-        faltantes.push('Métricas con datos hasta el ' + dt + ' (falta domingo ' + rng.end + '): ' + list.join(', '));
+        faltantes.push('Métricas con datos hasta el ' + fmtDmy(dt) + ' (falta domingo ' + fmtDmy(rng.end) + '): ' + list.join(', '));
       });
 
       if (metricsSinDatos.length > 0) {
@@ -642,8 +669,18 @@ function verificarDatosActualizadosSemanal(rng) {
     semana: rng.labelShort,
     start: rng.start,
     end: rng.end,
+    startDmy: fmtDmy(rng.start),
+    endDmy: fmtDmy(rng.end),
+    ordersDate: act.orders,
+    ordersDateDmy: fmtDmy(act.orders),
+    ordersOk: ordersOk,
+    gmvDate: act.gmv,
+    gmvDateDmy: fmtDmy(act.gmv),
+    gmvOk: gmvOk,
+    weeklyUsersOk: hasWeeklyUsersSheetOk,
+    targetsOk: hasTargetsOk,
     faltantes: faltantes,
-    motivo: faltantes.join(' · ')
+    motivo: ok ? ('Todos los datos de la semana ' + rng.labelShort + ' están completos') : faltantes.join(' · ')
   };
 }
 
@@ -968,59 +1005,149 @@ function checkYEnviarSemanal() {
   const mm    = parseInt(Utilities.formatDate(ahora, zona, 'm'), 10);
   const minAhora = hh * 60 + mm;
   const minObj   = HORA_ENVIO_SEM * 60 + MINUTO_ENVIO_SEM;
+  const finMinTotal = minObj + VENTANA_SEM_MIN;
+  const finHoraStr = String(Math.floor(finMinTotal / 60)).padStart(2, '0') + ':' + String(finMinTotal % 60).padStart(2, '0');
 
   const rng   = _weekRangeLunDom();   // semana lun→dom que se reportaría hoy
   const props = PropertiesService.getScriptProperties();
   const ultimo = props.getProperty(PROP_KEY_SEM) || 'nunca';
 
-  Logger.log('=== checkYEnviarSemanal ===');
-  Logger.log('Hora actual : ' + Utilities.formatDate(ahora, zona, 'EEE HH:mm') + ' (' + zona + ')');
-  Logger.log('Ventana     : Lunes ' + HORA_ENVIO_SEM + ':' + String(MINUTO_ENVIO_SEM).padStart(2,'0') +
-             ' → ' + HORA_ENVIO_SEM + ':' + String(MINUTO_ENVIO_SEM + VENTANA_SEM_MIN).padStart(2,'0'));
-  Logger.log('Semana      : ' + rng.start + ' al ' + rng.end);
-  Logger.log('Último envío: ' + ultimo);
-
-  if (dow !== DIA_ENVIO_SEM) { Logger.log('Estado      : NO es lunes — no se envía'); Logger.log('==='); return; }
-  if (minAhora < minObj || minAhora > minObj + VENTANA_SEM_MIN) {
-    Logger.log('Estado      : FUERA DE VENTANA — no se envía'); Logger.log('==='); return;
+  function fmtDmy(ymd) {
+    if (!ymd) return '—';
+    var p = String(ymd).split('-');
+    return (p.length === 3) ? (p[2] + '/' + p[1] + '/' + p[0]) : ymd;
   }
+
+  Logger.log('=== checkYEnviarSemanal ===');
+  Logger.log('Hora actual               : ' + Utilities.formatDate(ahora, zona, 'EEE HH:mm') + ' (' + zona + ')');
+  Logger.log('Ventana de envío          : Lunes ' + String(HORA_ENVIO_SEM).padStart(2, '0') + ':' + String(MINUTO_ENVIO_SEM).padStart(2, '0') + ' → ' + finHoraStr);
+  Logger.log('Semana a reportar (Lun-Dom): Semana ' + rng.labelShort + ' (' + fmtDmy(rng.start) + ' al ' + fmtDmy(rng.end) + ')');
+  Logger.log('Fecha de cierre (Domingo) : ' + fmtDmy(rng.end) + ' (' + rng.end + ')');
+
+  if (dow !== DIA_ENVIO_SEM) {
+    Logger.log('Resultado comparación    : [NO ES LUNES]');
+    Logger.log('Resultado final           : [NO SE ENVÍA] Hoy no es lunes (el reporte semanal se envía exclusivamente los lunes).');
+    Logger.log('========================');
+    return;
+  }
+
+  if (minAhora < minObj || minAhora > minObj + VENTANA_SEM_MIN) {
+    Logger.log('Último envío registrado   : ' + ultimo);
+    Logger.log('Resultado comparación    : [FUERA DE VENTANA]');
+    Logger.log('Resultado final           : [NO SE ENVÍA] Hora actual fuera de la ventana de envío semanal (' + String(HORA_ENVIO_SEM).padStart(2, '0') + ':' + String(MINUTO_ENVIO_SEM).padStart(2, '0') + ' → ' + finHoraStr + ').');
+    Logger.log('========================');
+    return;
+  }
+
   if (ultimo === rng.start || ultimo === rng.start + '_BLOCKED') {
-    Logger.log('Estado      : YA ENVIADO O BLOQUEADO esta semana (' + ultimo + ') — se omite');
-    Logger.log('===');
+    var isBlocked = (ultimo === rng.start + '_BLOCKED');
+    Logger.log('Último envío registrado   : ' + ultimo);
+    Logger.log('¿Ya enviado o bloqueado?  : ' + (isBlocked ? 'BLOQUEADO' : 'YA ENVIADO'));
+    var razonBloqueo = props.getProperty('WEEKLY_BLOCKED_REASON') || 'Sin motivo guardado';
+    if (isBlocked) {
+      Logger.log('Motivo del bloqueo        : ' + razonBloqueo);
+      Logger.log('Resultado final           : [NO SE ENVÍA - BLOQUEADO] El envío de la semana ' + rng.labelShort + ' está bloqueado por datos incompletos previamente.');
+    } else {
+      Logger.log('Resultado final           : [NO SE ENVÍA] El reporte semanal de la semana ' + rng.labelShort + ' ya fue enviado previamente.');
+    }
+    Logger.log('========================');
     return;
   }
 
   // ── Validación de datos completos al momento del envío ──────────────────────
-  // Si los datos de la semana no están completos, se BLOQUEA el envío para toda
-  // la semana (no se reintenta automáticamente) y se envía una ALERTA por mail
-  // a matias.cagliero@pedidosya.com informando el detalle de las métricas faltantes.
-  const check = verificarDatosActualizadosSemanal(rng);
+  var check;
+  try {
+    check = verificarDatosActualizadosSemanal(rng);
+  } catch (eCheck) {
+    Logger.log('Verificación semanal      : [ERROR] ' + eCheck.message);
+    Logger.log('Resultado comparación    : [ERROR EN COMPARACIÓN]');
+    Logger.log('Resultado final           : [NO SE ENVÍA] Excepción al verificar datos semanales (' + eCheck.message + ').');
+    Logger.log('========================');
+    return { ok: false, error: eCheck.message };
+  }
+
+  // Detalle explícito de la comparación de fuentes en el log
+  Logger.log('--- Comparación de Fuentes (Semana ' + rng.labelShort + ') ---');
+  Logger.log('• Cierre requerido (Domingo): ' + fmtDmy(rng.end) + ' (' + rng.end + ')');
+  Logger.log('• Actuals Confirmed Orders : ' + (check.ordersDateDmy || '—') + ' (' + (check.ordersDate || '—') + ') → ' + (check.ordersOk ? '[OK]' : '[PENDIENTE - esperando cierre domingo ' + fmtDmy(rng.end) + ']'));
+  Logger.log('• Actuals Facturación GMV  : ' + (check.gmvDateDmy || '—') + ' (' + (check.gmvDate || '—') + ') → ' + (check.gmvOk ? '[OK]' : '[PENDIENTE - esperando cierre domingo ' + fmtDmy(rng.end) + ']'));
+  Logger.log('• Snapshot Usuarios Semanal: ' + (check.weeklyUsersOk ? '[OK - semana cargada]' : '[PENDIENTE - falta fila en "' + WEEKLY_USERS_SHEET + '"]'));
+  Logger.log('• Targets Semanales (BE)   : ' + (check.targetsOk ? '[OK - targets listos]' : '[PENDIENTE - faltan targets de Orders o GMV]'));
+  Logger.log('Resultado comparación     : ' + (check.ok ? '[ACTUALIZADO] Todos los datos de la semana están completos' : ('[DATOS INCOMPLETOS] ' + check.motivo)));
+  Logger.log('------------------------------------------------------');
+
   if (!check.ok) {
     props.setProperty(PROP_KEY_SEM, rng.start + '_BLOCKED');
     props.setProperty('WEEKLY_BLOCKED_REASON', check.motivo);
-    Logger.log('Estado      : DATOS INCOMPLETOS — ' + check.motivo);
-    Logger.log('Acción      : [BLOQUEADO] Envío semanal cancelado para la semana ' + rng.labelShort + ' (' + rng.start + '). Enviando alerta a matias.cagliero@pedidosya.com...');
+    Logger.log('Acción                    : [BLOQUEADO] Cancelando envío semanal para la semana ' + rng.labelShort + ' (' + rng.start + '). Enviando alerta a matias.cagliero@pedidosya.com...');
 
     enviarAlertaMetricasDesactualizadasSemanal(rng, check);
 
-    Logger.log('===');
+    Logger.log('Resultado final           : [NO SE ENVÍA - BLOQUEADO] ' + check.motivo);
+    Logger.log('========================');
     return { ok: false, blocked: true, error: check.motivo, week: rng, alertaEnviada: true };
   }
 
-  Logger.log('Estado      : DENTRO DE VENTANA Y DATOS COMPLETOS — enviando...');
-  const r = sendWeeklyMtdEmail(false);
+  Logger.log('Resultado final           : [ENVIANDO] Datos completos, dentro de ventana y sin envío previo. Iniciando envío del Weekly Report...');
+
+  var r;
+  try {
+    r = sendWeeklyMtdEmail(false);
+  } catch (err) {
+    props.setProperty(PROP_KEY_SEM, rng.start + '_BLOCKED');
+    props.setProperty('WEEKLY_BLOCKED_REASON', (err && err.message) || 'Excepción al enviar');
+    Logger.log('Envío semanal             : [ERROR] Excepción al enviar — ' + (err && err.message));
+    Logger.log('Resultado final           : [FALLÓ EL ENVÍO] Envío semanal cancelado y bloqueado para reintentos automáticos.');
+    Logger.log('========================');
+    return { ok: false, error: err && err.message };
+  }
+
   if (r && r.ok) {
     props.setProperty(PROP_KEY_SEM, rng.start);
     props.deleteProperty('WEEKLY_BLOCKED_REASON');
-    Logger.log('Resultado   : [OK] Enviado a ' + r.sent + ' destinatarios — semana ' + rng.labelShort);
+    Logger.log('Envío semanal             : [OK] Enviado correctamente a ' + r.sent + ' destinatarios en ' + (r.batches || 1) + ' lote(s) — semana ' + rng.labelShort);
+    Logger.log('Registrado                : Semana ' + rng.start + ' confirmada en Script Properties');
+    Logger.log('Resultado final           : [ENVÍO EXITOSO] El Weekly Report fue despachado.');
   } else {
-    // Si ocurrió un error en el envío, también bloqueamos para no reintentar automáticamente
     props.setProperty(PROP_KEY_SEM, rng.start + '_BLOCKED');
     props.setProperty('WEEKLY_BLOCKED_REASON', (r && r.error) || 'Error desconocido al enviar');
-    Logger.log('Resultado   : [ERROR] Error al enviar — ' + (r && r.error || 'desconocido') + '. Bloqueado para reintentos automáticos.');
+    Logger.log('Envío semanal             : [ERROR] ' + ((r && (r.error || r.motivo)) || 'desconocido'));
+    Logger.log('Resultado final           : [FALLÓ EL ENVÍO] Bloqueado para reintentos automáticos.');
   }
-  Logger.log('===');
+
+  Logger.log('========================');
   return r;
+}
+
+// Test manual del chequeo de actualización semanal. Ejecutar desde el editor de Apps Script para
+// verificar en consola el estado de las fuentes de la semana cerrada sin enviar mail.
+function testCheckActualizacionSemanal() {
+  Logger.log('=== TEST MANUAL DE ACTUALIZACIÓN (Weekly Email) ===');
+  const zona = Session.getScriptTimeZone();
+  const ahora = new Date();
+  var rng = _weekRangeLunDom();
+
+  function fmtDmy(ymd) {
+    if (!ymd) return '—';
+    var p = String(ymd).split('-');
+    return (p.length === 3) ? (p[2] + '/' + p[1] + '/' + p[0]) : ymd;
+  }
+
+  Logger.log('Hora actual               : ' + Utilities.formatDate(ahora, zona, 'EEE HH:mm') + ' (' + zona + ')');
+  Logger.log('Semana a reportar         : Semana ' + rng.labelShort + ' (' + fmtDmy(rng.start) + ' al ' + fmtDmy(rng.end) + ')');
+  Logger.log('Fecha de cierre (Domingo) : ' + fmtDmy(rng.end) + ' (' + rng.end + ')');
+
+  var check = verificarDatosActualizadosSemanal(rng);
+  Logger.log('• Actuals Confirmed Orders : ' + (check.ordersDateDmy || '—') + ' → ' + (check.ordersOk ? '[OK]' : '[PENDIENTE]'));
+  Logger.log('• Actuals Facturación GMV  : ' + (check.gmvDateDmy || '—') + ' → ' + (check.gmvOk ? '[OK]' : '[PENDIENTE]'));
+  Logger.log('• Snapshot Usuarios Semanal: ' + (check.weeklyUsersOk ? '[OK]' : '[PENDIENTE]'));
+  Logger.log('• Targets Semanales (BE)   : ' + (check.targetsOk ? '[OK]' : '[PENDIENTE]'));
+  Logger.log('Resultado comparación     : ' + (check.ok ? '[ACTUALIZADO - LISTO]' : ('[DATOS INCOMPLETOS] ' + check.motivo)));
+  if (check.faltantes && check.faltantes.length > 0) {
+    Logger.log('Detalle de faltantes:');
+    check.faltantes.forEach(function(f, idx){ Logger.log('  ' + (idx+1) + '. ' + f); });
+  }
+  Logger.log('==================================================');
 }
 
 // Instala el envío automático (idempotente). Correr UNA vez desde el editor,

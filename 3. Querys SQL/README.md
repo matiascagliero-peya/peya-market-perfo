@@ -10,11 +10,11 @@ Esta estructura divide el repositorio de queries en 4 grandes bloques dentro de 
 - **`2. Operacional/`**: 8 queries (OPS Data diario/mensual/by WHS, Open Time diario/semanal/mensual, Stacked deliveries).
 - **`3. Comercial/`**: 6 queries (AQS, PQS, Price index, Promo Contribution, Nielsen).
 - **`4. Supply/`**: 4 queries (Supply Chain diario/mensual/by WHS, Planning).
-- **`5. Otros/`**: 3 queries (Targets 2026 diario/by WHS, Basket Size).
-- **`6. Customer Insights/`**: 2 queries (NPS, Rating).
-- **`7. Finance/`**: 1 query (Forecast America).
-- **`8. Tablas Frankenstein - MCagliero version/`**: 9 queries de usuarios, cohortes y MAUs coverage.
-- **`9. Tablas Frankenstein - Euge version/`**: 4 queries de sesiones y retención de usuarios.
+- **`5. Customer Insights/`**: 2 queries (NPS, Rating).
+- **`6. Finance/`**: 1 query (Forecast America).
+- **`7. Tablas Frankenstein - MCagliero version/`**: 9 queries de usuarios, cohortes y MAUs coverage.
+- **`8. Tablas Frankenstein - Euge version/`**: 4 queries de sesiones y retención de usuarios.
+- **`9. Otros/`**: 3 queries (Targets 2026 diario/by WHS, Basket Size).
 - **`10. Z - Descartados/`**: Consultas obsoletas o en desuso.
 
 ---

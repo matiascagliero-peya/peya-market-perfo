@@ -35,7 +35,10 @@ function getHojaInteligente(ss, nombreBuscado) {
   let s = ss.getSheetByName(nombreBuscado);
   if (s) return s;
   const clean = String(nombreBuscado).trim().toLowerCase();
-  const sheets = ss.getSheets();
+  if (!ss._sheetsCache) {
+    try { ss._sheetsCache = ss.getSheets(); } catch (_) { ss._sheetsCache = []; }
+  }
+  const sheets = ss._sheetsCache;
   for (let i = 0; i < sheets.length; i++) {
     if (sheets[i].getName().trim().toLowerCase() === clean) return sheets[i];
   }
@@ -109,6 +112,17 @@ function leerHoja(ss, sheetName) {
     if (obj.creado_por && !obj.creadoPor) obj.creadoPor = obj.creado_por;
     if (obj.asignado_a && !obj.asignadoA) obj.asignadoA = obj.asignado_a;
     if (!obj.todos) obj.todos = obj.to_dos || obj.tareas || obj.prioridades || obj.checklist || obj.tareas_de_la_semana || "";
+    if (!obj.email) {
+      obj.email = obj.mail || obj.correo || obj.e_mail || obj.correo_electronico || obj.email_corporativo || "";
+      if (!obj.email) {
+        for (const k in obj) {
+          if (typeof obj[k] === "string" && obj[k].includes("@") && obj[k].includes(".")) {
+            obj.email = obj[k].trim(); break;
+          }
+        }
+      }
+    }
+    if (!obj.nombre) obj.nombre = obj.miembro || obj.analista || obj.integrante || obj.usuario || "";
     items.push(obj);
   }
   return items;
@@ -422,11 +436,17 @@ function subirImagenAdjunto(base64Data, nombreArchivo) {
     const file = folder.createFile(blob);
     try {
       file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-    } catch (_) {}
+    } catch (_) {
+      try {
+        file.setSharing(DriveApp.Access.DOMAIN_WITH_LINK, DriveApp.Permission.VIEW);
+      } catch (_) {}
+    }
 
     const fileId = file.getId();
     const url = `https://drive.google.com/thumbnail?id=${fileId}&sz=w1200`;
-    return { success: true, url: url, fileId: fileId };
+    const viewUrl = `https://drive.google.com/file/d/${fileId}/view`;
+    const directUrl = `https://lh3.googleusercontent.com/d/${fileId}`;
+    return { success: true, url: url, directUrl: directUrl, viewUrl: viewUrl, fileId: fileId };
   } catch (e) {
     return { success: true, url: base64Data };
   }

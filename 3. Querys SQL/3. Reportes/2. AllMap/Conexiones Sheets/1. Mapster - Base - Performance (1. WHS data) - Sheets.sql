@@ -199,11 +199,25 @@ peya_coverage_users AS (
 -- ==============================================================================
 SELECT
   oa.month_date,
-  mw.country,
-  mw.country_code,
-  mw.city,
+  COALESCE(mw.country, CASE 
+    WHEN oa.warehouse_id LIKE 'AR_%' THEN 'Argentina'
+    WHEN oa.warehouse_id LIKE 'CH_%' OR oa.warehouse_id LIKE 'CL_%' THEN 'Chile'
+    WHEN oa.warehouse_id LIKE 'UY_%' THEN 'Uruguay'
+    WHEN oa.warehouse_id LIKE 'PE_%' THEN 'Perú'
+    WHEN oa.warehouse_id LIKE 'PA_%' THEN 'Panamá'
+    WHEN oa.warehouse_id LIKE 'EC_%' THEN 'Ecuador'
+    WHEN oa.warehouse_id LIKE 'BO_%' THEN 'Bolivia'
+    WHEN oa.warehouse_id LIKE 'PY_%' THEN 'Paraguay'
+    WHEN oa.warehouse_id LIKE 'RD_%' THEN 'República Dominicana'
+    WHEN oa.warehouse_id LIKE 'GT_%' THEN 'Guatemala'
+    WHEN oa.warehouse_id LIKE 'SV_%' THEN 'El Salvador'
+    WHEN oa.warehouse_id LIKE 'HN_%' THEN 'Honduras'
+    WHEN oa.warehouse_id LIKE 'NI_%' THEN 'Nicaragua'
+    ELSE 'Otros' END) AS country,
+  COALESCE(mw.country_code, LOWER(SUBSTR(oa.warehouse_id, 1, 2))) AS country_code,
+  COALESCE(mw.city, 'General') AS city,
   oa.warehouse_id,
-  mw.warehouse_name,
+  COALESCE(mw.warehouse_name, oa.warehouse_id) AS warehouse_name,
 
   -- 1. Transaccionales
   oa.total_orders,

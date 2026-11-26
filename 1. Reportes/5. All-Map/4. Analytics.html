@@ -2,12 +2,12 @@
 <html lang="es">
 <head>
   <!--
-    4. Analytics.html — Panel de Análisis y Auditoría de Mapster 2 (Exclusivo para matias.cagliero@pedidosya.com).
+    4. Analytics.html — Panel de Análisis y Auditoría de All-Map (Exclusivo para matias.cagliero@pedidosya.com).
     Auditoría de vistas, consumo BigQuery, telemetría y monitoreo de lluvias en red WHS.
   -->
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Analytics & Auditoría — Mapster 2</title>
+  <title>Analytics & Auditoría — All-Map</title>
 
   <!-- Google Fonts: Outfit (UI) + JetBrains Mono (Métricas y Datos) -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -48,14 +48,19 @@
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
+    body, button, input, select, textarea, table, th, td, h1, h2, h3, div, span, label {
+      font-family: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif !important;
+    }
     body {
-      font-family: var(--font);
       background: var(--bg);
       color: var(--text);
       font-size: 12.5px;
       line-height: 1.4;
       min-height: 100vh;
       overflow-x: auto;
+    }
+    .mono, .kpi-value, [data-mono], .code-val {
+      font-family: 'JetBrains Mono', monospace !important;
     }
 
     /* Layout Fluido que ocupa el ancho de pantalla de forma armónica y centrada */
@@ -459,7 +464,7 @@
     <div class="analytics-head">
       <div>
         <div class="analytics-title">
-          <span>Mapster 2</span>
+          <span>All-Map</span>
           <b>Analytics & Auditoría</b>
           <span class="badge-tag primary">Solo Admin</span>
         </div>
@@ -594,6 +599,34 @@
           </div>
         </div>
 
+        <!-- Card 3.5: Ranking de Uso de Botones y Herramientas (Más vs Menos Usados) -->
+        <div class="card">
+          <div class="card-head">
+            <div class="card-title">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="2.3"><path d="M12 20V10M18 20V4M6 20v-4"/></svg>
+              <span>Uso de Botones & Herramientas (Más vs Menos Usados)</span>
+              <span id="buttons-total-count" style="font-size:10px; font-weight:700; background:rgba(99,102,241,0.12); color:#6366f1; padding:2px 8px; border-radius:12px;">0 clics</span>
+            </div>
+            <div style="font-size:10.5px; color:var(--light);">Frecuencia de interacción y adopción de herramientas</div>
+          </div>
+          <div class="table-wrap" style="max-height: 280px;">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th style="width:12%;"># Ranking</th>
+                  <th style="width:40%;">Botón / Herramienta</th>
+                  <th style="width:14%;">Clics</th>
+                  <th style="width:14%;">% de Uso</th>
+                  <th style="width:20%;">Frecuencia Relativa</th>
+                </tr>
+              </thead>
+              <tbody id="buttons-ranking-tbody">
+                <tr><td colspan="5" class="empty-state">Analizando telemetría de botones...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
         <!-- Card 4: Desgloses (Acciones y Top Tiendas) -->
         <div class="breakdown-grid">
           <!-- Acciones / Páginas -->
@@ -657,6 +690,17 @@
   </div>
 
   <script>
+    /**
+     * ============================================================
+     * SPATIAL PERFORMANCE — TELEMETRY & AUDIT CONTROLLER
+     * Matías Sebastián Cagliero Lomazzi
+     * ============================================================
+     */
+    window.CAGLIERO_LOMAZZI_ANALYTICS_CORE = {
+      name: 'Matias Sebastian Cagliero Lomazzi',
+      version: '2.1.0-msc'
+    };
+
     let ANALYTICS_DATA = null;
     let currentGranularity = 'day';
     let periodOffset = 0;
@@ -673,6 +717,36 @@
       if (num < 1024 * 1024) return (num / 1024).toFixed(0) + ' KB';
       if (num < 1024 * 1024 * 1024) return (num / (1024 * 1024)).toFixed(1) + ' MB';
       return (num / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
+    }
+
+    // Formateador inteligente de nombres para mostrar el Nombre Real debajo de TOTAL GENERAL
+    function formatUserDisplayName(email) {
+      if (!email) return 'Usuario';
+      const clean = String(email).trim().toLowerCase();
+      const prefix = clean.split('@')[0];
+
+      // Mapeos conocidos frecuentes de usuarios
+      const KNOWN_NAMES = {
+        'matias.cagliero': 'Matías Sebastián Cagliero Lomazzi',
+        'cagliero.matias': 'Matías Sebastián Cagliero Lomazzi',
+        'franco.banchio': 'Franco Banchio',
+        'ignacio.lopez': 'Ignacio López',
+        'santiago.fernandez': 'Santiago Fernández',
+        'gonzalo.sanchez': 'Gonzalo Sánchez',
+        'lucas.alvarez': 'Lucas Álvarez',
+        'rodrigo.garcia': 'Rodrigo García',
+        'martin.perez': 'Martín Pérez',
+        'nicolas.diaz': 'Nicolás Díaz'
+      };
+
+      if (KNOWN_NAMES[prefix]) return KNOWN_NAMES[prefix];
+
+      // Inferencia inteligente separando por puntos o guiones: "nombre.apellido" -> "Nombre Apellido"
+      const parts = prefix.split(/[._-]/);
+      if (parts.length >= 2) {
+        return parts.map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(' ');
+      }
+      return prefix.charAt(0).toUpperCase() + prefix.slice(1);
     }
 
     function switchGranularity(gran, btn) {
@@ -768,8 +842,14 @@
 
       // Filas por Usuario
       users.forEach(u => {
-        const cleanEmail = u.email.replace(/@.*$/, '');
-        html += `<tr><td title="${u.email}"><b>${cleanEmail}</b> <span style="color:var(--light); font-size:10px;">${u.email.includes('@') ? '@' + u.email.split('@')[1] : ''}</span></td>`;
+        const displayName = formatUserDisplayName(u.email);
+        html += `
+          <tr>
+            <td title="${u.email}">
+              <div style="font-weight:800; font-size:12px; color:var(--text);">${displayName}</div>
+              <div style="color:var(--light); font-size:10.5px; font-weight:500;">${u.email}</div>
+            </td>
+        `;
         cols.forEach(p => {
           const v = u.per[p.period] || 0;
           html += `<td class="mono">${v > 0 ? formatNumber(v) : '<span style="color:var(--border);">·</span>'}</td>`;
@@ -810,12 +890,79 @@
       }
 
       users.forEach(u => {
+        const displayName = formatUserDisplayName(u.email);
         const tr = document.createElement('tr');
         tr.innerHTML = `
-          <td><b>${u.email}</b></td>
+          <td>
+            <div style="font-weight:800; font-size:12px; color:var(--text);">${displayName}</div>
+            <div style="color:var(--light); font-size:10.5px; font-weight:500;">${u.email}</div>
+          </td>
           <td class="mono v-strong">${formatNumber(u.queries)}</td>
           <td class="mono v-strong" style="color:var(--primary);">${formatBytes(u.bytes)}</td>
           <td style="color:var(--sub); font-size:11px;">${u.lastQuery || '—'}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function renderButtonsRanking() {
+      const tbody = document.getElementById('buttons-ranking-tbody');
+      const badgeCount = document.getElementById('buttons-total-count');
+      if (!tbody) return;
+      tbody.innerHTML = '';
+
+      const list = (ANALYTICS_DATA && ANALYTICS_DATA.buttonsRanking) || [];
+      const totalClicks = (ANALYTICS_DATA && ANALYTICS_DATA.totalButtonClicks) || list.reduce((a, b) => a + b.count, 0);
+
+      if (badgeCount) {
+        badgeCount.textContent = `${formatNumber(totalClicks)} clics`;
+      }
+
+      if (list.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No se registraron clics en botones todavía. La telemetría se acumula automáticamente al interactuar con la plataforma.</td></tr>';
+        return;
+      }
+
+      const maxCount = list[0].count || 1;
+
+      list.forEach((b, idx) => {
+        const tr = document.createElement('tr');
+        const rank = idx + 1;
+        const rankMedal = `#${rank}`;
+        const ratio = (b.count / maxCount) * 100;
+
+        let badgeStatus = '';
+        let barColor = '#10b981';
+
+        if (rank <= 3) {
+          badgeStatus = '<span class="badge-tag primary" style="font-size:9.5px;">Más Usado</span>';
+          barColor = 'linear-gradient(90deg, #ea044e, #f43f5e)';
+        } else if (idx >= list.length - 3 && list.length > 5) {
+          badgeStatus = '<span class="badge-tag" style="font-size:9.5px; opacity:0.75;">Poco Usado</span>';
+          barColor = '#94a3b8';
+        } else {
+          badgeStatus = '<span class="badge-tag blue" style="font-size:9.5px;">Frecuente</span>';
+          barColor = '#3b82f6';
+        }
+
+        tr.innerHTML = `
+          <td class="mono" style="font-weight:800; font-size:11px; color:var(--text);">${rankMedal}</td>
+          <td>
+            <div style="font-weight:700; color:var(--text); display:flex; align-items:center; gap:6px;">
+              <span>${b.name}</span>
+              ${badgeStatus}
+            </div>
+          </td>
+          <td class="mono v-strong" style="font-size:12px; color:var(--primary);">${formatNumber(b.count)}</td>
+          <td class="mono" style="font-size:11px; color:var(--sub);">${b.pct}%</td>
+          <td>
+            <div style="display:flex; align-items:center; gap:8px;">
+              <div style="flex:1; height:6px; background:rgba(148,163,184,0.2); border-radius:10px; overflow:hidden;">
+                <div style="width:${ratio}%; height:100%; background:${barColor}; border-radius:10px;"></div>
+              </div>
+              <span class="mono" style="font-size:9.5px; color:var(--light); width:28px; text-align:right;">${ratio.toFixed(0)}%</span>
+            </div>
+          </td>
         `;
         tbody.appendChild(tr);
       });
@@ -866,12 +1013,16 @@
 
       logs.forEach(l => {
         const tr = document.createElement('tr');
+        const displayName = formatUserDisplayName(l.email);
         const bqText = l.bytes > 0 ? `<b style="color:var(--primary);">${formatBytes(l.bytes)}</b>` : '<span style="color:var(--light);">0 KB</span>';
         const pageBadge = l.page === 'explorer' ? '<span class="badge-tag primary">Explorer</span>' : (l.page === 'benchmark' ? '<span class="badge-tag blue">Benchmark</span>' : `<span class="badge-tag">${l.page}</span>`);
 
         tr.innerHTML = `
           <td class="mono" style="font-size:10.5px; color:var(--light);">${l.timestamp}</td>
-          <td><b>${l.email}</b></td>
+          <td>
+            <div style="font-weight:700; color:var(--text);">${displayName}</div>
+            <div style="font-size:10px; color:var(--light); font-weight:500;">${l.email}</div>
+          </td>
           <td>${pageBadge}</td>
           <td>${l.action}</td>
           <td>${l.store || '—'}</td>
@@ -933,6 +1084,7 @@
 
       renderPeriodTable();
       renderBqUsersTable();
+      renderButtonsRanking();
       renderActionsAndStores();
       renderRecentLogs();
     }

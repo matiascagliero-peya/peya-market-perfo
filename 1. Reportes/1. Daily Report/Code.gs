@@ -1273,14 +1273,14 @@ function _readSheet() {
 //   ly / Var LY (columna aparte, NO del grupo RR): Actual MTD vs mismo período
 //     año pasado (A. TI - Actuals OKRs); Var LY = (Actual − ly)/ly.
 // =================================================================
-function _getRRDataFromSheet(freshRead) {
+function _getRRDataFromSheet(freshRead, asOfDateStr) {
   var result = { orders: {}, gmv: {} };
   var rrSource = getRRSource();   // 'export' | 'calc' (global, lo elige el admin en rrcompare)
   Logger.log('[RR] Origen activo (definido en rrcompare): ' + rrSource);
   
   var bp1 = '';
   try { bp1 = PropertiesService.getScriptProperties().getProperty('LAST_VALID_DATE') || ''; } catch(e) {}
-  var cacheKey = 'cache_rrdata_mtd_' + bp1 + '_' + rrSource;
+  var cacheKey = 'cache_rrdata_mtd_' + bp1 + '_' + rrSource + (asOfDateStr ? ('_' + asOfDateStr) : '');
   
   var cache = CacheService.getScriptCache();
   if (!freshRead) {
@@ -1365,18 +1365,35 @@ function _getRRDataFromSheet(freshRead) {
       }
     }
 
-    var asOf = (leaderMs!==-Infinity)? new Date(leaderMs) : new Date();
-    if (bp1_date && bp1_date < asOf) {
+    var reqAsOf = null;
+    if (asOfDateStr && /^\d{4}-\d{2}-\d{2}$/.test(asOfDateStr)) {
+      var parts = asOfDateStr.split('-');
+      reqAsOf = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+    }
+
+    var asOf = reqAsOf || ((leaderMs!==-Infinity)? new Date(leaderMs) : new Date());
+    if (!reqAsOf && bp1_date && bp1_date < asOf) {
       asOf = bp1_date;
     }
+    // Capar al último día con datos reales si asOf pide una fecha futura sin datos
+    if (leaderMs !== -Infinity && asOf.getTime() > leaderMs) {
+      asOf = new Date(leaderMs);
+    }
+
     var Y=asOf.getFullYear(), Mo=asOf.getMonth();
     var monthStartMs=new Date(Y,Mo,1).getTime();
-    var asOfMs=new Date(Y,Mo,asOf.getDate(),23,59,59).getTime();
     var curMonthKey=Y+'-'+('0'+(Mo+1)).slice(-2);
+
+    // Acotar el límite de fecha por KPI hasta el día que efectivamente tiene datos
+    var asOfMsByKpi = {
+      orders: Math.min(new Date(Y, Mo, asOf.getDate(), 23, 59, 59).getTime(), (maxKpiMs.orders !== -Infinity) ? maxKpiMs.orders : Infinity),
+      gmv:    Math.min(new Date(Y, Mo, asOf.getDate(), 23, 59, 59).getTime(), (maxKpiMs.gmv !== -Infinity) ? maxKpiMs.gmv : Infinity)
+    };
+    var asOfMs = Math.max(asOfMsByKpi.orders, asOfMsByKpi.gmv);
     var asOfDayMs=new Date(Y,Mo,asOf.getDate()).getTime();
     var incomplete={
-      orders:(maxKpiMs.orders===-Infinity)||(maxKpiMs.orders<asOfDayMs),
-      gmv:   (maxKpiMs.gmv===-Infinity)   ||(maxKpiMs.gmv<asOfDayMs)
+      orders:(maxKpiMs.orders===-Infinity)||(maxKpiMs.orders<asOfDayMs && asOfDayMs<=leaderMs),
+      gmv:   (maxKpiMs.gmv===-Infinity)   ||(maxKpiMs.gmv<asOfDayMs && asOfDayMs<=leaderMs)
     };
     // Mismo período del año pasado (MTD LY): día 1 → mismo día, año -1.
     var lyMonthStartMs=new Date(Y-1,Mo,1).getTime();
@@ -1396,7 +1413,8 @@ function _getRRDataFromSheet(freshRead) {
       var tA=parseDateToMs(ad[i][aDi]); if(isNaN(tA)) continue;
       var isoA=getISO(ad[i][aCi]); if(!isoA) continue;   // LATAM se captura (fila propia si existe)
       var vA=num(ad[i][aVi])||0;
-      if(tA>=monthStartMs   && tA<=asOfMs)      actualMTD[kA][isoA]=(actualMTD[kA][isoA]||0)+vA;   // MTD actual
+      var capMsA = asOfMsByKpi[kA] || asOfMs;
+      if(tA>=monthStartMs   && tA<=capMsA)      actualMTD[kA][isoA]=(actualMTD[kA][isoA]||0)+vA;   // MTD actual
       if(tA>=lyMonthStartMs && tA<=lyAsOfMs)    actualLY[kA][isoA] =(actualLY[kA][isoA] ||0)+vA;   // LY MTD (mismo tramo)
       if(tA>=lyMonthStartMs && tA<=lyFullEndMs) lyFull[kA][isoA]   =(lyFull[kA][isoA]   ||0)+vA;   // LY mes COMPLETO
       if(tA>=lmStartMs      && tA<=lmEndMs)     lmFull[kA][isoA]   =(lmFull[kA][isoA]   ||0)+vA;   // LM mes anterior COMPLETO
@@ -1411,7 +1429,9 @@ function _getRRDataFromSheet(freshRead) {
       var dMi=dH.indexOf('metric'),dCi=dH.indexOf('country'),dDi=dH.indexOf('date'),dVi=dH.indexOf('value');
       for (var i=1;i<dd.length;i++){
         var nmD=String(dd[i][dMi]||'').trim(); var kD=kpiOfTarget(nmD); if(!kD) continue;
-        var tD=parseDateToMs(dd[i][dDi]); if(isNaN(tD)||tD<monthStartMs||tD>asOfMs) continue;
+        var tD=parseDateToMs(dd[i][dDi]);
+        var capMsD = asOfMsByKpi[kD] || asOfMs;
+        if(isNaN(tD)||tD<monthStartMs||tD>capMsD) continue;
         var isoD=getISO(dd[i][dCi]); if(!isoD) continue;   // LATAM se captura (fila propia si existe)
         if(!beMTDraw[kD][isoD]) beMTDraw[kD][isoD]={};
         beMTDraw[kD][isoD][nmD]=(beMTDraw[kD][isoD][nmD]||0)+(num(dd[i][dVi])||0);
@@ -1489,12 +1509,13 @@ function _getRRDataFromSheet(freshRead) {
         var be   = (beExport[kpi][iso]!=null) ? beExport[kpi][iso] : pick(kpi, beMesRaw[kpi][iso]);
         var beTd = pick(kpi, beMTDraw[kpi][iso]);
         var act  = actualMTD[kpi][iso];
-        // RR Mes: del export (rr_mensual) si está; si no, calculado.
+        // RR Mes: si no se especifica fecha puntual y está en export, se usa export;
+        // si se especifica asOfDateStr o está en modo calc, se calcula dinámicamente con actuals y target ajustados.
         var rr;
-        if (rrExport[kpi][iso]!=null) {
+        if (!reqAsOf && rrExport[kpi][iso]!=null) {
           rr = rrExport[kpi][iso];
         } else {
-          rr = (be!=null && beTd) ? be*((act||0)/beTd) : null;
+          rr = (be!=null && beTd && beTd !== 0) ? be*((act||0)/beTd) : null;
         }
         // Si el KPI no tiene datos hasta el día de corte (Orders líder), RR queda
         // VACÍO sin importar el origen (export o cálculo) → y la Var BE también.
@@ -1583,8 +1604,8 @@ function _getRRDataFromSheet(freshRead) {
 
 // Endpoint liviano que el front (daily / MTD) llama APARTE para traer el RR,
 // sin bloquear la carga principal. Usa la caché propia de _getRRDataFromSheet.
-function fetchRRData() {
-  return _getRRDataFromSheet();
+function fetchRRData(asOfDateStr) {
+  return _getRRDataFromSheet(false, asOfDateStr);
 }
 
 // Devuelve las últimas fechas reales con datos cargados en "A. TI - Actuals OKRs"
@@ -1593,14 +1614,22 @@ function _getFechasActuals() {
   try {
     var tz = Session.getScriptTimeZone();
     var actSheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(SHEET_ACTUALS);
-    if (!actSheet) return { orders: null, gmv: null };
+    if (!actSheet) return { orders: null, gmv: null, error: 'Hoja "' + SHEET_ACTUALS + '" no encontrada' };
     var ad = actSheet.getDataRange().getValues();
-    if (!ad || ad.length < 2) return { orders: null, gmv: null };
-    var aMi = ad[0].indexOf('Metric'), aDi = ad[0].indexOf('Date'), aVi = ad[0].indexOf('Value');
+    if (!ad || ad.length < 2) return { orders: null, gmv: null, error: 'Hoja "' + SHEET_ACTUALS + '" sin datos' };
+    var H = (ad[0] || []).map(function(h) { return String(h || '').trim().toLowerCase(); });
+    var aMi = H.indexOf('metric');
+    var aDi = H.indexOf('date');
+    if (aDi < 0) aDi = H.indexOf('fecha');
+    var aVi = H.indexOf('value');
+    if (aVi < 0) aVi = H.indexOf('valor');
+    if (aMi < 0 || aDi < 0 || aVi < 0) {
+      return { orders: null, gmv: null, error: 'Encabezados requeridos (Metric/Date/Value) no encontrados en ' + SHEET_ACTUALS };
+    }
     var maxKpi = { orders: -Infinity, gmv: -Infinity };
     for (var i = 1; i < ad.length; i++) {
-      var mm0 = ad[i][aMi];
-      var k0 = (mm0 === 'Confirmed Orders') ? 'orders' : (mm0 === 'GMV User Dmarts') ? 'gmv' : null;
+      var mm0 = String(ad[i][aMi] || '').trim().toLowerCase();
+      var k0 = (mm0 === 'confirmed orders') ? 'orders' : (mm0 === 'gmv user dmarts') ? 'gmv' : null;
       if (!k0) continue;
       var v = ad[i][aVi];
       if (v === '' || v == null || isNaN(parseFloat(v))) continue;
@@ -2918,7 +2947,12 @@ function fetchMtdActuals(startDate, endDate) {
       if(t>maxDateMsGlobal)maxDateMsGlobal=t;
       var mName=data[i][idxMetric];
       var vRaw=data[i][idxValue];
-      if(vRaw!==''&&vRaw!=null&&!isNaN(parseFloat(vRaw))){ if(compMaxMs[mName]===undefined||t>compMaxMs[mName])compMaxMs[mName]=t; }
+      var vNum=parseFloat(vRaw);
+      // Solo consideramos como dato real valores numéricos > 0 (si una tabla de origen falla o no carga datos,
+      // no debemos tomar un 0 como dato actualizado).
+      if(!isNaN(vNum)&&vNum>0){
+        if(compMaxMs[mName]===undefined||t>compMaxMs[mName])compMaxMs[mName]=t;
+      }
       if(METRICAS_DEMANDA.indexOf(mName)!==-1&&t>maxDateMsDemanda)maxDateMsDemanda=t;
       // Para GMV/Orders: registrar el último día con valor > 0 (GMV suele llegar
       // más tarde, así su target no se acumula más allá de donde hay datos).
@@ -2969,19 +3003,48 @@ function fetchMtdActuals(startDate, endDate) {
       dailyMap[rCountry][rTime][rMetric]=parseFloat(data[i][idxValue])||0;
     }
     var rawData={}, countries=Object.keys(countriesSet);
+    var dailyActuals = { 'Confirmed Orders': {}, 'GMV User Dmarts': {} };
+    var curCompMaxMs = {};
     for (var c in dailyMap){
       if(!rawData[c])rawData[c]={};
-      for (var tStr in dailyMap[c]){
-        var t2=parseInt(tStr,10);
+      var tKeys = Object.keys(dailyMap[c]).map(function(k){return parseInt(k,10);}).sort(function(a,b){return a-b;});
+      for (var idxT=0; idxT<tKeys.length; idxT++){
+        var t2 = tKeys[idxT];
         var isCur=(t2>=startTime&&t2<=endTime),isM1t=(t2>=startM1T&&t2<=endM1T),isY1t=(t2>=startY1T&&t2<=endY1T);
         if(!isCur&&!isM1t&&!isY1t)continue;
-        var bucket=isCur?'current':(isM1t?'m1':'y1'), dayData=dailyMap[c][tStr];
+        var bucket=isCur?'current':(isM1t?'m1':'y1'), dayData=dailyMap[c][t2];
         for (var m in dayData){
           if(!rawData[c][m])rawData[c][m]={current:0,m1:0,y1:0};
           rawData[c][m][bucket]+=dayData[m];
+          if(isCur && dayData[m] > 0){
+            if(curCompMaxMs[m]===undefined||t2>curCompMaxMs[m]) curCompMaxMs[m]=t2;
+          }
+        }
+        if(isCur){
+          ['Confirmed Orders', 'GMV User Dmarts'].forEach(function(kpiName){
+            if(dayData[kpiName] !== undefined){
+              if(!dailyActuals[kpiName][c]) dailyActuals[kpiName][c] = [];
+              dailyActuals[kpiName][c].push(dayData[kpiName]);
+            }
+          });
         }
       }
     }
+    // LATAM desglose diario
+    ['Confirmed Orders', 'GMV User Dmarts'].forEach(function(kpiName){
+      dailyActuals[kpiName]['LATAM'] = [];
+      var maxL = 0;
+      countries.forEach(function(c){
+        if(dailyActuals[kpiName][c] && dailyActuals[kpiName][c].length > maxL) maxL = dailyActuals[kpiName][c].length;
+      });
+      for(var dI=0; dI<maxL; dI++){
+        var sDay = 0;
+        countries.forEach(function(c){
+          if(dailyActuals[kpiName][c] && dailyActuals[kpiName][c][dI] != null) sDay += dailyActuals[kpiName][c][dI];
+        });
+        dailyActuals[kpiName]['LATAM'].push(sDay);
+      }
+    });
     rawData['LATAM']={};
     COMPONENTES_CRUDOS.forEach(function(comp){
       var sc=0,sm1=0,sy1=0;
@@ -3022,12 +3085,18 @@ function fetchMtdActuals(startDate, endDate) {
       var ms=Math.min(maxByMetricMs[m], baseDate.getTime());
       maxDateByMetric[m]=Utilities.formatDate(new Date(ms),tz,'yyyy-MM-dd');
     });
-    // "Datos hasta" por MÉTRICA FINAL: última fecha con dato de su componente
-    // representativo (para mostrar arriba de cada métrica hasta cuándo hay datos).
+    // "Datos hasta" por MÉTRICA FINAL: última fecha con dato real de su componente representativo.
+    // Si tenemos registros reales dentro del período actual (curCompMaxMs), usamos esa fecha.
+    // De lo contrario, usamos compMaxMs acotado al fin del rango (endTime).
     var dataThroughByMetric={};
     METRICAS_FINALES.forEach(function(fm){
       var rep=METRIC_REP_COMPONENT[fm];
-      var ms=(rep && compMaxMs[rep]!==undefined)?compMaxMs[rep]:null;
+      var ms = null;
+      if (rep && curCompMaxMs[rep] !== undefined) {
+        ms = curCompMaxMs[rep];
+      } else if (rep && compMaxMs[rep] !== undefined) {
+        ms = Math.min(compMaxMs[rep], endTime);
+      }
       dataThroughByMetric[fm]=(ms!=null)?Utilities.formatDate(new Date(ms),tz,'yyyy-MM-dd'):null;
     });
     // ── Usuarios SEMANALES (pestaña "Weekly data"): valor FIJO de la primera semana
@@ -3127,7 +3196,7 @@ function fetchMtdActuals(startDate, endDate) {
       snapCcList.forEach(function(cc){ if(countries.indexOf(cc)===-1) countries.push(cc); });
     } catch(_eMtd){ Logger.log('mtd snapshot inject: ' + _eMtd.message); }
 
-    var resultData={metrics:metricsData,countries:countries,currentStart:startStr,currentEnd:endStr,maxDemandDate:defaultEnd,maxDateByMetric:maxDateByMetric,dataThroughByMetric:dataThroughByMetric,config:uiConfig,validDates:validDatesArray,rrData:rrData};
+    var resultData={metrics:metricsData,countries:countries,currentStart:startStr,currentEnd:endStr,maxDemandDate:defaultEnd,maxDateByMetric:maxDateByMetric,dataThroughByMetric:dataThroughByMetric,config:uiConfig,validDates:validDatesArray,rrData:rrData,dailyActuals:dailyActuals};
     cache.put(cacheKey, JSON.stringify(resultData), 1500);
     return { payload: resultData };
   } catch(err) {
@@ -3214,7 +3283,7 @@ function fetchTargetsOnly(startStr, endStr, capByMetric) {
 
     // Acumulamos por (finalKey, sourceMetric, country) para luego elegir
     // solo la métrica de mayor prioridad por país y evitar doble conteo.
-    var rawResult={};
+    var rawResult={}, rawDailyTargets={};
     for(var i=1;i<data.length;i++){
       var rMR=String(data[i][idxMetric]||'').trim(); if(!rMR)continue;
       var finalKey=reverseMap[rMR]; if(!finalKey)continue;
@@ -3228,11 +3297,18 @@ function fetchTargetsOnly(startStr, endStr, capByMetric) {
       if(!rawResult[finalKey])rawResult[finalKey]={};
       if(!rawResult[finalKey][rMR])rawResult[finalKey][rMR]={};
       rawResult[finalKey][rMR][rCountry]=(rawResult[finalKey][rMR][rCountry]||0)+rValue;
+
+      if(!rawDailyTargets[finalKey]) rawDailyTargets[finalKey]={};
+      if(!rawDailyTargets[finalKey][rMR]) rawDailyTargets[finalKey][rMR]={};
+      if(!rawDailyTargets[finalKey][rMR][rCountry]) rawDailyTargets[finalKey][rMR][rCountry]={};
+      rawDailyTargets[finalKey][rMR][rCountry][rDateYMD] = (rawDailyTargets[finalKey][rMR][rCountry][rDateYMD] || 0) + rValue;
     }
 
     // Para cada (finalKey, country) usa solo la métrica de mayor prioridad
     // (la que aparece primero en el array de METRIC_TARGET_MAP).
+    result._daily = {};
     Object.keys(METRIC_TARGET_MAP).forEach(function(finalKey){
+      result._daily[finalKey] = {};
       var priorityList=Array.isArray(METRIC_TARGET_MAP[finalKey])?METRIC_TARGET_MAP[finalKey]:[METRIC_TARGET_MAP[finalKey]];
       if(!rawResult[finalKey])return;
       var allCountries={};
@@ -3244,10 +3320,31 @@ function fetchTargetsOnly(startStr, endStr, capByMetric) {
           var src=priorityList[j];
           if(rawResult[finalKey][src]&&rawResult[finalKey][src][country]!==undefined){
             result[finalKey][country]=rawResult[finalKey][src][country];
+            if(rawDailyTargets[finalKey]&&rawDailyTargets[finalKey][src]&&rawDailyTargets[finalKey][src][country]){
+              var sDates = Object.keys(rawDailyTargets[finalKey][src][country]).sort();
+              result._daily[finalKey][country] = sDates.map(function(dYMD){ return rawDailyTargets[finalKey][src][country][dYMD]; });
+            }
             break;
           }
         }
       });
+      result._daily[finalKey]['LATAM'] = [];
+      var countriesList = Object.keys(result._daily[finalKey]).filter(function(c){return c!=='LATAM'&&c!=='LATAM ex AR';});
+      var maxTargetDays = 0;
+      countriesList.forEach(function(c){
+        if (result._daily[finalKey][c] && result._daily[finalKey][c].length > maxTargetDays) {
+          maxTargetDays = result._daily[finalKey][c].length;
+        }
+      });
+      for (var dIdx = 0; dIdx < maxTargetDays; dIdx++){
+        var dSum = 0;
+        countriesList.forEach(function(c){
+          if (result._daily[finalKey][c] && result._daily[finalKey][c][dIdx] != null) {
+            dSum += result._daily[finalKey][c][dIdx];
+          }
+        });
+        result._daily[finalKey]['LATAM'].push(dSum);
+      }
     });
     var coKey='Confirmed Orders', gmvKey='GMV User Dmarts';
     if(result[coKey]&&!result[coKey]['LATAM']){

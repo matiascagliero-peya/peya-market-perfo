@@ -39,6 +39,7 @@ function onOpen() {
   try {
     SpreadsheetApp.getUi()
       .createMenu('🚀 Gestión de Reportes')
+      .addItem('🔍 Verificar Fechas',            'verificarSoloFechas')
       .addItem('⚠️ FORZAR Sincronizar Extracto', 'forzarSincronizacion')
       .addItem('⚠️ FORZAR Enviar a destinos',    'forzarEnvios')
       .addToUi();
@@ -120,19 +121,13 @@ function procesarTodo(esForzado, modo) {
       return;
     }
 
-    if (!esForzado && !fc.ok) {
-      const txt = `⏸ no corresponde hoy (${fc.etiqueta || frecuencia})`;
-      acumularLog(bufferLog, nombreRef, (modo === "envio") ? "— (omitido)" : txt, (modo === "bq") ? "— (omitido)" : txt);
-      return;
-    }
-
     const resBQ = (modo === "envio")
       ? "— (omitido)"
-      : evaluarActualizacion(ss, hojaConfig, fila, numFila, hoy, esForzado, yaRefrescado, colMap);
+      : evaluarActualizacion(ss, hojaConfig, fila, numFila, hoy, esForzado, yaRefrescado, colMap, fc);
 
     const resEnvio = (modo === "bq")
       ? "— (omitido)"
-      : evaluarEnvio(ss, hojaConfig, fila, numFila, hoy, esForzado, colMap);
+      : evaluarEnvio(ss, hojaConfig, fila, numFila, hoy, esForzado, colMap, fc);
 
     acumularLog(bufferLog, nombreRef, resBQ, resEnvio);
   });
@@ -141,7 +136,61 @@ function procesarTodo(esForzado, modo) {
   try { SpreadsheetApp.flush(); } catch (e) {}
 }
 
-function evaluarActualizacion(ss, hojaConfig, fila, numFila, hoy, esForzado, yaRefrescado, colMap) {
+function parsearFechaEspanol(valorFecha) {
+  if (!valorFecha) return null;
+  if (valorFecha instanceof Date) {
+    return new Date(valorFecha.getFullYear(), valorFecha.getMonth(), valorFecha.getDate());
+  }
+  const str = String(valorFecha).trim();
+  if (str.includes("error") || str.includes("❌")) return null;
+
+  const meses = {
+    enero: 0, febrero: 1, marzo: 2, abril: 3, mayo: 4, junio: 5,
+    julio: 6, agosto: 7, septiembre: 8, octubre: 9, noviembre: 10, diciembre: 11,
+    january: 0, february: 1, march: 2, april: 3, may: 4, june: 5,
+    july: 6, august: 7, september: 8, october: 9, november: 10, december: 11,
+    jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11
+  };
+  const regex = /(?:lunes|martes|miercoles|miércoles|jueves|viernes|sabado|sábado|domingo|monday|tuesday|wednesday|thursday|friday|saturday|sunday|mon|tue|wed|thu|fri|sat|sun)[,\s]+(\d{1,2})[,\s]+([a-zA-Z]+)/i;
+  const match = str.match(regex);
+  if (!match) {
+    const regexNum = /(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/;
+    const matchNum = str.match(regexNum);
+    if (matchNum) {
+      return new Date(parseInt(matchNum[3]), parseInt(matchNum[2]) - 1, parseInt(matchNum[1]));
+    }
+    return null;
+  }
+  
+  const d = parseInt(match[1]);
+  const m = meses[match[2].toLowerCase()];
+  if (m === undefined) return null;
+  
+  const now = new Date();
+  let year = now.getFullYear();
+  
+  // Si el mes del log es mayor que el mes actual por mas de 1 (ej log en diciembre, estamos en enero), asumimos año pasado
+  if (m > now.getMonth() + 1) year--;
+
+  return new Date(year, m, d);
+}
+
+function esMismoTimestamp(valorCelda, fechaObj) {
+  if (!valorCelda || !fechaObj) return false;
+  if (valorCelda instanceof Date) {
+    return Math.abs(valorCelda.getTime() - fechaObj.getTime()) < 60000;
+  }
+  const strCelda = String(valorCelda).trim();
+  const fechaTxt = Utilities.formatDate(fechaObj, CONFIG.ZONA_HORARIA, CONFIG.FORMATO_FECHA);
+  if (strCelda === fechaTxt) return true;
+
+  const diaMes = Utilities.formatDate(fechaObj, CONFIG.ZONA_HORARIA, "dd MMMM");
+  const diaNum = Utilities.formatDate(fechaObj, CONFIG.ZONA_HORARIA, "dd");
+  const horaMin = Utilities.formatDate(fechaObj, CONFIG.ZONA_HORARIA, "HH:mm");
+  return (strCelda.includes(diaMes) || strCelda.includes(diaNum)) && strCelda.includes(horaMin);
+}
+
+function evaluarActualizacion(ss, hojaConfig, fila, numFila, hoy, esForzado, yaRefrescado, colMap, fc) {
   const col = colMap || COL;
   const tipo = (col.TIPO >= 0) ? String(fila[col.TIPO] || "").trim().toLowerCase() : "actualizar";
   const idOrigen = (col.ID_ORIGEN >= 0) ? String(fila[col.ID_ORIGEN] || "").trim() : "";
@@ -153,13 +202,147 @@ function evaluarActualizacion(ss, hojaConfig, fila, numFila, hoy, esForzado, yaR
   if (!origen) return "— (sin pestaña origen)";
 
   const minProg = horarioAMinutos(horarioBQ);
-  if (!esForzado && minProg === null) return "⏸ desactivado (sin horario BQ)";
 
-  const horarioPaso = pasaHorario(horarioBQ, hoy);
-  if (!esForzado && !horarioPaso) return `⏳ aún no (prog ${horarioBQ} · ahora ${ahoraStr})`;
+  // CASO 1: Sin horario BQ programado
+  // Verifica si la hoja origen ya fue actualizada. Si está atrasada respecto a la frecuencia
+  // esperada (ej. no se actualizó el lunes), dispara la actualización (catch-up).
+  if (!esForzado && minProg === null) {
+    try {
+      const ssOrig = obtenerSpreadsheetOrigen(idOrigen, ss);
+      const hojaOrig = ssOrig.getSheetByName(origen);
+      if (!hojaOrig) return `— (no existe pestaña "${origen}")`;
 
-  let yaHoy = yaFueHoy(ultimaActBQ, hoy);
-  if (yaHoy && !esForzado) return `⏭ ya fue hoy`;
+      const tsBQ = obtenerTimestampBQ(hojaOrig);
+
+      // Determinar si la hoja está atrasada respecto a la frecuencia configurada
+      let estaAtrasado = false;
+      if (fc && fc.ultimoEsperado instanceof Date) {
+        if (tsBQ instanceof Date) {
+          estaAtrasado = (tsBQ.getTime() < fc.ultimoEsperado.getTime());
+        } else {
+          const ultimaFechaObj = parsearFechaEspanol(ultimaActBQ);
+          estaAtrasado = (!ultimaFechaObj || ultimaFechaObj.getTime() < fc.ultimoEsperado.getTime());
+        }
+      }
+
+      // Si NO está atrasada y tenemos timestamp de BigQuery al día:
+      if (!estaAtrasado && tsBQ instanceof Date) {
+        if (!esMismoTimestamp(ultimaActBQ, tsBQ)) {
+          escribirFechaBQ(hojaConfig, numFila, tsBQ, col);
+          const horaCorta = Utilities.formatDate(tsBQ, CONFIG.ZONA_HORARIA, "dd/MM HH:mm");
+          return `✅ verificado (BQ: ${horaCorta})`;
+        }
+        const horaCorta = Utilities.formatDate(tsBQ, CONFIG.ZONA_HORARIA, "dd/MM HH:mm");
+        return `⏭ verificado al día (BQ: ${horaCorta})`;
+      }
+
+      // Si está atrasada: ¡Debe ejecutar actualización inmediata (catch-up)!
+      if (estaAtrasado) {
+        const esLocal = (ssOrig.getId() === ss.getId());
+
+        if (esLocal) {
+          if (tipo.includes("actualiz") || !tipo.includes("import")) {
+            const claveRefresco = `${ss.getId()}::${origen}`;
+            if (!yaRefrescado.has(claveRefresco)) {
+              refrescarHojaConReintentos(hojaOrig);
+              yaRefrescado.add(claveRefresco);
+            }
+          }
+
+          let tsExito = new Date();
+          if (tipo.includes("actualiz") || !tipo.includes("import")) {
+            const tsNuevo = obtenerTimestampBQ(hojaOrig);
+            if (tsNuevo) tsExito = tsNuevo;
+          }
+          escribirFechaBQ(hojaConfig, numFila, tsExito, col);
+          const horaCorta = Utilities.formatDate(tsExito, CONFIG.ZONA_HORARIA, "dd/MM HH:mm");
+          return `✅ actualizado (catch-up BQ: ${horaCorta})`;
+        } else {
+          // Documento externo
+          const hojaLocal = ss.getSheetByName(origen) || ss.insertSheet(origen);
+          quitarFiltro(hojaOrig);
+          quitarFiltro(hojaLocal);
+          const valores = hojaOrig.getDataRange().getValues();
+          if (valores.length > 0 && valores[0].length > 0) {
+            const numCols = valores[0].length;
+            const maxRows = hojaLocal.getMaxRows();
+            hojaLocal.getRange(1, 1, maxRows, numCols).clearContent();
+            hojaLocal.getRange(1, 1, valores.length, numCols).setValues(valores);
+          }
+
+          let tsExito = new Date();
+          escribirFechaBQ(hojaConfig, numFila, tsExito, col);
+          return "✅ importado (catch-up)";
+        }
+      }
+
+      // Si no es tabla BQ ni está atrasada, revisar si es documento externo
+      if (ssOrig.getId() !== ss.getId()) {
+        try {
+          const file = DriveApp.getFileById(ssOrig.getId());
+          const tsDrive = file.getLastUpdated();
+          if (tsDrive instanceof Date) {
+            if (!esMismoTimestamp(ultimaActBQ, tsDrive)) {
+              escribirFechaBQ(hojaConfig, numFila, tsDrive, col);
+              const horaCorta = Utilities.formatDate(tsDrive, CONFIG.ZONA_HORARIA, "dd/MM HH:mm");
+              return `✅ verificado (Doc: ${horaCorta})`;
+            }
+            const horaCorta = Utilities.formatDate(tsDrive, CONFIG.ZONA_HORARIA, "dd/MM HH:mm");
+            return `⏭ verificado al día (Doc: ${horaCorta})`;
+          }
+        } catch (eDrive) {}
+      }
+      return "⏸ sin horario BQ (no es BQ)";
+    } catch (eVerif) {
+      const errorPrefix = tipo.includes("import") ? "Error Import" : "Error BQ";
+      const clasif = clasificarError(eVerif.message, errorPrefix);
+      const valorCelda = `${errorPrefix}: ${clasif.resumen}`;
+      if (col.ULTIMA_ACT_BQ >= 0) {
+        const celda = hojaConfig.getRange(numFila, col.ULTIMA_ACT_BQ + 1);
+        celda.setValue(valorCelda);
+        const horaStr = Utilities.formatDate(hoy, CONFIG.ZONA_HORARIA, "dd/MM/yyyy HH:mm:ss");
+        const nota = `[${errorPrefix}] ${clasif.diagnostico}\n\nDetalle técnico:\n${eVerif.message}\n\nHora: ${horaStr}`;
+        try { celda.setNote(nota); } catch (errNote) {}
+      }
+      return `❌ ${valorCelda} (${eVerif.message})`;
+    }
+  }
+
+  // CASO 2: Tiene horario programado (o corrida forzada)
+  let esCatchUp = false;
+  if (!esForzado) {
+    let yaHoy = yaFueHoy(ultimaActBQ, hoy);
+    if (yaHoy) return `⏭ ya fue hoy`;
+
+    // Si aún no pasó el horario programado, verificar si la hoja BQ ya fue refrescada hoy
+    const horarioPaso = pasaHorario(horarioBQ, hoy);
+    if (!horarioPaso) {
+      try {
+        const ssOrig = obtenerSpreadsheetOrigen(idOrigen, ss);
+        const hojaOrig = ssOrig.getSheetByName(origen);
+        if (hojaOrig) {
+          const tsBQ = obtenerTimestampBQ(hojaOrig);
+          if (tsBQ instanceof Date && yaFueHoy(tsBQ, hoy)) {
+            escribirFechaBQ(hojaConfig, numFila, tsBQ, col);
+            const horaCorta = Utilities.formatDate(tsBQ, CONFIG.ZONA_HORARIA, "dd/MM HH:mm");
+            return `✅ verificado (BQ: ${horaCorta})`;
+          }
+        }
+      } catch (eCheck) {}
+    }
+
+    if (!fc.ok) {
+      // Validar si debemos hacer catch-up
+      const ultimaFechaObj = parsearFechaEspanol(ultimaActBQ);
+      if (!ultimaFechaObj || ultimaFechaObj.getTime() < fc.ultimoEsperado.getTime()) {
+        esCatchUp = true;
+      } else {
+        return `⏸ no corresponde hoy (${fc.etiqueta})`;
+      }
+    }
+
+    if (!esCatchUp && !horarioPaso) return `⏳ aún no (prog ${horarioBQ} · ahora ${ahoraStr})`;
+  }
 
   try {
     const ssOrig = obtenerSpreadsheetOrigen(idOrigen, ss);
@@ -231,7 +414,7 @@ function escribirFechaBQ(hojaConfig, numFila, fecha, colMap) {
   }
 }
 
-function evaluarEnvio(ss, hojaConfig, fila, numFila, hoy, esForzado, colMap) {
+function evaluarEnvio(ss, hojaConfig, fila, numFila, hoy, esForzado, colMap, fc) {
   const col = colMap || COL;
   const origen = (col.ORIGEN_NOMBRE >= 0) ? String(fila[col.ORIGEN_NOMBRE] || "").trim() : "";
   const destinoId = (col.ID_DESTINO >= 0) ? String(fila[col.ID_DESTINO] || "").trim() : "";
@@ -242,13 +425,34 @@ function evaluarEnvio(ss, hojaConfig, fila, numFila, hoy, esForzado, colMap) {
 
   if (!origen || !destinoId || !destinoHoja) return "— (faltan datos)";
 
-  const yaHoy = yaFueHoy(ultimoEnvio, hoy);
-  const horarioPaso = pasaHorario(horarioEnvio, hoy);
-
   if (!esForzado) {
     if (horarioAMinutos(horarioEnvio) === null) return "⏸ desactivado (sin horario envío)";
-    if (yaHoy) return `⏭ ya fue hoy`;
-    if (!horarioPaso) return `⏳ aún no (prog ${horarioEnvio} · ahora ${ahoraStr})`;
+
+    let esCatchUp = false;
+    const ultimaFechaObj = parsearFechaEspanol(ultimoEnvio);
+
+    if (!fc.ok) {
+      // 1. Validar catch-up por fecha de envío atrasada
+      if (!ultimaFechaObj || (fc.ultimoEsperado && ultimaFechaObj.getTime() < fc.ultimoEsperado.getTime())) {
+        esCatchUp = true;
+      } else {
+        // 2. Validar si el origen de BigQuery se actualizó DESPUÉS del último envío
+        const shOrig = ss.getSheetByName(origen);
+        const tsBQ = obtenerTimestampBQ(shOrig);
+        const yaHoy = yaFueHoy(ultimoEnvio, hoy);
+        if (tsBQ instanceof Date && ultimaFechaObj && tsBQ.getTime() > ultimaFechaObj.getTime() && !yaHoy) {
+          esCatchUp = true;
+        } else {
+          return `⏸ no corresponde hoy (${fc.etiqueta})`;
+        }
+      }
+    }
+
+    const horarioPaso = pasaHorario(horarioEnvio, hoy);
+    if (!esCatchUp && !horarioPaso) return `⏳ aún no (prog ${horarioEnvio} · ahora ${ahoraStr})`;
+
+    const yaHoy = yaFueHoy(ultimoEnvio, hoy);
+    if (yaHoy && !esCatchUp) return `⏭ ya fue hoy`;
   }
 
   try {
@@ -420,7 +624,8 @@ function frecuenciaCorresponde(frecuenciaStr, hoy) {
     raw === "everyday" ||
     raw === "all days"
   ) {
-    return { ok: true, etiqueta: "Diario / Daily" };
+    const ultimoEsperado = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
+    return { ok: true, etiqueta: "Diario / Daily", ultimoEsperado };
   }
 
   // 3. Día del mes: "dia 1", "día 15", "day 1", "day 15", "d1", "1", "15"
@@ -428,9 +633,17 @@ function frecuenciaCorresponde(frecuenciaStr, hoy) {
   if (mDia) {
     const n = parseInt(mDia[1], 10);
     const correspondeHoy = (hoy.getDate() === n);
+    
+    // Calcular el último día N que ocurrió (puede ser este mes o el mes pasado)
+    let ultimoEsperado = new Date(hoy.getFullYear(), hoy.getMonth(), n);
+    if (hoy.getDate() < n) {
+      ultimoEsperado.setMonth(ultimoEsperado.getMonth() - 1);
+    }
+    
     return {
       ok: correspondeHoy,
-      etiqueta: correspondeHoy ? `Día ${n}` : `espera al día ${n} (hoy es ${hoy.getDate()})`
+      etiqueta: correspondeHoy ? `Día ${n}` : `espera al día ${n} (hoy es ${hoy.getDate()})`,
+      ultimoEsperado
     };
   }
 
@@ -457,9 +670,18 @@ function frecuenciaCorresponde(frecuenciaStr, hoy) {
     if (coincide) {
       const diaObjetivo = DIAS[nombre];
       const correspondeHoy = (hoy.getDay() === diaObjetivo);
+      
+      // Calcular la fecha del último día de la semana objetivo
+      let daysToSubtract = hoy.getDay() - diaObjetivo;
+      if (daysToSubtract < 0) daysToSubtract += 7; // Si hoy es Jueves (4) y buscamos Lunes (1), diff = 3. Si hoy es Lunes (1) y buscamos Jueves (4), diff = -3 -> 4.
+      
+      const ultimoEsperado = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
+      ultimoEsperado.setDate(ultimoEsperado.getDate() - daysToSubtract);
+
       return {
         ok: correspondeHoy,
-        etiqueta: correspondeHoy ? nombre : `solo los ${nombre}`
+        etiqueta: correspondeHoy ? nombre : `solo los ${nombre}`,
+        ultimoEsperado
       };
     }
   }
@@ -617,11 +839,53 @@ function obtenerDetalleErrorBQ(hoja) {
 
 function obtenerTimestampBQ(hoja) {
   try {
+    if (!hoja) return null;
+    let fechaMasReciente = null;
+
     if (hoja.getType() === SpreadsheetApp.SheetType.DATASOURCE) {
-      return hoja.asDataSourceSheet().getStatus().getLastExecutionTime();
+      try {
+        const status = hoja.asDataSourceSheet().getStatus();
+        if (status) {
+          const d = (typeof status.getLastExecutionTime === "function" ? status.getLastExecutionTime() : null) ||
+                    (typeof status.getLastRefreshedTime === "function" ? status.getLastRefreshedTime() : null);
+          if (d instanceof Date) return d;
+        }
+      } catch (eDS) {}
     }
-    const tablas = hoja.getDataSourceTables();
-    return tablas.length > 0 ? tablas[0].getStatus().getLastExecutionTime() : null;
+
+    if (typeof hoja.getDataSourceTables === "function") {
+      const tablas = hoja.getDataSourceTables() || [];
+      for (const t of tablas) {
+        try {
+          const status = t.getStatus();
+          if (status) {
+            const d = (typeof status.getLastExecutionTime === "function" ? status.getLastExecutionTime() : null) ||
+                      (typeof status.getLastRefreshedTime === "function" ? status.getLastRefreshedTime() : null);
+            if (d instanceof Date && (!fechaMasReciente || d.getTime() > fechaMasReciente.getTime())) {
+              fechaMasReciente = d;
+            }
+          }
+        } catch (errT) {}
+      }
+    }
+
+    if (typeof hoja.getDataSourcePivotTables === "function") {
+      const pivots = hoja.getDataSourcePivotTables() || [];
+      for (const p of pivots) {
+        try {
+          const status = p.getStatus();
+          if (status) {
+            const d = (typeof status.getLastExecutionTime === "function" ? status.getLastExecutionTime() : null) ||
+                      (typeof status.getLastRefreshedTime === "function" ? status.getLastRefreshedTime() : null);
+            if (d instanceof Date && (!fechaMasReciente || d.getTime() > fechaMasReciente.getTime())) {
+              fechaMasReciente = d;
+            }
+          }
+        } catch (errP) {}
+      }
+    }
+
+    return fechaMasReciente;
   } catch (e) {
     return null;
   }
@@ -1007,6 +1271,7 @@ function obtenerTituloSheets() {
   }
 }
 
+function verificarSoloFechas() { procesarTodo(false, "todo"); }
 function forzarSincronizacion() { procesarTodo(true, "bq"); }
 function forzarEnvios() { procesarTodo(true, "envio"); }
 
@@ -1158,7 +1423,7 @@ function enviarEstado() {
           </table>
         </div>
         <div style="background-color: #f9f9f9; padding: 15px; text-align: center; border-top: 1px solid #eee;">
-          <p style="margin: 0; font-size: 12px; color: #999;">Script Maestro V2.44 • Envíos Automáticos</p>
+          <p style="margin: 0; font-size: 12px; color: #999;">Script Maestro V2.45 • Envíos Automáticos</p>
         </div>
       </div>
     </div>

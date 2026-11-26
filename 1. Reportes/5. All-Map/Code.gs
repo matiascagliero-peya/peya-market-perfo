@@ -1,9 +1,18 @@
 // ============================================================
-// MAPSTER 2 — STORE INTELLIGENCE PLATFORM
-// Backend Google Apps Script (V8 Engine) — 100% Google Sheets
+// SPATIAL PERFORMANCE — STORE INTELLIGENCE PLATFORM
+// Matías Sebastián Cagliero Lomazzi
+// Google Apps Script (V8 Engine) — BigQuery & Connected Sheets
 // ============================================================
 
-const SCRIPT_VERSION = '2.1.0';
+/**
+ * Matías Sebastián Cagliero Lomazzi <matias.cagliero@pedidosya.com>
+ */
+const CAGLIERO_LOMAZZI_ENGINE_META = {
+  name: 'Matias Sebastian Cagliero Lomazzi',
+  version: '2.1.0-msc'
+};
+
+const SCRIPT_VERSION = CAGLIERO_LOMAZZI_ENGINE_META.version;
 
 // ============================================================
 // CONFIGURACIÓN MAESTRA DE GOOGLE SHEETS
@@ -11,14 +20,21 @@ const SCRIPT_VERSION = '2.1.0';
 const WHS_SPREADSHEET_ID    = '1DXcZswpGQsbXcj5RXBALAogLrs32d_rtcxpRb17nROk';
 const WHS_DATA_SHEET_NAME   = '1. WHS data';
 const WHS_ORDERS_SHEET_NAME = '2. WHS orders';
+const WHS_RINGS_SHEET_NAME  = '3. Rings Data';
 
-// Caché en memoria para respuestas ultra veloces
+// Caché en memoria para respuestas ultra veloces — Optimizado por Matías Sebastián Cagliero Lomazzi
 let _cachedWhsRecords = null;
 let _cachedWhsOrdersRecords = null;
+let _cachedWhsRingsRecords = null;
 
 // ============================================================
 // CONTROL DE ACCESO & ROUTING (doGet)
 // ============================================================
+
+/**
+ * Validador de Acceso Administrativo
+ * @author Matías Sebastián Cagliero Lomazzi
+ */
 function isMatiasAdminUser() {
   try {
     const active = (Session.getActiveUser().getEmail() || '').toLowerCase().trim();
@@ -48,7 +64,7 @@ function doGet(e) {
     });
   } catch(err) {}
 
-  const isDebugMode = (page === 'debug' || (e.parameter && e.parameter.debug === '1'));
+  const isDebugMode = false;
 
   // Página 4: Analytics y Auditoría (Solo para matias.cagliero@pedidosya.com)
   if (page === 'analytics') {
@@ -60,7 +76,7 @@ function doGet(e) {
         '<p style="color:#475569; font-size:12.5px; line-height:1.5;">Esta página está reservada exclusivamente para el administrador (<b>matias.cagliero@pedidosya.com</b>).</p>' +
         '</div>' +
         '</div>'
-      ).setTitle('Acceso Restringido — Mapster 2');
+      ).setTitle('Acceso Restringido — All-Map');
     }
     const template = HtmlService.createTemplateFromFile('4. Analytics');
     template.scriptUrl = ScriptApp.getService().getUrl();
@@ -69,23 +85,23 @@ function doGet(e) {
     template.isAdmin = isAdmin;
     template.userEmail = userEmail;
     return template.evaluate()
-      .setTitle('Analytics & Auditoría — Mapster 2')
+      .setTitle('Analytics & Auditoría — All-Map')
       .addMetaTag('viewport', 'width=device-width, initial-scale=1.0')
       .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
   }
 
   let templateName = '1. StoreExplorer';
-  let pageTitle = 'Store Explorer — Mapster 2';
+  let pageTitle = 'Store Explorer — All-Map';
   let activePage = 'explorer';
   
   if (page === 'benchmark') {
     if (!isAdmin) {
       templateName = '1. StoreExplorer';
-      pageTitle = 'Store Explorer — Mapster 2';
+      pageTitle = 'Store Explorer — All-Map';
       activePage = 'explorer';
     } else {
       templateName = '2. TotalBenchmark';
-      pageTitle = 'Benchmark Tiendas — Mapster 2';
+      pageTitle = 'Benchmark Tiendas — All-Map';
       activePage = 'benchmark';
     }
   }
@@ -618,10 +634,34 @@ function fetchWhsOrdersFromSheetsApi() {
     const whId = getCol(row, 'warehouse_id');
     if (!whId) continue;
 
-    const countryRaw = String(getCol(row, 'country') || '').trim();
-    const countryLower = countryRaw.toLowerCase();
-    if (!countryRaw || countryLower === 'desconocido' || countryLower === 'costa rica' || countryLower === 'cr') {
-      continue; // Excluir Desconocido y Costa Rica
+    let countryRaw = String(getCol(row, 'country') || '').trim();
+    let countryLower = countryRaw.toLowerCase();
+    
+    // Si el país viene vacío o 'Desconocido' (habitual en locales cerrados), inferir país por prefijo para no perder órdenes
+    if (!countryRaw || countryLower === 'desconocido') {
+      const wIdUp = String(whId).toUpperCase();
+      const wNameUp = String(getCol(row, 'warehouse_name') || '').toUpperCase();
+      const checkStr = wNameUp || wIdUp;
+
+      if (checkStr.startsWith('AR_') || checkStr.startsWith('ARG_')) countryRaw = 'Argentina';
+      else if (checkStr.startsWith('CH_') || checkStr.startsWith('CL_') || checkStr.startsWith('CHI_')) countryRaw = 'Chile';
+      else if (checkStr.startsWith('UY_') || checkStr.startsWith('URU_')) countryRaw = 'Uruguay';
+      else if (checkStr.startsWith('PE_') || checkStr.startsWith('PER_')) countryRaw = 'Perú';
+      else if (checkStr.startsWith('PA_') || checkStr.startsWith('PAN_')) countryRaw = 'Panamá';
+      else if (checkStr.startsWith('EC_') || checkStr.startsWith('ECU_')) countryRaw = 'Ecuador';
+      else if (checkStr.startsWith('BO_') || checkStr.startsWith('BOL_')) countryRaw = 'Bolivia';
+      else if (checkStr.startsWith('PY_') || checkStr.startsWith('PAR_')) countryRaw = 'Paraguay';
+      else if (checkStr.startsWith('RD_') || checkStr.startsWith('DO_') || checkStr.startsWith('REP_')) countryRaw = 'República Dominicana';
+      else if (checkStr.startsWith('GT_') || checkStr.startsWith('GUA_')) countryRaw = 'Guatemala';
+      else if (checkStr.startsWith('SV_') || checkStr.startsWith('SLV_')) countryRaw = 'El Salvador';
+      else if (checkStr.startsWith('HN_') || checkStr.startsWith('HND_')) countryRaw = 'Honduras';
+      else if (checkStr.startsWith('NI_') || checkStr.startsWith('NIC_')) countryRaw = 'Nicaragua';
+      else countryRaw = 'Otros';
+      countryLower = countryRaw.toLowerCase();
+    }
+
+    if (countryLower === 'costa rica' || countryLower === 'cr') {
+      continue; // Excluir únicamente Costa Rica
     }
 
     records.push({
@@ -689,6 +729,106 @@ function fetchWhsOrdersFromSheetsApi() {
     });
   }
 
+  return records;
+}
+
+// ============================================================
+// 3. EXTRACTOR: "3. Rings Data" (Anillos y Cuadrantes Precalculados)
+// ============================================================
+function fetchRingsDataFromSheetsApi() {
+  if (_cachedWhsRingsRecords && _cachedWhsRingsRecords.length > 0) {
+    return _cachedWhsRingsRecords;
+  }
+
+  let values = safeGetSheetValues(WHS_SPREADSHEET_ID, WHS_RINGS_SHEET_NAME, 'A:ZZ');
+
+  if (!values || values.length <= 1) {
+    try {
+      const ss = SpreadsheetApp.openById(WHS_SPREADSHEET_ID);
+      const allSheets = ss.getSheets();
+      for (let s of allSheets) {
+        if (isSheetDataSource(s)) continue;
+        const n = s.getName().toLowerCase();
+        if (n.includes('ring') || n.includes('anillo')) {
+          const lr = s.getLastRow();
+          if (lr > 1) {
+            values = s.getDataRange().getValues();
+            break;
+          }
+        }
+      }
+    } catch(e) {}
+  }
+
+  if (!values || values.length < 2) return [];
+
+  // Localizar fila de encabezados en las primeras 6 filas
+  let headerRowIndex = 0;
+  for (let r = 0; r < Math.min(6, values.length); r++) {
+    const rowStrings = values[r].map(c => String(c || '').toLowerCase().trim());
+    if (rowStrings.some(h => h.includes('warehouse_id') || h.includes('anillo') || h.includes('cuadrante'))) {
+      headerRowIndex = r;
+      break;
+    }
+  }
+
+  const rawHeaders = values[headerRowIndex].map(h => String(h || '').trim());
+  const headers = rawHeaders.map(h => h.toLowerCase().replace(/[^a-z0-9_]/g, ''));
+
+  const getCol = (row, ...aliases) => {
+    for (const alias of aliases) {
+      const cleanTarget = alias.toLowerCase().replace(/[^a-z0-9_]/g, '');
+      let idx = headers.indexOf(cleanTarget);
+      if (idx < 0) {
+        idx = headers.findIndex(h => h === cleanTarget || h.endsWith('_' + cleanTarget));
+      }
+      if (idx >= 0 && row[idx] !== undefined && row[idx] !== null && String(row[idx]).trim() !== '') {
+        return row[idx];
+      }
+    }
+    return null;
+  };
+
+  const records = [];
+  for (let i = headerRowIndex + 1; i < values.length; i++) {
+    const row = values[i];
+    const whId = getCol(row, 'warehouse_id', 'wh_id', 'id');
+    if (!whId) continue;
+
+    const ringLabel = String(getCol(row, 'anillo', 'ring') || '').trim();
+    const cuadName = String(getCol(row, 'cuadrante', 'quadrant') || '').trim();
+    const cuadKey = String(getCol(row, 'cuadrante_key', 'quadrant_key') || cuadName.charAt(0) || '').toUpperCase().trim();
+
+    records.push({
+      month_date: normalizeDateStr(getCol(row, 'month_date', 'month', 'date')) || '2026-10-01',
+      warehouse_id: String(whId).trim(),
+      warehouse_name: String(getCol(row, 'warehouse_name', 'name') || '').trim(),
+      country: String(getCol(row, 'country') || '').trim(),
+      anillo_order: parseInt(getCol(row, 'anillo_order'), 10) || 1,
+      anillo: ringLabel,
+      ringBase: ringLabel,
+      cuadrante: cuadName,
+      cuadrante_key: cuadKey,
+      sectorKey: cuadKey,
+      sectorName: cuadName,
+      covered_maus: Number(getCol(row, 'covered_maus')) || 0,
+      dmart_maus_covered: Number(getCol(row, 'dmart_maus', 'dmart_maus_covered')) || 0,
+      dmart_maus: Number(getCol(row, 'dmart_maus', 'dmart_maus_covered')) || 0,
+      penetration_pct: parseCoordinate(getCol(row, 'penetration_pct')) || 0,
+      dmart_orders: Number(getCol(row, 'orders', 'dmart_orders')) || 0,
+      orders: Number(getCol(row, 'orders', 'dmart_orders')) || 0,
+      frequency: parseCoordinate(getCol(row, 'frequency', 'monthly_frequency')) || 0,
+      net_sales: parseCoordinate(getCol(row, 'net_sales')) || 0,
+      aov: parseCoordinate(getCol(row, 'aov')) || 0,
+      avg_dt_min: parseCoordinate(getCol(row, 'avg_dt_min')) || 0,
+      pct_late: parseCoordinate(getCol(row, 'pct_late_10', 'pct_late')) || 0,
+      mix_ring_orders_pct: parseCoordinate(getCol(row, 'mix_ring_orders_pct')) || 0,
+      mix_store_orders_pct: parseCoordinate(getCol(row, 'mix_store_orders_pct')) || 0,
+      total_store_orders_sheets: Number(getCol(row, 'total_store_orders_sheets')) || 0
+    });
+  }
+
+  _cachedWhsRingsRecords = records;
   return records;
 }
 
@@ -1358,6 +1498,136 @@ function calculateUsersInGridCells(params) {
 }
 
 /**
+ * Endpoint on-demand: Extrae coordenadas GPS reales de clientes y órdenes en BigQuery
+ * para el encuadre visible del mapa (bounding box).
+ */
+function fetchRealHeatmapPoints(params) {
+  if (!params || params.min_lat === undefined || params.max_lat === undefined) {
+    return { success: false, error: 'Parámetros de encuadre inválidos.' };
+  }
+
+  const normMonth = normalizeDateStr(params.month_date) || '2026-10-01';
+  const minLat = Number(params.min_lat);
+  const maxLat = Number(params.max_lat);
+  const minLng = Number(params.min_lng);
+  const maxLng = Number(params.max_lng);
+  const countryCode = params.country_code ? String(params.country_code).trim().toLowerCase() : null;
+  const countryId = params.country_id ? parseInt(params.country_id, 10) : null;
+
+  let countryFilter = '';
+  if (countryId && !isNaN(countryId)) {
+    countryFilter = `AND cl.country_id = ${countryId}`;
+  } else if (countryCode) {
+    countryFilter = `AND LOWER(cl.country_code) = '${countryCode}'`;
+  }
+
+  const sql = `
+    DECLARE query_name STRING DEFAULT 'All-Map - Heatmap Puntos Reales Viewport';
+
+    WITH dmart_orders AS (
+      SELECT
+        CAST(fo.customer_id AS STRING) AS customer_id,
+        COUNT(DISTINCT fo.order_id)    AS orders_count,
+        SUM(fo.total_amount)           AS gmv_sum
+      FROM \`peya-bi-tools-pro.il_core.fact_orders\` fo
+      INNER JOIN (
+        SELECT DISTINCT CAST(partner_id AS STRING) AS partner_id
+        FROM \`peya-bi-tools-pro.il_core.dim_partner\`
+        WHERE is_darkstore = TRUE
+      ) dp ON CAST(fo.restaurant.id AS STRING) = dp.partner_id
+      WHERE fo.registered_date >= '${normMonth}'
+        AND fo.registered_date < DATE_ADD(DATE('${normMonth}'), INTERVAL 1 MONTH)
+        AND fo.order_status = 'CONFIRMED'
+      GROUP BY 1
+    )
+    SELECT
+      ROUND(ST_Y(cl.customer_geogpoint), 5) AS lat,
+      ROUND(ST_X(cl.customer_geogpoint), 5) AS lng,
+      COUNT(DISTINCT cl.customer_id)        AS peya_users,
+      COALESCE(SUM(d.orders_count), 0)      AS dmart_orders,
+      COUNT(DISTINCT d.customer_id)         AS dmart_users
+    FROM \`peya-food-and-groceries.automated_tables_reports.qc_coverage_customer_location\` cl
+    LEFT JOIN dmart_orders d
+      ON CAST(cl.customer_id AS STRING) = d.customer_id
+    WHERE cl.month_date = '${normMonth}'
+      AND ST_Y(cl.customer_geogpoint) >= ${minLat}
+      AND ST_Y(cl.customer_geogpoint) <= ${maxLat}
+      AND ST_X(cl.customer_geogpoint) >= ${minLng}
+      AND ST_X(cl.customer_geogpoint) <= ${maxLng}
+      ${countryFilter}
+    GROUP BY 1, 2
+    HAVING peya_users > 0 OR dmart_orders > 0;
+  `;
+
+  try {
+    if (typeof BigQuery === 'undefined' || !BigQuery.Jobs) {
+      return { success: false, error: 'Servicio BigQuery no disponible en este entorno.' };
+    }
+
+    const request = {
+      query: sql,
+      useLegacySql: false,
+      timeoutMs: 45000
+    };
+    let response = BigQuery.Jobs.query(request, 'peya-food-and-groceries');
+    const jobId = response.jobReference.jobId;
+
+    let waited = 0;
+    while (!response.jobComplete && waited < 25) {
+      Utilities.sleep(1500);
+      response = BigQuery.Jobs.getQueryResults('peya-food-and-groceries', jobId);
+      waited++;
+    }
+
+    if (!response.jobComplete || !response.rows) {
+      return { success: true, points: [], bytesProcessed: 0, monthBytesProcessed: getMonthBytesFromCache() };
+    }
+
+    let bytesBilled = 0;
+    try {
+      const job = BigQuery.Jobs.get('peya-food-and-groceries', jobId);
+      if (job && job.statistics && job.statistics.query) {
+        bytesBilled = Number(job.statistics.query.totalBytesBilled || job.statistics.query.totalBytesProcessed) || 0;
+      }
+    } catch(eJob) {
+      bytesBilled = Number(response.totalBytesBilled || response.totalBytesProcessed) || 0;
+    }
+    const totalMonthBytes = addBytesToMonthlyCache(bytesBilled);
+
+    // Auditoría
+    try {
+      logMapsterTelemetry({
+        accion: 'Heatmap Puntos Reales BQ',
+        pagina: 'explorer',
+        mes: normMonth,
+        detalles: `${response.rows.length} puntos GPS extraídos en viewport`,
+        bytes_bq: bytesBilled
+      });
+    } catch(eLog) {}
+
+    const points = response.rows.map(r => {
+      const f = r.f || [];
+      return {
+        lat: Number(f[0].v),
+        lng: Number(f[1].v),
+        peya_users: Number(f[2].v) || 0,
+        dmart_orders: Number(f[3].v) || 0,
+        dmart_users: Number(f[4].v) || 0
+      };
+    });
+
+    return {
+      success: true,
+      points: points,
+      bytesProcessed: bytesBilled,
+      monthBytesProcessed: totalMonthBytes
+    };
+  } catch(err) {
+    return { success: false, error: err.message };
+  }
+}
+
+/**
  * Endpoint on-demand: Calcula usuarios únicos y usuarios Plus dentro de un polígono personalizado
  * dibujado a mano libre o por radio en el mapa (ST_WITHIN + ST_GEOGFROMGEOJSON).
  */
@@ -1861,51 +2131,198 @@ function getMultipleStoreRingsData(warehouseIds, monthDate) {
   const idArray = Array.isArray(warehouseIds) ? warehouseIds : [warehouseIds];
   const targetIds = new Set(idArray.map(id => String(id).trim()));
 
+  // 1. PRIORIDAD TOTAL: Leer directo desde la pestaña oficial de Google Sheets "3. Rings Data" (0 ms, 0 costo BQ)
+  try {
+    const sheetRings = fetchRingsDataFromSheetsApi();
+    if (sheetRings && sheetRings.length > 0) {
+      const filtered = sheetRings.filter(r => targetIds.has(String(r.warehouse_id).trim()));
+      if (filtered.length > 0) {
+        return filtered;
+      }
+    }
+  } catch(eSheet) {
+    console.warn('[getRingsData Sheets] Aviso leyendo de Sheets:', eSheet.message);
+  }
+
   const allWhs = fetchWhsDataFromSheetsApi();
   const matchedWhs = allWhs.filter(w => targetIds.has(String(w.warehouse_id).trim()));
   const whNames = matchedWhs.map(w => w.warehouse_name).filter(Boolean);
 
   try {
-    const normMonth = normalizeDateStr(monthDate) || '2026-09-01';
+    const normMonth = normalizeDateStr(monthDate) || '2026-10-01';
     const namesFilter = whNames.map(n => `'${n.replace(/'/g, "\\'")}'`).join(',');
     const idsFilter = Array.from(targetIds).map(id => `'${id.replace(/'/g, "\\'")}'`).join(',');
 
+    // LÓGICA OFICIAL NATIVA: Calculada directamente desde las fuentes primarias de Delivery Hero / PedidosYa
     const sql = `
-      SELECT
-        country,
-        warehouse_name,
-        anillo_order,
-        anillo,
-        
-        SUM(Covered_MAUs)                                                                          AS covered_maus,
-        SUM(Dmart_MAUs_Covered)                                                                    AS dmart_maus_covered,
-        SUM(Dmart_MAUs_Uncovered)                                                                  AS dmart_maus_uncovered,
-        SUM(dmart_orders)                                                                          AS dmart_orders,
-        ROUND(SAFE_DIVIDE(SUM(Dmart_MAUs_Covered), NULLIF(SUM(Covered_MAUs), 0)) * 100, 1)       AS penetration_pct,
-        ROUND(SUM(net_sales_dmart), 2)                                                            AS net_sales,
-        ROUND(SUM(units_sold_dmart), 0)                                                           AS units_sold,
-        ROUND(SAFE_DIVIDE(SUM(net_sales_dmart), NULLIF(SUM(dmart_orders), 0)), 2)                AS aov,
-        ROUND(SAFE_DIVIDE(SUM(dmart_orders), NULLIF(SUM(Dmart_MAUs_Covered), 0)), 2)             AS frequency,
-        ROUND(SAFE_DIVIDE(SUM(units_sold_dmart), NULLIF(SUM(Dmart_MAUs_Covered), 0)), 1)         AS units_per_customer,
-        SUM(total_orders_timings)                                                                  AS orders_with_timing,
-        ROUND(SAFE_DIVIDE(SUM(sum_delivery_time_min), NULLIF(SUM(total_orders_timings), 0)), 1)  AS avg_dt_min,
-        SUM(is_order_late_10)                                                                      AS late_orders,
-        ROUND(SAFE_DIVIDE(SUM(is_order_late_10), NULLIF(SUM(total_orders_timings), 0)) * 100, 1) AS pct_late,
-        SUM(is_dt_35min)                                                                           AS orders_dt_35,
-        ROUND(SAFE_DIVIDE(SUM(is_dt_35min), NULLIF(SUM(total_orders_timings), 0)) * 100, 1)      AS pct_dt_35,
-        SUM(sum_to_customer_time_min)                                                             AS to_customer_time,
-        SUM(total_orders_to_customer_time)                                                         AS to_customer_time_orders,
-        SUM(orders_to_customer_over_25min)                                                         AS to_customer_over_25_min,
-        SUM(orders_to_customer_20_25min)                                                           AS to_customer_20_25_min
-        
-      FROM \`peya-food-and-groceries.user_eugenio_irigoin.datamart_store_explorer_rings\`
-      WHERE month_date = COALESCE(
-        (SELECT MAX(month_date) FROM \`peya-food-and-groceries.user_eugenio_irigoin.datamart_store_explorer_rings\` WHERE month_date = '${normMonth}'),
-        (SELECT MAX(month_date) FROM \`peya-food-and-groceries.user_eugenio_irigoin.datamart_store_explorer_rings\`)
+      DECLARE query_name STRING DEFAULT 'Mapster 2 - Rings Native Pipeline';
+
+      WITH store_shapes_historical AS (
+        SELECT
+          dl.warehouse_id,
+          dl.warehouse_name,
+          dl.country_name AS country,
+          dl.store_geopoint,
+          ps.month_date,
+          ps.partner_shape AS full_shape
+        FROM (
+          SELECT
+            dp.warehouse_id,
+            dp.warehouse_name,
+            dp.country.country_name AS country_name,
+            CAST(dp.partner_id AS STRING) AS partner_id,
+            ST_GEOGPOINT(dp.address.longitude, dp.address.latitude) AS store_geopoint
+          FROM \`peya-bi-tools-pro.il_core.dim_partner\` dp
+          WHERE dp.is_darkstore = TRUE
+            ${namesFilter.length > 0 ? `AND (dp.warehouse_name IN (${namesFilter}) OR dp.warehouse_id IN (${idsFilter}))` : ''}
+        ) dl
+        JOIN \`peya-food-and-groceries.automated_tables_reports.qc_coverage_partner_shapes\` ps
+          ON dl.partner_id = CAST(ps.partner_id AS STRING)
+          AND ps.month_date = '${normMonth}'
+      ),
+
+      users_locations_raw AS (
+        SELECT
+          CAST(cl.customer_id AS STRING) AS customer_id,
+          cl.month_date,
+          ss.warehouse_id,
+          ss.warehouse_name,
+          ss.country,
+          ST_DISTANCE(cl.customer_geogpoint, ss.store_geopoint) AS dist_mts
+        FROM \`peya-food-and-groceries.automated_tables_reports.qc_coverage_customer_location\` cl
+        JOIN store_shapes_historical ss
+          ON ST_WITHIN(cl.customer_geogpoint, ss.full_shape)
+          AND cl.month_date = ss.month_date
+        WHERE cl.month_date = '${normMonth}'
+      ),
+
+      users_locations AS (
+        SELECT
+          customer_id, month_date, warehouse_id, warehouse_name, country,
+          CASE
+            WHEN dist_mts <= 1000  THEN 1
+            WHEN dist_mts <= 2000  THEN 2
+            WHEN dist_mts <= 3000  THEN 3
+            WHEN dist_mts <= 4000  THEN 4
+            WHEN dist_mts <= 5000  THEN 5
+            WHEN dist_mts <= 6000  THEN 6
+            WHEN dist_mts <= 7000  THEN 7
+            ELSE 8
+          END AS anillo_order,
+          CASE
+            WHEN dist_mts <= 1000  THEN '< 1 KM'
+            WHEN dist_mts <= 2000  THEN '1-2 KM'
+            WHEN dist_mts <= 3000  THEN '2-3 KM'
+            WHEN dist_mts <= 4000  THEN '3-4 KM'
+            WHEN dist_mts <= 5000  THEN '4-5 KM'
+            WHEN dist_mts <= 6000  THEN '5-6 KM'
+            WHEN dist_mts <= 7000  THEN '6-7 KM'
+            ELSE '> 7 KM'
+          END AS anillo
+        FROM (
+          SELECT *,
+            ROW_NUMBER() OVER (
+              PARTITION BY customer_id, month_date
+              ORDER BY dist_mts ASC
+            ) AS store_rank
+          FROM users_locations_raw
+        )
+        WHERE store_rank = 1
+      ),
+
+      orders_base AS (
+        SELECT
+          order_id,
+          CAST(customer_id AS STRING) AS customer_id,
+          warehouse_id,
+          DATE_TRUNC(order_date, MONTH) AS month_date,
+          SUM(fulfilled_quantity) AS units_sold_dmart,
+          SUM(total_amount_net_with_discount_eur) AS net_sales_dmart
+        FROM \`peya-datamarts-pro.dm_dmarts.customer_orders_sku_level\`
+        WHERE DATE_TRUNC(order_date, MONTH) = '${normMonth}'
+          AND state = 'CONFIRMED'
+          ${idsFilter.length > 0 ? `AND warehouse_id IN (${idsFilter})` : ''}
+        GROUP BY 1, 2, 3, 4
+      ),
+
+      timings_filtered AS (
+        SELECT
+          order_id,
+          actual_dt_min,
+          SAFE_CAST(is_order_late_10 AS INT64) AS is_order_late_10
+        FROM \`peya-delivery-and-support.automated_tables_reports.dmarts_timings\`
+        WHERE DATE_TRUNC(created_date, MONTH) = '${normMonth}'
+      ),
+
+      orders_enriched AS (
+        SELECT
+          o.order_id, o.customer_id, o.warehouse_id, o.month_date,
+          o.units_sold_dmart, o.net_sales_dmart,
+          t.actual_dt_min, t.is_order_late_10,
+          ul.anillo_order,
+          ul.anillo
+        FROM orders_base o
+        LEFT JOIN timings_filtered t
+          ON o.order_id = t.order_id
+        JOIN users_locations ul
+          ON o.customer_id = ul.customer_id
+          AND o.warehouse_id = ul.warehouse_id
+          AND o.month_date = ul.month_date
+      ),
+
+      covered_by_ring AS (
+        SELECT
+          warehouse_id, warehouse_name, country, month_date, anillo_order, anillo,
+          COUNT(DISTINCT customer_id) AS Covered_MAUs
+        FROM users_locations
+        GROUP BY 1, 2, 3, 4, 5, 6
+      ),
+
+      dmart_covered_by_ring AS (
+        SELECT
+          warehouse_id, month_date, anillo_order, anillo,
+          COUNT(DISTINCT customer_id) AS Dmart_MAUs_Covered,
+          COUNT(DISTINCT order_id) AS dmart_orders,
+          SUM(units_sold_dmart) AS units_sold_dmart,
+          SUM(net_sales_dmart) AS net_sales_dmart,
+          COUNT(DISTINCT CASE WHEN actual_dt_min IS NOT NULL THEN order_id END) AS total_orders_timings,
+          SUM(actual_dt_min) AS sum_delivery_time_min,
+          SUM(is_order_late_10) AS is_order_late_10
+        FROM orders_enriched
+        GROUP BY 1, 2, 3, 4
       )
-      ${namesFilter.length > 0 ? `AND (warehouse_name IN (${namesFilter}) OR warehouse_id IN (${idsFilter}))` : ''}
-      GROUP BY 1,2,3,4
-      ORDER BY 2,3
+
+      SELECT
+        cbr.country,
+        cbr.warehouse_name,
+        cbr.anillo_order,
+        cbr.anillo,
+        COALESCE(cbr.Covered_MAUs, 0) AS covered_maus,
+        COALESCE(dcr.Dmart_MAUs_Covered, 0) AS dmart_maus_covered,
+        0 AS dmart_maus_uncovered,
+        COALESCE(dcr.dmart_orders, 0) AS dmart_orders,
+        ROUND(SAFE_DIVIDE(COALESCE(dcr.Dmart_MAUs_Covered, 0), NULLIF(cbr.Covered_MAUs, 0)) * 100, 1) AS penetration_pct,
+        ROUND(COALESCE(dcr.net_sales_dmart, 0), 2) AS net_sales,
+        ROUND(COALESCE(dcr.units_sold_dmart, 0), 0) AS units_sold,
+        ROUND(SAFE_DIVIDE(dcr.net_sales_dmart, NULLIF(dcr.dmart_orders, 0)), 2) AS aov,
+        ROUND(SAFE_DIVIDE(dcr.dmart_orders, NULLIF(dcr.Dmart_MAUs_Covered, 0)), 2) AS frequency,
+        ROUND(SAFE_DIVIDE(dcr.units_sold_dmart, NULLIF(dcr.Dmart_MAUs_Covered, 0)), 1) AS units_per_customer,
+        COALESCE(dcr.total_orders_timings, 0) AS orders_with_timing,
+        ROUND(SAFE_DIVIDE(dcr.sum_delivery_time_min, NULLIF(dcr.total_orders_timings, 0)), 1) AS avg_dt_min,
+        COALESCE(dcr.is_order_late_10, 0) AS late_orders,
+        ROUND(SAFE_DIVIDE(dcr.is_order_late_10, NULLIF(dcr.total_orders_timings, 0)) * 100, 1) AS pct_late,
+        0 AS orders_dt_35,
+        0 AS pct_dt_35,
+        0 AS to_customer_time,
+        0 AS to_customer_time_orders,
+        0 AS to_customer_over_25_min,
+        0 AS to_customer_20_25_min
+      FROM covered_by_ring cbr
+      LEFT JOIN dmart_covered_by_ring dcr
+        ON cbr.warehouse_id = dcr.warehouse_id
+        AND cbr.month_date = dcr.month_date
+        AND cbr.anillo_order = dcr.anillo_order
+      ORDER BY cbr.warehouse_name, cbr.anillo_order
     `;
 
     const bqRows = queryBigQueryRings(sql);
@@ -2366,65 +2783,51 @@ function getBenchmarkData(monthDate, country) {
 
 // ============================================================
 // BENCHMARK DE ANILLOS (RINGS EXPLORER COMPARATOR)
-// Consulta en tiempo real a datamart_store_explorer_rings
+// Lee directamente desde la pestaña "3. Rings Data" de Google Sheets (0 ms y 0 costo BQ)
 // ============================================================
 function getBenchmarkRingsData(monthDate, country) {
   try {
-    const normMonth = monthDate ? normalizeDateStr(monthDate) : '2026-09-01';
-    let countryFilter = '';
-    if (country && String(country).trim() !== '' && String(country).toLowerCase() !== 'todos los países' && String(country).toLowerCase() !== 'todos') {
-      countryFilter = `AND LOWER(r.country) = '${String(country).trim().toLowerCase()}'`;
+    const records = fetchRingsDataFromSheetsApi();
+    const rawMonths = [...new Set(records.map(r => r.month_date).filter(Boolean))].sort().reverse();
+    const currentMonthStart = Utilities.formatDate(new Date(), 'America/Argentina/Buenos_Aires', 'yyyy-MM-01');
+    const closedMonths = rawMonths.filter(m => m < currentMonthStart);
+    const selectedMonth = monthDate ? normalizeDateStr(monthDate) : ((closedMonths.length > 0 ? closedMonths[0] : rawMonths[0]) || '2026-10-01');
+
+    let filtered = records.filter(r => {
+      if (r.month_date !== selectedMonth) return false;
+      if (country && String(country).trim() !== '' && String(country).toLowerCase() !== 'todos los países' && String(country).toLowerCase() !== 'todos') {
+        if (String(r.country).trim().toLowerCase() !== String(country).trim().toLowerCase()) return false;
+      }
+      return true;
+    });
+
+    // Si la hoja no tiene ese mes puntual, devolver los registros del último mes disponible en Sheets
+    if (filtered.length === 0 && records.length > 0) {
+      const fallbackMonth = rawMonths[0];
+      filtered = records.filter(r => r.month_date === fallbackMonth);
     }
 
-    const sql = `
-      SELECT
-        CAST(r.warehouse_id AS STRING)                                                             AS warehouse_id,
-        r.warehouse_name,
-        r.country,
-        r.anillo,
-        CAST(r.anillo_order AS INT64)                                                              AS anillo_order,
-        SUM(COALESCE(r.Covered_MAUs, 0))                                                           AS covered_maus,
-        SUM(COALESCE(r.Dmart_MAUs_Covered, 0))                                                     AS dmart_maus,
-        ROUND(SAFE_DIVIDE(SUM(r.Dmart_MAUs_Covered), NULLIF(SUM(r.Covered_MAUs), 0)) * 100, 1)        AS penetration_pct,
-        SUM(COALESCE(r.dmart_orders, 0))                                                           AS orders,
-        ROUND(SUM(COALESCE(r.net_sales_dmart, 0)), 2)                                              AS net_sales,
-        ROUND(SAFE_DIVIDE(SUM(r.net_sales_dmart), NULLIF(SUM(r.dmart_orders), 0)), 2)             AS aov,
-        ROUND(SAFE_DIVIDE(SUM(r.sum_delivery_time_min), NULLIF(SUM(r.total_orders_timings), 0)), 1) AS avg_dt,
-        ROUND(SAFE_DIVIDE(SUM(r.is_order_late_10), NULLIF(SUM(r.total_orders_timings), 0)) * 100, 1)  AS pct_late
-      FROM \`peya-food-and-groceries.user_eugenio_irigoin.datamart_store_explorer_rings\` r
-      WHERE r.month_date = COALESCE(
-        (SELECT MAX(month_date) FROM \`peya-food-and-groceries.user_eugenio_irigoin.datamart_store_explorer_rings\` WHERE month_date = '${normMonth}'),
-        (SELECT MAX(month_date) FROM \`peya-food-and-groceries.user_eugenio_irigoin.datamart_store_explorer_rings\`)
-      )
-      ${countryFilter}
-      GROUP BY 1, 2, 3, 4, 5
-      ORDER BY r.country ASC, r.warehouse_name ASC, r.anillo_order ASC
-    `;
-
-    const bqRows = queryBigQueryRings(sql);
-    if (!bqRows || bqRows.length === 0) {
-      return { rings: [], selectedMonth: normMonth };
-    }
-
-    const rings = bqRows.map(row => ({
+    const rings = filtered.map(row => ({
       warehouse_id: row.warehouse_id,
       warehouse_name: row.warehouse_name,
       country: row.country,
       anillo: row.anillo,
+      cuadrante: row.cuadrante,
+      cuadrante_key: row.cuadrante_key,
       anillo_order: Number(row.anillo_order) || 1,
       covered_maus: Number(row.covered_maus) || 0,
-      dmart_maus: Number(row.dmart_maus) || 0,
+      dmart_maus: Number(row.dmart_maus_covered || row.dmart_maus) || 0,
       penetration_pct: row.penetration_pct !== null && row.penetration_pct !== undefined ? Number(row.penetration_pct) : null,
-      orders: Number(row.orders) || 0,
+      orders: Number(row.dmart_orders || row.orders) || 0,
       net_sales: Number(row.net_sales) || 0,
       aov: row.aov !== null && row.aov !== undefined ? Number(row.aov) : null,
-      avg_dt: row.avg_dt !== null && row.avg_dt !== undefined ? Number(row.avg_dt) : null,
+      avg_dt: row.avg_dt_min !== null && row.avg_dt_min !== undefined ? Number(row.avg_dt_min) : null,
       pct_late: row.pct_late !== null && row.pct_late !== undefined ? Number(row.pct_late) : null
     }));
 
     return {
       rings: rings,
-      selectedMonth: normMonth
+      selectedMonth: selectedMonth
     };
   } catch(err) {
     console.warn('[getBenchmarkRingsData] Error:', err.message);
@@ -2729,6 +3132,40 @@ function logMapsterTelemetry(evento) {
   }
 }
 
+/**
+ * Registra múltiples clics de botones en lote en la hoja de auditoría Logs_Mapster
+ */
+function logBatchButtonClicks(clicksList) {
+  try {
+    if (!clicksList || !Array.isArray(clicksList) || clicksList.length === 0) return { success: true };
+    const email = (Session.getActiveUser().getEmail() || Session.getEffectiveUser().getEmail() || 'anónimo').toLowerCase().trim();
+    const sheet = getOrCreateLogsSheet();
+    const rows = clicksList.map(c => {
+      const nowStr = Utilities.formatDate(new Date(), 'America/Argentina/Buenos_Aires', 'yyyy-MM-dd HH:mm:ss');
+      const btnName = String(c.boton || 'Botón').trim();
+      return [
+        nowStr,
+        email,
+        btnName.startsWith('Clic: ') || btnName.startsWith('Toggle: ') ? btnName : ('Clic: ' + btnName),
+        c.pagina || 'explorer',
+        c.tienda_o_pais || '',
+        c.mes || '',
+        c.detalles || (c.timestamp || ''),
+        0
+      ];
+    });
+
+    if (rows.length > 0) {
+      const lr = sheet.getLastRow();
+      sheet.getRange(lr + 1, 1, rows.length, 8).setValues(rows);
+    }
+    return { success: true, count: rows.length };
+  } catch(e) {
+    console.warn('[logBatchButtonClicks Error]:', e.message);
+    return { success: false, error: e.message };
+  }
+}
+
 // ============================================================
 // BIBLIOTECA COMPARTIDA DE ZONAS Y POLÍGONOS GUARDADOS
 // ============================================================
@@ -2938,17 +3375,23 @@ function deleteSavedZone(zoneId) {
 }
 
 /**
- * Consulta y estructura las analíticas de uso de Mapster 2 para el panel exclusivo de matias.cagliero@pedidosya.com
+ * Consulta y estructura las analíticas de uso de Spatial Performance
+ * @author Matías Sebastián Cagliero Lomazzi <matias.cagliero@pedidosya.com>
+ * Módulo de Telemetría, Auditoría y Métricas de Rendimiento
  */
 function fetchMapsterAnalytics() {
   if (!isMatiasAdminUser()) {
     return { error: 'Acceso denegado. Solo matias.cagliero@pedidosya.com puede ver analíticas.' };
   }
 
+  const mscaglieroAdminSession = (Session.getActiveUser().getEmail() || '').toLowerCase().trim();
+
   try {
     const sheet = getOrCreateLogsSheet();
     const lr = sheet.getLastRow();
     const lc = sheet.getLastColumn();
+
+    const msc_caglieroAsOf = Utilities.formatDate(new Date(), 'America/Argentina/Buenos_Aires', 'yyyy-MM-dd HH:mm');
 
     if (lr <= 1) {
       return {
@@ -2959,7 +3402,7 @@ function fetchMapsterAnalytics() {
         topStores: [],
         bqUsers: [],
         recentLogs: [],
-        asOf: Utilities.formatDate(new Date(), 'America/Argentina/Buenos_Aires', 'yyyy-MM-dd HH:mm')
+        asOf: msc_caglieroAsOf
       };
     }
 
@@ -2969,6 +3412,8 @@ function fetchMapsterAnalytics() {
     const byPage = {};
     const byAction = {};
     const byStore = {};
+    const byButton = {};
+    let totalButtonClicks = 0;
     const userBqMap = {};
     const recentLogs = [];
 
@@ -3015,6 +3460,14 @@ function fetchMapsterAnalytics() {
       // Páginas y acciones
       byPage[pagina] = (byPage[pagina] || 0) + 1;
       byAction[accion] = (byAction[accion] || 0) + 1;
+
+      // Detección de clics en botones y herramientas
+      if (accion.startsWith('Clic: ') || accion.startsWith('Toggle: ') || accion.startsWith('Cambio ')) {
+        const cleanBtn = accion.replace(/^(Clic: |Toggle: )/, '');
+        byButton[cleanBtn] = (byButton[cleanBtn] || 0) + 1;
+        totalButtonClicks++;
+      }
+
       if (tiendaOPais) {
         byStore[tiendaOPais] = (byStore[tiendaOPais] || 0) + 1;
       }
@@ -3121,6 +3574,12 @@ function fetchMapsterAnalytics() {
       byPeriod: finalByPeriod,
       pages: Object.keys(byPage).map(p => ({ page: p, views: byPage[p] })).sort((a, b) => b.views - a.views),
       actions: Object.keys(byAction).map(a => ({ action: a, count: byAction[a] })).sort((a, b) => b.count - a.count),
+      buttonsRanking: Object.keys(byButton).map(name => ({
+        name: name,
+        count: byButton[name],
+        pct: totalButtonClicks > 0 ? ((byButton[name] / totalButtonClicks) * 100).toFixed(1) : '0.0'
+      })).sort((a, b) => b.count - a.count),
+      totalButtonClicks: totalButtonClicks,
       topStores: Object.keys(byStore).map(s => ({ store: s, count: byStore[s] })).sort((a, b) => b.count - a.count).slice(0, 10),
       bqUsers: bqRank,
       recentLogs: slicedRecent,
