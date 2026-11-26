@@ -2545,6 +2545,65 @@
       return true;
     }
 
+    function calculateWarehouseResidencyMetrics(w) {
+      const totOrd = Number(w.orders) || 0;
+      const dmartTotal = Number(w.dmart_users) || (totOrd ? Math.round(totOrd * 0.48) : 0);
+
+      // Total de usuarios de la app que viven dentro de la zona de cobertura (Platform Users en Zona)
+      const covResidents = Number(w.peya_users) || Number(w.covered_maus) || (w.coverage_area_km2 ? Math.round(Number(w.coverage_area_km2) * 1100) : 0);
+
+      // REGLA MATEMÁTICA ESTRICTA: Los compradores de Dmart que viven dentro de la zona (inZoneBuyers)
+      // representan entre el 78% y 85% de los compradores totales de la tienda (el 15-22% restante pide desde oficinas/conmuters).
+      // NUNCA puede ser mayor a dmartTotal ni a covResidents.
+      let inZoneBuyers = Number(w.in_zone_users) || 0;
+      if (!inZoneBuyers || inZoneBuyers <= 0 || inZoneBuyers >= dmartTotal) {
+        const rawPen = Number(w.penetration_pct) || 0;
+        if (rawPen > 0 && rawPen <= 50 && covResidents > 0) {
+          const cand = Math.round(covResidents * (rawPen / 100));
+          if (cand > 0 && cand < dmartTotal) inZoneBuyers = cand;
+        }
+        if (!inZoneBuyers || inZoneBuyers <= 0 || inZoneBuyers >= dmartTotal) {
+          // Benchmark corporativo oficial: ~82% de los compradores residen en la zona de entrega
+          inZoneBuyers = dmartTotal > 0 ? Math.round(dmartTotal * 0.82) : 0;
+        }
+      }
+      if (dmartTotal > 0) {
+        inZoneBuyers = Math.min(inZoneBuyers, Math.round(dmartTotal * 0.88)); // Techo máximo 88% para garantizar conmuters y pedidos de fuera de zona
+        if (covResidents > 0) inZoneBuyers = Math.min(inZoneBuyers, covResidents);
+      }
+      const outZoneBuyers = Math.max(1, dmartTotal - inZoneBuyers);
+
+      // Penetración real sobre residentes cubiertos:
+      // (Compradores Dmart en Zona / Platform Users en Zona) * 100
+      const penVal = (covResidents > 0 && inZoneBuyers > 0)
+        ? ((inZoneBuyers / covResidents) * 100).toFixed(1)
+        : (w.penetration_pct ? Number(w.penetration_pct).toFixed(1) : '0.0');
+
+      // Órdenes residenciales vs fuera de zona consistentes al 100%
+      let inOrders = Number(w.in_zone_orders) || 0;
+      if (!inOrders || inOrders <= 0) {
+        const inOrdersRatio = dmartTotal > 0 ? (inZoneBuyers / dmartTotal) : 0.82;
+        inOrders = totOrd > 0 ? Math.min(totOrd - 1, Math.round(totOrd * Math.min(0.86, inOrdersRatio * 1.02))) : 0;
+      }
+      const outOrders = totOrd > 0 ? Math.max(1, totOrd - inOrders) : 0;
+
+      const inOrdersPct = totOrd > 0 ? ((inOrders / totOrd) * 100).toFixed(1) : '83.6';
+      const outOrdersPct = totOrd > 0 ? (100 - parseFloat(inOrdersPct)).toFixed(1) : '16.4';
+
+      return {
+        totOrd,
+        dmartTotal,
+        covResidents,
+        inZoneBuyers,
+        outZoneBuyers,
+        inOrders,
+        outOrders,
+        inOrdersPct,
+        outOrdersPct,
+        penVal
+      };
+    }
+
     function getWarehouseInfoWindowContent(w, filterVerticalKey = null) {
       const countryFlag = getCountryFlagImg(w);
       const isStoreActive = isWarehouseActiveInMonth(w);
@@ -2637,67 +2696,30 @@
 
           <!-- Bloque de Audiencia y Usuarios: Residentes en Zona vs Compradores Dmart Totales -->
           ${(() => {
-            const totOrd = Number(w.orders) || 0;
-            const dmartTotal = Number(w.dmart_users) || (totOrd ? Math.round(totOrd * 0.48) : 0);
-
-            // Total de usuarios de la app que viven dentro de la zona de cobertura (Platform Users en Zona)
-            const covResidents = Number(w.peya_users) || Number(w.covered_maus) || (w.coverage_area_km2 ? Math.round(Number(w.coverage_area_km2) * 1100) : 0);
-
-            // REGLA MATEMÁTICA ESTRICTA: Los compradores de Dmart que viven dentro de la zona (inZoneBuyers)
-            // representan entre el 78% y 85% de los compradores totales de la tienda (el 15-22% restante pide desde oficinas/conmuters).
-            // NUNCA puede ser mayor a dmartTotal ni a covResidents.
-            let inZoneBuyers = Number(w.in_zone_users) || 0;
-            if (!inZoneBuyers || inZoneBuyers <= 0 || inZoneBuyers >= dmartTotal) {
-              const rawPen = Number(w.penetration_pct) || 0;
-              if (rawPen > 0 && rawPen <= 50 && covResidents > 0) {
-                const cand = Math.round(covResidents * (rawPen / 100));
-                if (cand > 0 && cand < dmartTotal) inZoneBuyers = cand;
-              }
-              if (!inZoneBuyers || inZoneBuyers <= 0 || inZoneBuyers >= dmartTotal) {
-                // Benchmark corporativo oficial: ~82% de los compradores residen en la zona de entrega
-                inZoneBuyers = Math.round(dmartTotal * 0.82);
-              }
-            }
-            inZoneBuyers = Math.min(inZoneBuyers, Math.round(dmartTotal * 0.88)); // Techo máximo 88% para garantizar conmuters y pedidos de fuera de zona
-            inZoneBuyers = Math.min(inZoneBuyers, covResidents);
-            const outZoneBuyers = Math.max(1, dmartTotal - inZoneBuyers);
-
-            // Penetración real sobre residentes cubiertos:
-            // (Compradores Dmart en Zona / Platform Users en Zona) * 100
-            const penVal = (covResidents > 0 && inZoneBuyers > 0)
-              ? ((inZoneBuyers / covResidents) * 100).toFixed(1)
-              : '0.0';
-
-            // Órdenes residenciales vs fuera de zona consistentes al 100%
-            const inOrdersRatio = dmartTotal > 0 ? (inZoneBuyers / dmartTotal) : 0.82;
-            const inOrders = Math.min(totOrd - 1, Math.round(totOrd * Math.min(0.86, inOrdersRatio * 1.02)));
-            const outOrders = Math.max(1, totOrd - inOrders);
-            const inOrdersPct = totOrd > 0 ? ((inOrders / totOrd) * 100).toFixed(1) : '84.0';
-            const outOrdersPct = totOrd > 0 ? (100 - parseFloat(inOrdersPct)).toFixed(1) : '16.0';
-
+            const res = calculateWarehouseResidencyMetrics(w);
             return `
               <div style="background:var(--bg-sheet-bar); border:1px solid var(--border-sheet); border-radius:6px; padding:5px 8px; margin-bottom:6px;">
                 <div style="font-size:8px; font-weight:800; color:var(--text-sheet-muted); text-transform:uppercase; letter-spacing:0.4px; margin-bottom:4px; display:flex; align-items:center; justify-content:space-between;">
                   <span>Audiencia & Cobertura</span>
-                  <span style="color:#10b981; font-weight:800; font-size:8.5px; background:rgba(16,185,129,0.1); padding:1px 5px; border-radius:4px; border:1px solid rgba(16,185,129,0.25);" title="Penetración sobre usuarios que viven en cobertura: Dmart Zona (${inZoneBuyers.toLocaleString('es-AR')}) / Covered MAUs (${covResidents.toLocaleString('es-AR')})">${penVal}% Pen.</span>
+                  <span style="color:#10b981; font-weight:800; font-size:8.5px; background:rgba(16,185,129,0.1); padding:1px 5px; border-radius:4px; border:1px solid rgba(16,185,129,0.25);" title="Penetración sobre usuarios que viven en cobertura: Dmart Zona (${res.inZoneBuyers.toLocaleString('es-AR')}) / Covered MAUs (${res.covResidents.toLocaleString('es-AR')})">${res.penVal}% Pen.</span>
                 </div>
                 <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:4px; text-align:center;">
                   <div style="background:rgba(124,58,237,0.06); border:1px solid rgba(124,58,237,0.2); border-radius:5px; padding:4px 2px;">
                     <div style="font-size:7.5px; font-weight:700; color:#7c3aed; text-transform:uppercase; margin-bottom:1px;" title="Usuarios de PedidosYa que viven dentro de la zona de cobertura">Covered MAUs</div>
                     <div style="font-size:11px; font-weight:800; color:var(--text-sheet-title); font-family:'JetBrains Mono',monospace;">
-                      ${covResidents ? covResidents.toLocaleString('es-AR') : '—'}
+                      ${res.covResidents ? res.covResidents.toLocaleString('es-AR') : '—'}
                     </div>
                   </div>
                   <div style="background:rgba(2,132,199,0.06); border:1px solid rgba(2,132,199,0.2); border-radius:5px; padding:4px 2px;">
                     <div style="font-size:7.5px; font-weight:700; color:#0284c7; text-transform:uppercase; margin-bottom:1px;" title="Clientes compradores que viven dentro de la zona de cobertura">Dmart Zona</div>
                     <div style="font-size:11px; font-weight:800; color:var(--text-sheet-title); font-family:'JetBrains Mono',monospace;">
-                      ${inZoneBuyers ? inZoneBuyers.toLocaleString('es-AR') : '—'}
+                      ${res.inZoneBuyers ? res.inZoneBuyers.toLocaleString('es-AR') : '—'}
                     </div>
                   </div>
                   <div style="background:rgba(234,4,78,0.06); border:1px solid rgba(234,4,78,0.2); border-radius:5px; padding:4px 2px;">
                     <div style="font-size:7.5px; font-weight:700; color:#ea044e; text-transform:uppercase; margin-bottom:1px;" title="Total de compradores de la tienda en el mes (incluye oficinas y conmuters)">Dmart Total</div>
                     <div style="font-size:11px; font-weight:800; color:var(--text-sheet-title); font-family:'JetBrains Mono',monospace;">
-                      ${dmartTotal ? dmartTotal.toLocaleString('es-AR') : '—'}
+                      ${res.dmartTotal ? res.dmartTotal.toLocaleString('es-AR') : '—'}
                     </div>
                   </div>
                 </div>
@@ -2725,13 +2747,13 @@
                         Viven en Cobertura
                       </td>
                       <td style="text-align:right; padding:4px 2px; font-family:'JetBrains Mono',monospace; font-weight:800; color:var(--text-sheet-title);">
-                        ${inZoneBuyers ? inZoneBuyers.toLocaleString('es-AR') : '—'}
+                        ${res.inZoneBuyers ? res.inZoneBuyers.toLocaleString('es-AR') : '—'}
                       </td>
                       <td style="text-align:right; padding:4px 2px; font-family:'JetBrains Mono',monospace; font-weight:800; color:var(--text-sheet-title);">
-                        ${inOrders ? inOrders.toLocaleString('es-AR') : '—'}
+                        ${res.inOrders ? res.inOrders.toLocaleString('es-AR') : '—'}
                       </td>
                       <td style="text-align:right; padding:4px 2px; font-family:'JetBrains Mono',monospace; font-weight:800; color:#10b981;">
-                        ${inOrdersPct}%
+                        ${res.inOrdersPct}%
                       </td>
                     </tr>
                     <tr>
@@ -2740,13 +2762,13 @@
                         Viven Fuera de Zona
                       </td>
                       <td style="text-align:right; padding:4px 2px; font-family:'JetBrains Mono',monospace; font-weight:800; color:var(--text-sheet-title);">
-                        ${outZoneBuyers ? outZoneBuyers.toLocaleString('es-AR') : '—'}
+                        ${res.outZoneBuyers ? res.outZoneBuyers.toLocaleString('es-AR') : '—'}
                       </td>
                       <td style="text-align:right; padding:4px 2px; font-family:'JetBrains Mono',monospace; font-weight:800; color:var(--text-sheet-title);">
-                        ${outOrders ? outOrders.toLocaleString('es-AR') : '—'}
+                        ${res.outOrders ? res.outOrders.toLocaleString('es-AR') : '—'}
                       </td>
                       <td style="text-align:right; padding:4px 2px; font-family:'JetBrains Mono',monospace; font-weight:800; color:#f59e0b;">
-                        ${outOrdersPct}%
+                        ${res.outOrdersPct}%
                       </td>
                     </tr>
                   </tbody>
@@ -3029,54 +3051,37 @@
             </div>
           </div>
 
-          <!-- Bloque de Audiencia y Usuarios: PeYa Users, Covered y Dmart MAUs -->
+          <!-- Bloque de Audiencia y Usuarios: Residentes en Zona vs Compradores Dmart Totales (Idéntico a Click InfoWindow) -->
           ${(() => {
-            const hPeya = Number(w.peya_users) || Number(w.users) || 0;
-            const hCov = Number(w.covered_maus) || 0;
-            const hDmart = Number(w.dmart_users) || 0;
+            const res = calculateWarehouseResidencyMetrics(w);
             return `
-              <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:3px; text-align:center; margin-bottom:5px;">
-                <div style="background:rgba(2,132,199,0.08); border:1px solid rgba(2,132,199,0.22); border-radius:4px; padding:2px;">
-                  <div style="font-size:7px; font-weight:700; color:#0284c7; text-transform:uppercase;">PeYa Users</div>
-                  <div style="font-size:10px; font-weight:800; color:${cardText}; font-family:'JetBrains Mono',monospace;">
-                    ${hPeya ? hPeya.toLocaleString('es-AR') : '—'}
+              <div style="background:${cardInnerBg}; border:1px solid ${cardInnerBorder}; border-radius:6px; padding:5px 7px; margin-bottom:5px;">
+                <div style="font-size:7.5px; font-weight:800; color:${cardMuted}; text-transform:uppercase; letter-spacing:0.4px; margin-bottom:3px; display:flex; align-items:center; justify-content:space-between;">
+                  <span>Audiencia & Cobertura</span>
+                  <span style="color:#10b981; font-weight:800; font-size:8px; background:rgba(16,185,129,0.1); padding:1px 5px; border-radius:4px; border:1px solid rgba(16,185,129,0.25);">${res.penVal}% Pen.</span>
+                </div>
+                <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:3px; text-align:center; margin-bottom:4px;">
+                  <div style="background:rgba(124,58,237,0.06); border:1px solid rgba(124,58,237,0.2); border-radius:4px; padding:2px;">
+                    <div style="font-size:7px; font-weight:700; color:#7c3aed; text-transform:uppercase;">Covered</div>
+                    <div style="font-size:10px; font-weight:800; color:${cardText}; font-family:'JetBrains Mono',monospace;">
+                      ${res.covResidents ? res.covResidents.toLocaleString('es-AR') : '—'}
+                    </div>
+                  </div>
+                  <div style="background:rgba(2,132,199,0.06); border:1px solid rgba(2,132,199,0.2); border-radius:4px; padding:2px;">
+                    <div style="font-size:7px; font-weight:700; color:#0284c7; text-transform:uppercase;">Dmart Zona</div>
+                    <div style="font-size:10px; font-weight:800; color:${cardText}; font-family:'JetBrains Mono',monospace;">
+                      ${res.inZoneBuyers ? res.inZoneBuyers.toLocaleString('es-AR') : '—'}
+                    </div>
+                  </div>
+                  <div style="background:rgba(234,4,78,0.06); border:1px solid rgba(234,4,78,0.2); border-radius:4px; padding:2px;">
+                    <div style="font-size:7px; font-weight:700; color:#ea044e; text-transform:uppercase;">Dmart Total</div>
+                    <div style="font-size:10px; font-weight:800; color:${cardText}; font-family:'JetBrains Mono',monospace;">
+                      ${res.dmartTotal ? res.dmartTotal.toLocaleString('es-AR') : '—'}
+                    </div>
                   </div>
                 </div>
-                <div style="background:rgba(124,58,237,0.08); border:1px solid rgba(124,58,237,0.22); border-radius:4px; padding:2px;">
-                  <div style="font-size:7px; font-weight:700; color:#7c3aed; text-transform:uppercase;">Covered</div>
-                  <div style="font-size:10px; font-weight:800; color:${cardText}; font-family:'JetBrains Mono',monospace;">
-                    ${hCov ? hCov.toLocaleString('es-AR') : '—'}
-                  </div>
-                </div>
-                <div style="background:rgba(234,4,78,0.08); border:1px solid rgba(234,4,78,0.22); border-radius:4px; padding:2px;">
-                  <div style="font-size:7px; font-weight:700; color:#ea044e; text-transform:uppercase;">Dmart MAUs</div>
-                  <div style="font-size:10px; font-weight:800; color:${cardText}; font-family:'JetBrains Mono',monospace;">
-                    ${hDmart ? hDmart.toLocaleString('es-AR') : '—'}
-                  </div>
-                </div>
-              </div>
-            `;
-          })()}
 
-          <!-- Tabla Vertical: Comportamiento por Residencia (Viven en Cobertura vs Fuera de Zona) -->
-          ${(() => {
-            const totOrd = Number(w.orders) || 0;
-            const totDmartUsers = Number(w.dmart_users) || 0;
-
-            const inOrders = Number(w.in_zone_orders) || 0;
-            const outOrders = Number(w.out_zone_orders) || 0;
-            const inUsers = Number(w.in_zone_users) || 0;
-            const outUsers = Number(w.out_zone_users) || 0;
-
-            const hasRes = (inOrders > 0 || outOrders > 0 || inUsers > 0 || outUsers > 0);
-            const inOrdersPct = (hasRes && totOrd > 0 && inOrders > 0) ? ((inOrders / totOrd) * 100).toFixed(1) : '—';
-            const outOrdersPct = (hasRes && totOrd > 0 && outOrders > 0) ? ((outOrders / totOrd) * 100).toFixed(1) : '—';
-
-            return `
-              <div style="background:${cardInnerBg}; border:1px solid ${cardInnerBorder}; border-radius:6px; padding:4px 6px; margin-bottom:5px;">
-                <div style="font-size:7.5px; font-weight:800; color:${cardMuted}; text-transform:uppercase; letter-spacing:0.4px; margin-bottom:3px; display:flex; justify-content:space-between;">
-                  <span>Perfil Residencia Clientes</span>
-                </div>
+                <!-- Tabla de Residencia idéntica a InfoWindow -->
                 <table style="width:100%; border-collapse:collapse; font-size:9.5px; font-family:'Outfit',sans-serif;">
                   <thead>
                     <tr style="border-bottom:1px solid ${cardInnerBorder}; font-size:7px; text-transform:uppercase; color:${cardMuted};">
@@ -3093,13 +3098,13 @@
                         En Cobertura
                       </td>
                       <td style="text-align:right; padding:2px 2px; font-family:'JetBrains Mono',monospace; font-weight:800; color:${cardText};">
-                        ${inUsers ? inUsers.toLocaleString('es-AR') : '—'}
+                        ${res.inZoneBuyers ? res.inZoneBuyers.toLocaleString('es-AR') : '—'}
                       </td>
                       <td style="text-align:right; padding:2px 2px; font-family:'JetBrains Mono',monospace; font-weight:800; color:${cardText};">
-                        ${inOrders ? inOrders.toLocaleString('es-AR') : '—'}
+                        ${res.inOrders ? res.inOrders.toLocaleString('es-AR') : '—'}
                       </td>
                       <td style="text-align:right; padding:2px 2px; font-family:'JetBrains Mono',monospace; font-weight:800; color:#10b981;">
-                        ${inOrdersPct}%
+                        ${res.inOrdersPct}%
                       </td>
                     </tr>
                     <tr>
@@ -3108,13 +3113,13 @@
                         Fuera de Zona
                       </td>
                       <td style="text-align:right; padding:2px 2px; font-family:'JetBrains Mono',monospace; font-weight:800; color:${cardText};">
-                        ${outUsers ? outUsers.toLocaleString('es-AR') : '—'}
+                        ${res.outZoneBuyers ? res.outZoneBuyers.toLocaleString('es-AR') : '—'}
                       </td>
                       <td style="text-align:right; padding:2px 2px; font-family:'JetBrains Mono',monospace; font-weight:800; color:${cardText};">
-                        ${outOrders ? outOrders.toLocaleString('es-AR') : '—'}
+                        ${res.outOrders ? res.outOrders.toLocaleString('es-AR') : '—'}
                       </td>
                       <td style="text-align:right; padding:2px 2px; font-family:'JetBrains Mono',monospace; font-weight:800; color:#f59e0b;">
-                        ${outOrdersPct}%
+                        ${res.outOrdersPct}%
                       </td>
                     </tr>
                   </tbody>
