@@ -671,11 +671,7 @@
               </select>
             </div>
 
-            <div style="display:flex; align-items:center; justify-content:space-between; margin-top:4px;">
-              <label style="display:flex; align-items:center; gap:5px; font-size:10.5px; font-weight:700; color:var(--text-sheet-muted); cursor:pointer;">
-                <input type="checkbox" id="sheet-active-only" checked onchange="filterWarehouseCards()" style="accent-color:var(--brand-red);">
-                <span>Solo Activos</span>
-              </label>
+            <div style="display:flex; align-items:center; justify-content:flex-end; margin-top:4px;">
               <label style="display:flex; align-items:center; gap:5px; font-size:10.5px; font-weight:700; color:var(--text-sheet-muted); cursor:pointer;">
                 <input type="checkbox" id="opt-viewport-toggle" checked onchange="toggleOptViewport(this.checked)" style="accent-color:var(--brand-red);">
                 <span>Autofiltro mapa</span>
@@ -1111,7 +1107,7 @@
 
     function loadInitialData() {
       if (SERVER_PRELOADED_DATA && SERVER_PRELOADED_DATA.warehouses) {
-        allWarehouses = SERVER_PRELOADED_DATA.warehouses;
+        allWarehouses = SERVER_PRELOADED_DATA.warehouses.filter(w => w.is_active !== false);
         populateFilters();
         return;
       }
@@ -1120,7 +1116,7 @@
         google.script.run
           .withSuccessHandler((res) => {
             if (res && res.warehouses) {
-              allWarehouses = res.warehouses;
+              allWarehouses = res.warehouses.filter(w => w.is_active !== false);
               populateFilters();
             }
           })
@@ -1218,12 +1214,11 @@
       const country = document.getElementById('sheet-filter-country')?.value || '';
       const city = document.getElementById('sheet-filter-city')?.value || '';
       const search = (document.getElementById('whs-search-input')?.value || '').toLowerCase().trim();
-      const activeOnly = Boolean(document.getElementById('sheet-active-only')?.checked);
 
       const filtered = allWarehouses.filter(w => {
         if (country && w.country !== country) return false;
         if (city && w.city !== city) return false;
-        if (activeOnly && w.is_active === false) return false;
+        if (w.is_active === false) return false;
         if (search) {
           const matchName = (w.warehouse_name || '').toLowerCase().includes(search);
           const matchId = (w.warehouse_id || '').toLowerCase().includes(search);
@@ -1796,37 +1791,65 @@
           });
         }
       } else {
-        // Si hay múltiples tiendas: Rebalancear mediante Voronoi recortado
+        // Si hay múltiples tiendas: Rebalancear mediante Voronoi recortado sobre la UNIÓN TOTAL DE LA RED
+        // 1. Obtener los polígonos reales de todas las tiendas seleccionadas
+        const storePolygons = [];
+        activeStores.forEach(w => {
+          const shapeInfo = getStorePolygonCoords(w);
+          if (shapeInfo && shapeInfo.coords && shapeInfo.coords.length >= 3) {
+            try {
+              const poly = coordsToTurfPolygon(shapeInfo.coords);
+              if (poly) storePolygons.push({ store: w, poly: poly, coords: shapeInfo.coords });
+            } catch(e) {}
+          }
+        });
+
+        // 2. UNIÓN TOTAL DEL TERRITORIO DE LA RED (Conservación 100% de la cobertura previa)
+        let totalNetworkUnion = null;
+        if (storePolygons.length > 0) {
+          totalNetworkUnion = storePolygons[0].poly;
+          for (let i = 1; i < storePolygons.length; i++) {
+            try {
+              const u = turf.union(totalNetworkUnion, storePolygons[i].poly);
+              if (u) totalNetworkUnion = u;
+            } catch(e) {
+              console.warn('Error en turf.union:', e);
+            }
+          }
+        }
+
         const points = activeStores.map(w => turf.point([Number(w.lng), Number(w.lat)], { id: w.warehouse_id }));
         const featureColl = turf.featureCollection(points);
-        const bbox = turf.bbox(featureColl);
-        const pad = 0.08;
+        const bbox = turf.bbox(totalNetworkUnion || featureColl);
+        const pad = 0.12;
         const expandedBbox = [bbox[0] - pad, bbox[1] - pad, bbox[2] + pad, bbox[3] + pad];
 
         let voronoiCells = null;
         try {
           voronoiCells = turf.voronoi(featureColl, { bbox: expandedBbox });
-        } catch(e) {}
+        } catch(e) {
+          console.warn('Error calculando Voronoi:', e);
+        }
 
         activeStores.forEach((w, idx) => {
-          const shapeInfo = getStorePolygonCoords(w);
-          let baseFeature = null;
+          let optFeature = null;
 
-          if (shapeInfo && shapeInfo.coords && shapeInfo.coords.length >= 3) {
+          // Asignar a cada tienda la porción de la red total que le queda más cercana geodésicamente
+          if (voronoiCells && voronoiCells.features && voronoiCells.features[idx] && totalNetworkUnion) {
             try {
-              baseFeature = turf.polygon([shapeInfo.coords.map(p => [p.lng, p.lat])]);
-            } catch(e) {}
-          }
-
-          let optFeature = baseFeature;
-
-          if (voronoiCells && voronoiCells.features && voronoiCells.features[idx] && baseFeature) {
-            try {
-              const intersected = turf.intersect(voronoiCells.features[idx], baseFeature);
+              const intersected = turf.intersect(voronoiCells.features[idx], totalNetworkUnion);
               if (intersected && intersected.geometry) {
                 optFeature = intersected;
               }
-            } catch(e) {}
+            } catch(e) {
+              console.warn('Error intersectando Voronoi con la red total:', e);
+            }
+          }
+
+          // Si por alguna razón la intersección no devolvió geometría, respaldar con su polígono original
+          if (!optFeature) {
+            const match = storePolygons.find(item => item.store.warehouse_id === w.warehouse_id);
+            if (match) optFeature = match.poly;
           }
 
           if (optFeature && optFeature.geometry) {
@@ -1840,7 +1863,7 @@
                 country: w.country,
                 coords: rawCoords,
                 area_km2: newAreaKm2,
-                projected_orders: Math.round((Number(w.orders) || 0) * 0.98)
+                projected_orders: Number(w.orders || 0)
               });
             }
           }
