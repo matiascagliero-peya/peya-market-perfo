@@ -667,6 +667,41 @@
 
   <!-- Scripts del Optimizador de Zonas -->
   <script>
+    var SERVER_PRELOADED_DATA = <?!= (typeof preloadedInitialData !== 'undefined' && preloadedInitialData) ? preloadedInitialData : 'null' ?>;
+
+    // Estilos personalizados para el mapa oscuro moderno de Google Maps
+    const DARK_MAP_STYLE = [
+      { "elementType": "geometry", "stylers": [{ "color": "#1e293b" }] },
+      { "elementType": "labels.text.stroke", "stylers": [{ "color": "#0f172a" }] },
+      { "elementType": "labels.text.fill", "stylers": [{ "color": "#94a3b8" }] },
+      { "featureType": "administrative.locality", "elementType": "labels.text.fill", "stylers": [{ "color": "#cbd5e1" }] },
+      { "featureType": "road", "elementType": "geometry", "stylers": [{ "color": "#334155" }] },
+      { "featureType": "road", "elementType": "geometry.stroke", "stylers": [{ "color": "#1e293b" }] },
+      { "featureType": "road.highway", "elementType": "geometry", "stylers": [{ "color": "#475569" }] },
+      { "featureType": "water", "elementType": "geometry", "stylers": [{ "color": "#0b0f19" }] },
+      { "featureType": "poi", "stylers": [{ "visibility": "off" }] },
+      { "featureType": "poi.business", "stylers": [{ "visibility": "off" }] },
+      { "featureType": "poi.attraction", "stylers": [{ "visibility": "off" }] },
+      { "featureType": "transit", "stylers": [{ "visibility": "off" }] }
+    ];
+
+    // Estilos personalizados para el mapa claro (Modo Día) de Google Maps
+    const LIGHT_MAP_STYLE = [
+      { "featureType": "all", "elementType": "geometry", "stylers": [{ "color": "#f5f5f5" }] },
+      { "featureType": "all", "elementType": "labels.text.fill", "stylers": [{ "color": "#616161" }] },
+      { "featureType": "all", "elementType": "labels.text.stroke", "stylers": [{ "color": "#f5f5f5" }] },
+      { "featureType": "administrative.land_parcel", "elementType": "labels.text.fill", "stylers": [{ "color": "#bdbdbd" }] },
+      { "featureType": "poi", "stylers": [{ "visibility": "off" }] },
+      { "featureType": "poi.business", "stylers": [{ "visibility": "off" }] },
+      { "featureType": "road", "elementType": "geometry", "stylers": [{ "color": "#ffffff" }] },
+      { "featureType": "road.arterial", "elementType": "labels.text.fill", "stylers": [{ "color": "#757575" }] },
+      { "featureType": "road.highway", "elementType": "geometry", "stylers": [{ "color": "#dadada" }] },
+      { "featureType": "road.highway", "elementType": "labels.text.fill", "stylers": [{ "color": "#616161" }] },
+      { "featureType": "transit", "stylers": [{ "visibility": "off" }] },
+      { "featureType": "water", "elementType": "geometry", "stylers": [{ "color": "#c9e6ff" }] },
+      { "featureType": "water", "elementType": "labels.text.fill", "stylers": [{ "color": "#9e9e9e" }] }
+    ];
+
     let map = null;
     let allWarehouses = [];
     let cityStores = [];
@@ -692,6 +727,13 @@
       fetchOptimizerData();
     });
 
+    window.addEventListener('mapsterThemeChanged', function(e) {
+      const theme = e.detail ? e.detail.theme : (localStorage.getItem('mapster_theme') || 'dark');
+      if (map) {
+        map.setOptions({ styles: theme === 'dark' ? DARK_MAP_STYLE : LIGHT_MAP_STYLE });
+      }
+    });
+
     function initOptimizerMap() {
       const activeTheme = localStorage.getItem('mapster_theme') || 'dark';
       map = new google.maps.Map(document.getElementById('optimizer-map'), {
@@ -711,18 +753,28 @@
     }
 
     function fetchOptimizerData() {
-      google.script.run
-        .withSuccessHandler((res) => {
-          if (res && res.warehouses) {
-            allWarehouses = res.warehouses;
-            populateCountrySelect(res.countries || []);
-          }
-        })
-        .withFailureHandler((err) => {
-          console.error('Error cargando almacenes:', err);
-          showToast('Error cargando catálogo de tiendas de Sheets', 'error');
-        })
-        .getStoreExplorerInitialData();
+      // 1. Usar precarga del servidor si está disponible (0 ms)
+      if (typeof SERVER_PRELOADED_DATA !== 'undefined' && SERVER_PRELOADED_DATA && SERVER_PRELOADED_DATA.warehouses) {
+        allWarehouses = SERVER_PRELOADED_DATA.warehouses;
+        populateCountrySelect(SERVER_PRELOADED_DATA.countries || []);
+        return;
+      }
+
+      // 2. Fallback a llamada asincrónica de Google Apps Script
+      if (typeof google !== 'undefined' && google.script && google.script.run) {
+        google.script.run
+          .withSuccessHandler((res) => {
+            if (res && res.warehouses) {
+              allWarehouses = res.warehouses;
+              populateCountrySelect(res.countries || []);
+            }
+          })
+          .withFailureHandler((err) => {
+            console.error('Error cargando almacenes:', err);
+            showToast('Error cargando catálogo de tiendas de Sheets', 'error');
+          })
+          .getStoreExplorerInitialData();
+      }
     }
 
     function populateCountrySelect(countries) {

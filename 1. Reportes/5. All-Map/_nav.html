@@ -804,17 +804,24 @@
    * Navegación segura compatible con iframes de Apps Script y ejecución directa
    */
   function navigateToAllMapPage(targetPage, event) {
-    if (event) {
-      try { event.preventDefault(); } catch(e) {}
-    }
-    showLoading('Cargando ' + (targetPage === 'explorer' ? 'Store Explorer' : (targetPage === 'benchmark' ? 'Benchmark Tiendas' : 'Analytics')) + '...');
-
     var rawUrl = '<?= (typeof scriptUrl !== "undefined" && scriptUrl) ? scriptUrl : "" ?>';
+    if (!rawUrl && typeof window !== 'undefined' && window.location && window.location.href.startsWith('http')) {
+      rawUrl = window.location.href;
+    }
+
+    const pageLabels = {
+      explorer: 'Store Explorer',
+      benchmark: 'Benchmark Tiendas',
+      optimizer: 'Optimización Logística',
+      analytics: 'Analytics & Auditoría'
+    };
+    showLoading('Cargando ' + (pageLabels[targetPage] || targetPage) + '...');
 
     if (rawUrl && rawUrl.startsWith('http')) {
-      var dest = rawUrl.split('?')[0] + '?page=' + targetPage;
+      var baseUrl = rawUrl.split('?')[0];
+      var dest = baseUrl + '?page=' + targetPage;
       try {
-        if (window.top) {
+        if (window.top && window.top !== window) {
           window.top.location.href = dest;
           return false;
         }
@@ -826,18 +833,15 @@
     if (typeof google !== 'undefined' && google.script && google.script.run) {
       google.script.run
         .withSuccessHandler(function(url) {
-          if (url && url.startsWith('http')) {
-            var dest = url.split('?')[0] + '?page=' + targetPage;
-            try {
-              if (window.top) {
-                window.top.location.href = dest;
-                return;
-              }
-            } catch(e) {}
-            window.location.href = dest;
-          } else {
-            window.location.href = '?page=' + targetPage;
-          }
+          var effectiveUrl = (url && url.startsWith('http')) ? url : (window.location.href.split('?')[0]);
+          var dest = effectiveUrl.split('?')[0] + '?page=' + targetPage;
+          try {
+            if (window.top && window.top !== window) {
+              window.top.location.href = dest;
+              return;
+            }
+          } catch(e) {}
+          window.location.href = dest;
         })
         .withFailureHandler(function() {
           window.location.href = '?page=' + targetPage;

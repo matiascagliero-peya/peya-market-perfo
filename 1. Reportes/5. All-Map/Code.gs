@@ -111,18 +111,42 @@ function doGet(e) {
   }
 
   let preloadedInitialData = 'null';
-  if (templateName === '1. StoreExplorer') {
+  if (templateName === '1. StoreExplorer' || templateName === '3. OptimizadorZonas') {
     try {
       const initData = getStoreExplorerInitialData();
       if (initData) {
         preloadedInitialData = JSON.stringify(initData).replace(/<\/script/gi, '<\\/script');
       }
     } catch(err) {
-      console.warn('[doGet] Error pre-cargando StoreExplorer initialData:', err.message);
+      console.warn('[doGet] Error pre-cargando initialData:', err.message);
     }
   }
 
-  const template = HtmlService.createTemplateFromFile(templateName);
+  // Carga ultra-segura de plantilla con tolerancia a nombres de archivo en Apps Script
+  let template = null;
+  const candidateTemplates = [
+    templateName,
+    templateName.replace(/\.html$/i, ''),
+    templateName + '.html',
+    templateName.replace(/^[0-9]+\.\s*/, ''),
+    templateName.replace(/^[0-9]+\.\s*/, '') + '.html',
+    '3. OptimizadorZonas',
+    '3. OptimizadorZonas.html',
+    'OptimizadorZonas',
+    'OptimizadorZonas.html'
+  ];
+
+  for (let c of candidateTemplates) {
+    try {
+      template = HtmlService.createTemplateFromFile(c);
+      if (template) break;
+    } catch(e) {}
+  }
+
+  if (!template) {
+    template = HtmlService.createTemplateFromFile('1. StoreExplorer');
+  }
+
   template.scriptUrl = ScriptApp.getService().getUrl();
   template.activePage = activePage;
   template.scriptVersion = SCRIPT_VERSION;
