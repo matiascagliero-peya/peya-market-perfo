@@ -3213,22 +3213,65 @@
       if (!map || !w) return;
 
       const strokeCol = ringColor || '#ea044e';
-      const ringData = getRingDataForStore(w.warehouse_id, ringLabel) || (generateFallbackRingsForStore(w).find(r => r.anillo === ringLabel));
+
+      // Matching tolerante de nombres y etiquetas de anillos
+      function matchRing(sheetAnillo, target) {
+        if (!sheetAnillo || !target) return false;
+        const s = String(sheetAnillo).toLowerCase().replace(/\s+/g, '');
+        const t = String(target).toLowerCase().replace(/\s+/g, '');
+        if (s === t) return true;
+        if ((s.includes('>4') || s.includes('4-5') || s.includes('4km+')) && 
+            (t.includes('>4') || t.includes('4-5') || t.includes('4km+'))) return true;
+        if (s.includes('<1') && t.includes('<1')) return true;
+        if (s.includes('1-2') && t.includes('1-2')) return true;
+        if (s.includes('2-3') && t.includes('2-3')) return true;
+        if (s.includes('3-4') && t.includes('3-4')) return true;
+        if ((s.includes('5-6.5') || s.includes('5-6')) && (t.includes('5-6.5') || t.includes('5-6'))) return true;
+        if ((s.includes('6.5-8') || s.includes('6-8')) && (t.includes('6.5-8') || t.includes('6-8'))) return true;
+        return false;
+      }
+
+      function matchStore(r, targetW) {
+        if (!r || !targetW) return false;
+        const norm = str => String(str || '').toLowerCase().trim();
+        const rId = norm(r.warehouse_id);
+        const wId = norm(targetW.warehouse_id);
+        if (rId && wId && rId === wId) return true;
+        const rName = norm(r.warehouse_name);
+        const wName = norm(targetW.warehouse_name);
+        if (rName && wName && (rName === wName || rName.includes(wName) || wName.includes(rName))) return true;
+        return false;
+      }
+
+      function matchCardinal(sheetCuad, cardKey, cardName) {
+        if (!sheetCuad) return false;
+        const s = String(sheetCuad).toUpperCase().trim();
+        const k = String(cardKey).toUpperCase().trim();
+        if (s === k) return true;
+        if (k === 'O' && (s === 'W' || s === 'WEST' || s.includes('OESTE'))) return true;
+        if (k === 'N' && (s.includes('NORTE') || s === 'NORTH')) return true;
+        if (k === 'S' && (s.includes('SUR') || s === 'SOUTH')) return true;
+        if (k === 'E' && (s.includes('ESTE') || s === 'EAST')) return true;
+        if (cardName && s.includes(cardName.toUpperCase())) return true;
+        return false;
+      }
 
       // ── DIVISIÓN 1 (SUPERIOR): TODO EL ANILLO CONCÉNTRICO (RADIO TOTAL 360°) ──
+      const ringData = (allRingsData || []).find(r => matchStore(r, w) && matchRing(r.anillo || r.ringBase, ringLabel));
+
       const allCardinalRowsInRing = (allRingsData || []).filter(r => 
-        String(r.warehouse_id).trim() === String(w.warehouse_id).trim() && 
-        (r.ringBase === ringLabel || r.anillo === ringLabel)
+        matchStore(r, w) && matchRing(r.anillo || r.ringBase, ringLabel)
       );
 
       const ringUsersFromQuads = allCardinalRowsInRing.reduce((sum, r) => sum + Number(r.covered_maus || 0), 0);
       const ringDmartFromQuads = allCardinalRowsInRing.reduce((sum, r) => sum + Number(r.dmart_maus || r.dmart_maus_covered || 0), 0);
       const ringOrdersFromQuads = allCardinalRowsInRing.reduce((sum, r) => sum + Number(r.orders || r.dmart_orders || 0), 0);
 
+      const hasRingData = Boolean(ringData || allCardinalRowsInRing.length > 0);
       const ringUsers = ringUsersFromQuads > 0 ? ringUsersFromQuads : Number(ringData?.covered_maus || ringData?.peya_users || 0);
       const ringDmart = ringDmartFromQuads > 0 ? ringDmartFromQuads : Number(ringData?.dmart_maus_covered || ringData?.dmart_maus || 0);
       const ringOrders = ringOrdersFromQuads > 0 ? ringOrdersFromQuads : Number(ringData?.dmart_orders || ringData?.orders || 0);
-      const ringPen = ringUsers > 0 ? ((ringDmart / ringUsers) * 100).toFixed(1) : (ringData?.penetration_pct ? Number(ringData.penetration_pct).toFixed(1) : '—');
+      const ringPen = (hasRingData && ringUsers > 0) ? ((ringDmart / ringUsers) * 100).toFixed(1) : (ringData?.penetration_pct ? Number(ringData.penetration_pct).toFixed(1) : '—');
       const aov = ringData?.aov ? Number(ringData.aov).toFixed(1) : '—';
       const dt = (ringData?.avg_dt_min || ringData?.avg_dt) ? Number(ringData.avg_dt_min || ringData.avg_dt).toFixed(1) : '—';
 
@@ -3237,15 +3280,16 @@
       const cardinalName = (sector && (sector.cardinalName || sector.name)) || 'Norte';
 
       const cardinalRow = (allRingsData || []).find(r => 
-        String(r.warehouse_id).trim() === String(w.warehouse_id).trim() && 
-        (r.ringBase === ringLabel || r.anillo === ringLabel) && 
-        (r.sectorKey === cardinalKey || r.cuadrante_key === cardinalKey || (r.cuadrante && r.cuadrante.toLowerCase().includes(cardinalName.toLowerCase())))
+        matchStore(r, w) && 
+        matchRing(r.anillo || r.ringBase, ringLabel) && 
+        matchCardinal(r.sectorKey || r.cuadrante_key || r.cuadrante, cardinalKey, cardinalName)
       );
 
+      const hasCardinalData = Boolean(cardinalRow);
       const cardUsers = cardinalRow ? Number(cardinalRow.covered_maus || 0) : 0;
       const cardDmart = cardinalRow ? Number(cardinalRow.dmart_maus || cardinalRow.dmart_maus_covered || 0) : 0;
       const cardOrders = cardinalRow ? Number(cardinalRow.orders || cardinalRow.dmart_orders || 0) : 0;
-      const cardPen = cardinalRow ? Number(cardinalRow.penetration_pct || 0).toFixed(1) : (cardUsers > 0 ? ((cardDmart / cardUsers) * 100).toFixed(1) : '—');
+      const cardPen = (hasCardinalData && cardUsers > 0) ? ((cardDmart / cardUsers) * 100).toFixed(1) : '—';
       const cardMixRingPct = (ringOrders > 0 && cardOrders > 0) ? ((cardOrders / ringOrders) * 100).toFixed(1) : '—';
 
       // ── DIVISIÓN 3 (INFERIOR): SUBDIVISIÓN (EL CARDINAL CORTADO EN DOS) ──
@@ -3258,9 +3302,8 @@
       let matchCount = 0;
 
       if (window.RAW_REAL_BQ_POINTS && Array.isArray(window.RAW_REAL_BQ_POINTS) && window.RAW_REAL_BQ_POINTS.length > 0 && sector) {
-        const RING_LABELS = ['< 1 KM', '1-2 KM', '2-3 KM', '3-4 KM', '> 4 KM'];
-        const rIdx = RING_LABELS.indexOf(ringLabel);
-        const radiusM = (rIdx >= 0) ? RING_RADII_METERS[rIdx] : 2000;
+        const rIdx = RING_LABELS.findIndex(l => matchRing(l, ringLabel));
+        const radiusM = (rIdx >= 0 && rIdx < RING_RADII_METERS.length) ? RING_RADII_METERS[rIdx] : 2000;
         const innerM = (rIdx > 0) ? RING_RADII_METERS[rIdx - 1] : 0;
         const radiusKm = radiusM / 1000;
         const innerKm = innerM / 1000;
@@ -3287,21 +3330,25 @@
 
       if (matchCount === 0) {
         const weight = (sector && sector.urbanWeight) ? sector.urbanWeight : 0.50;
-        subUsers = Math.max(1, Math.round(cardUsers * weight));
-        subDmart = Math.max(1, Math.round(cardDmart * weight));
-        subOrders = Math.max(1, Math.round(cardOrders * weight));
+        // Solo derivar si cardinal tiene datos positivos
+        subUsers = cardUsers > 0 ? Math.max(1, Math.round(cardUsers * weight)) : 0;
+        subDmart = cardDmart > 0 ? Math.max(1, Math.round(cardDmart * weight)) : 0;
+        subOrders = cardOrders > 0 ? Math.max(1, Math.round(cardOrders * weight)) : 0;
       }
 
-      const subPen = subUsers > 0 ? ((subDmart / subUsers) * 100).toFixed(1) : '0.0';
-      const subCardMixPct = cardOrders > 0 ? ((subOrders / cardOrders) * 100).toFixed(1) : '50.0';
-      const subRingMixPct = ringOrders > 0 ? ((subOrders / ringOrders) * 100).toFixed(1) : '12.5';
+      const subPen = (subUsers > 0 && subDmart > 0) ? ((subDmart / subUsers) * 100).toFixed(1) : '—';
+      const subCardMixPct = (cardOrders > 0 && subOrders > 0) ? ((subOrders / cardOrders) * 100).toFixed(1) : '—';
+      const subRingMixPct = (ringOrders > 0 && subOrders > 0) ? ((subOrders / ringOrders) * 100).toFixed(1) : '—';
 
       const ringAreas = {
         '< 1 KM': '3.14 km²',
         '1-2 KM': '9.42 km²',
         '2-3 KM': '15.71 km²',
         '3-4 KM': '21.99 km²',
-        '> 4 KM': '28.27 km²'
+        '4-5 KM': '28.27 km²',
+        '> 4 KM': '28.27 km²',
+        '5-6.5 KM': '40.64 km²',
+        '6.5-8 KM': '54.59 km²'
       };
       const approxAreaKm2 = ringAreas[ringLabel] || 'Radio concéntrico';
 
