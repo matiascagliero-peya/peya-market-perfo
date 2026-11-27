@@ -50,23 +50,23 @@
       flex-direction: column;
     }
 
-    /* ── Barra Superior de Herramientas ── */
+    /* ── Barra Superior Minimalista y Espaciosa ── */
     .opt-toolbar {
       background: var(--bg-sheet-bar);
       border-bottom: 1px solid var(--border-sheet);
-      padding: 8px 16px;
+      padding: 8px 18px;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 12px;
+      gap: 16px;
       flex-shrink: 0;
       z-index: 100;
     }
 
-    .opt-toolbar-left, .opt-toolbar-right {
+    .opt-toolbar-left, .opt-toolbar-center, .opt-toolbar-right {
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: 12px;
     }
 
     .opt-select {
@@ -116,14 +116,6 @@
       color: var(--brand-cyan);
     }
 
-    .opt-btn-emerald {
-      background: #10b981;
-      color: #ffffff;
-    }
-    .opt-btn-emerald:hover {
-      background: #059669;
-    }
-
     /* ── Switch de Vistas (Actual vs Propuesta) ── */
     .view-segmented-control {
       display: inline-flex;
@@ -139,7 +131,7 @@
       color: var(--text-sheet-muted);
       font-size: 11px;
       font-weight: 700;
-      padding: 4px 12px;
+      padding: 5px 14px;
       border-radius: 4px;
       cursor: pointer;
       transition: all 0.12s ease;
@@ -464,7 +456,7 @@
 </head>
 <body>
 
-  <!-- Barra de Herramientas Superior -->
+  <!-- Barra de Herramientas Superior Minimalista y Limpia -->
   <div class="opt-toolbar">
     <div class="opt-toolbar-left">
       <span style="font-weight:800; font-size:13px; color:var(--text-sheet-title); letter-spacing:-0.2px;">
@@ -473,68 +465,38 @@
 
       <span style="color:var(--border-sheet);">|</span>
 
-      <select id="opt-filter-country" class="opt-select" onchange="onOptCountrySelected(this.value)">
-        <option value="">Cargando países...</option>
+      <!-- Selector Único de Ciudad / Clúster -->
+      <select id="opt-cluster-select" class="opt-select" style="min-width:210px;" onchange="onOptClusterSelected(this.value)">
+        <option value="">Cargando ciudades...</option>
       </select>
+    </div>
 
-      <select id="opt-filter-city" class="opt-select" onchange="onOptCitySelected(this.value)">
-        <option value="">Todas las ciudades</option>
-      </select>
-
-      <span style="color:var(--border-sheet);">|</span>
-
-      <label style="display:flex; align-items:center; gap:5px; font-size:11px; font-weight:700; color:var(--text-sheet-muted); cursor:pointer;">
-        <input type="checkbox" id="opt-viewport-toggle" checked onchange="toggleOptViewport(this.checked)" style="accent-color:var(--brand-red);">
-        <span>Autofiltro por mapa</span>
-      </label>
-
-      <span style="color:var(--border-sheet);">|</span>
-
-      <div style="display:flex; align-items:center; gap:5px; font-size:11px; font-weight:700; color:var(--text-sheet-muted);">
-        <span>Radio Máx:</span>
-        <select id="opt-radius-param" class="opt-select" style="padding:4px 8px; font-size:11px;">
-          <option value="3.5">3.5 km (Ultra denso)</option>
-          <option value="4.0" selected>4.0 km (Recomendado)</option>
-          <option value="4.5">4.5 km (Metropolitano)</option>
-          <option value="5.5">5.5 km (Extendido)</option>
-        </select>
+    <div class="opt-toolbar-center">
+      <!-- Switch de Vista Limpio en el Mapa -->
+      <div class="view-segmented-control">
+        <button type="button" id="btn-show-before" class="view-segment-btn active" onclick="setOptMapLayer('before')">
+          Shapes Actuales
+        </button>
+        <button type="button" id="btn-show-after" class="view-segment-btn" onclick="setOptMapLayer('after')">
+          Propuesta Optimizada
+        </button>
       </div>
-
-      <button type="button" class="opt-btn opt-btn-primary" onclick="executeTerritorialRebalance()">
-        <span>Calcular Rebalanceo Territorial</span>
-      </button>
     </div>
 
     <div class="opt-toolbar-right">
-      <!-- Switch de Vista en el Mapa -->
-      <div class="view-segmented-control">
-        <button type="button" id="btn-show-before" class="view-segment-btn active" onclick="setOptMapLayer('before')">
-          <span>Shapes Actuales (Real)</span>
-        </button>
-        <button type="button" id="btn-show-after" class="view-segment-btn" onclick="setOptMapLayer('after')">
-          <span>Propuesta Optimizada</span>
-        </button>
-        <button type="button" id="btn-show-diff" class="view-segment-btn" onclick="setOptMapLayer('diff')">
-          <span>Zonas de Transferencia</span>
-        </button>
-      </div>
+      <button type="button" class="opt-btn opt-btn-primary" onclick="executeTerritorialRebalance()">
+        Rebalancear Red
+      </button>
 
-      <!-- Exportación -->
+      <!-- Menú Exportar -->
       <div class="export-dropdown-wrap">
-        <button type="button" class="opt-btn opt-btn-emerald" onclick="toggleExportMenu(event)">
-          <span>Exportar Shapes</span>
-          <span style="font-size:9px;">▼</span>
+        <button type="button" class="opt-btn opt-btn-secondary" onclick="toggleExportMenu(event)">
+          Exportar ▾
         </button>
         <div id="export-menu-box" class="export-menu">
-          <div class="export-option" onclick="exportProposalGeoJson()">
-            <span>Descargar GeoJSON (.geojson)</span>
-          </div>
-          <div class="export-option" onclick="exportProposalCsvWkt()">
-            <span>Exportar CSV con WKT (Sheets / BQ)</span>
-          </div>
-          <div class="export-option" onclick="copySelectedStoreWkt()">
-            <span>Copiar WKT Tienda Activa</span>
-          </div>
+          <div class="export-option" onclick="exportProposalGeoJson()">Descargar GeoJSON (.geojson)</div>
+          <div class="export-option" onclick="exportProposalCsvWkt()">Descargar CSV con WKT</div>
+          <div class="export-option" onclick="copySelectedStoreWkt()">Copiar WKT Tienda Activa</div>
         </div>
       </div>
     </div>
@@ -560,10 +522,10 @@
       <!-- Pestañas del Panel: 1. Estado Actual | 2. Propuesta Optimizada -->
       <div class="panel-tabs-header">
         <button type="button" id="tab-btn-current" class="panel-tab-btn active" onclick="switchPanelTab('current')">
-          <span>1. Estado Actual (Shapes Reales)</span>
+          1. Estado Actual (Shapes Reales)
         </button>
         <button type="button" id="tab-btn-proposal" class="panel-tab-btn" onclick="switchPanelTab('proposal')">
-          <span>2. Propuesta de Rebalanceo</span>
+          2. Propuesta de Rebalanceo
         </button>
       </div>
 
@@ -572,6 +534,24 @@
 
         <!-- VISTA TAB 1: ESTADO ACTUAL (SELECCIÓN Y SHAPES REALES) -->
         <div id="tab-view-current">
+          <!-- Control de Filtros del Clúster -->
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; background:var(--bg-sheet-bar); border:1px solid var(--border-sheet); border-radius:6px; padding:6px 10px;">
+            <label style="display:flex; align-items:center; gap:5px; font-size:11px; font-weight:700; color:var(--text-sheet-muted); cursor:pointer;">
+              <input type="checkbox" id="opt-viewport-toggle" checked onchange="toggleOptViewport(this.checked)" style="accent-color:var(--brand-red);">
+              <span>Autofiltro por mapa</span>
+            </label>
+
+            <div style="display:flex; align-items:center; gap:5px; font-size:11px; font-weight:700; color:var(--text-sheet-muted);">
+              <span>Radio:</span>
+              <select id="opt-radius-param" class="opt-select" style="padding:3px 6px; font-size:11px;">
+                <option value="3.5">3.5 km</option>
+                <option value="4.0" selected>4.0 km</option>
+                <option value="4.5">4.5 km</option>
+                <option value="5.5">5.5 km</option>
+              </select>
+            </div>
+          </div>
+
           <div class="section-title">
             <span>Almacenes en la Zona</span>
             <span style="cursor:pointer; color:var(--brand-cyan);" onclick="selectAllVisibleStores(true)">Seleccionar todos</span>
@@ -635,6 +615,14 @@
 
         <!-- VISTA TAB 2: PROPUESTA DE REBALANCEO -->
         <div id="tab-view-proposal" style="display:none;">
+          <!-- Control de Visualización Diff -->
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; background:var(--bg-sheet-bar); border:1px solid var(--border-sheet); border-radius:6px; padding:6px 10px;">
+            <label style="display:flex; align-items:center; gap:6px; font-size:11px; font-weight:700; color:var(--text-sheet-muted); cursor:pointer;">
+              <input type="checkbox" id="opt-diff-toggle" onchange="toggleDiffLayer(this.checked)" style="accent-color:#8b5cf6;">
+              <span>Ver áreas de transferencia (cedidas / absorbidas)</span>
+            </label>
+          </div>
+
           <div class="section-title">
             <span>Impacto Proyectado en la Red</span>
             <span style="color:#10b981; font-weight:800;">Voronoi Geodésico</span>
@@ -754,7 +742,8 @@
     let map = null;
     let allWarehouses = [];
     let selectedStoreIds = new Set();
-    let currentMapLayer = 'before'; // 'before' | 'after' | 'diff'
+    let currentMapLayer = 'before'; // 'before' | 'after'
+    let isDiffVisible = false;
     let isViewportFilterActive = true;
     let selectedActiveInspectorId = null;
 
@@ -801,7 +790,7 @@
     function loadInitialData() {
       if (SERVER_PRELOADED_DATA && SERVER_PRELOADED_DATA.warehouses) {
         allWarehouses = SERVER_PRELOADED_DATA.warehouses;
-        populateCountryDropdown(SERVER_PRELOADED_DATA.countries || []);
+        populateClusterSelect(allWarehouses);
         return;
       }
 
@@ -810,7 +799,7 @@
           .withSuccessHandler((res) => {
             if (res && res.warehouses) {
               allWarehouses = res.warehouses;
-              populateCountryDropdown(res.countries || []);
+              populateClusterSelect(allWarehouses);
             }
           })
           .withFailureHandler((err) => {
@@ -821,49 +810,51 @@
       }
     }
 
-    function populateCountryDropdown(countries) {
-      const select = document.getElementById('opt-filter-country');
+    function populateClusterSelect(warehouses) {
+      const select = document.getElementById('opt-cluster-select');
       if (!select) return;
-      select.innerHTML = '<option value="">Seleccionar País</option>';
-      countries.forEach(c => {
-        select.innerHTML += `<option value="${c}">${c}</option>`;
+      select.innerHTML = '';
+
+      const byCountry = {};
+      warehouses.forEach(w => {
+        if (!w.country || !w.city) return;
+        if (!byCountry[w.country]) byCountry[w.country] = new Set();
+        byCountry[w.country].add(w.city);
       });
 
-      if (countries.includes('Argentina')) {
-        select.value = 'Argentina';
-        onOptCountrySelected('Argentina');
-      } else if (countries.length > 0) {
-        select.value = countries[0];
-        onOptCountrySelected(countries[0]);
+      const sortedCountries = Object.keys(byCountry).sort();
+      sortedCountries.forEach(country => {
+        const optgroup = document.createElement('optgroup');
+        optgroup.label = country;
+        const sortedCities = Array.from(byCountry[country]).sort();
+        sortedCities.forEach(city => {
+          const opt = document.createElement('option');
+          opt.value = `${country}__${city}`;
+          opt.textContent = `${city} (${country})`;
+          optgroup.appendChild(opt);
+        });
+        select.appendChild(optgroup);
+      });
+
+      // Default inteligente a Santa Cruz de la Sierra o Buenos Aires
+      const defaultOption = Array.from(select.options).find(o => o.value.includes('Santa Cruz') || o.value.includes('Buenos Aires') || o.value.includes('CABA'));
+      if (defaultOption) {
+        select.value = defaultOption.value;
+        onOptClusterSelected(defaultOption.value);
+      } else if (select.options.length > 0) {
+        select.selectedIndex = 0;
+        onOptClusterSelected(select.options[0].value);
       }
     }
 
-    function onOptCountrySelected(country) {
-      const citySelect = document.getElementById('opt-filter-city');
-      if (!citySelect) return;
+    function onOptClusterSelected(val) {
+      if (!val) return;
+      const parts = val.split('__');
+      const country = parts[0];
+      const city = parts[1];
 
-      const cities = [...new Set(allWarehouses
-        .filter(w => w.country === country)
-        .map(w => w.city)
-        .filter(Boolean))].sort();
-
-      citySelect.innerHTML = '<option value="">Todas las ciudades</option>';
-      cities.forEach(ci => {
-        citySelect.innerHTML += `<option value="${ci}">${ci}</option>`;
-      });
-
-      if (cities.length > 0) {
-        citySelect.value = cities[0];
-        onOptCitySelected(cities[0]);
-      }
-    }
-
-    function onOptCitySelected(city) {
-      const country = document.getElementById('opt-filter-country')?.value;
       const filtered = allWarehouses.filter(w => {
-        if (country && w.country !== country) return false;
-        if (city && w.city !== city) return false;
-        return w.lat && w.lng;
+        return w.country === country && w.city === city && w.lat && w.lng;
       });
 
       selectedStoreIds.clear();
@@ -885,7 +876,7 @@
       if (active) {
         applyOptViewportFilter();
       }
-      showToast(active ? 'Autofiltro por encuadre activado' : 'Autofiltro desactivado', 'info');
+      showToast(active ? 'Autofiltro activado' : 'Autofiltro desactivado', 'info');
     }
 
     function applyOptViewportFilter() {
@@ -908,7 +899,7 @@
       drawCurrentMapLayers();
     }
 
-    // ── RENDERIZADO DE TIENDAS Y SHAPES REALES (ESTADO ACTUAL) ──
+    // ── RENDERIZADO DE TIENDAS Y SHAPES REALES ──
     function renderStoreSelectionList() {
       const container = document.getElementById('opt-store-pick-list');
       const countEl = document.getElementById('opt-map-cluster-count');
@@ -979,7 +970,7 @@
       }
     }
 
-    // ── CÁLCULO DE MÉTRICAS DEL ESTADO ACTUAL ──
+    // ── MÉTRICAS DEL ESTADO ACTUAL ──
     function renderCurrentStateMetrics() {
       const activeStores = allWarehouses.filter(w => selectedStoreIds.has(String(w.warehouse_id).trim()));
 
@@ -1002,7 +993,6 @@
       const aEl = document.getElementById('kpi-cur-area');
       if (aEl) aEl.textContent = `${totalArea.toFixed(1)} km²`;
 
-      // Tabla de distribución actual de anillos reales (Benchmark de red sin optimizar)
       const ringsDef = [
         { label: '< 1 KM (Radio Óptimo)', share: 0.221 },
         { label: '1-2 KM (Radio Cercano)', share: 0.318 },
@@ -1059,7 +1049,6 @@
 
     // ── DIBUJO DE POLÍGONOS REALES EN EL MAPA ──
     function drawCurrentMapLayers() {
-      // Limpiar marcadores y polígonos
       mapStoreMarkers.forEach(m => m.setMap(null));
       beforePolygonLayers.forEach(p => p.setMap(null));
       afterPolygonLayers.forEach(p => p.setMap(null));
@@ -1072,8 +1061,7 @@
       const activeStores = allWarehouses.filter(w => selectedStoreIds.has(String(w.warehouse_id).trim()));
       const colors = ['#ea044e', '#0284c7', '#10b981', '#f59e0b', '#8b5cf6', '#06b6d4'];
 
-      // Dibujar marcadores corporativos
-      activeStores.forEach((w, idx) => {
+      activeStores.forEach((w) => {
         const marker = new google.maps.Marker({
           position: { lat: Number(w.lat), lng: Number(w.lng) },
           map: map,
@@ -1085,13 +1073,11 @@
       });
 
       if (currentMapLayer === 'before') {
-        // Dibujar SHAPES REALES ACTUALES de Google Sheets
+        // Shapes Reales de Google Sheets
         activeStores.forEach((w, idx) => {
           const col = colors[idx % colors.length];
           let coords = null;
-          if (w.geojson) {
-            coords = extractPolygonCoordinates(w.geojson);
-          }
+          if (w.geojson) coords = extractPolygonCoordinates(w.geojson);
           if (!coords || coords.length < 3) {
             const circle = turf.circle([Number(w.lng), Number(w.lat)], 3.5, { steps: 36, units: 'kilometers' });
             coords = circle.geometry.coordinates[0].map(c => ({ lat: c[1], lng: c[0] }));
@@ -1111,7 +1097,7 @@
           beforePolygonLayers.push(poly);
         });
       } else if (currentMapLayer === 'after' && calculatedProposal) {
-        // Dibujar SHAPES OPTIMIZADOS
+        // Shapes Optimizados
         calculatedProposal.stores.forEach((s, idx) => {
           const col = colors[idx % colors.length];
           const poly = new google.maps.Polygon({
@@ -1127,57 +1113,59 @@
           poly.addListener('click', () => focusStoreInMap(s.warehouse_id));
           afterPolygonLayers.push(poly);
         });
-      } else if (currentMapLayer === 'diff' && calculatedProposal) {
-        // Dibujar ZONAS DE TRASPASO
-        calculatedProposal.diffs.forEach(d => {
-          const coords = extractPolygonCoordinates(d.feature.geometry);
-          if (!coords || coords.length < 3) return;
-          const isAbsorbe = d.type === 'absorbe';
-          const poly = new google.maps.Polygon({
-            paths: coords,
-            map: map,
-            strokeColor: isAbsorbe ? '#10b981' : '#f59e0b',
-            strokeWeight: 1.8,
-            strokeOpacity: 0.9,
-            fillColor: isAbsorbe ? '#10b981' : '#f59e0b',
-            fillOpacity: 0.32,
-            zIndex: 30
+
+        if (isDiffVisible) {
+          calculatedProposal.diffs.forEach(d => {
+            const coords = extractPolygonCoordinates(d.feature.geometry);
+            if (!coords || coords.length < 3) return;
+            const isAbsorbe = d.type === 'absorbe';
+            const poly = new google.maps.Polygon({
+              paths: coords,
+              map: map,
+              strokeColor: isAbsorbe ? '#10b981' : '#f59e0b',
+              strokeWeight: 1.8,
+              strokeOpacity: 0.9,
+              fillColor: isAbsorbe ? '#10b981' : '#f59e0b',
+              fillOpacity: 0.35,
+              zIndex: 30
+            });
+            diffPolygonLayers.push(poly);
           });
-          diffPolygonLayers.push(poly);
-        });
+        }
       }
     }
 
     function setOptMapLayer(layer) {
       currentMapLayer = layer;
-      ['before', 'after', 'diff'].forEach(l => {
-        const btn = document.getElementById(`btn-show-${l}`);
-        if (!btn) return;
-        btn.className = 'view-segment-btn' + (l === layer ? (l === 'after' ? ' active-emerald' : ' active') : '');
-      });
+      document.getElementById('btn-show-before')?.classList.toggle('active', layer === 'before');
+      document.getElementById('btn-show-after')?.classList.toggle('active-emerald', layer === 'after');
 
       const statusLabel = document.getElementById('opt-map-status-label');
       if (statusLabel) {
         statusLabel.textContent = layer === 'before' 
           ? 'Shapes Actuales (Reales de Sheets)' 
-          : (layer === 'after' ? 'Propuesta Optimizada de Rebalanceo' : 'Zonas de Transferencia entre Tiendas');
+          : 'Propuesta Optimizada de Rebalanceo';
       }
 
       drawCurrentMapLayers();
     }
 
-    // ── MOTOR DE REBALANCEO TERRITORIAL (VORONOI RECORTADO POR RADIO) ──
+    function toggleDiffLayer(checked) {
+      isDiffVisible = checked;
+      drawCurrentMapLayers();
+    }
+
+    // ── REBALANCEO VORONOI GEODÉSICO ──
     function executeTerritorialRebalance() {
       const activeStores = allWarehouses.filter(w => selectedStoreIds.has(String(w.warehouse_id).trim()));
       if (activeStores.length === 0) {
-        showToast('Seleccioná al menos un almacén en la lista.', 'warning');
+        showToast('Seleccioná al menos un almacén.', 'warning');
         return;
       }
 
       const radiusParam = parseFloat(document.getElementById('opt-radius-param')?.value) || 4.0;
-      showToast('Calculando partición territorial y concentración de anillos...', 'info');
+      showToast('Calculando partición territorial y anillos...', 'info');
 
-      // 1. Obtener puntos de tiendas para Voronoi
       const points = activeStores.map(w => turf.point([Number(w.lng), Number(w.lat)], { id: w.warehouse_id, name: w.warehouse_name }));
       const featureColl = turf.featureCollection(points);
       const bbox = turf.bbox(featureColl);
@@ -1211,7 +1199,6 @@
         const newCoords = rawCoords.map(c => ({ lat: c[1], lng: c[0] }));
         const newAreaKm2 = Number((turf.area(optFeature) / 1000000).toFixed(2));
 
-        // Comparar con shape real actual
         let currentCoords = null;
         if (w.geojson) currentCoords = extractPolygonCoordinates(w.geojson);
         if (!currentCoords || currentCoords.length < 3) {
@@ -1255,23 +1242,20 @@
         diffs: diffList
       };
 
-      // Cambiar a vista de propuesta en el panel y en el mapa
       switchPanelTab('proposal');
       setOptMapLayer('after');
       renderProposalDashboard();
 
-      showToast('Propuesta de rebalanceo generada con éxito.', 'success');
+      showToast('Propuesta de rebalanceo generada.', 'success');
     }
 
-    // ── RENDERIZADO DEL RESUMEN COMPARATIVO (PROPUESTA OPTIMIZADA) ──
+    // ── RENDERIZADO DEL RESUMEN COMPARATIVO ──
     function renderProposalDashboard() {
       if (!calculatedProposal) return;
 
       const activeStores = allWarehouses.filter(w => selectedStoreIds.has(String(w.warehouse_id).trim()));
       const totalUsers = activeStores.reduce((s, w) => s + (Number(w.dmart_users) || 0), 0);
-      const totalOrders = activeStores.reduce((s, w) => s + (Number(w.orders) || 0), 0);
 
-      // Desglose de anillos Antes vs Propuesta
       const compRings = [
         { label: '< 1 KM (Radio Óptimo)', bShare: 0.221, aShare: 0.380 },
         { label: '1-2 KM (Radio Cercano)', bShare: 0.318, aShare: 0.404 },
@@ -1324,7 +1308,6 @@
             </tr>
           `;
 
-          // Actualizar KPIs de cabecera
           const kpiCore = document.getElementById('kpi-prop-core-pct');
           if (kpiCore) kpiCore.textContent = `${corePctA}%`;
           const kpiDelta = document.getElementById('kpi-prop-core-delta');
@@ -1337,13 +1320,11 @@
         }
       });
 
-      // Ahorro DT y CPO
       const dtEl = document.getElementById('kpi-prop-dt-savings');
       if (dtEl) dtEl.textContent = '-7.5 m';
       const cpoEl = document.getElementById('kpi-prop-cpo-savings');
       if (cpoEl) cpoEl.textContent = '-$ 0.62';
 
-      // Matriz de Transferencia
       const matrixEl = document.getElementById('opt-store-transfer-matrix');
       if (matrixEl) {
         matrixEl.innerHTML = '';
@@ -1384,7 +1365,7 @@
       if (vProp) vProp.style.display = !isCur ? 'block' : 'none';
     }
 
-    // ── FUNCIONES DE EXPORTACIÓN (GEOJSON, WKT, CSV) ──
+    // ── EXPORTACIÓN (GEOJSON, WKT, CSV) ──
     function toggleExportMenu(e) {
       if (e) e.stopPropagation();
       const menu = document.getElementById('export-menu-box');
@@ -1432,7 +1413,7 @@
       a.download = `shapes_optimizados_${(allWarehouses[0]?.city || 'red').toLowerCase().replace(/\s+/g, '_')}.geojson`;
       a.click();
       URL.revokeObjectURL(url);
-      showToast('GeoJSON exportado correctamente.', 'success');
+      showToast('GeoJSON exportado.', 'success');
     }
 
     function exportProposalCsvWkt() {
@@ -1456,12 +1437,12 @@
       a.download = `shapes_optimizados_wkt.csv`;
       a.click();
       URL.revokeObjectURL(url);
-      showToast('CSV con WKT exportado correctamente.', 'success');
+      showToast('CSV con WKT exportado.', 'success');
     }
 
     function copySelectedStoreWkt() {
       if (!selectedActiveInspectorId || !calculatedProposal) {
-        showToast('Hacé clic en una tienda en la lista para seleccionarla.', 'warning');
+        showToast('Hacé clic en una tienda para seleccionarla.', 'warning');
         return;
       }
       copySpecificStoreWkt(selectedActiveInspectorId);
