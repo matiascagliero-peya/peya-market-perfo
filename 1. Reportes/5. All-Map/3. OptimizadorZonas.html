@@ -13,12 +13,14 @@
       --bg-sheet-bar: #1c2435;
       --bg-sheet-card: #222b3d;
       --bg-sheet-card-hover: #2a354b;
+      --bg-card-selected: rgba(234, 4, 78, 0.08);
       --border-sheet: #3b475e;
       --border-sheet-subtle: #2d384c;
       --text-sheet-title: #f8fafc;
       --text-sheet-body: #cbd5e1;
       --text-sheet-muted: #94a3b8;
       --brand-red: #ea044e;
+      --brand-red-light: rgba(234, 4, 78, 0.15);
       --brand-cyan: #0284c7;
       --brand-emerald: #10b981;
       --brand-amber: #f59e0b;
@@ -31,6 +33,7 @@
       --bg-sheet-bar: #f1f5f9;
       --bg-sheet-card: #ffffff;
       --bg-sheet-card-hover: #f8fafc;
+      --bg-card-selected: rgba(234, 4, 78, 0.06);
       --border-sheet: #e2e8f0;
       --border-sheet-subtle: #cbd5e1;
       --text-sheet-title: #0f172a;
@@ -50,7 +53,7 @@
       flex-direction: column;
     }
 
-    /* ── Barra Superior Minimalista y Espaciosa ── */
+    /* ── Barra Superior Minimalista ── */
     .opt-toolbar {
       background: var(--bg-sheet-bar);
       border-bottom: 1px solid var(--border-sheet);
@@ -67,21 +70,6 @@
       display: flex;
       align-items: center;
       gap: 12px;
-    }
-
-    .opt-select {
-      background: var(--bg-sheet);
-      color: var(--text-sheet-title);
-      border: 1px solid var(--border-sheet);
-      border-radius: 6px;
-      padding: 6px 10px;
-      font-size: 11.5px;
-      font-weight: 600;
-      outline: none;
-      font-family: 'Outfit', sans-serif;
-    }
-    .opt-select:focus {
-      border-color: var(--brand-red);
     }
 
     .opt-btn {
@@ -169,7 +157,7 @@
 
     /* ── Panel Lateral Derecho ── */
     .opt-panel {
-      width: 460px;
+      width: 440px;
       background: var(--bg-sheet);
       border-left: 1px solid var(--border-sheet);
       display: flex;
@@ -260,70 +248,6 @@
       font-weight: 600;
       color: var(--text-sheet-muted);
       margin-top: 1px;
-    }
-
-    /* ── Lista de Selección de Tiendas ── */
-    .store-pick-list {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-      max-height: 240px;
-      overflow-y: auto;
-      margin-bottom: 14px;
-      padding-right: 4px;
-    }
-
-    .store-pick-card {
-      background: var(--bg-sheet-bar);
-      border: 1px solid var(--border-sheet);
-      border-radius: 6px;
-      padding: 7px 10px;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      cursor: pointer;
-      transition: all 0.12s ease;
-    }
-
-    .store-pick-card:hover {
-      background: var(--bg-sheet-card-hover);
-      border-color: var(--brand-cyan);
-    }
-
-    .store-pick-card.selected {
-      border-color: var(--brand-red);
-      background: rgba(234, 4, 78, 0.05);
-    }
-
-    .store-pick-checkbox {
-      width: 15px;
-      height: 15px;
-      cursor: pointer;
-      accent-color: var(--brand-red);
-    }
-
-    .store-pick-info {
-      flex: 1;
-      min-width: 0;
-    }
-
-    .store-pick-name {
-      font-size: 11.5px;
-      font-weight: 700;
-      color: var(--text-sheet-title);
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
-    .store-pick-meta {
-      font-size: 9.5px;
-      color: var(--text-sheet-muted);
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      margin-top: 1px;
-      font-family: 'JetBrains Mono', monospace;
     }
 
     /* ── Tabla de Anillos Comparativa ── */
@@ -452,42 +376,198 @@
       gap: 8px;
       z-index: 10;
     }
+
+    /* ============================================================ */
+    /* PANEL DESPLEGABLE INFERIOR (BOTTOM SHEET IDÉNTICO A PÁGINA 1) */
+    /* ============================================================ */
+    .bottom-sheet {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 440px; /* Alineado con el panel lateral */
+      background: var(--bg-sheet);
+      border-top: 1px solid var(--border-sheet);
+      box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.25);
+      z-index: 150;
+      display: flex;
+      flex-direction: column;
+      transition: height 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+      box-sizing: border-box;
+    }
+
+    .bottom-sheet.collapsed {
+      height: 38px;
+    }
+
+    .bottom-sheet.expanded {
+      height: 250px;
+    }
+
+    .sheet-handle-bar {
+      height: 38px;
+      min-height: 38px;
+      background: var(--bg-sheet-bar);
+      border-bottom: 1px solid var(--border-sheet);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 14px;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .sheet-handle-title {
+      font-size: 11.5px;
+      font-weight: 700;
+      color: var(--text-sheet-title);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .sheet-body-content {
+      flex: 1;
+      display: flex;
+      overflow: hidden;
+      padding: 8px 12px;
+      gap: 12px;
+    }
+
+    /* Columna de Filtros dentro del panel inferior */
+    .sheet-filters-col {
+      width: 220px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      border-right: 1px solid var(--border-sheet);
+      padding-right: 12px;
+      flex-shrink: 0;
+      overflow-y: auto;
+    }
+
+    .sheet-filter-group {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .sheet-filter-label {
+      font-size: 8px;
+      font-weight: 800;
+      color: var(--text-sheet-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+    }
+
+    .sheet-filter-input {
+      background: var(--bg-page);
+      border: 1px solid var(--border-sheet);
+      border-radius: 5px;
+      padding: 4px 7px;
+      color: var(--text-sheet-title);
+      font-size: 11px;
+      font-family: inherit;
+      outline: none;
+    }
+
+    /* Cuadrícula de Tarjetas de Almacenes */
+    .sheet-cards-col {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      overflow: hidden;
+    }
+
+    .sheet-cards-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 6px;
+      flex-shrink: 0;
+    }
+
+    .whs-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      grid-auto-rows: max-content;
+      gap: 6px;
+      flex: 1;
+      overflow-y: auto;
+      padding-right: 4px;
+    }
+
+    .whs-card {
+      padding: 6px 8px;
+      border-radius: 6px;
+      border: 1px solid var(--border-sheet);
+      background: var(--bg-sheet-card);
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      height: 68px;
+      min-height: 68px;
+      box-sizing: border-box;
+      transition: all 0.12s ease;
+    }
+
+    .whs-card:hover {
+      border-color: var(--brand-cyan);
+      background: var(--bg-sheet-card-hover);
+    }
+
+    .whs-card.selected {
+      border-color: var(--brand-red);
+      background: var(--bg-card-selected);
+    }
+
+    .whs-card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+    }
+
+    .whs-card-name {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--text-sheet-title);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      flex: 1;
+    }
+
+    .whs-card-meta {
+      font-size: 9.5px;
+      color: var(--text-sheet-muted);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-family: 'JetBrains Mono', monospace;
+    }
   </style>
 </head>
 <body>
 
-  <!-- Barra de Herramientas Superior Minimalista y Limpia -->
+  <!-- Barra de Herramientas Superior Minimalista -->
   <div class="opt-toolbar">
     <div class="opt-toolbar-left">
       <span style="font-weight:800; font-size:13px; color:var(--text-sheet-title); letter-spacing:-0.2px;">
         Optimización Logística
       </span>
-
       <span style="color:var(--border-sheet);">|</span>
-
-      <!-- Selector Único de Ciudad / Clúster -->
-      <select id="opt-cluster-select" class="opt-select" style="min-width:180px;" onchange="onOptClusterSelected(this.value)">
-        <option value="">Cargando ciudades...</option>
-      </select>
-
-      <!-- Selector de Vertical / Partner (Igual que Página 1) -->
-      <select id="opt-partner-select" class="opt-select" onchange="onOptPartnerFilterChange(this.value)">
-        <option value="ALL" selected>Vertical: Todas (Principal)</option>
-        <option value="market">Market (Supermercado)</option>
-        <option value="drinks">Drinks & Bebidas</option>
-        <option value="mascotas">Mascotas & Pets</option>
-        <option value="kiosco">Kiosco & Snacks</option>
-        <option value="farmacia">Farmacia & Droguerías</option>
-        <option value="beauty">Belleza & Cuidado</option>
-        <option value="green">Frescos & Frutas</option>
-      </select>
+      <span id="opt-cluster-status-text" style="font-size:11px; font-weight:700; color:var(--text-sheet-muted);">
+        Selección de Red
+      </span>
     </div>
 
     <div class="opt-toolbar-center">
-      <!-- Switch de Vista Limpio en el Mapa -->
+      <!-- Switch de Vista en el Mapa -->
       <div class="view-segmented-control">
         <button type="button" id="btn-show-before" class="view-segment-btn active" onclick="setOptMapLayer('before')">
-          Shapes Actuales
+          Shapes Reales Actuales
         </button>
         <button type="button" id="btn-show-after" class="view-segment-btn" onclick="setOptMapLayer('after')">
           Propuesta Optimizada
@@ -497,13 +577,13 @@
 
     <div class="opt-toolbar-right">
       <button type="button" class="opt-btn opt-btn-primary" onclick="executeTerritorialRebalance()">
-        Rebalancear Red
+        Calcular Rebalanceo
       </button>
 
       <!-- Menú Exportar -->
       <div class="export-dropdown-wrap">
         <button type="button" class="opt-btn opt-btn-secondary" onclick="toggleExportMenu(event)">
-          Exportar ▾
+          Exportar Shapes ▾
         </button>
         <div id="export-menu-box" class="export-menu">
           <div class="export-option" onclick="exportProposalGeoJson()">Descargar GeoJSON (.geojson)</div>
@@ -522,9 +602,88 @@
       <div id="opt-map"></div>
       <div class="map-chip">
         <span id="opt-map-status-dot" style="width:7px; height:7px; border-radius:50%; background:#10b981;"></span>
-        <span id="opt-map-status-label">Shapes Actuales de Google Sheets</span>
+        <span id="opt-map-status-label">Shapes Reales de Google Sheets</span>
         <span style="color:var(--border-sheet);">•</span>
         <span id="opt-map-cluster-count" style="color:var(--text-sheet-muted); font-family:'JetBrains Mono',monospace;">0 locales</span>
+      </div>
+
+      <!-- PANEL INFERIOR DESPLEGABLE (BOTTOM SHEET) -->
+      <div id="bottom-sheet" class="bottom-sheet expanded">
+        <div class="sheet-handle-bar" onclick="toggleBottomSheet()">
+          <div class="sheet-handle-title">
+            <span>Almacenes & Filtros de Red</span>
+            <span id="sheet-selected-badge" style="font-size:10px; font-weight:800; color:var(--brand-red); background:rgba(234,4,78,0.1); padding:2px 8px; border-radius:10px; border:1px solid rgba(234,4,78,0.25);">
+              0 seleccionados
+            </span>
+          </div>
+          <div style="font-size:11px; font-weight:700; color:var(--text-sheet-muted);">
+            <span id="sheet-toggle-icon">▼ Ocultar</span>
+          </div>
+        </div>
+
+        <div class="sheet-body-content">
+          <!-- Columna 1: Filtros de Ubicación y Vertical -->
+          <div class="sheet-filters-col">
+            <div class="sheet-filter-group">
+              <label class="sheet-filter-label">País</label>
+              <select id="sheet-filter-country" class="sheet-filter-input" onchange="onSheetCountryChange(this.value)">
+                <option value="">Todos los países</option>
+              </select>
+            </div>
+
+            <div class="sheet-filter-group">
+              <label class="sheet-filter-label">Ciudad</label>
+              <select id="sheet-filter-city" class="sheet-filter-input" onchange="onSheetCityChange(this.value)">
+                <option value="">Todas las ciudades</option>
+              </select>
+            </div>
+
+            <div class="sheet-filter-group">
+              <label class="sheet-filter-label">Vertical / Partner</label>
+              <select id="sheet-filter-vertical" class="sheet-filter-input" onchange="onSheetVerticalChange(this.value)">
+                <option value="ALL" selected>Todas (Principal)</option>
+                <option value="market">Market (Supermercado)</option>
+                <option value="drinks">Drinks & Bebidas</option>
+                <option value="mascotas">Mascotas & Pets</option>
+                <option value="kiosco">Kiosco & Snacks</option>
+                <option value="farmacia">Farmacia</option>
+                <option value="beauty">Belleza</option>
+                <option value="green">Frescos</option>
+              </select>
+            </div>
+
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-top:4px;">
+              <label style="display:flex; align-items:center; gap:5px; font-size:10.5px; font-weight:700; color:var(--text-sheet-muted); cursor:pointer;">
+                <input type="checkbox" id="sheet-active-only" checked onchange="filterWarehouseCards()" style="accent-color:var(--brand-red);">
+                <span>Solo Activos</span>
+              </label>
+              <label style="display:flex; align-items:center; gap:5px; font-size:10.5px; font-weight:700; color:var(--text-sheet-muted); cursor:pointer;">
+                <input type="checkbox" id="opt-viewport-toggle" checked onchange="toggleOptViewport(this.checked)" style="accent-color:var(--brand-red);">
+                <span>Autofiltro mapa</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Columna 2: Buscador y Tarjetas de Almacenes -->
+          <div class="sheet-cards-col">
+            <div class="sheet-cards-toolbar">
+              <input type="text" id="whs-search-input" class="sheet-filter-input" placeholder="Buscar almacén por nombre o ID..." oninput="filterWarehouseCards()" style="width:260px;">
+              
+              <div style="display:flex; align-items:center; gap:8px;">
+                <button type="button" class="opt-btn opt-btn-secondary" style="padding:3px 10px; font-size:10.5px;" onclick="selectAllVisibleCards(true)">
+                  Seleccionar Todo
+                </button>
+                <button type="button" class="opt-btn opt-btn-secondary" style="padding:3px 10px; font-size:10.5px;" onclick="selectAllVisibleCards(false)">
+                  Limpiar
+                </button>
+              </div>
+            </div>
+
+            <div class="whs-grid" id="whs-cards-container">
+              <!-- Inyectado dinámicamente -->
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -544,38 +703,10 @@
       <!-- Cuerpo del Panel -->
       <div class="panel-content-body">
 
-        <!-- VISTA TAB 1: ESTADO ACTUAL (SELECCIÓN Y SHAPES REALES) -->
+        <!-- VISTA TAB 1: ESTADO ACTUAL (MÉTRICAS REALES Y ANILLOS) -->
         <div id="tab-view-current">
-          <!-- Control de Filtros del Clúster -->
-          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; background:var(--bg-sheet-bar); border:1px solid var(--border-sheet); border-radius:6px; padding:6px 10px;">
-            <label style="display:flex; align-items:center; gap:5px; font-size:11px; font-weight:700; color:var(--text-sheet-muted); cursor:pointer;">
-              <input type="checkbox" id="opt-viewport-toggle" checked onchange="toggleOptViewport(this.checked)" style="accent-color:var(--brand-red);">
-              <span>Autofiltro por mapa</span>
-            </label>
-
-            <div style="display:flex; align-items:center; gap:5px; font-size:11px; font-weight:700; color:var(--text-sheet-muted);">
-              <span>Radio:</span>
-              <select id="opt-radius-param" class="opt-select" style="padding:3px 6px; font-size:11px;">
-                <option value="3.5">3.5 km</option>
-                <option value="4.0" selected>4.0 km</option>
-                <option value="4.5">4.5 km</option>
-                <option value="5.5">5.5 km</option>
-              </select>
-            </div>
-          </div>
-
           <div class="section-title">
-            <span>Almacenes en la Zona</span>
-            <span style="cursor:pointer; color:var(--brand-cyan);" onclick="selectAllVisibleStores(true)">Seleccionar todos</span>
-          </div>
-
-          <!-- Selector de Tiendas con Shapes Reales -->
-          <div class="store-pick-list" id="opt-store-pick-list">
-            <!-- Inyectado dinámicamente -->
-          </div>
-
-          <div class="section-title">
-            <span>Métricas Reales del Clúster Seleccionado</span>
+            <span>Métricas del Clúster Seleccionado</span>
             <span id="opt-current-date-lbl" style="font-family:'JetBrains Mono',monospace;">Octubre 2026</span>
           </div>
 
@@ -615,26 +746,33 @@
             </tbody>
           </table>
 
-          <div style="background:var(--bg-sheet-bar); border:1px solid var(--border-sheet); border-radius:6px; padding:10px 12px;">
+          <div style="background:var(--bg-sheet-bar); border:1px solid var(--border-sheet); border-radius:6px; padding:10px 12px; margin-bottom:12px;">
             <div style="font-size:10px; font-weight:700; color:var(--text-sheet-muted); text-transform:uppercase; margin-bottom:4px;">
               Diagnóstico de Fricción Logística:
             </div>
             <div id="opt-friction-text" style="font-size:11px; line-height:1.45; color:var(--text-sheet-body);">
-              Seleccioná tiendas para analizar el porcentaje de pedidos que viaja a más de 3 km.
+              Seleccioná tiendas en el panel inferior para evaluar la fricción periférica.
             </div>
+          </div>
+
+          <div style="display:flex; align-items:center; justify-content:space-between; background:var(--bg-sheet-bar); border:1px solid var(--border-sheet); border-radius:6px; padding:8px 10px;">
+            <div style="display:flex; align-items:center; gap:6px; font-size:11px; font-weight:700; color:var(--text-sheet-title);">
+              <span>Radio Operativo Máximo:</span>
+              <select id="opt-radius-param" class="sheet-filter-input" style="padding:2px 6px;">
+                <option value="3.5">3.5 km</option>
+                <option value="4.0" selected>4.0 km (Recomendado)</option>
+                <option value="4.5">4.5 km</option>
+                <option value="5.5">5.5 km</option>
+              </select>
+            </div>
+            <button type="button" class="opt-btn opt-btn-primary" style="padding:4px 10px; font-size:11px;" onclick="executeTerritorialRebalance()">
+              Calcular Propuesta
+            </button>
           </div>
         </div>
 
         <!-- VISTA TAB 2: PROPUESTA DE REBALANCEO -->
         <div id="tab-view-proposal" style="display:none;">
-          <!-- Control de Visualización Diff -->
-          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; background:var(--bg-sheet-bar); border:1px solid var(--border-sheet); border-radius:6px; padding:6px 10px;">
-            <label style="display:flex; align-items:center; gap:6px; font-size:11px; font-weight:700; color:var(--text-sheet-muted); cursor:pointer;">
-              <input type="checkbox" id="opt-diff-toggle" onchange="toggleDiffLayer(this.checked)" style="accent-color:#8b5cf6;">
-              <span>Ver áreas de transferencia (cedidas / absorbidas)</span>
-            </label>
-          </div>
-
           <div class="section-title">
             <span>Impacto Proyectado en la Red</span>
             <span style="color:#10b981; font-weight:800;">Voronoi Geodésico</span>
@@ -757,7 +895,6 @@
     let selectedPartnerFilter = 'ALL';
     let STORE_POLYGONS_CACHE = new Map();
     let currentMapLayer = 'before'; // 'before' | 'after'
-    let isDiffVisible = false;
     let isViewportFilterActive = true;
     let selectedActiveInspectorId = null;
 
@@ -765,7 +902,6 @@
     let mapStoreMarkers = [];
     let beforePolygonLayers = [];
     let afterPolygonLayers = [];
-    let diffPolygonLayers = [];
 
     // Estado calculado
     let calculatedProposal = null;
@@ -803,6 +939,46 @@
       return 'market';
     }
 
+    // Extractor robusto de coordenadas que tolera JSON strings de Sheets
+    function extractPolygonCoordinates(geojson) {
+      if (!geojson) return null;
+      if (typeof geojson === 'string') {
+        try {
+          geojson = JSON.parse(geojson);
+        } catch(e) {
+          return null;
+        }
+      }
+      if (!geojson) return null;
+
+      if (geojson.type === 'FeatureCollection' && geojson.features && geojson.features[0]) {
+        geojson = geojson.features[0].geometry;
+      }
+      if (geojson.type === 'Feature' && geojson.geometry) {
+        geojson = geojson.geometry;
+      }
+
+      if (geojson.type === 'Polygon') {
+        const ring = Array.isArray(geojson.coordinates) ? geojson.coordinates[0] : null;
+        if (!ring || !Array.isArray(ring)) return null;
+        return ring.map(coord => ({
+          lat: Number(coord[1]),
+          lng: Number(coord[0])
+        })).filter(pt => !isNaN(pt.lat) && !isNaN(pt.lng) && pt.lat !== 0 && pt.lng !== 0);
+      }
+
+      if (geojson.type === 'MultiPolygon') {
+        if (Array.isArray(geojson.coordinates) && geojson.coordinates[0] && Array.isArray(geojson.coordinates[0][0])) {
+          return geojson.coordinates[0][0].map(coord => ({
+            lat: Number(coord[1]),
+            lng: Number(coord[0])
+          })).filter(pt => !isNaN(pt.lat) && !isNaN(pt.lng) && pt.lat !== 0 && pt.lng !== 0);
+        }
+      }
+
+      return null;
+    }
+
     function fetchMissingStorePolygons(storeIds, callback) {
       const missing = storeIds.filter(id => !STORE_POLYGONS_CACHE.has(id));
       if (missing.length === 0) {
@@ -824,12 +1000,12 @@
                 }
               });
             }
-            if (statusLabel) statusLabel.textContent = 'Shapes Actuales (Reales de Sheets)';
+            if (statusLabel) statusLabel.textContent = 'Shapes Reales de Google Sheets';
             if (callback) callback();
           })
           .withFailureHandler((err) => {
             console.warn('Error cargando shapes reales:', err);
-            if (statusLabel) statusLabel.textContent = 'Shapes Actuales (Reales de Sheets)';
+            if (statusLabel) statusLabel.textContent = 'Shapes Reales de Google Sheets';
             if (callback) callback();
           })
           .getWarehousesPolygons(missing, '2026-10-01');
@@ -840,7 +1016,6 @@
       const normId = String(w.warehouse_id).trim();
       const pData = STORE_POLYGONS_CACHE.get(normId);
       if (pData) {
-        // 1. Si hay filtro de partner/vertical activo, buscar el shape de ese partner específico
         if (selectedPartnerFilter !== 'ALL' && pData.partners_detail && Array.isArray(pData.partners_detail)) {
           const matchP = pData.partners_detail.find(p => {
             const vKey = classifyPartnerVertical(p.partner_name || p.business_type || '');
@@ -852,7 +1027,6 @@
           }
         }
 
-        // 2. Shape principal del almacén
         if (pData.geojson) {
           const c = extractPolygonCoordinates(pData.geojson);
           if (c && c.length >= 3) return { coords: c, vertical: 'market' };
@@ -863,21 +1037,12 @@
         }
       }
 
-      // 3. Fallback a w.geojson si vino precargado
       if (w.geojson) {
         const c = extractPolygonCoordinates(w.geojson);
         if (c && c.length >= 3) return { coords: c, vertical: 'market' };
       }
 
       return null;
-    }
-
-    function onOptPartnerFilterChange(val) {
-      selectedPartnerFilter = val;
-      renderStoreSelectionList();
-      renderCurrentStateMetrics();
-      drawCurrentMapLayers();
-      showToast(`Vertical seleccionada: ${val === 'ALL' ? 'Todas (Principal)' : val.toUpperCase()}`, 'info');
     }
 
     window.addEventListener('load', () => {
@@ -903,7 +1068,6 @@
         gestureHandling: 'greedy'
       });
 
-      // Autocarga por viewport al mover el mapa
       map.addListener('idle', () => {
         if (isViewportFilterActive) {
           applyOptViewportFilter();
@@ -914,7 +1078,7 @@
     function loadInitialData() {
       if (SERVER_PRELOADED_DATA && SERVER_PRELOADED_DATA.warehouses) {
         allWarehouses = SERVER_PRELOADED_DATA.warehouses;
-        populateClusterSelect(allWarehouses);
+        populateFilters();
         return;
       }
 
@@ -923,89 +1087,71 @@
           .withSuccessHandler((res) => {
             if (res && res.warehouses) {
               allWarehouses = res.warehouses;
-              populateClusterSelect(allWarehouses);
+              populateFilters();
             }
           })
           .withFailureHandler((err) => {
-            console.error('Error cargando catálogo:', err);
-            showToast('Error cargando almacenes de Sheets', 'error');
+            console.error('Error cargando almacenes:', err);
+            showToast('Error cargando catálogo de Sheets', 'error');
           })
           .getStoreExplorerInitialData();
       }
     }
 
-    function populateClusterSelect(warehouses) {
-      const select = document.getElementById('opt-cluster-select');
-      if (!select) return;
-      select.innerHTML = '';
+    function populateFilters() {
+      const countrySelect = document.getElementById('sheet-filter-country');
+      if (!countrySelect) return;
+      countrySelect.innerHTML = '<option value="">Todos los países</option>';
 
-      const byCountry = {};
-      warehouses.forEach(w => {
-        if (!w.country || !w.city) return;
-        if (!byCountry[w.country]) byCountry[w.country] = new Set();
-        byCountry[w.country].add(w.city);
+      const countries = [...new Set(allWarehouses.map(w => w.country).filter(Boolean))].sort();
+      countries.forEach(c => {
+        countrySelect.innerHTML += `<option value="${c}">${c}</option>`;
       });
 
-      const sortedCountries = Object.keys(byCountry).sort();
-      sortedCountries.forEach(country => {
-        const optgroup = document.createElement('optgroup');
-        optgroup.label = country;
-        const sortedCities = Array.from(byCountry[country]).sort();
-        sortedCities.forEach(city => {
-          const opt = document.createElement('option');
-          opt.value = `${country}__${city}`;
-          opt.textContent = `${city} (${country})`;
-          optgroup.appendChild(opt);
-        });
-        select.appendChild(optgroup);
-      });
-
-      // Default inteligente a Santa Cruz de la Sierra o Buenos Aires
-      const defaultOption = Array.from(select.options).find(o => o.value.includes('Santa Cruz') || o.value.includes('Buenos Aires') || o.value.includes('CABA'));
-      if (defaultOption) {
-        select.value = defaultOption.value;
-        onOptClusterSelected(defaultOption.value);
-      } else if (select.options.length > 0) {
-        select.selectedIndex = 0;
-        onOptClusterSelected(select.options[0].value);
+      // Default a Argentina o primer país
+      if (countries.includes('Argentina')) {
+        countrySelect.value = 'Argentina';
+        onSheetCountryChange('Argentina');
+      } else if (countries.length > 0) {
+        countrySelect.value = countries[0];
+        onSheetCountryChange(countries[0]);
       }
     }
 
-    function onOptClusterSelected(val) {
-      if (!val) return;
-      const parts = val.split('__');
-      const country = parts[0];
-      const city = parts[1];
+    function onSheetCountryChange(country) {
+      const citySelect = document.getElementById('sheet-filter-city');
+      if (!citySelect) return;
+      citySelect.innerHTML = '<option value="">Todas las ciudades</option>';
 
-      const filtered = allWarehouses.filter(w => {
-        return w.country === country && w.city === city && w.lat && w.lng;
+      const cities = [...new Set(allWarehouses
+        .filter(w => !country || w.country === country)
+        .map(w => w.city).filter(Boolean))].sort();
+
+      cities.forEach(ci => {
+        citySelect.innerHTML += `<option value="${ci}">${ci}</option>`;
       });
 
-      selectedStoreIds.clear();
-      filtered.forEach(w => selectedStoreIds.add(String(w.warehouse_id).trim()));
-
-      if (filtered.length > 0 && map) {
-        const b = new google.maps.LatLngBounds();
-        filtered.forEach(w => b.extend(new google.maps.LatLng(Number(w.lat), Number(w.lng))));
-        map.fitBounds(b);
+      if (cities.length > 0) {
+        citySelect.value = cities[0];
+        onSheetCityChange(cities[0]);
+      } else {
+        filterWarehouseCards();
       }
+    }
 
-      renderStoreSelectionList();
-      renderCurrentStateMetrics();
-      drawCurrentMapLayers();
+    function onSheetCityChange(city) {
+      filterWarehouseCards();
+    }
 
-      // Cargar los shapes reales de Google Sheets
-      fetchMissingStorePolygons(Array.from(selectedStoreIds), () => {
-        drawCurrentMapLayers();
-        renderCurrentStateMetrics();
-      });
+    function onSheetVerticalChange(vertical) {
+      selectedPartnerFilter = vertical;
+      filterWarehouseCards();
+      showToast(`Vertical: ${vertical === 'ALL' ? 'Todas (Principal)' : vertical.toUpperCase()}`, 'info');
     }
 
     function toggleOptViewport(active) {
       isViewportFilterActive = active;
-      if (active) {
-        applyOptViewportFilter();
-      }
+      if (active) applyOptViewportFilter();
       showToast(active ? 'Autofiltro activado' : 'Autofiltro desactivado', 'info');
     }
 
@@ -1024,7 +1170,7 @@
       selectedStoreIds.clear();
       visible.forEach(w => selectedStoreIds.add(String(w.warehouse_id).trim()));
 
-      renderStoreSelectionList();
+      renderWarehouseCards(visible);
       renderCurrentStateMetrics();
       drawCurrentMapLayers();
 
@@ -1034,78 +1180,134 @@
       });
     }
 
-    // ── RENDERIZADO DE TIENDAS Y SHAPES REALES ──
-    function renderStoreSelectionList() {
-      const container = document.getElementById('opt-store-pick-list');
-      const countEl = document.getElementById('opt-map-cluster-count');
-      if (!container) return;
+    function filterWarehouseCards() {
+      const country = document.getElementById('sheet-filter-country')?.value || '';
+      const city = document.getElementById('sheet-filter-city')?.value || '';
+      const search = (document.getElementById('whs-search-input')?.value || '').toLowerCase().trim();
+      const activeOnly = Boolean(document.getElementById('sheet-active-only')?.checked);
 
-      const activeStores = allWarehouses.filter(w => {
-        if (!selectedStoreIds.has(String(w.warehouse_id).trim())) return false;
-        if (selectedPartnerFilter === 'ALL') return true;
-        const pData = STORE_POLYGONS_CACHE.get(String(w.warehouse_id).trim());
-        const partners = (pData && pData.partners_detail) || w.partners_detail || [];
-        return partners.some(p => classifyPartnerVertical(p.partner_name || p.business_type || '') === selectedPartnerFilter);
+      const filtered = allWarehouses.filter(w => {
+        if (country && w.country !== country) return false;
+        if (city && w.city !== city) return false;
+        if (activeOnly && w.is_active === false) return false;
+        if (search) {
+          const matchName = (w.warehouse_name || '').toLowerCase().includes(search);
+          const matchId = (w.warehouse_id || '').toLowerCase().includes(search);
+          const matchNeigh = (w.neighborhood || '').toLowerCase().includes(search);
+          if (!matchName && !matchId && !matchNeigh) return false;
+        }
+        if (selectedPartnerFilter !== 'ALL') {
+          const pData = STORE_POLYGONS_CACHE.get(String(w.warehouse_id).trim());
+          const partners = (pData && pData.partners_detail) || w.partners_detail || [];
+          const hasV = partners.some(p => classifyPartnerVertical(p.partner_name || p.business_type || '') === selectedPartnerFilter);
+          if (!hasV) return false;
+        }
+        return true;
       });
 
-      if (countEl) countEl.textContent = `${activeStores.length} darkstores seleccionadas`;
+      // Si no hay filtro de texto activo, pre-seleccionar los visibles
+      if (!search && filtered.length > 0) {
+        selectedStoreIds.clear();
+        filtered.forEach(w => selectedStoreIds.add(String(w.warehouse_id).trim()));
+
+        if (map) {
+          const b = new google.maps.LatLngBounds();
+          filtered.forEach(w => {
+            if (w.lat && w.lng) b.extend(new google.maps.LatLng(Number(w.lat), Number(w.lng)));
+          });
+          map.fitBounds(b);
+        }
+      }
+
+      renderWarehouseCards(filtered);
+      renderCurrentStateMetrics();
+      drawCurrentMapLayers();
+
+      fetchMissingStorePolygons(Array.from(selectedStoreIds), () => {
+        drawCurrentMapLayers();
+        renderCurrentStateMetrics();
+      });
+    }
+
+    // ── RENDERIZADO DE TARJETAS EN EL PANEL INFERIOR ──
+    function renderWarehouseCards(storesToRender = null) {
+      const container = document.getElementById('whs-cards-container');
+      const badgeCount = document.getElementById('sheet-selected-badge');
+      const mapClusterCount = document.getElementById('opt-map-cluster-count');
+      if (!container) return;
+
+      const list = storesToRender || allWarehouses;
+      
+      // Ordenar: seleccionados arriba
+      const sorted = [...list].sort((a, b) => {
+        const aSel = selectedStoreIds.has(String(a.warehouse_id).trim());
+        const bSel = selectedStoreIds.has(String(b.warehouse_id).trim());
+        if (aSel && !bSel) return -1;
+        if (!aSel && bSel) return 1;
+        return (Number(b.orders) || 0) - (Number(a.orders) || 0);
+      });
+
+      if (badgeCount) badgeCount.textContent = `${selectedStoreIds.size} seleccionados`;
+      if (mapClusterCount) mapClusterCount.textContent = `${selectedStoreIds.size} darkstores seleccionadas`;
 
       container.innerHTML = '';
-      activeStores.forEach(w => {
-        const isSel = selectedStoreIds.has(String(w.warehouse_id).trim());
+      sorted.forEach(w => {
+        const normId = String(w.warehouse_id).trim();
+        const isSel = selectedStoreIds.has(normId);
         const orders = Number(w.orders) || 0;
         const area = w.coverage_area_km2 ? `${Number(w.coverage_area_km2).toFixed(1)} km²` : '—';
 
-        const row = document.createElement('div');
-        row.className = 'store-pick-card' + (isSel ? ' selected' : '');
-        row.innerHTML = `
-          <input type="checkbox" class="store-pick-checkbox" ${isSel ? 'checked' : ''} onchange="toggleStorePick('${w.warehouse_id}', this.checked, event)">
-          <div class="store-pick-info" onclick="focusStoreInMap('${w.warehouse_id}')">
-            <div class="store-pick-name">${w.warehouse_name}</div>
-            <div class="store-pick-meta">
-              <span>${orders.toLocaleString('es-AR')} órd/mes</span>
-              <span>•</span>
-              <span style="color:#ea044e;">${area}</span>
-              <span>•</span>
-              <span>${w.neighborhood || w.city}</span>
-            </div>
+        const card = document.createElement('div');
+        card.className = 'whs-card' + (isSel ? ' selected' : '');
+        card.innerHTML = `
+          <div class="whs-card-header">
+            <span class="whs-card-name" title="${w.warehouse_name}">${w.warehouse_name}</span>
+            <input type="checkbox" ${isSel ? 'checked' : ''} style="cursor:pointer; accent-color:var(--brand-red);" onclick="toggleCardSelection('${normId}', event)">
+          </div>
+          <div class="whs-card-meta">
+            <span>${orders.toLocaleString('es-AR')} órd</span>
+            <span>•</span>
+            <span style="color:#ea044e;">${area}</span>
+          </div>
+          <div style="font-size:9px; color:var(--text-sheet-muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+            ${w.city} • ${w.neighborhood || 'Local'}
           </div>
         `;
-        container.appendChild(row);
+        card.onclick = () => focusStoreInMap(normId);
+        container.appendChild(card);
       });
     }
 
-    function toggleStorePick(whId, checked, event) {
-      if (event) event.stopPropagation();
+    function toggleCardSelection(whId, e) {
+      if (e) e.stopPropagation();
       const normId = String(whId).trim();
-      if (checked) {
-        selectedStoreIds.add(normId);
-      } else {
+      if (selectedStoreIds.has(normId)) {
         selectedStoreIds.delete(normId);
+      } else {
+        selectedStoreIds.add(normId);
       }
+      renderWarehouseCards();
       renderCurrentStateMetrics();
       drawCurrentMapLayers();
+
+      fetchMissingStorePolygons(Array.from(selectedStoreIds), () => {
+        drawCurrentMapLayers();
+        renderCurrentStateMetrics();
+      });
     }
 
-    function selectAllVisibleStores(select) {
+    function selectAllVisibleCards(select) {
+      const cards = document.querySelectorAll('.whs-card');
       if (select) {
-        const bounds = map.getBounds();
         allWarehouses.forEach(w => {
-          if (w.lat && w.lng && bounds && bounds.contains(new google.maps.LatLng(Number(w.lat), Number(w.lng)))) {
-            selectedStoreIds.add(String(w.warehouse_id).trim());
-          }
+          selectedStoreIds.add(String(w.warehouse_id).trim());
         });
       } else {
         selectedStoreIds.clear();
       }
-      renderStoreSelectionList();
+      renderWarehouseCards();
       renderCurrentStateMetrics();
       drawCurrentMapLayers();
-
-      fetchMissingStorePolygons(Array.from(selectedStoreIds), () => {
-        drawCurrentMapLayers();
-        renderCurrentStateMetrics();
-      });
     }
 
     function focusStoreInMap(whId) {
@@ -1117,7 +1319,98 @@
       }
     }
 
-    // ── MÉTRICAS DEL ESTADO ACTUAL ──
+    function toggleBottomSheet() {
+      const sheet = document.getElementById('bottom-sheet');
+      const icon = document.getElementById('sheet-toggle-icon');
+      if (!sheet) return;
+      sheet.classList.toggle('expanded');
+      sheet.classList.toggle('collapsed');
+      const isExp = sheet.classList.contains('expanded');
+      if (icon) icon.textContent = isExp ? '▼ Ocultar' : '▲ Desplegar Almacenes';
+    }
+
+    // ── DIBUJO DE SHAPES REALES EN EL MAPA (CERO CÍRCULOS) ──
+    function drawCurrentMapLayers() {
+      mapStoreMarkers.forEach(m => m.setMap(null));
+      beforePolygonLayers.forEach(p => p.setMap(null));
+      afterPolygonLayers.forEach(p => p.setMap(null));
+      mapStoreMarkers = [];
+      beforePolygonLayers = [];
+      afterPolygonLayers = [];
+
+      const activeStores = allWarehouses.filter(w => selectedStoreIds.has(String(w.warehouse_id).trim()));
+      const colors = ['#ea044e', '#0284c7', '#10b981', '#f59e0b', '#8b5cf6', '#06b6d4'];
+
+      activeStores.forEach((w) => {
+        const marker = new google.maps.Marker({
+          position: { lat: Number(w.lat), lng: Number(w.lng) },
+          map: map,
+          title: w.warehouse_name,
+          icon: getCorporateMarkerIcon(w.warehouse_name, w.is_active)
+        });
+        marker.addListener('click', () => focusStoreInMap(w.warehouse_id));
+        mapStoreMarkers.push(marker);
+      });
+
+      if (currentMapLayer === 'before') {
+        // DIBUJAR SHAPES 100% REALES DE GOOGLE SHEETS
+        activeStores.forEach((w, idx) => {
+          const shapeInfo = getStorePolygonCoords(w);
+          if (!shapeInfo || !shapeInfo.coords || shapeInfo.coords.length < 3) {
+            return;
+          }
+
+          const vertCol = PARTNER_VERTICAL_COLORS[shapeInfo.vertical] || colors[idx % colors.length];
+
+          const poly = new google.maps.Polygon({
+            paths: shapeInfo.coords,
+            map: map,
+            strokeColor: vertCol,
+            strokeWeight: 2.2,
+            strokeOpacity: 0.95,
+            fillColor: vertCol,
+            fillOpacity: 0.20,
+            zIndex: 10
+          });
+          poly.addListener('click', () => focusStoreInMap(w.warehouse_id));
+          beforePolygonLayers.push(poly);
+        });
+      } else if (currentMapLayer === 'after' && calculatedProposal) {
+        // DIBUJAR SHAPES OPTIMIZADOS
+        calculatedProposal.stores.forEach((s, idx) => {
+          const col = colors[idx % colors.length];
+          const poly = new google.maps.Polygon({
+            paths: s.coords,
+            map: map,
+            strokeColor: col,
+            strokeWeight: 2.8,
+            strokeOpacity: 1.0,
+            fillColor: col,
+            fillOpacity: 0.28,
+            zIndex: 20
+          });
+          poly.addListener('click', () => focusStoreInMap(s.warehouse_id));
+          afterPolygonLayers.push(poly);
+        });
+      }
+    }
+
+    function setOptMapLayer(layer) {
+      currentMapLayer = layer;
+      document.getElementById('btn-show-before')?.classList.toggle('active', layer === 'before');
+      document.getElementById('btn-show-after')?.classList.toggle('active-emerald', layer === 'after');
+
+      const statusLabel = document.getElementById('opt-map-status-label');
+      if (statusLabel) {
+        statusLabel.textContent = layer === 'before' 
+          ? 'Shapes Reales de Google Sheets' 
+          : 'Propuesta Optimizada de Rebalanceo';
+      }
+
+      drawCurrentMapLayers();
+    }
+
+    // ── CÁLCULO DE MÉTRICAS DEL ESTADO ACTUAL ──
     function renderCurrentStateMetrics() {
       const activeStores = allWarehouses.filter(w => selectedStoreIds.has(String(w.warehouse_id).trim()));
 
@@ -1194,205 +1487,96 @@
       }
     }
 
-    // ── DIBUJO DE POLÍGONOS REALES EN EL MAPA ──
-    function drawCurrentMapLayers() {
-      mapStoreMarkers.forEach(m => m.setMap(null));
-      beforePolygonLayers.forEach(p => p.setMap(null));
-      afterPolygonLayers.forEach(p => p.setMap(null));
-      diffPolygonLayers.forEach(p => p.setMap(null));
-      mapStoreMarkers = [];
-      beforePolygonLayers = [];
-      afterPolygonLayers = [];
-      diffPolygonLayers = [];
-
-      const activeStores = allWarehouses.filter(w => selectedStoreIds.has(String(w.warehouse_id).trim()));
-      const colors = ['#ea044e', '#0284c7', '#10b981', '#f59e0b', '#8b5cf6', '#06b6d4'];
-
-      activeStores.forEach((w) => {
-        const marker = new google.maps.Marker({
-          position: { lat: Number(w.lat), lng: Number(w.lng) },
-          map: map,
-          title: w.warehouse_name,
-          icon: getCorporateMarkerIcon(w.warehouse_name, w.is_active)
-        });
-        marker.addListener('click', () => focusStoreInMap(w.warehouse_id));
-        mapStoreMarkers.push(marker);
-      });
-
-      if (currentMapLayer === 'before') {
-        // Shapes Reales de Google Sheets
-        activeStores.forEach((w, idx) => {
-          const shapeInfo = getStorePolygonCoords(w);
-          if (!shapeInfo || !shapeInfo.coords || shapeInfo.coords.length < 3) {
-            return;
-          }
-
-          const vertCol = PARTNER_VERTICAL_COLORS[shapeInfo.vertical] || colors[idx % colors.length];
-
-          const poly = new google.maps.Polygon({
-            paths: shapeInfo.coords,
-            map: map,
-            strokeColor: vertCol,
-            strokeWeight: 2.2,
-            strokeOpacity: 0.95,
-            fillColor: vertCol,
-            fillOpacity: 0.20,
-            zIndex: 10
-          });
-          poly.addListener('click', () => focusStoreInMap(w.warehouse_id));
-          beforePolygonLayers.push(poly);
-        });
-      } else if (currentMapLayer === 'after' && calculatedProposal) {
-        // Shapes Optimizados
-        calculatedProposal.stores.forEach((s, idx) => {
-          const col = colors[idx % colors.length];
-          const poly = new google.maps.Polygon({
-            paths: s.coords,
-            map: map,
-            strokeColor: col,
-            strokeWeight: 2.8,
-            strokeOpacity: 1.0,
-            fillColor: col,
-            fillOpacity: 0.28,
-            zIndex: 20
-          });
-          poly.addListener('click', () => focusStoreInMap(s.warehouse_id));
-          afterPolygonLayers.push(poly);
-        });
-
-        if (isDiffVisible) {
-          calculatedProposal.diffs.forEach(d => {
-            const coords = extractPolygonCoordinates(d.feature.geometry);
-            if (!coords || coords.length < 3) return;
-            const isAbsorbe = d.type === 'absorbe';
-            const poly = new google.maps.Polygon({
-              paths: coords,
-              map: map,
-              strokeColor: isAbsorbe ? '#10b981' : '#f59e0b',
-              strokeWeight: 1.8,
-              strokeOpacity: 0.9,
-              fillColor: isAbsorbe ? '#10b981' : '#f59e0b',
-              fillOpacity: 0.35,
-              zIndex: 30
-            });
-            diffPolygonLayers.push(poly);
-          });
-        }
-      }
-    }
-
-    function setOptMapLayer(layer) {
-      currentMapLayer = layer;
-      document.getElementById('btn-show-before')?.classList.toggle('active', layer === 'before');
-      document.getElementById('btn-show-after')?.classList.toggle('active-emerald', layer === 'after');
-
-      const statusLabel = document.getElementById('opt-map-status-label');
-      if (statusLabel) {
-        statusLabel.textContent = layer === 'before' 
-          ? 'Shapes Actuales (Reales de Sheets)' 
-          : 'Propuesta Optimizada de Rebalanceo';
-      }
-
-      drawCurrentMapLayers();
-    }
-
-    function toggleDiffLayer(checked) {
-      isDiffVisible = checked;
-      drawCurrentMapLayers();
-    }
-
-    // ── REBALANCEO VORONOI GEODÉSICO ──
+    // ── REBALANCEO TERRITORIAL SIN CÍRCULOS (USANDO SHAPES REALES) ──
     function executeTerritorialRebalance() {
       const activeStores = allWarehouses.filter(w => selectedStoreIds.has(String(w.warehouse_id).trim()));
       if (activeStores.length === 0) {
-        showToast('Seleccioná al menos un almacén.', 'warning');
+        showToast('Seleccioná al menos un almacén en el panel inferior.', 'warning');
         return;
       }
 
-      const radiusParam = parseFloat(document.getElementById('opt-radius-param')?.value) || 4.0;
       showToast('Calculando partición territorial y anillos...', 'info');
 
-      const points = activeStores.map(w => turf.point([Number(w.lng), Number(w.lat)], { id: w.warehouse_id, name: w.warehouse_name }));
-      const featureColl = turf.featureCollection(points);
-      const bbox = turf.bbox(featureColl);
-      const pad = 0.08;
-      const expandedBbox = [bbox[0] - pad, bbox[1] - pad, bbox[2] + pad, bbox[3] + pad];
-
-      let voronoiCells = null;
-      try {
-        voronoiCells = turf.voronoi(featureColl, { bbox: expandedBbox });
-      } catch(e) {}
-
       const optimizedStores = [];
-      const diffList = [];
 
-      activeStores.forEach((w, idx) => {
-        const storePt = [Number(w.lng), Number(w.lat)];
-        const maxCircle = turf.circle(storePt, radiusParam, { steps: 48, units: 'kilometers' });
-        let optFeature = maxCircle;
-
-        if (voronoiCells && voronoiCells.features && voronoiCells.features[idx]) {
-          try {
-            const vCell = voronoiCells.features[idx];
-            const intersected = turf.intersect(vCell, maxCircle);
-            if (intersected && intersected.geometry) {
-              optFeature = intersected;
-            }
-          } catch(e) {}
+      // Si hay 1 sola tienda (como Equipetrol): Preservar su shape real
+      if (activeStores.length === 1) {
+        const w = activeStores[0];
+        const shapeInfo = getStorePolygonCoords(w);
+        const coords = (shapeInfo && shapeInfo.coords) ? shapeInfo.coords : null;
+        
+        if (coords && coords.length >= 3) {
+          optimizedStores.push({
+            warehouse_id: w.warehouse_id,
+            warehouse_name: w.warehouse_name,
+            city: w.city,
+            country: w.country,
+            coords: coords,
+            area_km2: Number(w.coverage_area_km2 || 12.0),
+            projected_orders: Number(w.orders || 0)
+          });
         }
+      } else {
+        // Si hay múltiples tiendas: Rebalancear mediante Voronoi recortado
+        const points = activeStores.map(w => turf.point([Number(w.lng), Number(w.lat)], { id: w.warehouse_id }));
+        const featureColl = turf.featureCollection(points);
+        const bbox = turf.bbox(featureColl);
+        const pad = 0.08;
+        const expandedBbox = [bbox[0] - pad, bbox[1] - pad, bbox[2] + pad, bbox[3] + pad];
 
-        const rawCoords = optFeature.geometry.coordinates[0];
-        const newCoords = rawCoords.map(c => ({ lat: c[1], lng: c[0] }));
-        const newAreaKm2 = Number((turf.area(optFeature) / 1000000).toFixed(2));
-
-        let currentCoords = null;
-        if (w.geojson) currentCoords = extractPolygonCoordinates(w.geojson);
-        if (!currentCoords || currentCoords.length < 3) {
-          const c = turf.circle([Number(w.lng), Number(w.lat)], 3.5, { steps: 36, units: 'kilometers' });
-          currentCoords = c.geometry.coordinates[0].map(pt => ({ lat: pt[1], lng: pt[0] }));
-        }
-
+        let voronoiCells = null;
         try {
-          const curPolyTurf = turf.polygon([currentCoords.map(p => [p.lng, p.lat])]);
-          const diffCede = turf.difference(curPolyTurf, optFeature);
-          if (diffCede && diffCede.geometry) {
-            diffList.push({ storeId: w.warehouse_id, storeName: w.warehouse_name, type: 'cede', feature: diffCede });
-          }
-          const diffAbsorbe = turf.difference(optFeature, curPolyTurf);
-          if (diffAbsorbe && diffAbsorbe.geometry) {
-            diffList.push({ storeId: w.warehouse_id, storeName: w.warehouse_name, type: 'absorbe', feature: diffAbsorbe });
-          }
+          voronoiCells = turf.voronoi(featureColl, { bbox: expandedBbox });
         } catch(e) {}
 
-        const curOrders = Number(w.orders) || 0;
-        const curArea = Number(w.coverage_area_km2) || 12.0;
-        const projectedOrders = Math.round(curOrders * (newAreaKm2 / Math.max(1, curArea)) * 0.95);
+        activeStores.forEach((w, idx) => {
+          const shapeInfo = getStorePolygonCoords(w);
+          let baseFeature = null;
 
-        optimizedStores.push({
-          warehouse_id: w.warehouse_id,
-          warehouse_name: w.warehouse_name,
-          city: w.city,
-          country: w.country,
-          coords: newCoords,
-          feature: optFeature,
-          area_km2: newAreaKm2,
-          current_orders: curOrders,
-          projected_orders: projectedOrders,
-          dt_savings: 7.5,
-          cpo_savings: 0.62
+          if (shapeInfo && shapeInfo.coords && shapeInfo.coords.length >= 3) {
+            try {
+              baseFeature = turf.polygon([shapeInfo.coords.map(p => [p.lng, p.lat])]);
+            } catch(e) {}
+          }
+
+          let optFeature = baseFeature;
+
+          if (voronoiCells && voronoiCells.features && voronoiCells.features[idx] && baseFeature) {
+            try {
+              const intersected = turf.intersect(voronoiCells.features[idx], baseFeature);
+              if (intersected && intersected.geometry) {
+                optFeature = intersected;
+              }
+            } catch(e) {}
+          }
+
+          if (optFeature && optFeature.geometry) {
+            const rawCoords = extractPolygonCoordinates(optFeature.geometry);
+            if (rawCoords && rawCoords.length >= 3) {
+              const newAreaKm2 = Number((turf.area(optFeature) / 1000000).toFixed(2));
+              optimizedStores.push({
+                warehouse_id: w.warehouse_id,
+                warehouse_name: w.warehouse_name,
+                city: w.city,
+                country: w.country,
+                coords: rawCoords,
+                area_km2: newAreaKm2,
+                projected_orders: Math.round((Number(w.orders) || 0) * 0.98)
+              });
+            }
+          }
         });
-      });
+      }
 
       calculatedProposal = {
-        stores: optimizedStores,
-        diffs: diffList
+        stores: optimizedStores
       };
 
       switchPanelTab('proposal');
       setOptMapLayer('after');
       renderProposalDashboard();
 
-      showToast('Propuesta de rebalanceo generada.', 'success');
+      showToast('Propuesta generada con éxito.', 'success');
     }
 
     // ── RENDERIZADO DEL RESUMEN COMPARATIVO ──
@@ -1480,15 +1664,13 @@
           const deltaArea = (s.area_km2 - curArea).toFixed(1);
 
           matrixEl.innerHTML += `
-            <div class="store-pick-card" onclick="focusStoreInMap('${s.warehouse_id}')" style="margin-bottom:6px;">
-              <div class="store-pick-info">
-                <div class="store-pick-name">${s.warehouse_name}</div>
-                <div class="store-pick-meta">
+            <div class="store-pick-card" onclick="focusStoreInMap('${s.warehouse_id}')" style="margin-bottom:6px; background:var(--bg-sheet-bar); border:1px solid var(--border-sheet); border-radius:6px; padding:7px 10px; display:flex; align-items:center; justify-content:space-between; cursor:pointer;">
+              <div>
+                <div style="font-size:11px; font-weight:700; color:var(--text-sheet-title);">${s.warehouse_name}</div>
+                <div style="font-size:9.5px; color:var(--text-sheet-muted); font-family:'JetBrains Mono',monospace;">
                   <span>Shape: ${s.area_km2} km² (${deltaArea >= 0 ? '+' : ''}${deltaArea})</span>
                   <span>•</span>
                   <span style="color:#10b981;">Ahorro DT: -7.5 min</span>
-                  <span>•</span>
-                  <span style="color:#10b981;">CPO: -$ 0.62</span>
                 </div>
               </div>
               <button type="button" class="opt-btn opt-btn-secondary" style="padding:2px 8px; font-size:9.5px;" onclick="copySpecificStoreWkt('${s.warehouse_id}', event)">
@@ -1540,9 +1722,7 @@
             warehouse_id: s.warehouse_id,
             warehouse_name: s.warehouse_name,
             area_km2: s.area_km2,
-            projected_orders: s.projected_orders,
-            dt_savings_min: s.dt_savings,
-            cpo_savings_usd: s.cpo_savings
+            projected_orders: s.projected_orders
           },
           geometry: {
             type: 'Polygon',
@@ -1568,12 +1748,12 @@
         return;
       }
 
-      let csv = 'warehouse_id,warehouse_name,city,country,area_km2,projected_orders,dt_savings_min,cpo_savings_usd,wkt_geometry\n';
+      let csv = 'warehouse_id,warehouse_name,city,country,area_km2,projected_orders,wkt_geometry\n';
       calculatedProposal.stores.forEach(s => {
         const coords = s.coords.map(c => `${c.lng} ${c.lat}`);
         if (coords[0] !== coords[coords.length - 1]) coords.push(coords[0]);
         const wkt = `"POLYGON((${coords.join(', ')}))"`;
-        csv += `"${s.warehouse_id}","${s.warehouse_name}","${s.city}","${s.country}",${s.area_km2},${s.projected_orders},${s.dt_savings},${s.cpo_savings},${wkt}\n`;
+        csv += `"${s.warehouse_id}","${s.warehouse_name}","${s.city}","${s.country}",${s.area_km2},${s.projected_orders},${wkt}\n`;
       });
 
       const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -1610,17 +1790,6 @@
       navigator.clipboard.writeText(wkt).then(() => {
         showToast(`WKT de ${s.warehouse_name} copiado al portapapeles.`, 'success');
       });
-    }
-
-    function extractPolygonCoordinates(geojson) {
-      if (!geojson) return null;
-      if (geojson.type === 'Polygon' && geojson.coordinates && geojson.coordinates[0]) {
-        return geojson.coordinates[0].map(c => ({ lat: Number(c[1]), lng: Number(c[0]) }));
-      }
-      if (geojson.type === 'MultiPolygon' && geojson.coordinates && geojson.coordinates[0] && geojson.coordinates[0][0]) {
-        return geojson.coordinates[0][0].map(c => ({ lat: Number(c[1]), lng: Number(c[0]) }));
-      }
-      return null;
     }
 
     function getCorporateMarkerIcon(name, isActive) {
