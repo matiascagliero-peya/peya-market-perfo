@@ -558,9 +558,18 @@
         Optimización Logística
       </span>
       <span style="color:var(--border-sheet);">|</span>
-      <span id="opt-cluster-status-text" style="font-size:11px; font-weight:700; color:var(--text-sheet-muted);">
-        Selección de Red
-      </span>
+
+      <!-- Botón para Ver Anillos Concéntricos -->
+      <button type="button" id="btn-toggle-rings" class="opt-btn opt-btn-secondary" onclick="toggleRingsLayer()" title="Activar/desactivar visualización de los 4 anillos concéntricos operativos">
+        <span style="display:inline-block; width:8px; height:8px; border-radius:50%; border:2px solid #f59e0b;"></span>
+        <span id="btn-rings-text">Ver Anillos</span>
+      </button>
+
+      <!-- Botón para Ver Antes y Después con Titileo -->
+      <button type="button" id="btn-pulse-diff" class="opt-btn opt-btn-secondary" style="border-color:#10b981; color:#10b981;" onclick="startBeforeAfterComparison()" title="Ver superposición Antes (Azul) y Después (Verde) con parpadeo de zonas modificadas">
+        <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#10b981;"></span>
+        <span id="btn-pulse-text">Comparar y Titilar</span>
+      </button>
     </div>
 
     <div class="opt-toolbar-center">
@@ -605,6 +614,16 @@
         <span id="opt-map-status-label">Shapes Reales de Google Sheets</span>
         <span style="color:var(--border-sheet);">•</span>
         <span id="opt-map-cluster-count" style="color:var(--text-sheet-muted); font-family:'JetBrains Mono',monospace;">0 locales</span>
+      </div>
+
+      <!-- Banner Flotante de Comparación y Titileo -->
+      <div id="pulse-diff-banner" style="display:none; position:absolute; top:52px; left:12px; background:var(--bg-sheet); border:1px solid #10b981; border-radius:6px; padding:6px 14px; font-size:11px; font-weight:700; box-shadow:0 6px 18px rgba(0,0,0,0.35); z-index:20; align-items:center; gap:12px;">
+        <span style="color:#0284c7;">■ Azul: Antes</span>
+        <span style="color:#10b981;">■ Verde: Después</span>
+        <span style="color:#f59e0b;">⚡ Titilando: Zonas modificadas</span>
+        <button type="button" class="opt-btn opt-btn-secondary" style="padding:2px 8px; font-size:10px;" onclick="stopBeforeAfterComparison()">
+          Detener
+        </button>
       </div>
 
       <!-- PANEL INFERIOR DESPLEGABLE (BOTTOM SHEET) -->
@@ -902,6 +921,21 @@
     let mapStoreMarkers = [];
     let beforePolygonLayers = [];
     let afterPolygonLayers = [];
+
+    // Anillos concéntricos operativos (1, 2, 3.5, 5 km)
+    let isRingsVisible = false;
+    let ringsLayers = [];
+    const RING_RADII_METERS = [1000, 2000, 3500, 5000];
+    const RING_LABELS = ['< 1 KM (Óptimo)', '1-2 KM (Cercano)', '2-3.5 KM (Medio)', '3.5-5 KM (Fricción)'];
+    const RING_COLORS = ['#ea044e', '#f97316', '#f59e0b', '#0284c7'];
+
+    // Comparación Antes vs Después con Titileo de Diferencias
+    let isPulseActive = false;
+    let pulseAnimId = null;
+    let pulseStartTime = 0;
+    let pulseGhostPolygons = [];
+    let pulseOptimizedPolygons = [];
+    let pulseDiffPolygons = [];
 
     // Estado calculado
     let calculatedProposal = null;
@@ -1408,6 +1442,251 @@
       }
 
       drawCurrentMapLayers();
+    }
+
+    // ── ANILLOS CONCÉNTRICOS OPERATIVOS (1, 2, 3.5, 5 KM) ──
+    function toggleRingsLayer() {
+      isRingsVisible = !isRingsVisible;
+      const btn = document.getElementById('btn-toggle-rings');
+      const text = document.getElementById('btn-rings-text');
+      if (btn) btn.classList.toggle('active', isRingsVisible);
+      if (text) text.textContent = isRingsVisible ? 'Ocultar Anillos' : 'Ver Anillos';
+
+      drawRingsLayers();
+      showToast(isRingsVisible ? 'Anillos concéntricos visibles' : 'Anillos concéntricos ocultos', 'info');
+    }
+
+    function clearRingsLayers() {
+      ringsLayers.forEach(l => l.setMap(null));
+      ringsLayers = [];
+    }
+
+    function drawRingsLayers() {
+      clearRingsLayers();
+      if (!isRingsVisible || !map) return;
+
+      const activeStores = allWarehouses.filter(w => selectedStoreIds.has(String(w.warehouse_id).trim()));
+
+      activeStores.forEach(w => {
+        if (!w.lat || !w.lng) return;
+        const center = new google.maps.LatLng(Number(w.lat), Number(w.lng));
+
+        RING_RADII_METERS.forEach((rad, rIdx) => {
+          const col = RING_COLORS[rIdx % RING_COLORS.length];
+          const circle = new google.maps.Circle({
+            center: center,
+            radius: rad,
+            map: map,
+            strokeColor: col,
+            strokeWeight: 1.8,
+            strokeOpacity: 0.85,
+            fillColor: col,
+            fillOpacity: 0.05,
+            zIndex: 15 + (RING_RADII_METERS.length - rIdx),
+            clickable: false
+          });
+          ringsLayers.push(circle);
+        });
+      });
+    }
+
+    // ── COMPARACIÓN ANTES VS DESPUÉS CON TITILEO DE DIFERENCIAS ──
+    function coordsToTurfPolygon(coords) {
+      if (!coords || coords.length < 3) return null;
+      let ring = coords.map(p => [Number(p.lng), Number(p.lat)]);
+      if (ring[0][0] !== ring[ring.length - 1][0] || ring[0][1] !== ring[ring.length - 1][1]) {
+        ring.push(ring[0]);
+      }
+      return turf.polygon([ring]);
+    }
+
+    function turfFeatureToLatLngPaths(feature) {
+      if (!feature || !feature.geometry) return [];
+      const geom = feature.geometry;
+      if (geom.type === 'Polygon') {
+        if (!geom.coordinates || !geom.coordinates[0]) return [];
+        return [geom.coordinates[0].map(c => ({ lat: Number(c[1]), lng: Number(c[0]) }))];
+      }
+      if (geom.type === 'MultiPolygon') {
+        const paths = [];
+        geom.coordinates.forEach(poly => {
+          if (poly && poly[0]) {
+            paths.push(poly[0].map(c => ({ lat: Number(c[1]), lng: Number(c[0]) })));
+          }
+        });
+        return paths;
+      }
+      return [];
+    }
+
+    function clearPulseLayers() {
+      if (pulseAnimId) {
+        cancelAnimationFrame(pulseAnimId);
+        pulseAnimId = null;
+      }
+      pulseGhostPolygons.forEach(p => p.setMap(null));
+      pulseOptimizedPolygons.forEach(p => p.setMap(null));
+      pulseDiffPolygons.forEach(item => item.poly.setMap(null));
+      pulseGhostPolygons = [];
+      pulseOptimizedPolygons = [];
+      pulseDiffPolygons = [];
+      isPulseActive = false;
+      const banner = document.getElementById('pulse-diff-banner');
+      if (banner) banner.style.display = 'none';
+      const btn = document.getElementById('btn-pulse-diff');
+      if (btn) {
+        btn.classList.remove('active');
+        const text = document.getElementById('btn-pulse-text');
+        if (text) text.textContent = 'Comparar y Titilar';
+      }
+    }
+
+    function stopBeforeAfterComparison() {
+      clearPulseLayers();
+      drawCurrentMapLayers();
+      showToast('Comparativa finalizada.', 'info');
+    }
+
+    function startBeforeAfterComparison() {
+      if (isPulseActive) {
+        stopBeforeAfterComparison();
+        return;
+      }
+
+      const activeStores = allWarehouses.filter(w => selectedStoreIds.has(String(w.warehouse_id).trim()));
+      if (activeStores.length === 0) {
+        showToast('Seleccioná al menos un almacén.', 'warning');
+        return;
+      }
+
+      // Si aún no se calculó la propuesta, calcularla en el momento
+      if (!calculatedProposal || !calculatedProposal.stores || calculatedProposal.stores.length === 0) {
+        executeTerritorialRebalance();
+      }
+
+      clearPulseLayers();
+      // Ocultar capas individuales para no superponer
+      beforePolygonLayers.forEach(p => p.setMap(null));
+      afterPolygonLayers.forEach(p => p.setMap(null));
+
+      isPulseActive = true;
+      const banner = document.getElementById('pulse-diff-banner');
+      if (banner) banner.style.display = 'flex';
+      const btn = document.getElementById('btn-pulse-diff');
+      if (btn) {
+        btn.classList.add('active');
+        const text = document.getElementById('btn-pulse-text');
+        if (text) text.textContent = 'Detener Comparación';
+      }
+
+      activeStores.forEach(w => {
+        const shapeInfo = getStorePolygonCoords(w);
+        const oldCoords = shapeInfo ? shapeInfo.coords : null;
+        const optStore = calculatedProposal.stores.find(s => s.warehouse_id === w.warehouse_id);
+        const newCoords = optStore ? optStore.coords : null;
+
+        if (!oldCoords || oldCoords.length < 3 || !newCoords || newCoords.length < 3) return;
+
+        // 1. Capa Antes en Azul Eléctrico (#0284c7)
+        const ghostPoly = new google.maps.Polygon({
+          paths: oldCoords,
+          strokeColor: '#0284c7',
+          strokeWeight: 2.2,
+          strokeOpacity: 0.9,
+          fillColor: '#0284c7',
+          fillOpacity: 0.12,
+          map: map,
+          zIndex: 10,
+          clickable: false
+        });
+        pulseGhostPolygons.push(ghostPoly);
+
+        // 2. Capa Después en Verde Esmeralda (#10b981)
+        const optPoly = new google.maps.Polygon({
+          paths: newCoords,
+          strokeColor: '#10b981',
+          strokeWeight: 2.5,
+          strokeOpacity: 0.95,
+          fillColor: '#10b981',
+          fillOpacity: 0.18,
+          map: map,
+          zIndex: 20,
+          clickable: false
+        });
+        pulseOptimizedPolygons.push(optPoly);
+
+        // 3. Extraer parches de diferencia con Turf
+        try {
+          const polyA = coordsToTurfPolygon(oldCoords);
+          const polyB = coordsToTurfPolygon(newCoords);
+
+          if (polyA && polyB && typeof turf !== 'undefined') {
+            // Zonas recortadas / cedidas (Antes existía, Después se quitó)
+            const diffRemoved = turf.difference(polyA, polyB);
+            if (diffRemoved && turf.area(diffRemoved) > 500) {
+              const removedPaths = turfFeatureToLatLngPaths(diffRemoved);
+              removedPaths.forEach(path => {
+                const p = new google.maps.Polygon({
+                  paths: path,
+                  strokeColor: '#f59e0b',
+                  strokeWeight: 3,
+                  strokeOpacity: 1,
+                  fillColor: '#f59e0b',
+                  fillOpacity: 0.45,
+                  map: map,
+                  zIndex: 999,
+                  clickable: false
+                });
+                pulseDiffPolygons.push({ poly: p, baseColor: '#f59e0b', type: 'removed' });
+              });
+            }
+
+            // Zonas absorbidas / ganadas (Antes no existía, Después se agregó)
+            const diffAdded = turf.difference(polyB, polyA);
+            if (diffAdded && turf.area(diffAdded) > 500) {
+              const addedPaths = turfFeatureToLatLngPaths(diffAdded);
+              addedPaths.forEach(path => {
+                const p = new google.maps.Polygon({
+                  paths: path,
+                  strokeColor: '#10b981',
+                  strokeWeight: 3,
+                  strokeOpacity: 1,
+                  fillColor: '#10b981',
+                  fillOpacity: 0.45,
+                  map: map,
+                  zIndex: 999,
+                  clickable: false
+                });
+                pulseDiffPolygons.push({ poly: p, baseColor: '#10b981', type: 'added' });
+              });
+            }
+          }
+        } catch(e) {
+          console.warn('Error calculando diferencias con Turf:', e);
+        }
+      });
+
+      // 4. Iniciar animación de parpadeo / titileo
+      pulseStartTime = performance.now();
+      function stepPulse(now) {
+        if (!isPulseActive) return;
+        const elapsed = now - pulseStartTime;
+        const t = (elapsed / 1000) * 2.5; // 2.5 ciclos por segundo
+        const wave = 0.5 + 0.5 * Math.sin(t * Math.PI * 2);
+
+        pulseDiffPolygons.forEach(item => {
+          item.poly.setOptions({
+            strokeWeight: 2.2 + 2.5 * wave,
+            strokeOpacity: 0.85 + 0.15 * wave,
+            fillOpacity: 0.18 + 0.55 * wave
+          });
+        });
+
+        pulseAnimId = requestAnimationFrame(stepPulse);
+      }
+
+      pulseAnimId = requestAnimationFrame(stepPulse);
+      showToast('Comparativa activa: titilando zonas modificadas.', 'info');
     }
 
     // ── CÁLCULO DE MÉTRICAS DEL ESTADO ACTUAL ──
