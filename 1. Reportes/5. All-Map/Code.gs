@@ -104,6 +104,10 @@ function doGet(e) {
       pageTitle = 'Benchmark Tiendas — All-Map';
       activePage = 'benchmark';
     }
+  } else if (page === 'optimizer' || page === 'expansion' || page === 'zonas') {
+    templateName = '3. OptimizadorZonas';
+    pageTitle = 'Optimización Logística & Rebalanceo — All-Map';
+    activePage = 'optimizer';
   }
 
   let preloadedInitialData = 'null';

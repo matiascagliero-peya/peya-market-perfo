@@ -517,6 +517,12 @@
         </span>
         <span>Benchmark Tiendas</span>
       </a>
+      <a href="<?= (typeof scriptUrl !== 'undefined' && scriptUrl) ? (scriptUrl + '?page=optimizer') : '?page=optimizer' ?>" onclick="return navigateToAllMapPage('optimizer', event)" target="_top" class="nav-item <?= activePage === 'optimizer' ? 'active' : '' ?>">
+        <span class="nav-item-icon">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>
+        </span>
+        <span>Optimización Logística</span>
+      </a>
       <? } ?>
     </nav>
   </div>

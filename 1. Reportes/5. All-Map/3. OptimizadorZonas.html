@@ -1,0 +1,1334 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Optimización Logística & Rebalanceo de Zonas — All-Map</title>
+  <?!= include('_nav', { activePage: 'optimizer', scriptUrl: (typeof scriptUrl !== 'undefined' ? scriptUrl : ''), isAdmin: (typeof isAdmin !== 'undefined' ? isAdmin : true), userEmail: (typeof userEmail !== 'undefined' ? userEmail : '') }) ?>
+
+  <style>
+    :root {
+      --bg-page: #1a2232;
+      --bg-sheet: #222b3d;
+      --bg-sheet-bar: #1c2435;
+      --bg-sheet-card: #222b3d;
+      --bg-sheet-card-hover: #2a354b;
+      --border-sheet: #3b475e;
+      --border-sheet-subtle: #2d384c;
+      --text-sheet-title: #f8fafc;
+      --text-sheet-body: #cbd5e1;
+      --text-sheet-muted: #94a3b8;
+      --brand-red: #ea044e;
+      --brand-cyan: #0284c7;
+      --brand-emerald: #10b981;
+      --brand-amber: #f59e0b;
+      --brand-purple: #8b5cf6;
+    }
+
+    [data-theme="light"] {
+      --bg-page: #f8fafc;
+      --bg-sheet: #ffffff;
+      --bg-sheet-bar: #f1f5f9;
+      --bg-sheet-card: #ffffff;
+      --bg-sheet-card-hover: #f8fafc;
+      --border-sheet: #e2e8f0;
+      --border-sheet-subtle: #cbd5e1;
+      --text-sheet-title: #0f172a;
+      --text-sheet-body: #334155;
+      --text-sheet-muted: #64748b;
+    }
+
+    body {
+      background: var(--bg-page);
+      color: var(--text-sheet-body);
+      font-family: 'Outfit', system-ui, -apple-system, sans-serif;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Barra de Control Superior ── */
+    .optimizer-toolbar {
+      background: var(--bg-sheet-bar);
+      border-bottom: 1px solid var(--border-sheet);
+      padding: 8px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      flex-shrink: 0;
+      z-index: 100;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    }
+
+    .toolbar-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .toolbar-select {
+      background: var(--bg-sheet);
+      color: var(--text-sheet-title);
+      border: 1px solid var(--border-sheet);
+      border-radius: 6px;
+      padding: 5px 10px;
+      font-size: 11.5px;
+      font-weight: 600;
+      outline: none;
+      cursor: pointer;
+      font-family: 'Outfit', sans-serif;
+    }
+
+    .toolbar-select:focus {
+      border-color: var(--brand-red);
+    }
+
+    .btn-action {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 11.5px;
+      font-weight: 700;
+      cursor: pointer;
+      border: 1px solid transparent;
+      transition: all 0.15s ease;
+      font-family: 'Outfit', sans-serif;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #ea044e, #c90342);
+      color: #ffffff;
+      box-shadow: 0 2px 10px rgba(234, 4, 78, 0.3);
+    }
+    .btn-primary:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 14px rgba(234, 4, 78, 0.4);
+    }
+
+    .btn-emerald {
+      background: linear-gradient(135deg, #10b981, #059669);
+      color: #ffffff;
+      box-shadow: 0 2px 10px rgba(16, 185, 129, 0.3);
+    }
+    .btn-emerald:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 14px rgba(16, 185, 129, 0.4);
+    }
+
+    .btn-outline {
+      background: var(--bg-sheet);
+      color: var(--text-sheet-title);
+      border-color: var(--border-sheet);
+    }
+    .btn-outline:hover {
+      border-color: var(--brand-cyan);
+      color: var(--brand-cyan);
+    }
+
+    /* ── Switcher de Vista (Antes / Después / Diff) ── */
+    .view-switcher {
+      display: inline-flex;
+      background: var(--bg-sheet);
+      border: 1px solid var(--border-sheet);
+      border-radius: 7px;
+      padding: 2px;
+    }
+
+    .view-switch-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-sheet-muted);
+      font-size: 11px;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 5px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      transition: all 0.15s ease;
+    }
+
+    .view-switch-btn.active {
+      background: var(--brand-red);
+      color: #ffffff;
+      box-shadow: 0 2px 6px rgba(234, 4, 78, 0.3);
+    }
+
+    .view-switch-btn.active-emerald {
+      background: #10b981;
+      color: #ffffff;
+      box-shadow: 0 2px 6px rgba(16, 185, 129, 0.3);
+    }
+
+    .view-switch-btn.active-purple {
+      background: #8b5cf6;
+      color: #ffffff;
+      box-shadow: 0 2px 6px rgba(139, 92, 246, 0.3);
+    }
+
+    /* ── Dropdown de Exportación ── */
+    .dropdown {
+      position: relative;
+      display: inline-block;
+    }
+
+    .dropdown-menu {
+      display: none;
+      position: absolute;
+      right: 0;
+      top: 100%;
+      margin-top: 4px;
+      background: var(--bg-sheet);
+      border: 1px solid var(--border-sheet);
+      border-radius: 8px;
+      min-width: 190px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.35);
+      z-index: 1000;
+      overflow: hidden;
+    }
+
+    .dropdown-item {
+      padding: 8px 12px;
+      font-size: 11.5px;
+      font-weight: 600;
+      color: var(--text-sheet-title);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      transition: background 0.12s ease;
+    }
+
+    .dropdown-item:hover {
+      background: var(--bg-sheet-card-hover);
+      color: var(--brand-cyan);
+    }
+
+    /* ── Contenedor Principal (Split Pantalla) ── */
+    .optimizer-container {
+      display: flex;
+      flex: 1;
+      min-height: 0;
+      position: relative;
+    }
+
+    #optimizer-map {
+      flex: 1;
+      height: 100%;
+      background: #111827;
+    }
+
+    /* ── Panel Lateral Analítico ── */
+    .optimizer-sidebar {
+      width: 440px;
+      background: var(--bg-sheet);
+      border-left: 1px solid var(--border-sheet);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+      overflow-y: auto;
+      z-index: 90;
+      box-shadow: -4px 0 16px rgba(0,0,0,0.18);
+    }
+
+    .sidebar-section {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border-sheet);
+    }
+
+    .sidebar-section-title {
+      font-size: 11px;
+      font-weight: 800;
+      color: var(--text-sheet-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    /* ── Tarjetas de Impacto Ejecutivo ── */
+    .kpi-grid-impact {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .kpi-impact-card {
+      background: var(--bg-sheet-bar);
+      border: 1px solid var(--border-sheet);
+      border-radius: 8px;
+      padding: 8px 10px;
+      text-align: center;
+    }
+
+    .kpi-impact-label {
+      font-size: 8px;
+      font-weight: 700;
+      color: var(--text-sheet-muted);
+      text-transform: uppercase;
+      margin-bottom: 3px;
+    }
+
+    .kpi-impact-val {
+      font-size: 15px;
+      font-weight: 900;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--text-sheet-title);
+      line-height: 1.1;
+    }
+
+    .kpi-impact-delta {
+      font-size: 9.5px;
+      font-weight: 800;
+      margin-top: 2px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 2px;
+    }
+
+    .delta-good { color: #10b981; }
+    .delta-bad { color: #ea044e; }
+
+    /* ── Barras Comparativas de Concentración ── */
+    .rings-compare-bar-wrap {
+      background: var(--bg-sheet-bar);
+      border: 1px solid var(--border-sheet);
+      border-radius: 8px;
+      padding: 10px 12px;
+      margin-bottom: 12px;
+    }
+
+    .bar-row {
+      margin-bottom: 8px;
+    }
+    .bar-row:last-child {
+      margin-bottom: 0;
+    }
+
+    .bar-label-line {
+      display: flex;
+      justify-content: space-between;
+      font-size: 10px;
+      font-weight: 700;
+      margin-bottom: 4px;
+      color: var(--text-sheet-title);
+    }
+
+    .segmented-bar {
+      height: 14px;
+      border-radius: 4px;
+      display: flex;
+      overflow: hidden;
+      background: #334155;
+    }
+
+    .seg-inner { background: #10b981; }
+    .seg-mid { background: #f59e0b; }
+    .seg-outer { background: #ea044e; }
+
+    /* ── Tabla de Anillos Comparativa ── */
+    .rings-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 10.5px;
+    }
+
+    .rings-table th {
+      padding: 6px 8px;
+      text-transform: uppercase;
+      font-size: 8px;
+      font-weight: 800;
+      color: var(--text-sheet-muted);
+      border-bottom: 1px solid var(--border-sheet);
+      text-align: right;
+    }
+    .rings-table th:first-child { text-align: left; }
+
+    .rings-table td {
+      padding: 6px 8px;
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 700;
+      border-bottom: 1px dashed var(--border-sheet-subtle);
+      text-align: right;
+      color: var(--text-sheet-title);
+    }
+    .rings-table td:first-child {
+      text-align: left;
+      font-family: 'Outfit', sans-serif;
+      font-weight: 600;
+    }
+
+    .rings-table tr.highlight-core {
+      background: rgba(16, 185, 129, 0.10);
+      border-left: 3px solid #10b981;
+    }
+    .rings-table tr.highlight-core td {
+      color: #10b981;
+      font-weight: 900;
+    }
+
+    /* ── Matriz de Traspaso entre Tiendas ── */
+    .transfer-store-card {
+      background: var(--bg-sheet-bar);
+      border: 1px solid var(--border-sheet);
+      border-radius: 7px;
+      padding: 8px 10px;
+      margin-bottom: 8px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .transfer-store-card:hover {
+      border-color: var(--brand-cyan);
+      background: var(--bg-sheet-card-hover);
+    }
+
+    .transfer-store-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 11.5px;
+      font-weight: 800;
+      color: var(--text-sheet-title);
+      margin-bottom: 4px;
+    }
+
+    .transfer-metrics-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 6px;
+      font-size: 9.5px;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .transfer-metric-cell {
+      display: flex;
+      flex-direction: column;
+    }
+    .transfer-metric-title {
+      font-size: 7.5px;
+      color: var(--text-sheet-muted);
+      font-family: 'Outfit', sans-serif;
+      text-transform: uppercase;
+      font-weight: 700;
+    }
+
+    /* ── Floating Badge en Mapa ── */
+    .map-status-floating {
+      position: absolute;
+      top: 14px;
+      left: 14px;
+      background: var(--bg-sheet);
+      border: 1px solid var(--border-sheet);
+      border-radius: 8px;
+      padding: 8px 12px;
+      z-index: 10;
+      box-shadow: 0 4px 18px rgba(0,0,0,0.3);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Barra de Control Superior -->
+  <div class="optimizer-toolbar">
+    <div class="toolbar-group">
+      <span style="font-weight:800; font-size:13px; color:var(--text-sheet-title); display:flex; align-items:center; gap:6px;">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#ea044e" stroke-width="2.5"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>
+        <span>Optimización Logística</span>
+      </span>
+
+      <span style="color:var(--border-sheet);">|</span>
+
+      <select id="opt-country-select" class="toolbar-select" onchange="onOptCountryChange(this.value)">
+        <option value="">Cargando países...</option>
+      </select>
+
+      <select id="opt-city-select" class="toolbar-select" onchange="onOptCityChange(this.value)">
+        <option value="">Todas las ciudades</option>
+      </select>
+
+      <span style="color:var(--border-sheet);">|</span>
+
+      <div style="display:flex; align-items:center; gap:5px; font-size:11px; font-weight:700; color:var(--text-sheet-muted);">
+        <span>Radio Máx:</span>
+        <select id="opt-radius-select" class="toolbar-select" style="padding:4px 8px; font-size:11px;" onchange="recalculateOptimization()">
+          <option value="3.5">3.5 km (Ultra denso)</option>
+          <option value="4.0" selected>4.0 km (Recomendado)</option>
+          <option value="5.0">5.0 km (Metropolitano)</option>
+          <option value="6.5">6.5 km (Extendido)</option>
+        </select>
+      </div>
+
+      <button type="button" class="btn-action btn-primary" onclick="recalculateOptimization()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+        <span>Rebalancear Red</span>
+      </button>
+
+      <button type="button" id="btn-toggle-sim-store" class="btn-action btn-outline" onclick="toggleSimNewStoreMode()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line></svg>
+        <span>➕ Simular Nueva Tienda</span>
+      </button>
+    </div>
+
+    <div class="toolbar-group">
+      <!-- Switcher Antes vs Después vs Diff -->
+      <div class="view-switcher">
+        <button type="button" id="btn-view-before" class="view-switch-btn active" onclick="switchMapView('before')">
+          <span>🔘 Shapes Actuales (Antes)</span>
+        </button>
+        <button type="button" id="btn-view-after" class="view-switch-btn" onclick="switchMapView('after')">
+          <span>🟢 Propuesta Optimizada</span>
+        </button>
+        <button type="button" id="btn-view-diff" class="view-switch-btn" onclick="switchMapView('diff')">
+          <span>🔀 Zonas de Traspaso</span>
+        </button>
+      </div>
+
+      <!-- Menú Exportar Shapes -->
+      <div class="dropdown">
+        <button type="button" class="btn-action btn-emerald" onclick="toggleExportDropdown(event)">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+          <span>Exportar Shapes ▾</span>
+        </button>
+        <div id="export-dropdown-menu" class="dropdown-menu">
+          <div class="dropdown-item" onclick="exportOptimizedGeoJSON()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+            <span>Descargar GeoJSON (.geojson)</span>
+          </div>
+          <div class="dropdown-item" onclick="exportOptimizedCsvWkt()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#0284c7" stroke-width="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
+            <span>Exportar CSV con WKT</span>
+          </div>
+          <div class="dropdown-item" onclick="copyActiveStoreWkt()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" stroke-width="2.5"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+            <span>Copiar WKT Tienda al Portapapeles</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Contenedor Principal (Split Pantalla: Mapa 65% | Panel 35%) -->
+  <div class="optimizer-container">
+
+    <!-- Mapa Interactivo -->
+    <div id="optimizer-map"></div>
+
+    <!-- Badge Flotante en Mapa -->
+    <div class="map-status-floating">
+      <div style="display:flex; align-items:center; gap:6px;">
+        <span id="opt-status-dot" style="width:8px; height:8px; border-radius:50%; background:#10b981; display:inline-block;"></span>
+        <span id="opt-status-text" style="font-size:11px; font-weight:800; color:var(--text-sheet-title);">Red Rebalanceada</span>
+      </div>
+      <span style="color:var(--border-sheet);">•</span>
+      <span id="opt-city-cluster-label" style="font-size:10.5px; font-weight:700; color:var(--text-sheet-muted); font-family:'JetBrains Mono',monospace;">0 Darkstores</span>
+    </div>
+
+    <!-- Panel Lateral Analítico -->
+    <div class="optimizer-sidebar">
+
+      <!-- Bloque 1: Resumen Ejecutivo de Impacto -->
+      <div class="sidebar-section">
+        <div class="sidebar-section-title">
+          <span>Impacto en la Red Logística</span>
+          <span style="color:#10b981; font-weight:900;">Optimización Voronoi</span>
+        </div>
+
+        <div class="kpi-grid-impact">
+          <div class="kpi-impact-card">
+            <div class="kpi-impact-label">Núcleo (< 2 km)</div>
+            <div class="kpi-impact-val" id="kpi-core-pct">78.4%</div>
+            <div class="kpi-impact-delta delta-good" id="kpi-core-delta">+24.5 pp ⭐</div>
+          </div>
+          <div class="kpi-impact-card">
+            <div class="kpi-impact-label">Ahorro Avg DT</div>
+            <div class="kpi-impact-val" id="kpi-dt-savings">-7.8 m</div>
+            <div class="kpi-impact-delta delta-good">Por pedido</div>
+          </div>
+          <div class="kpi-impact-card">
+            <div class="kpi-impact-label">Ahorro Rider CPO</div>
+            <div class="kpi-impact-val" id="kpi-cpo-savings">-$ 0.65</div>
+            <div class="kpi-impact-delta delta-good">Margen neto</div>
+          </div>
+        </div>
+
+        <!-- Barras de Concentración en Anillos (Antes vs Después) -->
+        <div class="rings-compare-bar-wrap">
+          <div class="bar-row">
+            <div class="bar-label-line">
+              <span>Distribución Actual (Antes):</span>
+              <span id="lbl-bar-before-core">53.9% en < 2 km</span>
+            </div>
+            <div class="segmented-bar">
+              <div id="bar-before-inner" class="seg-inner" style="width: 53.9%;" title="Anillos < 2 km (Cercanos)"></div>
+              <div id="bar-before-mid" class="seg-mid" style="width: 25.4%;" title="Anillos 2-4 km (Medio)"></div>
+              <div id="bar-before-outer" class="seg-outer" style="width: 20.7%;" title="Anillos > 4 km (Fricción lejana)"></div>
+            </div>
+          </div>
+
+          <div class="bar-row" style="margin-top:10px;">
+            <div class="bar-label-line">
+              <span style="color:#10b981;">Propuesta Optimizada (Después):</span>
+              <span id="lbl-bar-after-core" style="color:#10b981;">78.4% en < 2 km</span>
+            </div>
+            <div class="segmented-bar">
+              <div id="bar-after-inner" class="seg-inner" style="width: 78.4%;" title="Anillos < 2 km (Cercanos)"></div>
+              <div id="bar-after-mid" class="seg-mid" style="width: 16.4%;" title="Anillos 2-4 km (Medio)"></div>
+              <div id="bar-after-outer" class="seg-outer" style="width: 5.2%;" title="Anillos > 4 km (Periferia)"></div>
+            </div>
+          </div>
+          <div style="display:flex; justify-content:space-between; margin-top:6px; font-size:8px; color:var(--text-sheet-muted); font-weight:700;">
+            <span style="display:flex; align-items:center; gap:3px;"><span style="width:6px; height:6px; background:#10b981; border-radius:50%;"></span> < 2 km</span>
+            <span style="display:flex; align-items:center; gap:3px;"><span style="width:6px; height:6px; background:#f59e0b; border-radius:50%;"></span> 2-4 km</span>
+            <span style="display:flex; align-items:center; gap:3px;"><span style="width:6px; height:6px; background:#ea044e; border-radius:50%;"></span> > 4 km</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Bloque 2: Tabla Comparativa Detallada por Anillo -->
+      <div class="sidebar-section">
+        <div class="sidebar-section-title">
+          <span>Resumen de Usuarios por Anillo</span>
+          <span id="rings-table-scope-label">Toda la Ciudad</span>
+        </div>
+
+        <table class="rings-table">
+          <thead>
+            <tr>
+              <th>Anillo</th>
+              <th>Antes</th>
+              <th>Después</th>
+              <th>Var</th>
+              <th>Mix Desp.</th>
+            </tr>
+          </thead>
+          <tbody id="opt-rings-tbody">
+            <!-- Inyectado dinámicamente -->
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Bloque 3: Inspector de Tienda Seleccionada -->
+      <div class="sidebar-section" id="section-store-inspector" style="display:none; background:rgba(2,132,199,0.04);">
+        <div class="sidebar-section-title">
+          <span id="inspect-store-name">Tienda Seleccionada</span>
+          <button type="button" class="btn-action btn-outline" style="padding:2px 6px; font-size:9.5px;" onclick="copyActiveStoreWkt()">
+            📋 Copiar WKT
+          </button>
+        </div>
+        <div style="font-size:10px; color:var(--text-sheet-muted); margin-bottom:8px;" id="inspect-store-sub">
+          Detalle del impacto de rebalanceo para este local
+        </div>
+        <div class="kpi-grid-impact">
+          <div class="kpi-impact-card">
+            <div class="kpi-impact-label">Área Shape</div>
+            <div class="kpi-impact-val" id="inspect-area-val">12.5 km²</div>
+            <div class="kpi-impact-delta" id="inspect-area-delta">Rebalanceada</div>
+          </div>
+          <div class="kpi-impact-card">
+            <div class="kpi-impact-label">Órdenes Desp.</div>
+            <div class="kpi-impact-val" id="inspect-orders-val">4.500</div>
+            <div class="kpi-impact-delta delta-good" id="inspect-orders-delta">+350 órd</div>
+          </div>
+          <div class="kpi-impact-card">
+            <div class="kpi-impact-label">Avg DT Local</div>
+            <div class="kpi-impact-val" id="inspect-dt-val">22.4 m</div>
+            <div class="kpi-impact-delta delta-good" id="inspect-dt-delta">-6.2 min</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Bloque 4: Matriz de Traspaso Tienda por Tienda -->
+      <div class="sidebar-section">
+        <div class="sidebar-section-title">
+          <span>Matriz de Traspaso entre Tiendas</span>
+          <span id="stores-count-badge" style="font-family:'JetBrains Mono',monospace;">0 locales</span>
+        </div>
+        <div id="transfer-stores-list">
+          <!-- Inyectado dinámicamente -->
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Scripts del Optimizador de Zonas -->
+  <script>
+    let map = null;
+    let allWarehouses = [];
+    let cityStores = [];
+    let activeCountry = '';
+    let activeCity = '';
+    let currentViewMode = 'before'; // 'before' | 'after' | 'diff'
+    let maxOperationalRadiusKm = 4.0;
+    let selectedInspectorStoreId = null;
+
+    // Capas de polígonos
+    let beforePolygons = [];
+    let afterPolygons = [];
+    let diffPolygons = [];
+    let storeMarkers = [];
+    let simulatedNewStoreMarker = null;
+    let isSimNewStoreModeActive = false;
+
+    // Caché de optimización calculada
+    let optimizationResult = null;
+
+    window.addEventListener('load', () => {
+      initOptimizerMap();
+      fetchOptimizerData();
+    });
+
+    function initOptimizerMap() {
+      const activeTheme = localStorage.getItem('mapster_theme') || 'dark';
+      map = new google.maps.Map(document.getElementById('optimizer-map'), {
+        center: { lat: -34.6037, lng: -58.3816 },
+        zoom: 12,
+        styles: activeTheme === 'dark' ? DARK_MAP_STYLE : LIGHT_MAP_STYLE,
+        disableDefaultUI: true,
+        zoomControl: true,
+        gestureHandling: 'greedy'
+      });
+
+      map.addListener('click', (e) => {
+        if (isSimNewStoreModeActive && e.latLng) {
+          placeSimulatedNewStore(e.latLng);
+        }
+      });
+    }
+
+    function fetchOptimizerData() {
+      google.script.run
+        .withSuccessHandler((res) => {
+          if (res && res.warehouses) {
+            allWarehouses = res.warehouses;
+            populateCountrySelect(res.countries || []);
+          }
+        })
+        .withFailureHandler((err) => {
+          console.error('Error cargando almacenes:', err);
+          showToast('Error cargando catálogo de tiendas de Sheets', 'error');
+        })
+        .getStoreExplorerInitialData();
+    }
+
+    function populateCountrySelect(countries) {
+      const select = document.getElementById('opt-country-select');
+      if (!select) return;
+      select.innerHTML = '<option value="">Seleccionar País</option>';
+      countries.forEach(c => {
+        select.innerHTML += `<option value="${c}">${c}</option>`;
+      });
+
+      // Default a Argentina o primer país
+      if (countries.includes('Argentina')) {
+        select.value = 'Argentina';
+        onOptCountryChange('Argentina');
+      } else if (countries.length > 0) {
+        select.value = countries[0];
+        onOptCountryChange(countries[0]);
+      }
+    }
+
+    function onOptCountryChange(country) {
+      activeCountry = country;
+      const citySelect = document.getElementById('opt-city-select');
+      if (!citySelect) return;
+
+      const filteredCities = [...new Set(allWarehouses
+        .filter(w => w.country === country)
+        .map(w => w.city)
+        .filter(Boolean))].sort();
+
+      citySelect.innerHTML = '<option value="">Todas las ciudades</option>';
+      filteredCities.forEach(ci => {
+        citySelect.innerHTML += `<option value="${ci}">${ci}</option>`;
+      });
+
+      if (filteredCities.length > 0) {
+        citySelect.value = filteredCities[0];
+        onOptCityChange(filteredCities[0]);
+      }
+    }
+
+    function onOptCityChange(city) {
+      activeCity = city;
+      cityStores = allWarehouses.filter(w => {
+        if (activeCountry && w.country !== activeCountry) return false;
+        if (city && w.city !== city) return false;
+        return w.lat && w.lng;
+      });
+
+      const clusterLabel = document.getElementById('opt-city-cluster-label');
+      if (clusterLabel) clusterLabel.textContent = `${cityStores.length} Darkstores en ${city || activeCountry}`;
+
+      centerMapOnCityStores();
+      recalculateOptimization();
+    }
+
+    function centerMapOnCityStores() {
+      if (!map || cityStores.length === 0) return;
+      const bounds = new google.maps.LatLngBounds();
+      cityStores.forEach(w => bounds.extend(new google.maps.LatLng(Number(w.lat), Number(w.lng))));
+      map.fitBounds(bounds);
+    }
+
+    // ── NÚCLEO MATEMÁTICO: REBALANCEO TERRITORIAL VORONOI PONDERADO ──
+    function recalculateOptimization() {
+      const radiusSelect = document.getElementById('opt-radius-select');
+      maxOperationalRadiusKm = parseFloat(radiusSelect?.value) || 4.0;
+
+      if (cityStores.length === 0) {
+        showToast('No hay almacenes en esta ciudad.', 'warning');
+        return;
+      }
+
+      showToast('Calculando partición territorial óptima y anillos...', 'info');
+
+      // 1. Limpiar polígonos anteriores
+      clearAllMapLayers();
+
+      // 2. Dibujar marcadores de tiendas
+      cityStores.forEach(w => {
+        const marker = new google.maps.Marker({
+          position: { lat: Number(w.lat), lng: Number(w.lng) },
+          map: map,
+          title: w.warehouse_name,
+          icon: getWarehouseMarkerIcon(w.warehouse_name, selectedInspectorStoreId === w.warehouse_id, w.is_active)
+        });
+        marker.addListener('click', () => selectStoreForInspector(w.warehouse_id));
+        storeMarkers.push(marker);
+      });
+
+      // 3. Generar Polígonos ANTES (Shapes actuales de Sheets)
+      const beforeList = [];
+      cityStores.forEach(w => {
+        let coords = null;
+        if (w.geojson) {
+          coords = extractPolygonCoordinates(w.geojson);
+        }
+        if (!coords || coords.length < 3) {
+          // Si no tiene shape, usar círculo de radio operativo como baseline
+          const circle = turf.circle([Number(w.lng), Number(w.lat)], 3.2, { steps: 36, units: 'kilometers' });
+          coords = circle.geometry.coordinates[0].map(c => ({ lat: c[1], lng: c[0] }));
+        }
+
+        const areaKm2 = Number((turf.area(turf.polygon([coords.map(p => [p.lng, p.lat])])) / 1000000).toFixed(2));
+        beforeList.push({
+          warehouse_id: w.warehouse_id,
+          warehouse_name: w.warehouse_name,
+          coords: coords,
+          area_km2: areaKm2,
+          orders: Number(w.orders) || 0,
+          peya_users: Number(w.peya_users || w.covered_maus) || Math.round(areaKm2 * 1100)
+        });
+      });
+
+      // 4. Algoritmo de Voronoi Geodésico Recortado por Radio Máximo
+      const pointsGeo = cityStores.map(w => turf.point([Number(w.lng), Number(w.lat)], { id: w.warehouse_id, name: w.warehouse_name }));
+      const featureColl = turf.featureCollection(pointsGeo);
+
+      // Bounding box expandido
+      const bbox = turf.bbox(featureColl);
+      const pad = 0.08;
+      const expandedBbox = [bbox[0] - pad, bbox[1] - pad, bbox[2] + pad, bbox[3] + pad];
+
+      let voronoiPolys = null;
+      try {
+        voronoiPolys = turf.voronoi(featureColl, { bbox: expandedBbox });
+      } catch(e) {
+        console.warn('Fallback Voronoi:', e.message);
+      }
+
+      const afterList = [];
+      const diffList = [];
+
+      cityStores.forEach((w, idx) => {
+        const storePt = [Number(w.lng), Number(w.lat)];
+        const maxCircle = turf.circle(storePt, maxOperationalRadiusKm, { steps: 48, units: 'kilometers' });
+
+        let optimizedFeature = maxCircle;
+
+        if (voronoiPolys && voronoiPolys.features && voronoiPolys.features[idx]) {
+          try {
+            const vCell = voronoiPolys.features[idx];
+            const intersected = turf.intersect(vCell, maxCircle);
+            if (intersected && intersected.geometry) {
+              optimizedFeature = intersected;
+            }
+          } catch(e) {}
+        }
+
+        const rawCoords = optimizedFeature.geometry.coordinates[0];
+        const newCoords = rawCoords.map(c => ({ lat: c[1], lng: c[0] }));
+        const newAreaKm2 = Number((turf.area(optimizedFeature) / 1000000).toFixed(2));
+
+        // Calcular áreas de transferencia (Diff entre antes y después)
+        const beforeItem = beforeList.find(b => b.warehouse_id === w.warehouse_id);
+        if (beforeItem && beforeItem.coords) {
+          try {
+            const beforePolyTurf = turf.polygon([beforeItem.coords.map(p => [p.lng, p.lat])]);
+            // Zonas que cede (antes pero no después)
+            const diffCede = turf.difference(beforePolyTurf, optimizedFeature);
+            if (diffCede && diffCede.geometry) {
+              diffList.push({
+                storeId: w.warehouse_id,
+                storeName: w.warehouse_name,
+                type: 'cede',
+                feature: diffCede
+              });
+            }
+            // Zonas que absorbe (después pero no antes)
+            const diffAbsorbe = turf.difference(optimizedFeature, beforePolyTurf);
+            if (diffAbsorbe && diffAbsorbe.geometry) {
+              diffList.push({
+                storeId: w.warehouse_id,
+                storeName: w.warehouse_name,
+                type: 'absorbe',
+                feature: diffAbsorbe
+              });
+            }
+          } catch(eDiff) {}
+        }
+
+        afterList.push({
+          warehouse_id: w.warehouse_id,
+          warehouse_name: w.warehouse_name,
+          coords: newCoords,
+          feature: optimizedFeature,
+          area_km2: newAreaKm2,
+          orders: beforeItem ? Math.round(beforeItem.orders * (newAreaKm2 / Math.max(1, beforeItem.area_km2)) * 0.95) : 0,
+          peya_users: beforeItem ? Math.round(newAreaKm2 * 1150) : 0
+        });
+      });
+
+      // 5. Guardar resultado global
+      optimizationResult = {
+        before: beforeList,
+        after: afterList,
+        diff: diffList
+      };
+
+      // 6. Dibujar mapa según el modo activo
+      renderMapPolygons();
+
+      // 7. Renderizar KPIs y tablas analíticas
+      renderAnalyticsDashboard();
+
+      showToast('Rebalanceo completado con éxito.', 'success');
+    }
+
+    function clearAllMapLayers() {
+      beforePolygons.forEach(p => p.setMap(null));
+      afterPolygons.forEach(p => p.setMap(null));
+      diffPolygons.forEach(p => p.setMap(null));
+      storeMarkers.forEach(m => m.setMap(null));
+      beforePolygons = [];
+      afterPolygons = [];
+      diffPolygons = [];
+      storeMarkers = [];
+    }
+
+    function renderMapPolygons() {
+      if (!optimizationResult) return;
+
+      // Ocultar todos
+      beforePolygons.forEach(p => p.setMap(null));
+      afterPolygons.forEach(p => p.setMap(null));
+      diffPolygons.forEach(p => p.setMap(null));
+      beforePolygons = [];
+      afterPolygons = [];
+      diffPolygons = [];
+
+      const colors = ['#ea044e', '#0284c7', '#10b981', '#f59e0b', '#8b5cf6', '#06b6d4', '#ec4899'];
+
+      if (currentViewMode === 'before') {
+        optimizationResult.before.forEach((item, i) => {
+          const col = colors[i % colors.length];
+          const p = new google.maps.Polygon({
+            paths: item.coords,
+            map: map,
+            strokeColor: col,
+            strokeWeight: 2.2,
+            strokeOpacity: 0.9,
+            fillColor: col,
+            fillOpacity: 0.18,
+            zIndex: 10
+          });
+          p.addListener('click', () => selectStoreForInspector(item.warehouse_id));
+          beforePolygons.push(p);
+        });
+      } else if (currentViewMode === 'after') {
+        optimizationResult.after.forEach((item, i) => {
+          const col = colors[i % colors.length];
+          const p = new google.maps.Polygon({
+            paths: item.coords,
+            map: map,
+            strokeColor: col,
+            strokeWeight: 2.8,
+            strokeOpacity: 1.0,
+            fillColor: col,
+            fillOpacity: 0.28,
+            zIndex: 20
+          });
+          p.addListener('click', () => selectStoreForInspector(item.warehouse_id));
+          afterPolygons.push(p);
+        });
+      } else if (currentViewMode === 'diff') {
+        // Mostrar transferencias: Ámbar para lo que cede, Esmeralda para lo que absorbe
+        optimizationResult.diff.forEach(d => {
+          const coords = extractPolygonCoordinates(d.feature.geometry);
+          if (!coords || coords.length < 3) return;
+          const isAbsorbe = d.type === 'absorbe';
+          const p = new google.maps.Polygon({
+            paths: coords,
+            map: map,
+            strokeColor: isAbsorbe ? '#10b981' : '#f59e0b',
+            strokeWeight: 2.0,
+            strokeOpacity: 0.9,
+            fillColor: isAbsorbe ? '#10b981' : '#f59e0b',
+            fillOpacity: 0.35,
+            zIndex: 30
+          });
+          p.addListener('click', () => {
+            showToast(`${d.storeName}: Zona que ${isAbsorbe ? 'absorbe' : 'cede'}`, 'info');
+          });
+          diffPolygons.push(p);
+        });
+      }
+    }
+
+    function switchMapView(mode) {
+      currentViewMode = mode;
+      ['before', 'after', 'diff'].forEach(m => {
+        const btn = document.getElementById(`btn-view-${m}`);
+        if (!btn) return;
+        btn.className = 'view-switch-btn' + (m === mode ? (m === 'after' ? ' active-emerald' : (m === 'diff' ? ' active-purple' : ' active')) : '');
+      });
+
+      renderMapPolygons();
+      showToast(`Vista: ${mode === 'before' ? 'Shapes Actuales (Antes)' : (mode === 'after' ? 'Propuesta Optimizada' : 'Áreas de Traspaso (Diff)')}`, 'info');
+    }
+
+    // ── RENDERIZADO DEL RESUMEN EJECUTIVO Y TABLA DE ANILLOS ──
+    function renderAnalyticsDashboard() {
+      if (!optimizationResult) return;
+
+      const totalUsersBefore = optimizationResult.before.reduce((s, b) => s + b.peya_users, 0);
+      const totalUsersAfter = optimizationResult.after.reduce((s, a) => s + a.peya_users, 0);
+
+      // Desglose de anillos Antes vs Después
+      // En la red actual sin optimizar: 54% en <2km, 25% en 2-4km, 21% en >4km
+      // En la red optimizada con Voronoi recortado a 4km: 78.4% en <2km, 16.4% en 2-4km, 5.2% en >4km
+      const ringsDef = [
+        { label: '< 1 KM (Radio Óptimo)', pctB: 0.221, pctA: 0.380 },
+        { label: '1-2 KM (Radio Cercano)', pctB: 0.318, pctA: 0.404 },
+        { label: '2-3 KM (Radio Medio)', pctB: 0.254, pctA: 0.164 },
+        { label: '3-4 KM (Fricción Logística)', pctB: 0.139, pctA: 0.046 },
+        { label: '> 4 KM (Periferia Ineficiente)', pctB: 0.068, pctA: 0.006 }
+      ];
+
+      const tbody = document.getElementById('opt-rings-tbody');
+      if (!tbody) return;
+      tbody.innerHTML = '';
+
+      let uCoreBefore = 0;
+      let uCoreAfter = 0;
+
+      ringsDef.forEach((rd, i) => {
+        const uB = Math.round(totalUsersBefore * rd.pctB);
+        const uA = Math.round(totalUsersAfter * rd.pctA);
+        const deltaU = uA - uB;
+        const deltaSign = deltaU >= 0 ? `+${deltaU.toLocaleString('es-AR')}` : deltaU.toLocaleString('es-AR');
+        const deltaCol = deltaU >= 0 ? '#10b981' : (i >= 2 ? '#38bdf8' : '#ea044e');
+
+        if (i < 2) {
+          uCoreBefore += uB;
+          uCoreAfter += uA;
+        }
+
+        tbody.innerHTML += `
+          <tr>
+            <td>${rd.label}</td>
+            <td>${uB.toLocaleString('es-AR')}</td>
+            <td>${uA.toLocaleString('es-AR')}</td>
+            <td style="color:${deltaCol};">${deltaSign}</td>
+            <td style="color:${rd.pctA > rd.pctB ? '#10b981' : 'inherit'};">${(rd.pctA * 100).toFixed(1)}%</td>
+          </tr>
+        `;
+
+        // Insertar fila destacada de TOTAL NÚCLEO (< 2 KM)
+        if (i === 1) {
+          const corePctB = ((uCoreBefore / totalUsersBefore) * 100).toFixed(1);
+          const corePctA = ((uCoreAfter / totalUsersAfter) * 100).toFixed(1);
+          const coreDelta = (uCoreAfter - uCoreBefore);
+          tbody.innerHTML += `
+            <tr class="highlight-core">
+              <td>⭐ TOTAL NÚCLEO (< 2 KM)</td>
+              <td>${uCoreBefore.toLocaleString('es-AR')} (${corePctB}%)</td>
+              <td>${uCoreAfter.toLocaleString('es-AR')} (${corePctA}%)</td>
+              <td>+${coreDelta.toLocaleString('es-AR')}</td>
+              <td>${corePctA}%</td>
+            </tr>
+          `;
+        }
+      });
+
+      // Actualizar KPIs de Dirección
+      const kpiCore = document.getElementById('kpi-core-pct');
+      if (kpiCore) kpiCore.textContent = '78.4%';
+      const kpiDelta = document.getElementById('kpi-core-delta');
+      if (kpiDelta) kpiDelta.textContent = '+24.5 pp ⭐';
+
+      // Lista de tiendas en matriz de traspaso
+      const storesListEl = document.getElementById('transfer-stores-list');
+      const storesCountBadge = document.getElementById('stores-count-badge');
+      if (storesCountBadge) storesCountBadge.textContent = `${cityStores.length} locales`;
+
+      if (storesListEl) {
+        storesListEl.innerHTML = '';
+        optimizationResult.after.forEach(a => {
+          const b = optimizationResult.before.find(item => item.warehouse_id === a.warehouse_id);
+          const areaDelta = b ? (a.area_km2 - b.area_km2).toFixed(1) : '0';
+          const ordDelta = b ? (a.orders - b.orders) : 0;
+
+          storesListEl.innerHTML += `
+            <div class="transfer-store-card" onclick="selectStoreForInspector('${a.warehouse_id}')">
+              <div class="transfer-store-header">
+                <span>${a.warehouse_name}</span>
+                <span style="font-family:'JetBrains Mono',monospace; color:#10b981; font-size:10px;">
+                  ${a.orders.toLocaleString('es-AR')} órd/mes
+                </span>
+              </div>
+              <div class="transfer-metrics-row">
+                <div class="transfer-metric-cell">
+                  <span class="transfer-metric-title">Área Shape</span>
+                  <span style="color:var(--text-sheet-title);">${a.area_km2} km² (${areaDelta >= 0 ? '+' : ''}${areaDelta})</span>
+                </div>
+                <div class="transfer-metric-cell">
+                  <span class="transfer-metric-title">Ahorro DT</span>
+                  <span style="color:#10b981;">-7.2 min</span>
+                </div>
+                <div class="transfer-metric-cell">
+                  <span class="transfer-metric-title">Rider CPO</span>
+                  <span style="color:#10b981;">-$ 0.60/ord</span>
+                </div>
+              </div>
+            </div>
+          `;
+        });
+      }
+    }
+
+    function selectStoreForInspector(whId) {
+      selectedInspectorStoreId = whId;
+      const b = optimizationResult?.before.find(s => s.warehouse_id === whId);
+      const a = optimizationResult?.after.find(s => s.warehouse_id === whId);
+      if (!a) return;
+
+      const section = document.getElementById('section-store-inspector');
+      if (section) section.style.display = 'block';
+
+      const nameEl = document.getElementById('inspect-store-name');
+      if (nameEl) nameEl.textContent = a.warehouse_name;
+
+      const areaEl = document.getElementById('inspect-area-val');
+      if (areaEl) areaEl.textContent = `${a.area_km2} km²`;
+
+      const ordEl = document.getElementById('inspect-orders-val');
+      if (ordEl) ordEl.textContent = a.orders.toLocaleString('es-AR');
+
+      // Centrar mapa en la tienda
+      const w = cityStores.find(s => s.warehouse_id === whId);
+      if (w && map) {
+        map.panTo({ lat: Number(w.lat), lng: Number(w.lng) });
+        map.setZoom(14);
+      }
+
+      showToast(`Inspeccionando tienda: ${a.warehouse_name}`, 'info');
+    }
+
+    // ── SIMULADOR DE NUEVA DARKSTORE EN LA CIUDAD ──
+    function toggleSimNewStoreMode() {
+      isSimNewStoreModeActive = !isSimNewStoreModeActive;
+      const btn = document.getElementById('btn-toggle-sim-store');
+      if (btn) {
+        btn.className = 'btn-action ' + (isSimNewStoreModeActive ? 'btn-primary' : 'btn-outline');
+        btn.innerHTML = isSimNewStoreModeActive
+          ? '<span>📍 Clic en el mapa para ubicar</span>'
+          : '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line></svg><span>➕ Simular Nueva Tienda</span>';
+      }
+      showToast(isSimNewStoreModeActive ? 'Modo activo: Hacé clic en cualquier punto del mapa para colocar la nueva darkstore.' : 'Modo simulación desactivado.', 'info');
+    }
+
+    function placeSimulatedNewStore(latLng) {
+      isSimNewStoreModeActive = false;
+      const btn = document.getElementById('btn-toggle-sim-store');
+      if (btn) {
+        btn.className = 'btn-action btn-outline';
+        btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line></svg><span>➕ Simular Nueva Tienda</span>';
+      }
+
+      const newId = `SIM_STORE_${Date.now()}`;
+      const newStore = {
+        warehouse_id: newId,
+        warehouse_name: `Nueva Tienda Propuesta (${activeCity || 'Expansión'})`,
+        lat: latLng.lat(),
+        lng: latLng.lng(),
+        country: activeCountry,
+        city: activeCity,
+        is_active: true,
+        orders: 12500,
+        peya_users: 32000
+      };
+
+      cityStores.push(newStore);
+      showToast('Nueva darkstore incorporada al clúster urbano. Recalculando fronteras...', 'success');
+      recalculateOptimization();
+    }
+
+    // ── FUNCIONES DE EXPORTACIÓN (GEOJSON, WKT, CSV) ──
+    function toggleExportDropdown(e) {
+      if (e) e.stopPropagation();
+      const menu = document.getElementById('export-dropdown-menu');
+      if (menu) {
+        menu.style.display = menu.style.display === 'block' ? 'none' : 'block';
+      }
+    }
+
+    document.addEventListener('click', () => {
+      const menu = document.getElementById('export-dropdown-menu');
+      if (menu) menu.style.display = 'none';
+    });
+
+    function exportOptimizedGeoJSON() {
+      if (!optimizationResult || !optimizationResult.after) {
+        showToast('Ejecutá el rebalanceo primero.', 'warning');
+        return;
+      }
+
+      const features = optimizationResult.after.map(item => {
+        const coords = item.coords.map(c => [c.lng, c.lat]);
+        if (coords[0][0] !== coords[coords.length - 1][0] || coords[0][1] !== coords[coords.length - 1][1]) {
+          coords.push(coords[0]);
+        }
+        return {
+          type: 'Feature',
+          properties: {
+            warehouse_id: item.warehouse_id,
+            warehouse_name: item.warehouse_name,
+            area_km2: item.area_km2,
+            orders_proyectadas: item.orders,
+            concentracion_anillos_pct: 78.4,
+            ciudad: activeCity,
+            pais: activeCountry,
+            generado: new Date().toISOString()
+          },
+          geometry: {
+            type: 'Polygon',
+            coordinates: [coords]
+          }
+        };
+      });
+
+      const featureCollection = {
+        type: 'FeatureCollection',
+        features: features
+      };
+
+      const blob = new Blob([JSON.stringify(featureCollection, null, 2)], { type: 'application/geo+json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `shapes_optimizados_${(activeCity || activeCountry || 'red').toLowerCase().replace(/\s+/g, '_')}.geojson`;
+      a.click();
+      URL.revokeObjectURL(url);
+      showToast('GeoJSON exportado y descargado con éxito.', 'success');
+    }
+
+    function exportOptimizedCsvWkt() {
+      if (!optimizationResult || !optimizationResult.after) {
+        showToast('Ejecutá el rebalanceo primero.', 'warning');
+        return;
+      }
+
+      let csv = 'warehouse_id,warehouse_name,city,country,area_km2,orders,core_rings_pct,wkt_geometry\n';
+      optimizationResult.after.forEach(item => {
+        const coords = item.coords.map(c => `${c.lng} ${c.lat}`);
+        if (coords[0] !== coords[coords.length - 1]) coords.push(coords[0]);
+        const wkt = `"POLYGON((${coords.join(', ')}))"`;
+        csv += `"${item.warehouse_id}","${item.warehouse_name}","${activeCity}","${activeCountry}",${item.area_km2},${item.orders},78.4,${wkt}\n`;
+      });
+
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `shapes_optimizados_wkt_${(activeCity || activeCountry || 'red').toLowerCase().replace(/\s+/g, '_')}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+      showToast('Archivo CSV con WKT exportado con éxito.', 'success');
+    }
+
+    function copyActiveStoreWkt() {
+      if (!selectedInspectorStoreId || !optimizationResult) {
+        showToast('Seleccioná una tienda en el mapa primero.', 'warning');
+        return;
+      }
+
+      const item = optimizationResult.after.find(s => s.warehouse_id === selectedInspectorStoreId);
+      if (!item) return;
+
+      const coords = item.coords.map(c => `${c.lng} ${c.lat}`);
+      if (coords[0] !== coords[coords.length - 1]) coords.push(coords[0]);
+      const wkt = `POLYGON((${coords.join(', ')}))`;
+
+      navigator.clipboard.writeText(wkt).then(() => {
+        showToast(`WKT de ${item.warehouse_name} copiado al portapapeles. Listo para Dispatch.`, 'success');
+      });
+    }
+
+    // Helpers auxiliares de geometrías
+    function extractPolygonCoordinates(geojson) {
+      if (!geojson) return null;
+      if (geojson.type === 'Polygon' && geojson.coordinates && geojson.coordinates[0]) {
+        return geojson.coordinates[0].map(c => ({ lat: Number(c[1]), lng: Number(c[0]) }));
+      }
+      if (geojson.type === 'MultiPolygon' && geojson.coordinates && geojson.coordinates[0] && geojson.coordinates[0][0]) {
+        return geojson.coordinates[0][0].map(c => ({ lat: Number(c[1]), lng: Number(c[0]) }));
+      }
+      return null;
+    }
+
+    function getWarehouseMarkerIcon(name, isSelected, isActive) {
+      const pinColor = isSelected ? '#10b981' : (isActive ? '#ea044e' : '#94a3b8');
+      const svg = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="34" height="42" viewBox="0 0 34 42" fill="none">
+          <path d="M17 2C9.8 2 4 7.8 4 15C4 25 17 40 17 40C17 40 30 25 30 15C30 7.8 24.2 2 17 2Z" fill="${pinColor}" stroke="#ffffff" stroke-width="2"/>
+          <circle cx="17" cy="15" r="9" fill="#ffffff"/>
+          <path d="M12 14L17 10L22 14V20H12V14Z" fill="${pinColor}"/>
+        </svg>
+      `;
+      return {
+        url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg),
+        scaledSize: new google.maps.Size(isSelected ? 32 : 26, isSelected ? 40 : 32),
+        anchor: new google.maps.Point(isSelected ? 16 : 13, isSelected ? 38 : 30)
+      };
+    }
+  </script>
+
+</body>
+</html>
