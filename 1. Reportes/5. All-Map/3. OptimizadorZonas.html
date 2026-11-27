@@ -466,8 +466,20 @@
       <span style="color:var(--border-sheet);">|</span>
 
       <!-- Selector Único de Ciudad / Clúster -->
-      <select id="opt-cluster-select" class="opt-select" style="min-width:210px;" onchange="onOptClusterSelected(this.value)">
+      <select id="opt-cluster-select" class="opt-select" style="min-width:180px;" onchange="onOptClusterSelected(this.value)">
         <option value="">Cargando ciudades...</option>
+      </select>
+
+      <!-- Selector de Vertical / Partner (Igual que Página 1) -->
+      <select id="opt-partner-select" class="opt-select" onchange="onOptPartnerFilterChange(this.value)">
+        <option value="ALL" selected>Vertical: Todas (Principal)</option>
+        <option value="market">Market (Supermercado)</option>
+        <option value="drinks">Drinks & Bebidas</option>
+        <option value="mascotas">Mascotas & Pets</option>
+        <option value="kiosco">Kiosco & Snacks</option>
+        <option value="farmacia">Farmacia & Droguerías</option>
+        <option value="beauty">Belleza & Cuidado</option>
+        <option value="green">Frescos & Frutas</option>
       </select>
     </div>
 
@@ -742,6 +754,8 @@
     let map = null;
     let allWarehouses = [];
     let selectedStoreIds = new Set();
+    let selectedPartnerFilter = 'ALL';
+    let STORE_POLYGONS_CACHE = new Map();
     let currentMapLayer = 'before'; // 'before' | 'after'
     let isDiffVisible = false;
     let isViewportFilterActive = true;
@@ -755,6 +769,116 @@
 
     // Estado calculado
     let calculatedProposal = null;
+
+    const PARTNER_VERTICAL_COLORS = {
+      market: '#ea044e',
+      drinks: '#7c3aed',
+      mascotas: '#d97706',
+      kiosco: '#0284c7',
+      farmacia: '#2563eb',
+      beauty: '#0891b2',
+      green: '#059669'
+    };
+
+    function classifyPartnerVertical(name) {
+      const lower = (name || '').toLowerCase();
+      const isExplicitMarket = /\b(market|supermercado|dmart|d-mart)\b/i.test(lower);
+      const specificRegexes = [
+        { key: 'mascotas', regex: /\b(pets?|mascotas?|patitas)\b/i },
+        { key: 'drinks', regex: /\b(drinks?|bebidas?|botiller[ií]as?|chelas?|beers?|coctel|c[oó]ctel)\b/i },
+        { key: 'kiosco', regex: /\b(kioscos?|golosinas?|snacks?)\b/i },
+        { key: 'beauty', regex: /\b(beauty|care|cosm[eé]tica|cuidado personal)\b/i },
+        { key: 'green', regex: /\b(green|frescos?|frutas?|verduras?)\b/i },
+        { key: 'farmacia', regex: /\b(farmacias?|pharma|droguer[ií]as?)\b/i }
+      ];
+
+      for (const def of specificRegexes) {
+        if (def.regex.test(lower)) {
+          if (isExplicitMarket && def.key === 'mascotas' && !/\b(pet|pets|mascota|mascotas|patitas)\b/i.test(lower.replace(/equipetrol/gi, ''))) {
+            continue;
+          }
+          return def.key;
+        }
+      }
+      return 'market';
+    }
+
+    function fetchMissingStorePolygons(storeIds, callback) {
+      const missing = storeIds.filter(id => !STORE_POLYGONS_CACHE.has(id));
+      if (missing.length === 0) {
+        if (callback) callback();
+        return;
+      }
+
+      const statusLabel = document.getElementById('opt-map-status-label');
+      if (statusLabel) statusLabel.textContent = 'Cargando shapes reales de Google Sheets...';
+
+      if (typeof google !== 'undefined' && google.script && google.script.run) {
+        google.script.run
+          .withSuccessHandler((polygonsData) => {
+            if (polygonsData && Array.isArray(polygonsData)) {
+              polygonsData.forEach(p => {
+                if (p && p.warehouse_id) {
+                  STORE_POLYGONS_CACHE.set(String(p.warehouse_id).trim(), p);
+                  if (p.real_id) STORE_POLYGONS_CACHE.set(String(p.real_id).trim(), p);
+                }
+              });
+            }
+            if (statusLabel) statusLabel.textContent = 'Shapes Actuales (Reales de Sheets)';
+            if (callback) callback();
+          })
+          .withFailureHandler((err) => {
+            console.warn('Error cargando shapes reales:', err);
+            if (statusLabel) statusLabel.textContent = 'Shapes Actuales (Reales de Sheets)';
+            if (callback) callback();
+          })
+          .getWarehousesPolygons(missing, '2026-10-01');
+      }
+    }
+
+    function getStorePolygonCoords(w) {
+      const normId = String(w.warehouse_id).trim();
+      const pData = STORE_POLYGONS_CACHE.get(normId);
+      if (pData) {
+        // 1. Si hay filtro de partner/vertical activo, buscar el shape de ese partner específico
+        if (selectedPartnerFilter !== 'ALL' && pData.partners_detail && Array.isArray(pData.partners_detail)) {
+          const matchP = pData.partners_detail.find(p => {
+            const vKey = classifyPartnerVertical(p.partner_name || p.business_type || '');
+            return vKey === selectedPartnerFilter && (p.geojson || p.shape_geojson);
+          });
+          if (matchP) {
+            const c = extractPolygonCoordinates(matchP.geojson || matchP.shape_geojson);
+            if (c && c.length >= 3) return { coords: c, vertical: selectedPartnerFilter };
+          }
+        }
+
+        // 2. Shape principal del almacén
+        if (pData.geojson) {
+          const c = extractPolygonCoordinates(pData.geojson);
+          if (c && c.length >= 3) return { coords: c, vertical: 'market' };
+        }
+        if (pData.whs_unified_geojson) {
+          const c = extractPolygonCoordinates(pData.whs_unified_geojson);
+          if (c && c.length >= 3) return { coords: c, vertical: 'market' };
+        }
+      }
+
+      // 3. Fallback a w.geojson si vino precargado
+      if (w.geojson) {
+        const c = extractPolygonCoordinates(w.geojson);
+        if (c && c.length >= 3) return { coords: c, vertical: 'market' };
+      }
+
+      return null;
+    }
+
+    function onOptPartnerFilterChange(val) {
+      selectedPartnerFilter = val;
+      renderStoreSelectionList();
+      renderCurrentStateMetrics();
+      drawCurrentMapLayers();
+      showToast(`Vertical seleccionada: ${val === 'ALL' ? 'Todas (Principal)' : val.toUpperCase()}`, 'info');
+    }
 
     window.addEventListener('load', () => {
       initMap();
@@ -869,6 +993,12 @@
       renderStoreSelectionList();
       renderCurrentStateMetrics();
       drawCurrentMapLayers();
+
+      // Cargar los shapes reales de Google Sheets
+      fetchMissingStorePolygons(Array.from(selectedStoreIds), () => {
+        drawCurrentMapLayers();
+        renderCurrentStateMetrics();
+      });
     }
 
     function toggleOptViewport(active) {
@@ -897,6 +1027,11 @@
       renderStoreSelectionList();
       renderCurrentStateMetrics();
       drawCurrentMapLayers();
+
+      fetchMissingStorePolygons(Array.from(selectedStoreIds), () => {
+        drawCurrentMapLayers();
+        renderCurrentStateMetrics();
+      });
     }
 
     // ── RENDERIZADO DE TIENDAS Y SHAPES REALES ──
@@ -905,7 +1040,14 @@
       const countEl = document.getElementById('opt-map-cluster-count');
       if (!container) return;
 
-      const activeStores = allWarehouses.filter(w => selectedStoreIds.has(String(w.warehouse_id).trim()));
+      const activeStores = allWarehouses.filter(w => {
+        if (!selectedStoreIds.has(String(w.warehouse_id).trim())) return false;
+        if (selectedPartnerFilter === 'ALL') return true;
+        const pData = STORE_POLYGONS_CACHE.get(String(w.warehouse_id).trim());
+        const partners = (pData && pData.partners_detail) || w.partners_detail || [];
+        return partners.some(p => classifyPartnerVertical(p.partner_name || p.business_type || '') === selectedPartnerFilter);
+      });
+
       if (countEl) countEl.textContent = `${activeStores.length} darkstores seleccionadas`;
 
       container.innerHTML = '';
@@ -959,6 +1101,11 @@
       renderStoreSelectionList();
       renderCurrentStateMetrics();
       drawCurrentMapLayers();
+
+      fetchMissingStorePolygons(Array.from(selectedStoreIds), () => {
+        drawCurrentMapLayers();
+        renderCurrentStateMetrics();
+      });
     }
 
     function focusStoreInMap(whId) {
@@ -1075,22 +1222,21 @@
       if (currentMapLayer === 'before') {
         // Shapes Reales de Google Sheets
         activeStores.forEach((w, idx) => {
-          const col = colors[idx % colors.length];
-          let coords = null;
-          if (w.geojson) coords = extractPolygonCoordinates(w.geojson);
-          if (!coords || coords.length < 3) {
-            const circle = turf.circle([Number(w.lng), Number(w.lat)], 3.5, { steps: 36, units: 'kilometers' });
-            coords = circle.geometry.coordinates[0].map(c => ({ lat: c[1], lng: c[0] }));
+          const shapeInfo = getStorePolygonCoords(w);
+          if (!shapeInfo || !shapeInfo.coords || shapeInfo.coords.length < 3) {
+            return;
           }
 
+          const vertCol = PARTNER_VERTICAL_COLORS[shapeInfo.vertical] || colors[idx % colors.length];
+
           const poly = new google.maps.Polygon({
-            paths: coords,
+            paths: shapeInfo.coords,
             map: map,
-            strokeColor: col,
+            strokeColor: vertCol,
             strokeWeight: 2.2,
             strokeOpacity: 0.95,
-            fillColor: col,
-            fillOpacity: 0.18,
+            fillColor: vertCol,
+            fillOpacity: 0.20,
             zIndex: 10
           });
           poly.addListener('click', () => focusStoreInMap(w.warehouse_id));
